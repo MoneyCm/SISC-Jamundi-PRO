@@ -5,6 +5,7 @@ from typing import List
 import uvicorn
 import logging
 import traceback
+import os
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -70,6 +71,5 @@ app.include_router(ingesta.router, prefix="/ingesta", tags=["ingesta"])
 app.include_router(reportes.router, prefix="/reportes", tags=["reportes"])
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
