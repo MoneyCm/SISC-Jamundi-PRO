@@ -12,11 +12,21 @@ logger = logging.getLogger("sisc_api")
 
 from api import analitica, ingesta, auth, reportes
 from db.models import create_tables
+from contextlib import asynccontextmanager
 
-# Crear tablas al iniciar
-create_tables()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Crear tablas al iniciar de forma segura
+    try:
+        logger.info("Iniciando conexión con la base de datos...")
+        create_tables()
+        logger.info("Tablas de base de datos verificadas/creadas con éxito.")
+    except Exception as e:
+        logger.error(f"Error crítico conectando a la base de datos: {e}")
+        # No detenemos la app para que Render pueda mostrar los logs si es necesario
+    yield
 
-app = FastAPI(title="SISC Jamundí API", version="0.1.0")
+app = FastAPI(title="SISC Jamundí API", version="0.1.0", lifespan=lifespan)
 
 # Logger middleware para ver peticiones en terminal
 @app.middleware("http")
