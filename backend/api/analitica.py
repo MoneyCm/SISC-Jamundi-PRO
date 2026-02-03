@@ -85,8 +85,8 @@ def get_eventos_geojson(
         Event.descripcion,
         EventType.category,
         EventType.subcategory,
-        func.ST_X(text('location_geom')).label('lng'),
-        func.ST_Y(text('location_geom')).label('lat')
+        func.ST_X(text('location_geom::geometry')).label('lng'),
+        func.ST_Y(text('location_geom::geometry')).label('lat')
     ).join(EventType).filter(text('location_geom IS NOT NULL'))
     
     if start_date:
