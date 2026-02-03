@@ -17,21 +17,19 @@ const MapComponent = ({ incidents = [] }) => {
 
     return (
         <MapContainer center={jamundiPosition} zoom={14} style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}>
+            {/* Capa Base - Siempre Visible */}
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                 url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             />
 
             <LayersControl position="topright">
-                <LayersControl.BaseLayer checked name="Mapa de Calor (Densidad)">
+                {/* Capa de Calor como Overlay */}
+                <LayersControl.Overlay checked name="Mapa de Calor (Densidad)">
                     <HeatmapLayer points={validIncidents} />
-                </LayersControl.BaseLayer>
+                </LayersControl.Overlay>
 
-                <LayersControl.BaseLayer name="Puntos Individuales">
-                    <div style={{ display: 'none' }}></div>
-                    {/* Los puntos se renderizan condicionalmente abajo si esta capa está activa */}
-                </LayersControl.BaseLayer>
-
+                {/* Marcadores como Overlay */}
                 <LayersControl.Overlay checked name="Mostrar Marcadores">
                     <>
                         {validIncidents.map((incident) => {
