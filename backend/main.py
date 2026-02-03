@@ -11,6 +11,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sisc_api")
 
 from api import analitica, ingesta, auth, reportes
+from db.models import create_tables
+
+# Crear tablas al iniciar
+create_tables()
 
 app = FastAPI(title="SISC Jamundí API", version="0.1.0")
 
