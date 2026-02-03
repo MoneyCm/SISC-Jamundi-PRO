@@ -1,13 +1,33 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet.heat';
 
 const HeatmapLayer = ({ points }) => {
     const map = useMap();
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
-        if (!points || points.length === 0) return;
+        // Cargar leaflet-heat dinámicamente desde CDN si no existe
+        if (L.heatLayer) {
+            setLoaded(true);
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = "https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js";
+        script.async = true;
+        script.onload = () => {
+            setLoaded(true);
+        };
+        document.body.appendChild(script);
+
+        return () => {
+            // No quitamos el script para que esté disponible si se vuelve a montar
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!loaded || !points || points.length === 0 || !L.heatLayer) return;
 
         // Formatear puntos para leaflet.heat [lat, lng, intensidad]
         const heatPoints = points.map(p => [
@@ -32,7 +52,7 @@ const HeatmapLayer = ({ points }) => {
         return () => {
             map.removeLayer(layer);
         };
-    }, [map, points]);
+    }, [map, points, loaded]);
 
     return null;
 };
