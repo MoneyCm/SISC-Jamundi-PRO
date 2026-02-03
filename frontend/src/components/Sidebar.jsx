@@ -19,9 +19,9 @@ const Sidebar = ({ activePage, setActivePage }) => {
                     <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-10 h-12 object-contain" />
                 </div>
                 <div className="flex flex-col">
-                    <h1 className="text-2xl font-black tracking-tighter text-white leading-none">SISC</h1>
+                    <h1 className="text-2xl font-black tracking-tighter text-white leading-none italic">SISC v1.1</h1>
                     <span className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mt-1">
-                        Jamundí <span className="text-slate-500">| Valle</span>
+                        Jamundí <span className="text-slate-500">| Inteligencia Territorial</span>
                     </span>
                 </div>
             </div>
