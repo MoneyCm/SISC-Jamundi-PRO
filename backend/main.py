@@ -28,6 +28,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="SISC Jamundí API", version="0.1.0", lifespan=lifespan)
 
+# Loguear variables de entorno críticas (sin contraseñas) para depuración
+logger.info(f"DATABASE_URL configurada: {'SÍ' if os.getenv('DATABASE_URL') else 'NO'}")
+logger.info(f"PORT configurado: {os.getenv('PORT')}")
+
 # Logger middleware para ver peticiones en terminal
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
