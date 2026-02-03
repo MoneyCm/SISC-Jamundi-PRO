@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, Shield, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage }) => {
     const menuItems = [
@@ -15,12 +15,14 @@ const Sidebar = ({ activePage, setActivePage }) => {
             <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-slate-800/50 to-transparent pointer-events-none" />
 
             <div className="p-6 flex items-center space-x-4 border-b border-slate-800/50 relative z-10">
-                <div className="bg-primary/20 p-2 rounded-lg">
-                    <Shield className="w-8 h-8 text-primary" />
+                <div className="bg-white p-1.5 rounded-xl shadow-inner flex items-center justify-center">
+                    <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-10 h-12 object-contain" />
                 </div>
-                <div>
-                    <h1 className="text-xl font-bold tracking-wider text-white">SISC</h1>
-                    <p className="text-xs text-slate-400 font-medium tracking-wide">JAMUNDÍ</p>
+                <div className="flex flex-col">
+                    <h1 className="text-2xl font-black tracking-tighter text-white leading-none">SISC</h1>
+                    <span className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mt-1">
+                        Jamundí <span className="text-slate-500">| Valle</span>
+                    </span>
                 </div>
             </div>
 

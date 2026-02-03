@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from db.models import get_db, Event, EventType
 import pandas as pd
 import io
@@ -130,14 +130,53 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
                 db.add(event_type)
                 db.flush()
 
-            # 2. Fecha y Hora
-            occ_date = pd.to_datetime(item['fecha']).date()
-            # Si no hay hora, usar medianoche por defecto
-            occ_time = pd.to_datetime(item.get('hora', '00:00')).time()
+            # 2. Fecha y Hora con limpieza de rangos (ej: "18:00 - 23:59")
+            def parse_robust_time(val):
+                if not val or str(val).lower() == 'undefined' or str(val).strip() == '':
+                    return datetime.strptime("00:00", "%H:%M").time()
+                
+                # SIEDCO: "18:00 - 23:59"
+                val_str = str(val).split('-')[0].strip()
+                
+                # Intentar parseo manual si pandas falla
+                try:
+                    if ':' in val_str:
+                        # Manejar "HH:MM:SS" o "HH:MM"
+                        parts = val_str.split(':')
+                        h = int(parts[0])
+                        m = int(parts[1]) if len(parts) > 1 else 0
+                        return datetime.strptime(f"{h:02d}:{m:02d}", "%H:%M").time()
+                    return pd.to_datetime(val_str).time()
+                except:
+                    return datetime.strptime("00:00", "%H:%M").time()
 
-            # 3. Geometría (Lat/Lng) - Usar valores por defecto si faltan para evitar fallo total
-            lat = float(item.get('latitud', 3.26)) # Centro de Jamundí
-            lng = float(item.get('longitud', -76.53))
+            def parse_robust_date(val):
+                if not val or str(val).lower() == 'undefined':
+                    return datetime.now().date()
+                try:
+                    # Intentar parseo directo
+                    return pd.to_datetime(val).date()
+                except:
+                    # Si falla, intentar limpiar (ej: si viene con basura)
+                    try:
+                        val_clean = str(val).split(' ')[0] # Solo la parte de la fecha
+                        return pd.to_datetime(val_clean).date()
+                    except:
+                        return datetime.now().date()
+
+            occ_date = parse_robust_date(item.get('fecha'))
+            occ_time = parse_robust_time(item.get('hora'))
+
+            # 3. Geometría (Lat/Lng)
+            try:
+                def clean_coord(c):
+                    if not c or str(c).lower() == 'undefined': return None
+                    return float(str(c).replace(',', '.'))
+
+                lat = clean_coord(item.get('latitud')) or 3.26
+                lng = clean_coord(item.get('longitud')) or -76.53
+            except:
+                lat, lng = 3.26, -76.53
 
             # 4. Crear Evento
             new_event = Event(
@@ -152,9 +191,9 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
             db.add(new_event)
             db.flush()
 
-            # 5. PostGIS
+            # 5. PostGIS - Usar text() para SQL crudo
             db.execute(
-                func.text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
+                text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
                 {"lng": lng, "lat": lat, "id": new_event.id}
             )
             report["success_count"] += 1
@@ -169,3 +208,20 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
         "message": f"Carga masiva completada: {report['success_count']} registros integrados.",
         "report": report
     }
+
+@router.delete("/clear")
+def clear_all_events(db: Session = Depends(get_db)):
+    """Elimina todos los eventos de la base de datos"""
+    db.query(Event).delete()
+    db.commit()
+    return {"message": "Base de datos de eventos limpiada correctamente"}
+
+@router.delete("/{event_id}")
+def delete_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Elimina un evento específico"""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+    db.delete(event)
+    db.commit()
+    return {"message": "Evento eliminado correctamente"}

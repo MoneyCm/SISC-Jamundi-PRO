@@ -13,25 +13,32 @@ const Dashboard = () => {
         crimeDistributionData: mockDistributionData,
         recentActivity: mockRecentActivity
     });
+    const [mapData, setMapData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Simulate network delay for a smoother experience
-                await new Promise(resolve => setTimeout(resolve, 800));
+                // Fetch Dashboard Summary
+                const summaryRes = await fetch(`${API_BASE_URL}/analitica/estadisticas/resumen`);
+                if (!summaryRes.ok) throw new Error('Error al cargar resumen');
+                const summaryData = await summaryRes.json();
+                console.log("Resumen de incidentes (primeros 5):", summaryData.slice(0, 5));
+                console.log("Total incidentes cargados:", summaryData.length);
 
-                const response = await fetch(`${API_BASE_URL}/analitica/estadisticas/resumen`);
-                if (!response.ok) {
-                    throw new Error('Usando datos de demostración');
+                // Fetch Map Data (GeoJSON)
+                const mapRes = await fetch(`${API_BASE_URL}/analitica/eventos/geojson`);
+                if (mapRes.ok) {
+                    const geoData = await mapRes.json();
+                    console.log("GeoJSON features:", geoData.features ? geoData.features.length : 0);
+                    setMapData(geoData.features || []);
                 }
-                const data = await response.json();
-                const transformed = transformDashboardData(data);
+
+                const transformed = transformDashboardData(summaryData);
                 setDashboardData(transformed);
             } catch (err) {
-                console.log("Modo demostración activo:", err.message);
-                // Fallback is already set in initial state
+                console.log("Error cargando datos reales:", err.message);
             } finally {
                 setLoading(false);
             }
@@ -99,7 +106,7 @@ const Dashboard = () => {
                         <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">En vivo</span>
                     </div>
                     <div className="flex-1 relative z-0">
-                        <MapComponent />
+                        <MapComponent incidents={mapData} />
                     </div>
                 </div>
                 <div className="lg:col-span-1">

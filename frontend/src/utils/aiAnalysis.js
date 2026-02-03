@@ -26,23 +26,25 @@ export const analyzeData = async (data) => {
         // 2. Validate/Fix Type
         const validTypes = [
             'HOMICIDIO', 'HURTO A PERSONAS', 'HURTO A COMERCIO',
-            'LESIONES PERSONALES', 'VIOLENCIA INTRAFAMILIAR', 'RIÑA'
+            'LESIONES PERSONALES', 'VIOLENCIA INTRAFAMILIAR', 'RIÑA',
+            'HURTO', 'LESIONES', 'VIOLENCIA'
         ];
 
-        if (!validTypes.includes(item.tipo)) {
-            // Simple fuzzy match or correction logic could go here
-            // For now, just mark as warning if unknown
+        const itemTipoUpper = (item.tipo || '').toString().toUpperCase();
+        const isValidType = validTypes.some(vt => itemTipoUpper.includes(vt));
+
+        if (!isValidType && item.tipo) {
             status = 'warning';
             issues.push(`Tipo de delito no estándar: ${item.tipo}`);
         }
 
         // 3. Enrich/Fix Barrio (Capitalization)
-        if (item.barrio) {
-            const capitalized = item.barrio.replace(/\w\S*/g, (w) => (w.replace(/^\w/, (c) => c.toUpperCase())));
+        if (item.barrio && item.barrio !== 'undefined') {
+            const capitalized = item.barrio.toString().replace(/\w\S*/g, (w) => (w.replace(/^\w/, (c) => c.toUpperCase())));
             if (capitalized !== item.barrio) {
                 correctedItem.barrio = capitalized;
                 corrections.push('Capitalización de barrio corregida');
-                if (status === 'ok') status = 'warning'; // Show as a change
+                if (status === 'ok') status = 'warning';
             }
         } else {
             status = 'error';
@@ -50,15 +52,15 @@ export const analyzeData = async (data) => {
         }
 
         // 4. Description check
-        if (!item.descripcion || item.descripcion.length < 5) {
+        if (!item.descripcion || item.descripcion.length < 3 || item.descripcion === 'undefined') {
             status = 'warning';
-            issues.push('Descripción muy corta o faltante');
+            issues.push('Descripción insuficiente');
         }
 
         // Construct message
         let message = 'Validado correctamente';
         if (issues.length > 0 || corrections.length > 0) {
-            message = [...issues, ...corrections].join('. ');
+            message = [...new Set([...issues, ...corrections])].join('. ');
         }
 
         return {

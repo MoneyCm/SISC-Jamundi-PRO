@@ -3,6 +3,7 @@ import { Search, Plus, Edit2, Trash2, Save, X, ChevronLeft, ChevronRight, Upload
 import * as XLSX from 'xlsx';
 import AIAnalysisModal from '../components/AIAnalysisModal';
 
+import { geocodeNeighborhood } from '../utils/geocoding';
 import { API_BASE_URL } from '../utils/apiConfig';
 
 const API_URL = `${API_BASE_URL}/analitica/estadisticas/resumen`;
@@ -81,6 +82,22 @@ const DataPage = () => {
         alert('Funcionalidad de eliminación en desarrollo.');
     };
 
+    const handleClearDatabase = async () => {
+        if (!confirm('¿Estás seguro de que deseas eliminar TODOS los incidentes? Esta acción no se puede deshacer.')) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/ingesta/clear`, { method: 'DELETE' });
+            if (res.ok) {
+                alert('Base de datos limpiada correctamente.');
+                fetchIncidents();
+            } else {
+                throw new Error('No se pudo limpiar la base de datos.');
+            }
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setEditingId(null);
@@ -100,23 +117,88 @@ const DataPage = () => {
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
-                const rawData = XLSX.utils.sheet_to_json(ws);
 
-                // Normalizar columnas a minúsculas para el análisis
-                const normalizedData = rawData.map(row => {
-                    const newRow = {};
-                    Object.keys(row).forEach(key => {
-                        newRow[key.toLowerCase().trim()] = row[key];
+                // 1. Detección Dinámica de Encabezados
+                // Leemos las primeras 20 filas como matriz para encontrar los títulos
+                const rows = XLSX.utils.sheet_to_json(ws, { header: 1, range: 0, defval: '' });
+                let headerIndex = rows.findIndex(row =>
+                    row.some(cell => {
+                        const c = String(cell || '').toLowerCase().trim();
+                        return c.includes('fecha') || c.includes('delito') || c.includes('conducta') || c.includes('hecho');
+                    })
+                );
+
+                if (headerIndex === -1) headerIndex = 0;
+
+                const rawData = XLSX.utils.sheet_to_json(ws, { range: headerIndex });
+                const headers = Object.keys(rawData[0] || {});
+                console.log("Encabezados detectados en fila", headerIndex + 1, ":", headers);
+
+                // 2. Normalizar columnas y mapeo inteligente
+                const findValue = (row, keywords) => {
+                    const keys = Object.keys(row);
+                    const clean = (s) => (s || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                    let foundKey = keys.find(key => {
+                        const lowKey = clean(key);
+                        return keywords.some(kw => lowKey === clean(kw));
                     });
-                    // Mapear campos comunes si tienen nombres diferentes
+
+                    if (!foundKey) {
+                        foundKey = keys.find(key => {
+                            const lowKey = clean(key);
+                            return keywords.some(kw => kw.length > 3 && (lowKey.includes(clean(kw)) || clean(kw).includes(lowKey)));
+                        });
+                    }
+
+                    return foundKey ? row[foundKey] : undefined;
+                };
+
+                const excelDateToJSDate = (serial) => {
+                    if (!serial || typeof serial !== 'number') return serial;
+                    const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+                    return date.toISOString().split('T')[0];
+                };
+
+                const normalizedData = rawData.map(row => {
+                    const cleanRow = {};
+                    Object.keys(row).forEach(key => {
+                        cleanRow[key.toLowerCase().trim()] = row[key];
+                    });
+
+                    const rawFecha = findValue(cleanRow, ['fecha_hecho', 'fecha', 'dia', 'date']);
+                    const barrio = findValue(cleanRow, ['barrios_hecho', 'barrio', 'sector', 'comuna']);
+
+                    // Escaneo inteligente de coordenadas
+                    let lat = findValue(cleanRow, ['latitud_hecho', 'latitud', 'lat', 'y_hecho', 'coordenada_y', 'coord_y', 'coordy', 'y', 'norte']);
+                    let lng = findValue(cleanRow, ['longitud_hecho', 'longitud', 'long', 'lon', 'x_hecho', 'coordenada_x', 'coord_x', 'coordx', 'x', 'este']);
+
+                    if (!lat || !lng) {
+                        Object.values(row).forEach(val => {
+                            const num = parseFloat(String(val).replace(',', '.'));
+                            if (!isNaN(num)) {
+                                if (num > 3.2 && num < 3.4 && !lat) lat = num;
+                                if (num < -76.4 && num > -76.6 && !lng) lng = num;
+                            }
+                        });
+                    }
+
+                    // FALLBACK: Geocodificación por Barrio (User Request)
+                    // Si siguen faltando o son el punto central genérico (-76.53, 3.26)
+                    if (!lat || !lng || (Math.abs(lat - 3.2606) < 0.001 && Math.abs(lng - (-76.5364)) < 0.001)) {
+                        const geo = geocodeNeighborhood(barrio || "");
+                        lat = geo.lat;
+                        lng = geo.lng;
+                    }
+
                     return {
-                        fecha: newRow.fecha,
-                        tipo: newRow.delito || newRow.tipo,
-                        barrio: newRow.barrio,
-                        descripcion: newRow.descripcion || newRow.detalle,
-                        latitud: newRow.latitud,
-                        longitud: newRow.longitud,
-                        hora: newRow.hora || '00:00'
+                        fecha: typeof rawFecha === 'number' ? excelDateToJSDate(rawFecha) : rawFecha,
+                        tipo: findValue(cleanRow, ['descripcion_conducta', 'delito', 'clase_de_sitio', 'conducta', 'tipo']),
+                        barrio: barrio,
+                        descripcion: findValue(cleanRow, ['modalidad', 'detalle_de_la_conducta', 'observacion', 'descripcion', 'detalle']),
+                        latitud: lat,
+                        longitud: lng,
+                        hora: findValue(cleanRow, ['hora24', 'hora_hecho', 'hora', 'time']) || '00:00'
                     };
                 });
 
@@ -160,17 +242,21 @@ const DataPage = () => {
                     <h2 className="text-2xl font-bold text-slate-800">Gestión de Datos</h2>
                     <p className="text-slate-500">Administración de registros delictivos</p>
                 </div>
-                <div className="flex space-x-2">
-                    <label className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors cursor-pointer">
-                        <Upload size={18} />
-                        <span>Importar Excel</span>
-                        <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="hidden" />
-                    </label>
+                <div className="flex gap-2">
                     <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="flex items-center space-x-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+                        onClick={handleClearDatabase}
+                        className="flex items-center space-x-2 bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors border border-red-100"
                     >
-                        <Plus size={18} />
+                        <Trash2 size={20} />
+                        <span>Limpiar Base de Datos</span>
+                    </button>
+                    <label className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm">
+                        <Upload size={20} />
+                        <span>Cargar Excel / SIEDCO</span>
+                        <input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
+                    </label>
+                    <button className="flex items-center space-x-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-emphasis transition-colors shadow-sm">
+                        <Plus size={20} />
                         <span>Nuevo Registro</span>
                     </button>
                 </div>

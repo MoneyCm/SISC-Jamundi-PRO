@@ -52,7 +52,8 @@ class Event(Base):
     barrio = Column(String(100))
     estado = Column(String(50), default="Abierto")
     descripcion = Column(Text)
-    # Nota: PostGIS geom se trata con SQL crudo en los endpoints por ahora
+    # PostGIS geom (usamos un proxy de texto para que SQLAlchemy lo vea)
+    location_geom = Column(Text) 
     
     event_type = relationship("EventType")
 

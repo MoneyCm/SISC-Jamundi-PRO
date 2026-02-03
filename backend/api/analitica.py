@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from db.models import get_db, Event, EventType
 from datetime import date
 from typing import Optional, List
@@ -18,7 +18,7 @@ def get_resumen_estadistico(
     """
     Retorna un resumen de incidentes para los KPIs del dashboard.
     """
-    query = db.query(Event)
+    query = db.query(Event).order_by(Event.occurrence_date.desc())
     if start_date:
         query = query.filter(Event.occurrence_date >= start_date)
     if end_date:
@@ -85,9 +85,9 @@ def get_eventos_geojson(
         Event.descripcion,
         EventType.category,
         EventType.subcategory,
-        func.ST_X(Event.location_geom).label('lng'),
-        func.ST_Y(Event.location_geom).label('lat')
-    ).join(EventType).filter(Event.location_geom != None)
+        func.ST_X(text('location_geom')).label('lng'),
+        func.ST_Y(text('location_geom')).label('lat')
+    ).join(EventType).filter(text('location_geom IS NOT NULL'))
     
     if start_date:
         query = query.filter(Event.occurrence_date >= start_date)

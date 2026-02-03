@@ -11,46 +11,64 @@ export const transformDashboardData = (incidents) => {
         };
     }
 
-    // 1. KPIs
+    // Helper para contar con lógica flexible (maneja siglas como H. o V.)
+    const matchesType = (itemTipo, target) => {
+        const t = (itemTipo || '').toString().toUpperCase();
+        if (target === 'HURTO') return t.includes('HURTO') || t.startsWith('H.');
+        if (target === 'VIF') return t.includes('VIOLENCIA') || t.includes('VIF') || t.startsWith('V.');
+        if (target === 'HOMICIDIO') return t.includes('HOMICI');
+        return t === target.toUpperCase();
+    };
+
     const totalIncidents = incidents.length;
+    const homocidios = incidents.filter(i => matchesType(i.tipo, 'HOMICIDIO')).length;
+    const hurtos = incidents.filter(i => matchesType(i.tipo, 'HURTO')).length;
+    const vif = incidents.filter(i => matchesType(i.tipo, 'VIF')).length;
 
-    const homicidios = countByType('HOMICIDIO');
-    const hurtos = countByType('HURTO A PERSONAS') + countByType('HURTO A COMERCIO');
-    const vif = countByType('VIOLENCIA INTRAFAMILIAR');
-
-    // Mocking trends for now as we might not have enough historical data in the MVP
+    // 1. KPIs
     const kpiData = [
         { title: "Total Incidentes", value: totalIncidents.toString(), change: "+0%", trend: "neutral", icon: "AlertTriangle" },
-        { title: "Homicidios", value: homicidios.toString(), change: "+0%", trend: "neutral", icon: "Skull" },
+        { title: "Homicidios", value: homocidios.toString(), change: "+0%", trend: "neutral", icon: "Skull" },
         { title: "Hurtos", value: hurtos.toString(), change: "+0%", trend: "neutral", icon: "Briefcase" },
         { title: "Violencia Intrafamiliar", value: vif.toString(), change: "+0%", trend: "neutral", icon: "Home" },
     ];
 
-    // 2. Crime Trend (Last 6 months)
+    // 2. Crime Trend (Last 6 months based on data max date)
+    const maxDate = incidents.reduce((max, i) => {
+        const d = i.fecha.includes('T') ? parseISO(i.fecha) : parseISO(i.fecha + 'T00:00:00');
+        return d > max ? d : max;
+    }, new Date(0));
+
+    const referenceDate = maxDate.getTime() > 0 ? maxDate : new Date();
+
     const months = [];
     for (let i = 5; i >= 0; i--) {
-        months.push(subMonths(new Date(), i));
+        months.push(subMonths(referenceDate, i));
     }
 
     const crimeTrendData = months.map(date => {
         const monthName = format(date, 'MMM', { locale: es });
         const monthIncidents = incidents.filter(i => {
-            // Handle both ISO strings and YYYY-MM-DD strings
             const incidentDate = i.fecha.includes('T') ? parseISO(i.fecha) : parseISO(i.fecha + 'T00:00:00');
             return isSameMonth(incidentDate, date);
         });
 
         return {
             name: monthName.charAt(0).toUpperCase() + monthName.slice(1),
-            homicidios: monthIncidents.filter(i => i.tipo === 'HOMICIDIO').length,
-            hurtos: monthIncidents.filter(i => i.tipo.includes('HURTO')).length,
-            vif: monthIncidents.filter(i => i.tipo === 'VIOLENCIA INTRAFAMILIAR').length
+            year: format(date, 'yyyy'),
+            homicidios: monthIncidents.filter(i => matchesType(i.tipo, 'HOMICIDIO')).length,
+            hurtos: monthIncidents.filter(i => matchesType(i.tipo, 'HURTO')).length,
+            vif: monthIncidents.filter(i => matchesType(i.tipo, 'VIF')).length
         };
     });
 
-    // 3. Distribution
+    // 3. Distribution - Limpiar nombres para el gráfico de torta
     const distribution = incidents.reduce((acc, curr) => {
-        acc[curr.tipo] = (acc[curr.tipo] || 0) + 1;
+        let label = (curr.tipo || 'OTRO').toString().toUpperCase();
+        if (label.startsWith('H.')) label = label.replace('H.', 'HURTO ');
+        if (label.startsWith('V.')) label = label.replace('V.', 'VIOLENCIA ');
+
+        acc[label] = (acc[label] || 0) + 1;
         return acc;
     }, {});
 
@@ -64,7 +82,7 @@ export const transformDashboardData = (incidents) => {
         id: i.id,
         type: i.tipo,
         location: i.barrio,
-        time: i.fecha, // Could format this to "relative time" if needed
+        time: i.fecha,
         status: i.estado
     }));
 
