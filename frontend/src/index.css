@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@300;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-deep: #05070a;
+  --glass: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --accent-crimson: #ff2a6d;
+  --accent-cyan: #05d9e8;
+  --text-main: #e0e0e0;
+  --primary: #3b82f6;
+  /* Adaptado del diseño del escritorio */
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  .dashboard-container {
+    @apply min-h-screen p-8;
+    background: radial-gradient(circle at top right, rgba(255, 42, 109, 0.05), transparent),
+      radial-gradient(circle at bottom left, rgba(5, 217, 232, 0.05), transparent);
+  }
+
+  .glass-card {
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    @apply rounded-3xl p-8 shadow-2xl transition-all duration-300;
+  }
+
+  .glass-card:hover {
+    @apply -translate-y-1;
+    border-color: var(--accent-cyan);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+.leaflet-container {
+  background: #0a0a0f !important;
+  @apply rounded-xl;
+}

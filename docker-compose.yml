@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: sisc_db
+    environment:
+      POSTGRES_USER: sisc_user
+      POSTGRES_PASSWORD: sisc_password
+      POSTGRES_DB: sisc_jamundi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  backend:
+    build: ./backend
+    container_name: sisc_backend
+    environment:
+      DATABASE_URL: postgresql://sisc_user:sisc_password@db:5432/sisc_jamundi
+      SECRET_KEY: "super_secret_key_for_jwt_development"
+      ALGORITHM: "HS256"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build: ./frontend
+    container_name: sisc_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:

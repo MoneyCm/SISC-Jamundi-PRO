@@ -1,0 +1,40 @@
+{
+    "name": "SISC Jamundi Dev Env",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "backend",
+    "workspaceFolder": "/workspace",
+    "features": {
+        "ghcr.io/devcontainers/features/python:1": {
+            "version": "3.11"
+        },
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "18"
+        }
+    },
+    "forwardPorts": [
+        8000,
+        3000,
+        5432
+    ],
+    "portsAttributes": {
+        "3000": {
+            "label": "SISC Frontend",
+            "onAutoForward": "notify"
+        },
+        "8000": {
+            "label": "SISC API (Swagger)",
+            "onAutoForward": "silent"
+        }
+    },
+    "postCreateCommand": "python backend/db/seed_data.py && cd frontend && npm install",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-azuretools.vscode-docker",
+                "esbenp.prettier-vscode",
+                "dbaeumer.vscode-eslint"
+            ]
+        }
+    }
+}
