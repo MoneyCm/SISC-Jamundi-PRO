@@ -184,8 +184,10 @@ const DataPage = () => {
                     }
 
                     // FALLBACK: Geocodificación por Barrio (User Request)
-                    // Si siguen faltando o son el punto central genérico (-76.53, 3.26)
-                    if (!lat || !lng || (Math.abs(lat - 3.2606) < 0.001 && Math.abs(lng - (-76.5364)) < 0.001)) {
+                    // Solo si faltan datos o si son el punto exacto de la alcaldía (indicador de dato no georreferenciado)
+                    const isGenericCenter = lat && lng && Math.abs(lat - 3.2606) < 0.0001 && Math.abs(lng - (-76.5364)) < 0.0001;
+
+                    if (!lat || !lng || isGenericCenter) {
                         const geo = geocodeNeighborhood(barrio || "");
                         lat = geo.lat;
                         lng = geo.lng;
