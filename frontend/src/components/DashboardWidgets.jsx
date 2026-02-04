@@ -57,7 +57,7 @@ export const TrendChart = ({ data }) => {
                     <Activity size={20} className="text-primary" />
                     Tendencia Delictiva
                 </h3>
-                <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">2024</span>
+                <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{new Date().getFullYear()}</span>
             </div>
             <div className="flex-1 w-full min-h-0">
                 <ResponsiveContainer width="100%" height="100%">

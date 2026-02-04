@@ -12,7 +12,7 @@ const CATEGORIES = [
 ];
 
 const MapPage = () => {
-    const [startDate, setStartDate] = useState('2024-01-01');
+    const [startDate, setStartDate] = useState(`${new Date().getFullYear()}-01-01`);
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedCategories, setSelectedCategories] = useState(CATEGORIES);
     const [incidents, setIncidents] = useState([]);
