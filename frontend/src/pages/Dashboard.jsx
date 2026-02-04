@@ -51,7 +51,7 @@ const Dashboard = () => {
         return (
             <div className="flex flex-col items-center justify-center h-96">
                 <Loader className="w-12 h-12 text-primary animate-spin mb-4" />
-                <p className="text-slate-500 font-medium">Cargando SISC Jamundí...</p>
+                <p className="text-neutral-500 font-medium">Cargando SISC Jamundí...</p>
             </div>
         );
     }
@@ -62,12 +62,12 @@ const Dashboard = () => {
         <div className="space-y-6 animate-fade-in">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Tablero de Control</h2>
-                    <p className="text-slate-500 text-sm">Resumen estratégico de seguridad y convivencia</p>
+                    <h2 className="text-2xl font-bold text-neutral">Tablero de Control</h2>
+                    <p className="text-neutral-500 text-sm italic">Observatorio de Seguridad y Convivencia de Jamundí</p>
                 </div>
                 <div className="flex space-x-3">
                     <div className="relative">
-                        <select className="appearance-none bg-white border border-slate-200 text-slate-600 text-sm rounded-lg focus:ring-primary focus:border-primary block pl-3 pr-8 py-2.5 shadow-sm cursor-pointer hover:border-slate-300 transition-colors">
+                        <select className="appearance-none bg-white border border-neutral-200 text-neutral-600 text-sm rounded-lg focus:ring-primary focus:border-primary block pl-3 pr-8 py-2.5 shadow-sm cursor-pointer hover:border-neutral-300 transition-colors">
                             <option>Últimos 6 meses</option>
                             <option>Este año</option>
                             <option>Año anterior</option>
