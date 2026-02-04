@@ -6,6 +6,10 @@ import uvicorn
 import logging
 import traceback
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env (Solo para local)
+load_dotenv()
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)

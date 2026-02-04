@@ -122,87 +122,85 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
 
     for index, item in enumerate(data):
         try:
-            # 1. Validar Categoría
-            delito_nombre = str(item.get('tipo', '')).upper().strip()
-            event_type = db.query(EventType).filter(EventType.category == delito_nombre).first()
-            if not event_type:
-                event_type = EventType(category=delito_nombre, is_delicto=True)
-                db.add(event_type)
+            with db.begin_nested(): # SAVEPOINT: falla solo esta fila si algo sale mal
+                # 1. Validar Categoría
+                delito_nombre = str(item.get('tipo', '')).upper().strip()
+                event_type = db.query(EventType).filter(EventType.category == delito_nombre).first()
+                if not event_type:
+                    event_type = EventType(category=delito_nombre, is_delicto=True)
+                    db.add(event_type)
+                    db.flush()
+
+                # 2. Fecha y Hora
+                def parse_robust_time(val):
+                    if not val or str(val).lower() == 'undefined' or str(val).strip() == '':
+                        return datetime.strptime("00:00", "%H:%M").time()
+                    val_str = str(val).split('-')[0].strip()
+                    try:
+                        if ':' in val_str:
+                            parts = val_str.split(':')
+                            h = int(parts[0])
+                            m = int(parts[1]) if len(parts) > 1 else 0
+                            return datetime.strptime(f"{h:02d}:{m:02d}", "%H:%M").time()
+                        return pd.to_datetime(val_str).time()
+                    except:
+                        return datetime.strptime("00:00", "%H:%M").time()
+
+                def parse_robust_date(val):
+                    if not val or str(val).lower() == 'undefined':
+                        return datetime.now().date()
+                    try:
+                        return pd.to_datetime(val).date()
+                    except:
+                        try:
+                            val_clean = str(val).split(' ')[0]
+                            return pd.to_datetime(val_clean).date()
+                        except:
+                            return datetime.now().date()
+
+                occ_date = parse_robust_date(item.get('fecha'))
+                occ_time = parse_robust_time(item.get('hora'))
+
+                # 3. Geometría
+                try:
+                    def clean_coord(c):
+                        if not c or str(c).lower() == 'undefined': return None
+                        return float(str(c).replace(',', '.'))
+                    lat = clean_coord(item.get('latitud')) or 3.26
+                    lng = clean_coord(item.get('longitud')) or -76.53
+                except:
+                    lat, lng = 3.26, -76.53
+
+                # 4. Crear Evento
+                new_event = Event(
+                    external_id=str(item.get('id_externo', uuid.uuid4())),
+                    event_type_id=event_type.id,
+                    occurrence_date=occ_date,
+                    occurrence_time=occ_time,
+                    barrio=str(item.get('barrio', 'Sin especificar')),
+                    descripcion=str(item.get('descripcion', '')),
+                    estado=str(item.get('estado', 'Abierto'))
+                )
+                db.add(new_event)
                 db.flush()
 
-            # 2. Fecha y Hora con limpieza de rangos (ej: "18:00 - 23:59")
-            def parse_robust_time(val):
-                if not val or str(val).lower() == 'undefined' or str(val).strip() == '':
-                    return datetime.strptime("00:00", "%H:%M").time()
-                
-                # SIEDCO: "18:00 - 23:59"
-                val_str = str(val).split('-')[0].strip()
-                
-                # Intentar parseo manual si pandas falla
-                try:
-                    if ':' in val_str:
-                        # Manejar "HH:MM:SS" o "HH:MM"
-                        parts = val_str.split(':')
-                        h = int(parts[0])
-                        m = int(parts[1]) if len(parts) > 1 else 0
-                        return datetime.strptime(f"{h:02d}:{m:02d}", "%H:%M").time()
-                    return pd.to_datetime(val_str).time()
-                except:
-                    return datetime.strptime("00:00", "%H:%M").time()
-
-            def parse_robust_date(val):
-                if not val or str(val).lower() == 'undefined':
-                    return datetime.now().date()
-                try:
-                    # Intentar parseo directo
-                    return pd.to_datetime(val).date()
-                except:
-                    # Si falla, intentar limpiar (ej: si viene con basura)
-                    try:
-                        val_clean = str(val).split(' ')[0] # Solo la parte de la fecha
-                        return pd.to_datetime(val_clean).date()
-                    except:
-                        return datetime.now().date()
-
-            occ_date = parse_robust_date(item.get('fecha'))
-            occ_time = parse_robust_time(item.get('hora'))
-
-            # 3. Geometría (Lat/Lng)
-            try:
-                def clean_coord(c):
-                    if not c or str(c).lower() == 'undefined': return None
-                    return float(str(c).replace(',', '.'))
-
-                lat = clean_coord(item.get('latitud')) or 3.26
-                lng = clean_coord(item.get('longitud')) or -76.53
-            except:
-                lat, lng = 3.26, -76.53
-
-            # 4. Crear Evento
-            new_event = Event(
-                external_id=str(item.get('id_externo', uuid.uuid4())),
-                event_type_id=event_type.id,
-                occurrence_date=occ_date,
-                occurrence_time=occ_time,
-                barrio=str(item.get('barrio', 'Sin especificar')),
-                descripcion=str(item.get('descripcion', '')),
-                estado=str(item.get('estado', 'Abierto'))
-            )
-            db.add(new_event)
-            db.flush()
-
-            # 5. PostGIS - Usar text() para SQL crudo
-            db.execute(
-                text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
-                {"lng": lng, "lat": lat, "id": new_event.id}
-            )
-            report["success_count"] += 1
+                # 5. PostGIS
+                db.execute(
+                    text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
+                    {"lng": lng, "lat": lat, "id": new_event.id}
+                )
+                report["success_count"] += 1
+            
+            # Commit masivo cada 50 filas (Mucho más rápido)
+            if index % 50 == 0:
+                db.commit()
 
         except Exception as e:
+            # El uso de begin_nested() hace rollback automático de ESTA fila si falla
             report["error_count"] += 1
-            report["errors"].append({"fila": index + 1, "error": str(e)})
+            report["errors"].append({"index": index, "error": str(e)})
 
-    db.commit()
+    db.commit() # Commit final de lo que quede pendiente
     return {
         "status": "success" if report["error_count"] == 0 else "partial_success",
         "message": f"Carga masiva completada: {report['success_count']} registros integrados.",
