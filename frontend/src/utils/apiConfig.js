@@ -8,6 +8,11 @@ const getApiBaseUrl = () => {
         return `https://${baseUrl}`;
     }
 
+    // Detectar si estamos en Render (frontend)
+    if (host.includes('onrender.com')) {
+        return 'https://sisc-backend.onrender.com';
+    }
+
     // Localhost por defecto
     return 'http://localhost:8000';
 };
