@@ -19,9 +19,9 @@ const Sidebar = ({ activePage, setActivePage }) => {
                     <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-10 h-12 object-contain" />
                 </div>
                 <div className="flex flex-col">
-                    <h1 className="text-2xl font-black tracking-tighter text-white leading-none">SISC</h1>
-                    <span className="text-[10px] text-primary font-bold uppercase tracking-[0.2em] mt-1">
-                        Jamundí <span className="text-slate-500">| Valle</span>
+                    <h1 className="text-3xl font-black tracking-tighter text-white leading-none">SISC</h1>
+                    <span className="text-xs text-white font-bold uppercase tracking-[0.1em] mt-1 opacity-90">
+                        Jamundí <span className="opacity-60">| Valle</span>
                     </span>
                 </div>
             </div>
