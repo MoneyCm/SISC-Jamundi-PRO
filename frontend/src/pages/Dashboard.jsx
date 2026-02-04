@@ -56,7 +56,24 @@ const Dashboard = () => {
         );
     }
 
-    const { kpiData, crimeTrendData, crimeDistributionData, recentActivity } = dashboardData;
+    const handleExportCSV = () => {
+        if (!dashboardData.recentActivity.length) return;
+
+        const headers = ["ID", "Tipo", "Barrio", "Fecha", "Estado"];
+        const rows = dashboardData.recentActivity.map(i => [i.id, i.type, i.location, i.time, i.status]);
+
+        let csvContent = "data:text/csv;charset=utf-8,"
+            + headers.join(",") + "\n"
+            + rows.map(e => e.join(",")).join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `SISC_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -74,7 +91,10 @@ const Dashboard = () => {
                         </select>
                         <Calendar className="absolute right-2.5 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
                     </div>
-                    <button className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all shadow-sm hover:shadow-md active:scale-95">
+                    <button
+                        onClick={handleExportCSV}
+                        className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all shadow-sm hover:shadow-md active:scale-95"
+                    >
                         <Download size={16} />
                         Exportar Reporte
                     </button>

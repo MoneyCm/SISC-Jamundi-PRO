@@ -33,7 +33,7 @@ const ReportsPage = () => {
         { name: 'Alfaguara', delitos: 15 },
     ];
 
-    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#FF4444'];
+    const COLORS = ['#281FD0', '#384CF5', '#FFB600', '#FFE000', '#3A3A44'];
 
     const handleExportPDF = async () => {
         try {
