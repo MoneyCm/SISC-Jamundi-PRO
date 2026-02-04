@@ -58,7 +58,8 @@ export const transformDashboardData = (incidents) => {
             year: format(date, 'yyyy'),
             homicidios: monthIncidents.filter(i => matchesType(i.tipo, 'HOMICIDIO')).length,
             hurtos: monthIncidents.filter(i => matchesType(i.tipo, 'HURTO')).length,
-            vif: monthIncidents.filter(i => matchesType(i.tipo, 'VIF')).length
+            vif: monthIncidents.filter(i => matchesType(i.tipo, 'VIF')).length,
+            lesiones: monthIncidents.filter(i => matchesType(i.tipo, 'LESIONES')).length
         };
     });
 

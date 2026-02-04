@@ -124,7 +124,18 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
         try:
             with db.begin_nested(): # SAVEPOINT: falla solo esta fila si algo sale mal
                 # 1. Validar Categoría
-                delito_nombre = str(item.get('tipo', '')).upper().strip()
+                raw_delito = str(item.get('tipo', '')).upper().strip()
+                # Normalización inteligente
+                delito_nombre = raw_delito
+                if 'H.PERSONA' in raw_delito or raw_delito == 'H. PERSONAS': delito_nombre = 'HURTO A PERSONAS'
+                elif 'H.COMERCIO' in raw_delito: delito_nombre = 'HURTO A COMERCIO'
+                elif 'H.RESIDENCIA' in raw_delito: delito_nombre = 'HURTO A RESIDENCIAS'
+                elif 'H.MOTOS' in raw_delito: delito_nombre = 'HURTO A MOTOCICLETAS'
+                elif 'H.AUTOMO' in raw_delito: delito_nombre = 'HURTO A AUTOMOTORES'
+                elif 'L.PERSONALES' in raw_delito or 'LESIONES' in raw_delito: delito_nombre = 'LESIONES PERSONALES'
+                elif 'HOMICI' in raw_delito: delito_nombre = 'HOMICIDIO'
+                elif 'VIOLENCIA' in raw_delito or 'VIF' in raw_delito: delito_nombre = 'VIOLENCIA INTRAFAMILIAR'
+
                 event_type = db.query(EventType).filter(EventType.category == delito_nombre).first()
                 if not event_type:
                     event_type = EventType(category=delito_nombre, is_delicto=True)

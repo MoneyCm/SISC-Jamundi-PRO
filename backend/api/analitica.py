@@ -95,7 +95,13 @@ def get_eventos_geojson(
         query = query.filter(Event.occurrence_date <= end_date)
     
     if categories:
-        query = query.filter(EventType.category.in_(categories))
+        conditions = []
+        for cat in categories:
+            conditions.append(EventType.category.ilike(f"%{cat}%"))
+        query = query.filter(text(' OR '.join([f"event_types.category ILIKE '%{cat}%'" for cat in categories])))
+        # Re-escritura más segura con SQLAlchemy
+        from sqlalchemy import or_
+        query = query.filter(or_(*[EventType.category.ilike(f"%{cat}%") for cat in categories]))
         
     result = query.all()
     

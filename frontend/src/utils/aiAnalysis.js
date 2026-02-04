@@ -31,7 +31,27 @@ export const analyzeData = async (data) => {
         ];
 
         const itemTipoUpper = (item.tipo || '').toString().toUpperCase();
-        const isValidType = validTypes.some(vt => itemTipoUpper.includes(vt));
+
+        // Normalización Inteligente
+        if (itemTipoUpper.startsWith('H.PERSONA') || itemTipoUpper === 'H. PERSONAS') {
+            correctedItem.tipo = 'HURTO A PERSONAS';
+            corrections.push('Tipo normalizado a HURTO A PERSONAS');
+        } else if (itemTipoUpper.startsWith('H.COMERCIO') || itemTipoUpper === 'H. COMERCIO') {
+            correctedItem.tipo = 'HURTO A COMERCIO';
+            corrections.push('Tipo normalizado a HURTO A COMERCIO');
+        } else if (itemTipoUpper.startsWith('H.RESIDENCIA')) {
+            correctedItem.tipo = 'HURTO A RESIDENCIAS';
+            corrections.push('Tipo normalizado a HURTO A RESIDENCIAS');
+        } else if (itemTipoUpper.startsWith('LESIONES') || itemTipoUpper === 'L.PERSONALES') {
+            correctedItem.tipo = 'LESIONES PERSONALES';
+            corrections.push('Tipo normalizado a LESIONES PERSONALES');
+        } else if (itemTipoUpper.includes('HOMICI')) {
+            correctedItem.tipo = 'HOMICIDIO';
+            corrections.push('Tipo normalizado a HOMICIDIO');
+        }
+
+        const finalTipo = correctedItem.tipo.toUpperCase();
+        const isValidType = validTypes.some(vt => finalTipo.includes(vt));
 
         if (!isValidType && item.tipo) {
             status = 'warning';
