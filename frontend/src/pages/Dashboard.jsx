@@ -24,14 +24,11 @@ const Dashboard = () => {
                 const summaryRes = await fetch(`${API_BASE_URL}/analitica/estadisticas/resumen`);
                 if (!summaryRes.ok) throw new Error('Error al cargar resumen');
                 const summaryData = await summaryRes.json();
-                console.log("Resumen de incidentes (primeros 5):", summaryData.slice(0, 5));
-                console.log("Total incidentes cargados:", summaryData.length);
 
                 // Fetch Map Data (GeoJSON)
                 const mapRes = await fetch(`${API_BASE_URL}/analitica/eventos/geojson`);
                 if (mapRes.ok) {
                     const geoData = await mapRes.json();
-                    console.log("GeoJSON features:", geoData.features ? geoData.features.length : 0);
                     setMapData(geoData.features || []);
                 }
 
@@ -51,7 +48,7 @@ const Dashboard = () => {
         return (
             <div className="flex flex-col items-center justify-center h-96">
                 <Loader className="w-12 h-12 text-primary animate-spin mb-4" />
-                <p className="text-neutral-500 font-medium">Cargando SISC Jamundí...</p>
+                <p className="text-slate-500 font-medium">Cargando SISC Jamundí...</p>
             </div>
         );
     }
@@ -60,7 +57,7 @@ const Dashboard = () => {
         if (!dashboardData.recentActivity.length) return;
 
         const headers = ["ID", "Tipo", "Barrio", "Fecha", "Estado"];
-        const rows = dashboardData.recentActivity.map(i => [i.id, i.type, i.location, i.time, i.status]);
+        const rows = dashboardData.recentActivity.map(i => [i.id, (i.type || 'N/A'), (i.location || 'N/A'), (i.time || 'N/A'), (i.status || 'N/A')]);
 
         let csvContent = "data:text/csv;charset=utf-8,"
             + headers.join(",") + "\n"
@@ -75,16 +72,18 @@ const Dashboard = () => {
         document.body.removeChild(link);
     };
 
+    const { kpiData, crimeTrendData, crimeDistributionData, recentActivity } = dashboardData;
+
     return (
         <div className="space-y-6 animate-fade-in">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-neutral">Tablero de Control</h2>
-                    <p className="text-neutral-500 text-sm italic">Observatorio de Seguridad y Convivencia de Jamundí</p>
+                    <p className="text-slate-500 text-sm italic">Observatorio de Seguridad y Convivencia de Jamundí</p>
                 </div>
                 <div className="flex space-x-3">
                     <div className="relative">
-                        <select className="appearance-none bg-white border border-neutral-200 text-neutral-600 text-sm rounded-lg focus:ring-primary focus:border-primary block pl-3 pr-8 py-2.5 shadow-sm cursor-pointer hover:border-neutral-300 transition-colors">
+                        <select className="appearance-none bg-white border border-slate-200 text-slate-600 text-sm rounded-lg focus:ring-primary focus:border-primary block pl-3 pr-8 py-2.5 shadow-sm cursor-pointer hover:border-slate-300 transition-colors">
                             <option>Últimos 6 meses</option>
                             <option>Este año</option>
                             <option>Año anterior</option>
@@ -103,7 +102,7 @@ const Dashboard = () => {
 
             {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {kpiData.map((kpi, index) => (
+                {kpiData && kpiData.map((kpi, index) => (
                     <KPICard key={index} data={kpi} />
                 ))}
             </div>
