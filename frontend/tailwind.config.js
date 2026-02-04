@@ -7,11 +7,12 @@ export default {
     theme: {
         extend: {
             colors: {
-                primary: "#AF8254", // Driftwood
-                secondary: "#85A3E1", // Chetwode Blue
-                accent: "#FFB600", // Yellow
-                neutral: "#606175", // Grey text
-                background: "#f8fafc", // Slate 50
+                primary: "#281FD0",    /* Azul Institucional */
+                secondary: "#384CF5",  /* Azul Secundario */
+                accent: "#FFB600",     /* Oro/Naranja acento */
+                jamundi_yellow: "#FFE000", /* Amarillo Institucional */
+                neutral: "#3A3A44",    /* Gris Oscuro Institucional */
+                background: "#F2F4F7", /* Fondo */
                 surface: "#ffffff",
             },
             fontFamily: {

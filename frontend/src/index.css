@@ -1,24 +1,35 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@300;500;700&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-deep: #05070a;
-  --glass: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --accent-crimson: #ff2a6d;
-  --accent-cyan: #05d9e8;
-  --text-main: #e0e0e0;
-  --primary: #3b82f6;
-  /* Adaptado del diseño del escritorio */
+  /* Alcaldía de Jamundí - Manual de Identidad Visual */
+  --primary: #281FD0;
+  /* Azul Institucional */
+  --primary-light: #384CF5;
+  /* Azul Secundario */
+  --accent: #FFB600;
+  /* Oro/Naranja de acento digital */
+  --accent-yellow: #FFE000;
+  /* Amarillo Institucional */
+  --dark: #3A3A44;
+  /* Gris Oscuro Institucional */
+  --light-gray: #C5C5D2;
+  /* Gris Claro Institucional */
+  --bg-app: #F2F4F7;
+  /* Fondo claro */
+  --white: #ffffff;
+
+  --glass: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(40, 31, 208, 0.1);
+
+  /* Fuentes */
+  --font-main: 'Calibri', 'Inter', system-ui, sans-serif;
+  --font-display: 'Outfit', sans-serif;
 }
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
-    font-family: 'Inter', sans-serif;
+    @apply bg-[#F2F4F7] text-[#3A3A44] antialiased;
+    font-family: var(--font-main);
   }
 }
 

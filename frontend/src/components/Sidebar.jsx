@@ -10,9 +10,9 @@ const Sidebar = ({ activePage, setActivePage }) => {
     ];
 
     return (
-        <aside className="w-72 bg-slate-900 text-white min-h-screen flex flex-col shadow-2xl relative overflow-hidden">
-            {/* Background decoration */}
-            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-slate-800/50 to-transparent pointer-events-none" />
+        <aside className="w-72 bg-[#281FD0] text-white min-h-screen flex flex-col shadow-2xl relative overflow-hidden">
+            {/* Background decoration - subtle gradient */}
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
 
             <div className="p-6 flex items-center space-x-4 border-b border-slate-800/50 relative z-10">
                 <div className="bg-white p-1.5 rounded-xl shadow-inner flex items-center justify-center">
@@ -38,8 +38,8 @@ const Sidebar = ({ activePage, setActivePage }) => {
                                     onClick={() => setActivePage(item.id)}
                                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 group
                                         ${isActive
-                                            ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                            : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                            ? 'bg-white/20 text-white shadow-lg backdrop-blur-md border border-white/10'
+                                            : 'text-white/70 hover:bg-white/10 hover:text-white'
                                         }`}
                                 >
                                     <div className="flex items-center space-x-3">
@@ -55,7 +55,7 @@ const Sidebar = ({ activePage, setActivePage }) => {
             </nav>
 
             <div className="p-4 border-t border-slate-800/50 relative z-10">
-                <button className="flex items-center space-x-3 text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-3 rounded-xl transition-all w-full group">
+                <button className="flex items-center space-x-3 text-white/70 hover:text-white hover:bg-white/10 px-4 py-3 rounded-xl transition-all w-full group">
                     <Settings size={20} className="group-hover:rotate-90 transition-transform duration-500" />
                     <span className="font-medium">Configuración</span>
                 </button>

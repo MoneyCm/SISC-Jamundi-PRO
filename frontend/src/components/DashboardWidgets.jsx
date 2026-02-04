@@ -64,30 +64,30 @@ export const TrendChart = ({ data }) => {
                     <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorHurtos" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#384CF5" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#384CF5" stopOpacity={0} />
                             </linearGradient>
                             <linearGradient id="colorVif" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#FFB600" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#FFB600" stopOpacity={0} />
                             </linearGradient>
                             <linearGradient id="colorHomicidios" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#281FD0" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#281FD0" stopOpacity={0} />
                             </linearGradient>
                             <linearGradient id="colorLesiones" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#FFE000" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#FFE000" stopOpacity={0} />
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                         <Tooltip content={<CustomTooltip />} />
-                        <Area type="monotone" dataKey="homicidios" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorHomicidios)" name="Homicidios" activeDot={{ r: 6, strokeWidth: 0 }} />
-                        <Area type="monotone" dataKey="hurtos" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorHurtos)" name="Hurtos" activeDot={{ r: 6, strokeWidth: 0 }} />
-                        <Area type="monotone" dataKey="vif" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorVif)" name="Violencia Intrafamiliar" activeDot={{ r: 6, strokeWidth: 0 }} />
-                        <Area type="monotone" dataKey="lesiones" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorLesiones)" name="Lesiones Personales" activeDot={{ r: 6, strokeWidth: 0 }} />
+                        <Area type="monotone" dataKey="homicidios" stroke="#281FD0" strokeWidth={3} fillOpacity={1} fill="url(#colorHomicidios)" name="Homicidios" activeDot={{ r: 6, strokeWidth: 0 }} />
+                        <Area type="monotone" dataKey="hurtos" stroke="#384CF5" strokeWidth={3} fillOpacity={1} fill="url(#colorHurtos)" name="Hurtos" activeDot={{ r: 6, strokeWidth: 0 }} />
+                        <Area type="monotone" dataKey="vif" stroke="#FFB600" strokeWidth={3} fillOpacity={1} fill="url(#colorVif)" name="Violencia Intrafamiliar" activeDot={{ r: 6, strokeWidth: 0 }} />
+                        <Area type="monotone" dataKey="lesiones" stroke="#FFE000" strokeWidth={3} fillOpacity={1} fill="url(#colorLesiones)" name="Lesiones Personales" activeDot={{ r: 6, strokeWidth: 0 }} />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>
@@ -96,7 +96,7 @@ export const TrendChart = ({ data }) => {
 };
 
 export const DistributionChart = ({ data }) => {
-    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+    const COLORS = ['#281FD0', '#384CF5', '#FFB600', '#FFE000', '#3A3A44'];
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 h-96 flex flex-col">
