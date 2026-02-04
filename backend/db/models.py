@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Date, Time, ForeignKey, Boolean, Text
+from sqlalchemy import create_engine, Column, Integer, String, Date, Time, ForeignKey, Boolean, Text, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -19,6 +19,16 @@ Base = declarative_base()
 
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    # Asegurar que PostGIS existe y la columna también
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS location_geom GEOMETRY(Point, 4326);"))
+            conn.commit()
+            print("PostGIS y columna location_geom verificados con éxito.")
+        except Exception as e:
+            print(f"Nota: No se pudo verificar la columna geom (puede que ya exista o falten permisos): {e}")
+            conn.rollback()
 
 class Role(Base):
     __tablename__ = "roles"
