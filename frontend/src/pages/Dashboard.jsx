@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { KPICard, TrendChart, DistributionChart, RecentActivity } from '../components/DashboardWidgets';
+import { KPICard, TrendChart, DistributionChart, RecentActivity, AIInsightWidget, EarlyWarningWidget } from '../components/DashboardWidgets';
 import MapComponent from '../components/Map/MapComponent';
 import { kpiData as mockKpiData, crimeTrendData as mockTrendData, crimeDistributionData as mockDistributionData, recentActivity as mockRecentActivity } from '../data/mockData';
 import { transformDashboardData } from '../utils/dataTransformers';
@@ -16,26 +16,75 @@ const Dashboard = () => {
     const [mapData, setMapData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [aiInsight, setAiInsight] = useState('');
+    const [aiLoading, setAiLoading] = useState(true);
+    const [aiProvider, setAiProvider] = useState('IA');
+    const [alerts, setAlerts] = useState([]);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch Dashboard Summary
-                const summaryRes = await fetch(`${API_BASE_URL}/analitica/estadisticas/resumen`);
-                if (!summaryRes.ok) throw new Error('Error al cargar resumen');
-                const summaryData = await summaryRes.json();
+                // 1. Fetch KPIs
+                const kpiRes = await fetch(`${API_BASE_URL}/analitica/estadisticas/kpis`);
+                const kpis = await kpiRes.json();
 
-                // Fetch Map Data (GeoJSON)
+                // 2. Fetch Tendencia
+                const trendRes = await fetch(`${API_BASE_URL}/analitica/estadisticas/tendencia`);
+                const trendData = await trendRes.json();
+
+                // 3. Fetch Distribución
+                const distRes = await fetch(`${API_BASE_URL}/analitica/estadisticas/distribucion`);
+                const distData = await distRes.json();
+
+                // 4. Fetch Actividad Reciente (Resumen)
+                const recentRes = await fetch(`${API_BASE_URL}/analitica/estadisticas/resumen`);
+                const recentData = await recentRes.json();
+
+                // 5. Fetch Map Data (GeoJSON)
                 const mapRes = await fetch(`${API_BASE_URL}/analitica/eventos/geojson`);
+                let mapFeatures = [];
                 if (mapRes.ok) {
                     const geoData = await mapRes.json();
-                    setMapData(geoData.features || []);
+                    mapFeatures = geoData.features || [];
                 }
 
-                const transformed = transformDashboardData(summaryData);
-                setDashboardData(transformed);
+                setDashboardData({
+                    kpiData: [
+                        { title: "Total Incidentes", value: kpis.total_incidentes.toString(), change: "En vivo", trend: "neutral", icon: "AlertTriangle" },
+                        { title: "Tasa Homicidios", value: kpis.tasa_homicidios.toString(), change: "Por 100k hab", trend: "neutral", icon: "Skull" },
+                        { title: "Zonas Críticas", value: kpis.zonas_criticas.toString(), change: "Sectores", trend: "neutral", icon: "MapPin" },
+                        { title: "Población", value: "150,000", change: "Jamundí", trend: "neutral", icon: "Users" },
+                    ],
+                    crimeTrendData: trendData,
+                    crimeDistributionData: distData,
+                    recentActivity: recentData.slice(0, 5).map(i => ({
+                        id: i.id,
+                        type: i.tipo,
+                        location: i.barrio,
+                        time: i.fecha,
+                        status: i.estado
+                    }))
+                });
+                setMapData(mapFeatures);
+
+                try {
+                    const aiRes = await fetch(`${API_BASE_URL}/ia/insights`);
+                    const aiData = await aiRes.json();
+                    setAiInsight(aiData.insight);
+                    setAiProvider(aiData.provider || 'IA');
+
+                    // 7. Fetch Alerts
+                    const alertsRes = await fetch(`${API_BASE_URL}/ia/alertas`);
+                    const alertsData = await alertsRes.json();
+                    setAlerts(alertsData.alertas || []);
+                } catch (aiErr) {
+                    console.error("Error cargando IA insights o alertas:", aiErr);
+                } finally {
+                    setAiLoading(false);
+                }
             } catch (err) {
-                console.log("Error cargando datos reales:", err.message);
+                console.error("Error cargando datos reales:", err.message);
+                setError("Error conectando con el sistema local.");
             } finally {
                 setLoading(false);
             }
@@ -52,6 +101,25 @@ const Dashboard = () => {
             </div>
         );
     }
+
+    const handleDownloadPDF = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/reportes/generar-boletin`);
+            if (!response.ok) throw new Error("Error generando PDF");
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Boletin_SISC_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch (err) {
+            console.error("Error al descargar PDF:", err);
+            alert("No se pudo generar el reporte técnico en este momento.");
+        }
+    };
 
     const handleExportCSV = () => {
         if (!dashboardData.recentActivity.length) return;
@@ -98,6 +166,18 @@ const Dashboard = () => {
                         Exportar Reporte
                     </button>
                 </div>
+            </div>
+
+            {/* Early Warning Section */}
+            <EarlyWarningWidget alerts={alerts} />
+
+            <div className="grid grid-cols-1 gap-6">
+                <AIInsightWidget
+                    insight={aiInsight}
+                    loading={aiLoading}
+                    provider={aiProvider}
+                    onTechnicalReport={handleDownloadPDF}
+                />
             </div>
 
             {/* KPIs */}
