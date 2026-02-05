@@ -1,6 +1,6 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain } from 'lucide-react';
 
 const iconMap = {
     AlertTriangle: AlertTriangle,
@@ -174,6 +174,72 @@ export const RecentActivity = ({ data }) => {
                                 {item.status}
                             </span>
                             <p className="text-[10px] text-slate-400 font-medium">{item.time}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport }) => {
+    return (
+        <div className="bg-slate-900 p-6 rounded-xl shadow-xl border border-slate-800 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Brain size={120} className="text-primary" />
+            </div>
+            <div className="relative z-10">
+                <div className="flex items-center space-x-3 mb-4">
+                    <div className="p-2 bg-primary/20 rounded-lg">
+                        <Brain className="text-primary w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white">Perspectiva del Observatorio</h3>
+                </div>
+                {loading ? (
+                    <div className="flex items-center space-x-3 text-slate-400">
+                        <Activity className="animate-pulse w-4 h-4" />
+                        <p className="text-sm italic">SISC está sintetizando patrones...</p>
+                    </div>
+                ) : (
+                    <p className="text-slate-300 text-sm leading-relaxed italic">
+                        "{insight}"
+                    </p>
+                )}
+                <div className="mt-4 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2 py-1 bg-white/5 rounded">
+                        {provider || 'AI Analista'}
+                    </span>
+                    <button
+                        onClick={onTechnicalReport}
+                        className="text-xs text-primary font-bold hover:text-white transition-colors"
+                    >
+                        Ver reporte técnico
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export const EarlyWarningWidget = ({ alerts = [] }) => {
+    if (alerts.length === 0) return null;
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="text-red-500 animate-bounce" size={20} />
+                <h3 className="text-lg font-bold text-slate-800">Alertas Tempranas Detectadas</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {alerts.map((alert, idx) => (
+                    <div key={idx} className={`p-4 rounded-xl border-l-4 shadow-sm flex items-start gap-4 ${alert.nivel === 'CRÍTICO' ? 'bg-red-50 border-red-500' : 'bg-orange-50 border-orange-500'}`}>
+                        <div className={`p-2 rounded-lg ${alert.nivel === 'CRÍTICO' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                            <Activity size={20} />
+                        </div>
+                        <div>
+                            <p className={`text-xs font-bold uppercase tracking-wider ${alert.nivel === 'CRÍTICO' ? 'text-red-600' : 'text-orange-600'}`}>{alert.nivel}</p>
+                            <p className="text-sm text-slate-800 font-medium mt-1">{alert.mensaje}</p>
+                            <p className="text-[10px] text-slate-500 mt-2">Tendencia: {alert.anterior} → {alert.actual} casos</p>
                         </div>
                     </div>
                 ))}
