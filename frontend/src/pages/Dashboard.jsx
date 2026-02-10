@@ -146,12 +146,12 @@ const Dashboard = () => {
         <div className="space-y-6 animate-fade-in">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-neutral">Tablero de Control</h2>
+                    <h2 className="text-xl md:text-2xl font-bold text-neutral">Tablero de Control</h2>
                     <p className="text-slate-500 text-sm italic">Observatorio del Delito</p>
                 </div>
-                <div className="flex space-x-3">
-                    <div className="relative">
-                        <select className="appearance-none bg-white border border-slate-200 text-slate-600 text-sm rounded-lg focus:ring-primary focus:border-primary block pl-3 pr-8 py-2.5 shadow-sm cursor-pointer hover:border-slate-300 transition-colors">
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <div className="relative flex-1 md:flex-none">
+                        <select className="appearance-none w-full bg-white border border-slate-200 text-slate-600 text-sm rounded-lg focus:ring-primary focus:border-primary block pl-3 pr-8 py-2.5 shadow-sm cursor-pointer hover:border-slate-300 transition-colors">
                             <option>Últimos 6 meses</option>
                             <option>Este año</option>
                             <option>Año anterior</option>
@@ -160,10 +160,10 @@ const Dashboard = () => {
                     </div>
                     <button
                         onClick={handleExportCSV}
-                        className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all shadow-sm hover:shadow-md active:scale-95"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all shadow-sm hover:shadow-md active:scale-95"
                     >
                         <Download size={16} />
-                        Exportar Reporte
+                        Exportar
                     </button>
                 </div>
             </div>
@@ -181,7 +181,7 @@ const Dashboard = () => {
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 {kpiData && kpiData.map((kpi, index) => (
                     <KPICard key={index} data={kpi} />
                 ))}
@@ -199,10 +199,10 @@ const Dashboard = () => {
 
             {/* Bottom Section: Map & Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 h-[400px] flex flex-col">
+                <div className="lg:col-span-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 h-[300px] md:h-[400px] flex flex-col">
                     <div className="p-4 border-b border-slate-50 flex justify-between items-center">
-                        <h3 className="font-bold text-slate-800">Georreferenciación del Delito</h3>
-                        <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">En vivo</span>
+                        <h3 className="font-bold text-slate-800 text-sm md:text-base">Georreferenciación</h3>
+                        <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">En vivo</span>
                     </div>
                     <div className="flex-1 relative z-0">
                         <MapComponent incidents={mapData} />

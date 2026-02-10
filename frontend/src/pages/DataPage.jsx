@@ -239,27 +239,27 @@ const DataPage = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-slate-100">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Gestión de Datos</h2>
-                    <p className="text-slate-500">Administración de registros delictivos</p>
+                    <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">Bodega de Datos</h2>
+                    <p className="text-slate-500 text-sm font-medium">Sincronización con SIEDCO y fuentes secundarias</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 w-full lg:w-auto">
                     <button
                         onClick={handleClearDatabase}
-                        className="flex items-center space-x-2 bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors border border-red-100"
+                        className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-red-50 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-100 transition-colors border border-red-100 text-xs font-bold uppercase tracking-wider"
                     >
-                        <Trash2 size={20} />
-                        <span>Limpiar Base de Datos</span>
+                        <Trash2 size={18} />
+                        <span>Limpiar</span>
                     </button>
-                    <label className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm">
-                        <Upload size={20} />
-                        <span>Cargar Excel / SIEDCO</span>
+                    <label className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-all cursor-pointer shadow-md active:scale-95 text-xs font-bold uppercase tracking-wider">
+                        <Upload size={18} />
+                        <span>Sincronizar SIEDCO (Excel)</span>
                         <input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
                     </label>
-                    <button className="flex items-center space-x-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-emphasis transition-colors shadow-sm">
-                        <Plus size={20} />
-                        <span>Nuevo Registro</span>
+                    <button className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-primary text-white px-4 py-2.5 rounded-lg hover:bg-emphasis transition-all shadow-md active:scale-95 text-xs font-bold uppercase tracking-wider">
+                        <Plus size={18} />
+                        <span>Nuevo Caso</span>
                     </button>
                 </div>
             </div>

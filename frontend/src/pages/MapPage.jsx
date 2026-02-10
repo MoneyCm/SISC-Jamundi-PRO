@@ -54,81 +54,79 @@ const MapPage = () => {
     };
 
     return (
-        <div className="flex h-full gap-4">
+        <div className="flex flex-col lg:flex-row h-full gap-4 lg:gap-6 animate-fade-in">
             {/* Sidebar de Filtros */}
-            <div className="w-80 bg-white rounded-lg shadow-sm p-4 flex flex-col h-full overflow-y-auto">
-                <div className="flex items-center space-x-2 mb-6 text-slate-700 border-b pb-4">
-                    <Filter size={20} />
-                    <h2 className="font-bold text-lg">Filtros</h2>
+            <div className="w-full lg:w-80 bg-white rounded-xl shadow-sm p-4 lg:p-6 flex flex-col border border-slate-100 divide-y lg:divide-y-0 divide-slate-50">
+                <div className="flex items-center space-x-2 mb-4 lg:mb-6 text-slate-700 border-b border-slate-50 pb-4">
+                    <Filter size={20} className="text-primary" />
+                    <h2 className="font-bold text-lg">Filtros Avanzados</h2>
                 </div>
 
-                <div className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center">
-                            <AlertTriangle size={16} className="mr-2 text-primary" />
-                            Tipo de Delito
-                        </label>
-                        <div className="space-y-2">
-                            {CATEGORIES.map((type) => (
-                                <label key={type} className="flex items-center space-x-2 text-sm text-slate-600 cursor-pointer hover:text-slate-900 capitalize">
-                                    <input
-                                        type="checkbox"
-                                        className="rounded border-slate-300 text-primary focus:ring-primary"
-                                        checked={selectedCategories.includes(type)}
-                                        onChange={() => handleCategoryToggle(type)}
-                                    />
-                                    <span>{type.toLowerCase()}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center">
-                            <Calendar size={16} className="mr-2 text-primary" />
-                            Rango de Fechas
-                        </label>
-                        <div className="space-y-3">
-                            <div>
-                                <span className="text-[10px] uppercase font-bold text-slate-400">Desde</span>
+                <div className="py-4 lg:py-0">
+                    <label className="block text-sm font-semibold text-slate-700 mb-3 flex items-center">
+                        <AlertTriangle size={16} className="mr-2 text-primary" />
+                        Tipificación del Delito
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+                        {CATEGORIES.map((type) => (
+                            <label key={type} className="flex items-center space-x-3 text-sm text-slate-600 cursor-pointer hover:text-primary transition-colors capitalize bg-slate-50/50 p-2 rounded-lg border border-transparent hover:border-primary/20">
                                 <input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className="w-full border-slate-200 rounded-md text-sm focus:ring-primary focus:border-primary"
+                                    type="checkbox"
+                                    className="rounded border-slate-300 text-primary focus:ring-primary w-4 h-4"
+                                    checked={selectedCategories.includes(type)}
+                                    onChange={() => handleCategoryToggle(type)}
                                 />
-                            </div>
-                            <div>
-                                <span className="text-[10px] uppercase font-bold text-slate-400">Hasta</span>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    className="w-full border-slate-200 rounded-md text-sm focus:ring-primary focus:border-primary"
-                                />
-                            </div>
-                        </div>
+                                <span className="font-medium">{type.toLowerCase()}</span>
+                            </label>
+                        ))}
                     </div>
-
-                    <button
-                        onClick={fetchIncidents}
-                        disabled={loading}
-                        className="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-sm font-medium shadow-sm flex items-center justify-center space-x-2 disabled:opacity-50"
-                    >
-                        {loading && <Loader2 size={16} className="animate-spin" />}
-                        <span>Aplicar Filtros</span>
-                    </button>
-
-                    {error && (
-                        <p className="text-xs text-red-500 bg-red-50 p-2 rounded border border-red-100 italic">
-                            {error}
-                        </p>
-                    )}
                 </div>
+
+                <div className="py-4 lg:py-6 space-y-4">
+                    <label className="block text-sm font-semibold text-slate-700 mb-1 flex items-center">
+                        <Calendar size={16} className="mr-2 text-primary" />
+                        Rango Temporal
+                    </label>
+                    <div className="flex flex-col sm:flex-row lg:flex-col gap-3">
+                        <div className="flex-1">
+                            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider mb-1 block">Fecha Inicial</span>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="w-full border-slate-200 rounded-lg text-sm focus:ring-primary focus:border-primary shadow-sm"
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider mb-1 block">Fecha Final</span>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="w-full border-slate-200 rounded-lg text-sm focus:ring-primary focus:border-primary shadow-sm"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <button
+                    onClick={fetchIncidents}
+                    disabled={loading}
+                    className="w-full mt-6 bg-primary text-white py-3 px-4 rounded-xl hover:bg-emphasis transition-all text-sm font-bold shadow-md hover:shadow-lg flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-[0.98]"
+                >
+                    {loading ? <Loader2 size={18} className="animate-spin" /> : <Filter size={18} />}
+                    <span>Actualizar Visualización</span>
+                </button>
+
+                {error && (
+                    <p className="mt-4 text-xs text-red-500 bg-red-50 p-3 rounded-lg border border-red-100 italic">
+                        {error}
+                    </p>
+                )}
             </div>
 
             {/* Área del Mapa */}
-            <div className="flex-1 bg-white rounded-lg shadow-sm p-1 border border-slate-200 relative z-0 min-h-[500px]">
+            <div className="flex-1 bg-white rounded-xl shadow-sm p-1 border border-slate-100 relative z-0 min-h-[400px] lg:min-h-0 overflow-hidden">
                 <MapComponent incidents={incidents} />
             </div>
         </div>

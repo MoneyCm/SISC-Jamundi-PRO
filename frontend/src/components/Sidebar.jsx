@@ -1,7 +1,7 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X } from 'lucide-react';
 
-const Sidebar = ({ activePage, setActivePage }) => {
+const Sidebar = ({ activePage, setActivePage, isOpen, onClose }) => {
     const menuItems = [
         { id: 'dashboard', label: 'Tablero de Control', icon: LayoutDashboard },
         { id: 'map', label: 'Mapa del Delito', icon: Map },
@@ -10,20 +10,29 @@ const Sidebar = ({ activePage, setActivePage }) => {
     ];
 
     return (
-        <aside className="w-72 bg-[#281FD0] text-white min-h-screen flex flex-col shadow-2xl relative overflow-hidden">
+        <aside className={`fixed inset-y-0 left-0 z-30 w-72 bg-[#281FD0] text-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out md:relative md:translate-x-0 overflow-hidden ${isOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}>
             {/* Background decoration - subtle gradient */}
             <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
 
-            <div className="p-6 flex items-center space-x-4 border-b border-slate-800/50 relative z-10">
-                <div className="bg-white p-1.5 rounded-xl shadow-inner flex items-center justify-center">
-                    <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-10 h-12 object-contain" />
+            <div className="p-6 flex items-center justify-between border-b border-slate-800/50 relative z-10">
+                <div className="flex items-center space-x-4">
+                    <div className="bg-white p-1.5 rounded-xl shadow-inner flex items-center justify-center">
+                        <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-10 h-10 object-contain" />
+                    </div>
+                    <div className="flex flex-col">
+                        <h1 className="text-xl font-black tracking-tight text-white leading-none">Observatorio</h1>
+                        <span className="text-[10px] text-white font-bold uppercase tracking-[0.05em] mt-1 opacity-90">
+                            del Delito <span className="opacity-60">| Jamundí</span>
+                        </span>
+                    </div>
                 </div>
-                <div className="flex flex-col">
-                    <h1 className="text-xl font-black tracking-tight text-white leading-none">Observatorio</h1>
-                    <span className="text-[10px] text-white font-bold uppercase tracking-[0.05em] mt-1 opacity-90">
-                        del Delito <span className="opacity-60">| Jamundí</span>
-                    </span>
-                </div>
+                <button
+                    onClick={onClose}
+                    className="md:hidden text-white/60 hover:text-white transition-colors"
+                >
+                    <X size={24} />
+                </button>
             </div>
 
             <nav className="flex-1 py-8 px-4 relative z-10">
@@ -35,7 +44,10 @@ const Sidebar = ({ activePage, setActivePage }) => {
                         return (
                             <li key={item.id}>
                                 <button
-                                    onClick={() => setActivePage(item.id)}
+                                    onClick={() => {
+                                        setActivePage(item.id);
+                                        onClose();
+                                    }}
                                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 group
                                         ${isActive
                                             ? 'bg-white/20 text-white shadow-lg backdrop-blur-md border border-white/10'

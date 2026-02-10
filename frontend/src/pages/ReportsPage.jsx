@@ -46,22 +46,22 @@ const ReportsPage = () => {
     return (
         <div className="space-y-6">
             {/* Encabezado y Filtros */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-slate-100">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Boletines y Reportes</h2>
-                    <p className="text-slate-500">Estadísticas de seguridad y convivencia</p>
+                    <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">Boletines Técnicos</h2>
+                    <p className="text-slate-500 text-sm">Inteligencia estratégica de seguridad</p>
                 </div>
-                <div className="flex gap-2">
-                    <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50">
-                        <Calendar size={18} />
-                        <span>Últimos 6 meses</span>
+                <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+                    <button className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors text-sm font-medium">
+                        <Calendar size={18} className="text-slate-400" />
+                        <span>Este Semestre</span>
                     </button>
                     <button
                         onClick={handleExportPDF}
-                        className="flex items-center space-x-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+                        className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-emphasis transition-all shadow-md active:scale-95 text-sm font-bold"
                     >
                         <Download size={18} />
-                        <span>Exportar PDF</span>
+                        <span>Generar PDF</span>
                     </button>
                 </div>
             </div>

@@ -3,12 +3,28 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 
 const Layout = ({ children, activePage, setActivePage }) => {
+    const [sidebarOpen, setSidebarOpen] = React.useState(false);
+
     return (
-        <div className="flex h-screen bg-slate-50 overflow-hidden">
-            <Sidebar activePage={activePage} setActivePage={setActivePage} />
-            <div className="flex-1 flex flex-col min-w-0">
-                <Header />
-                <main className="flex-1 overflow-y-auto p-8">
+        <div className="flex h-screen bg-slate-50 overflow-hidden relative">
+            {/* Mobile Sidebar Overlay */}
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-slate-900/50 z-20 md:hidden backdrop-blur-sm transition-opacity"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
+            <Sidebar
+                activePage={activePage}
+                setActivePage={setActivePage}
+                isOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
+            />
+
+            <div className="flex-1 flex flex-col min-w-0 h-full">
+                <Header onMenuClick={() => setSidebarOpen(true)} />
+                <main className="flex-1 overflow-y-auto p-4 md:p-8">
                     {children}
                 </main>
             </div>

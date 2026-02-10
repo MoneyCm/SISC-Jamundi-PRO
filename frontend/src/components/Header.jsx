@@ -1,16 +1,24 @@
-import React from 'react';
-import { Bell, User, Search } from 'lucide-react';
+import { Bell, User, Search, Menu } from 'lucide-react';
 
-const Header = () => {
+const Header = ({ onMenuClick }) => {
     return (
-        <header className="bg-white border-b border-slate-100 h-16 flex items-center justify-between px-8 z-10 sticky top-0">
-            <div className="flex items-center bg-slate-50 rounded-full px-4 py-2 w-96 border border-slate-100">
-                <Search size={18} className="text-slate-400 mr-2" />
-                <input
-                    type="text"
-                    placeholder="Buscar reportes, zonas, indicadores..."
-                    className="bg-transparent border-none outline-none text-sm text-slate-700 w-full placeholder-slate-400"
-                />
+        <header className="bg-white border-b border-slate-100 h-16 flex items-center justify-between px-4 md:px-8 z-10 sticky top-0">
+            <div className="flex items-center space-x-4">
+                <button
+                    onClick={onMenuClick}
+                    className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-lg md:hidden transition-colors"
+                >
+                    <Menu size={24} />
+                </button>
+
+                <div className="hidden sm:flex items-center bg-slate-50 rounded-full px-4 py-2 w-64 lg:w-96 border border-slate-100">
+                    <Search size={18} className="text-slate-400 mr-2" />
+                    <input
+                        type="text"
+                        placeholder="Buscar reportes..."
+                        className="bg-transparent border-none outline-none text-sm text-slate-700 w-full placeholder-slate-400"
+                    />
+                </div>
             </div>
 
             <div className="flex items-center space-x-6">
