@@ -1,4 +1,4 @@
-# Arquitectura Técnica - SISC Jamundí
+# Arquitectura Técnica - SISC Jamundí (Observatorio del Delito)
 
 ## 1. Diagrama Conceptual
 ```mermaid

@@ -1,13 +1,17 @@
-# PRD - Sistema de Información para la Seguridad y la Convivencia (SISC) Jamundí
+# PRD - Observatorio del Delito (SISC Jamundí)
 
 ## 1. Objetivos del Producto
-El SISC Jamundí busca centralizar, procesar y analizar información estratégica sobre violencia, delincuencia y convivencia ciudadana para orientar la política pública del municipio.
+El sistema se enmarca en la estrategia "Jamundí se transforma con seguridad y convivencia", actuando como el **Sistema de Información para la Seguridad y Convivencia (SISC)**. Su propósito es servir como la herramienta tecnológica del **Observatorio del Delito** para gestionar y consolidar información estratégica sobre los comportamientos contra la vida y la integridad personal.
 
-### Objetivos específicos:
-- Consolidar fuentes administrativas (Policía, Fiscalía, etc.).
-- Producir indicadores georreferenciados y temporales.
-- Automatizar la generación de boletines de seguridad.
-- Ofrecer transparencia a la ciudadanía mediante datos agregados.
+### Misión del Observatorio:
+Gestionar y consolidar información estratégica y periódica sobre los comportamientos contra la vida y la integridad personal para elaborar análisis e investigaciones sobre los fenómenos de violencia e inseguridad que afectan el territorio.
+
+### Funciones Soportadas por el Sistema:
+1. **Coordinación de datos**: Integrar información de entes de Seguridad Pública.
+2. **Generación de informes**: Producir reportes periódicos de delitos y contravenciones.
+3. **Diagnóstico y Caracterización**: Identificar problemáticas y factores de riesgo.
+4. **Georreferenciación (GIS)**: Identificar las zonas más afectadas por delitos en el municipio.
+5. **Priorización**: Facilitar la priorización de problemáticas a atender mediante datos.
 
 ## 2. Usuarios y Roles
 | Rol | Descripción | Permisos Clave |

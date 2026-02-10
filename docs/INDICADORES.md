@@ -1,4 +1,4 @@
-# Indicadores y Reportes - SISC Jamundí
+# Indicadores y Reportes - Observatorio del Delito (SISC Jamundí)
 
 ## 1. Indicadores del MVP
 
