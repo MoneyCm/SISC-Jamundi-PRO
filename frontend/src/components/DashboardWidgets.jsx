@@ -198,7 +198,7 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
                 {loading ? (
                     <div className="flex items-center space-x-3 text-slate-400">
                         <Activity className="animate-pulse w-4 h-4" />
-                        <p className="text-sm italic">SISC está sintetizando patrones...</p>
+                        <p className="text-sm italic">El Observatorio está sintetizando patrones...</p>
                     </div>
                 ) : (
                     <p className="text-slate-300 text-sm leading-relaxed italic">

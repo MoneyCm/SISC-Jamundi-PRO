@@ -81,7 +81,7 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     top_barrio = db.query(Event.barrio, func.count(Event.id)).group_by(Event.barrio).order_by(func.count(Event.id).desc()).first()
     
     contexto = f"""
-    Eres el analista experto del SISC Jamundí (Sistema de Información para la Seguridad). 
+    Eres el analista experto del Observatorio del Delito de Jamundí. 
     Analiza estos datos actuales y da un resumen ejecutivo de un párrafo corto:
     - Total de incidentes registrados: {total}
     - Homicidios: {homicidios}

@@ -97,7 +97,7 @@ const Dashboard = () => {
         return (
             <div className="flex flex-col items-center justify-center h-96">
                 <Loader className="w-12 h-12 text-primary animate-spin mb-4" />
-                <p className="text-slate-500 font-medium">Cargando SISC Jamundí...</p>
+                <p className="text-slate-500 font-medium">Cargando Observatorio del Delito...</p>
             </div>
         );
     }
@@ -111,7 +111,7 @@ const Dashboard = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Boletin_SISC_${new Date().toISOString().split('T')[0]}.pdf`;
+            a.download = `Boletin_Observatorio_${new Date().toISOString().split('T')[0]}.pdf`;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -134,7 +134,7 @@ const Dashboard = () => {
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `SISC_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("download", `Observatorio_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -147,7 +147,7 @@ const Dashboard = () => {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-neutral">Tablero de Control</h2>
-                    <p className="text-slate-500 text-sm italic">Observatorio de Seguridad y Convivencia de Jamundí</p>
+                    <p className="text-slate-500 text-sm italic">Observatorio del Delito</p>
                 </div>
                 <div className="flex space-x-3">
                     <div className="relative">

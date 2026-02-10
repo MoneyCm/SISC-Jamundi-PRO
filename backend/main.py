@@ -13,7 +13,7 @@ load_dotenv()
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("sisc_api")
+logger = logging.getLogger("observatorio_api")
 
 from api import analitica, ingesta, auth, reportes, ia
 from db.models import create_tables
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
         # No detenemos la app para que Render pueda mostrar los logs si es necesario
     yield
 
-app = FastAPI(title="SISC Jamundí API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Observatorio del Delito API", version="0.1.0", lifespan=lifespan)
 
 # Loguear variables de entorno críticas (sin contraseñas) para depuración
 logger.info(f"DATABASE_URL configurada: {'SÍ' if os.getenv('DATABASE_URL') else 'NO'}")
@@ -67,7 +67,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "SISC Jamundí API is running"}
+    return {"message": "Observatorio del Delito API is running"}
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(analitica.router, prefix="/analitica", tags=["analitica"])
