@@ -263,7 +263,7 @@ const DataPage = () => {
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-slate-100">
                 <div>
                     <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">SISC Jamundí - Bodega de Datos</h2>
-                    <p className="text-slate-500 text-sm font-medium">Sincronización con SIEDCO y fuentes secundarias</p>
+                    <p className="text-slate-500 text-sm font-medium italic">Gestión de Trazabilidad y Datos - Oficina del Observatorio</p>
                 </div>
                 <div className="flex flex-wrap gap-2 w-full lg:w-auto">
                     <button

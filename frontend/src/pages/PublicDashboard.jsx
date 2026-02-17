@@ -3,6 +3,7 @@ import { KPICard, TrendChart, DistributionChart } from '../components/DashboardW
 import MapComponent from '../components/Map/MapComponent';
 import { Loader, Lock, Globe } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import AboutObservatorio from '../components/AboutObservatorio';
 
 const PublicDashboard = ({ onLoginClick }) => {
     const [dashboardData, setDashboardData] = useState({
@@ -148,9 +149,13 @@ const PublicDashboard = ({ onLoginClick }) => {
                 </div>
             </div>
 
+            {/* Nueva Sección: Sobre el Observatorio */}
+            <AboutObservatorio />
+
             <footer className="text-center py-10">
-                <p className="text-slate-400 text-sm">© 2026 Alcaldía de Jamundí - Datos Abiertos para la Seguridad</p>
-                <div className="mt-2 flex justify-center gap-4 text-xs font-semibold text-slate-500 uppercase tracking-tighter">
+                <p className="text-slate-400 text-sm">© 2026 Alcaldía de Jamundí - Oficina del Observatorio</p>
+                <p className="text-slate-500 text-[10px] mt-1 uppercase font-bold tracking-widest">SISC Jamundí - Datos Abiertos para la Seguridad</p>
+                <div className="mt-4 flex justify-center gap-4 text-xs font-semibold text-slate-500 uppercase tracking-tighter">
                     <span>Estrategia de Seguridad</span>
                     <span>•</span>
                     <span>Convivencia Ciudadana</span>
