@@ -24,10 +24,7 @@ const App = () => {
     setAppMode('public');
   };
 
-  // Public Mode Wrapper
-  if (appMode === 'public') {
-    return <PublicDashboard onLoginClick={() => setAppMode('login')} />;
-  }
+  const isPublic = appMode === 'public';
 
   if (appMode === 'login') {
     return <LoginPage
@@ -39,7 +36,7 @@ const App = () => {
   const renderContent = () => {
     switch (activePage) {
       case 'dashboard':
-        return <Dashboard />;
+        return isPublic ? <PublicDashboard onLoginClick={() => setAppMode('login')} /> : <Dashboard />;
       case 'map':
         return <MapPage />;
       case 'reports':
@@ -47,12 +44,17 @@ const App = () => {
       case 'data':
         return <DataPage />;
       default:
-        return <Dashboard />;
+        return isPublic ? <PublicDashboard onLoginClick={() => setAppMode('login')} /> : <Dashboard />;
     }
   };
 
   return (
-    <Layout activePage={activePage} setActivePage={setActivePage} onLogout={handleLogout}>
+    <Layout
+      activePage={activePage}
+      setActivePage={setActivePage}
+      onLogout={handleLogout}
+      isPublic={isPublic}
+    >
       <div className="animate-fade-in h-full">
         {renderContent()}
       </div>

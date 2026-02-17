@@ -1,8 +1,11 @@
 import React from 'react';
 import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X } from 'lucide-react';
 
-const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout }) => {
-    const menuItems = [
+const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic }) => {
+    const menuItems = isPublic ? [
+        { id: 'dashboard', label: 'Portal Ciudadano', icon: LayoutDashboard },
+        { id: 'map', label: 'Mapa de Incidencia', icon: Map },
+    ] : [
         { id: 'dashboard', label: 'Tablero de Control', icon: LayoutDashboard },
         { id: 'map', label: 'Mapa del Delito', icon: Map },
         { id: 'reports', label: 'Boletines y Reportes', icon: FileText },

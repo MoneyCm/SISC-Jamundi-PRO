@@ -2,7 +2,7 @@ import React from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
-const Layout = ({ children, activePage, setActivePage, onLogout }) => {
+const Layout = ({ children, activePage, setActivePage, onLogout, isPublic }) => {
     const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
     return (
@@ -21,6 +21,7 @@ const Layout = ({ children, activePage, setActivePage, onLogout }) => {
                 isOpen={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
                 onLogout={onLogout}
+                isPublic={isPublic}
             />
 
             <div className="flex-1 flex flex-col min-w-0 h-full">
