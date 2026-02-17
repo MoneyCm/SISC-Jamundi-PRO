@@ -130,6 +130,12 @@ const PublicDashboard = ({ onLoginClick }) => {
             <div className="bg-gradient-to-r from-primary to-primary-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="flex items-center gap-2 text-white/70 hover:text-white mb-2 font-bold uppercase text-[10px] tracking-widest transition-colors bg-white/10 px-3 py-1 rounded-full border border-white/20"
+                        >
+                            <Home size={14} /> Volver al Inicio del Portal
+                        </button>
                         <div className="flex items-center gap-2 mb-2">
                             <Globe size={20} className="text-white/80" />
                             <span className="text-xs font-bold uppercase tracking-wider text-white/80">Portal de Transparencia</span>

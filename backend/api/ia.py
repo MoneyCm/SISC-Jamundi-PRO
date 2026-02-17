@@ -162,3 +162,37 @@ async def get_ai_alerts(db: Session = Depends(get_db)):
         "count": len(alertas),
         "timestamp": datetime.now().isoformat()
     }
+@router.post("/chat_ciudadano")
+async def citizen_chat(data: dict):
+    """
+    Chatbot público para ciudadanos: Proporciona información sobre rutas y convivencia.
+    """
+    user_message = data.get("message", "")
+    if not user_message:
+        return {"response": "Hola, ¿en qué puedo ayudarte?"}
+
+    contexto = f"""
+    Eres el Asistente Virtual del SISC Jamundí (Sistema de Información para la Seguridad y Convivencia).
+    Tu objetivo es guiar a los ciudadanos en:
+    1. Rutas de atención para víctimas (Hospital Piloto, Comisarías de Familia, Fiscalía).
+    2. Información sobre el Código Nacional de Seguridad y Convivencia Ciudadana (Ley 1801).
+    3. Promover la cultura de la denuncia y la convivencia pacífica.
+
+    REGLAS DE RESPUESTA:
+    - Sé amable, empático y profesional.
+    - Si te preguntan por emergencias, SIEMPRE indica llamar al 123.
+    - NO reveles datos estadísticos internos ni nombres de funcionarios si no están en el portal público.
+    - Tus respuestas deben ser breves (máximo 100 palabras).
+    - El ciudadano te pregunta: "{user_message}"
+    """
+
+    try:
+        if AI_PROVIDER == "MISTRAL":
+            response_text = await call_mistral(contexto)
+        else:
+            response_text = await call_gemini(contexto)
+        
+        return {"response": response_text}
+    except Exception as e:
+        print(f"Error en Chat Ciudadano ({AI_PROVIDER}): {e}")
+        return {"response": "Lo siento, tengo dificultades técnicas. Por favor, acude a la estación de policía más cercana o llama al 123 en caso de emergencia."}

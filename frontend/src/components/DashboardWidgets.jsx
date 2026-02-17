@@ -59,8 +59,8 @@ export const TrendChart = ({ data }) => {
                 </h3>
                 <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{new Date().getFullYear()}</span>
             </div>
-            <div className="flex-1 w-full min-h-0">
-                <ResponsiveContainer width="100%" height="100%">
+            <div className="flex-1 w-full min-h-[300px]">
+                <ResponsiveContainer width="100%" height="100%" debounce={100}>
                     <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorHurtos" x1="0" y1="0" x2="0" y2="1">
@@ -101,8 +101,8 @@ export const DistributionChart = ({ data }) => {
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 h-96 flex flex-col">
             <h3 className="text-lg font-bold text-slate-800 mb-2">Distribución por Delito</h3>
-            <div className="flex-1 w-full min-h-0">
-                <ResponsiveContainer width="100%" height="100%">
+            <div className="flex-1 w-full min-h-[300px]">
+                <ResponsiveContainer width="100%" height="100%" debounce={100}>
                     <PieChart>
                         <Pie
                             data={data}
