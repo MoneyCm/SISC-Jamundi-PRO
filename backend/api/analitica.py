@@ -36,32 +36,48 @@ def get_dashboard_kpis(
     categories: Optional[List[str]] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """
-    Retorna los KPIs principales filtrados para las tarjetas del dashboard.
-    """
-    query = db.query(Event)
-    if start_date: query = query.filter(Event.occurrence_date >= start_date)
-    if end_date: query = query.filter(Event.occurrence_date <= end_date)
-    if categories:
-        query = query.join(EventType).filter(EventType.category.in_(categories))
-    
-    total = query.count()
-    
-    # Homicidios específicos para la tasa
-    hom_query = query.join(EventType).filter(EventType.category == "HOMICIDIO")
-    homicidios = hom_query.count()
-    tasa = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
-    
-    # Zonas críticas (Barrios con más de 10 incidentes en el periodo)
-    zonas_criticas_query = db.query(Event.barrio).filter(Event.id.in_(query.with_entities(Event.id))).group_by(Event.barrio).having(func.count(Event.id) > 10)
-    zonas_criticas = zonas_criticas_query.count()
-    
-    return {
-        "total_incidentes": total,
-        "tasa_homicidios": tasa,
-        "zonas_criticas": zonas_criticas,
-        "poblacion": POBLACION_JAMUNDI
-    }
+    try:
+        # 1. Total Incidentes (con filtros de fecha y categoría)
+        total_q = db.query(func.count(Event.id))
+        if start_date: total_q = total_q.filter(Event.occurrence_date >= start_date)
+        if end_date: total_q = total_q.filter(Event.occurrence_date <= end_date)
+        if categories:
+            total_q = total_q.join(EventType).filter(EventType.category.in_(categories))
+        total = total_q.scalar() or 0
+        
+        # 2. Homicidios (para la tasa)
+        hom_q = db.query(func.count(Event.id)).join(EventType).filter(EventType.category == "HOMICIDIO")
+        if start_date: hom_q = hom_q.filter(Event.occurrence_date >= start_date)
+        if end_date: hom_q = hom_q.filter(Event.occurrence_date <= end_date)
+        homicidios = hom_q.scalar() or 0
+        tasa = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
+        
+        # 3. Zonas críticas (Barrios con > 10 incidentes)
+        # Usamos una subquery explícita para contar grupos
+        subq = db.query(Event.barrio).filter(Event.barrio != 'Sin especificar')
+        if start_date: subq = subq.filter(Event.occurrence_date >= start_date)
+        if end_date: subq = subq.filter(Event.occurrence_date <= end_date)
+        if categories: subq = subq.join(EventType).filter(EventType.category.in_(categories))
+        
+        subq_grouped = subq.group_by(Event.barrio).having(func.count(Event.id) > 10).subquery()
+        zonas_criticas = db.query(func.count()).select_from(subq_grouped).scalar() or 0
+        
+        return {
+            "total_incidentes": total,
+            "tasa_homicidios": tasa,
+            "zonas_criticas": zonas_criticas,
+            "poblacion": POBLACION_JAMUNDI
+        }
+    except Exception as e:
+        # Fallback de seguridad: Nunca retornar 500 si podemos retornar data parcial
+        print(f"ALERTA: Error en KPI endpoint: {str(e)}")
+        return {
+            "total_incidentes": total if 'total' in locals() else 0,
+            "tasa_homicidios": 0.0,
+            "zonas_criticas": 0,
+            "poblacion": POBLACION_JAMUNDI,
+            "error_fallback": True
+        }
 
 @router.get("/estadisticas/tendencia")
 def get_tendencia_delictiva(
