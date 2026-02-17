@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { KPICard, TrendChart, DistributionChart } from '../components/DashboardWidgets';
 import MapComponent from '../components/Map/MapComponent';
-import { Loader, Lock, Globe } from 'lucide-react';
+import { Loader, Lock, Globe, Home } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import AboutObservatorio from '../components/AboutObservatorio';
 
