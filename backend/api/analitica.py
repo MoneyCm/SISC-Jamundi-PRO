@@ -53,7 +53,8 @@ def get_dashboard_kpis(
     tasa = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
     
     # Zonas críticas (Barrios con más de 10 incidentes en el periodo)
-    zonas_criticas = query.group_by(Event.barrio).having(func.count(Event.id) > 10).count()
+    zonas_criticas_query = db.query(Event.barrio).filter(Event.id.in_(query.with_entities(Event.id))).group_by(Event.barrio).having(func.count(Event.id) > 10)
+    zonas_criticas = zonas_criticas_query.count()
     
     return {
         "total_incidentes": total,

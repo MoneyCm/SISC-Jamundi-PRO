@@ -65,24 +65,31 @@ const PublicDashboard = ({ onLoginClick }) => {
                     features = geo.features || [];
                 } else failedCount++;
 
+                console.log("Datos cargados:", { kpis, trendData, distData, features });
+
                 setDashboardData({
                     kpiData: [
                         { title: "Incidentes Reportados", value: (kpis?.total_incidentes ?? 0).toString(), change: "Últimos 6 meses", trend: "neutral", icon: "Activity" },
                         { title: "Tasa Homicidios", value: (kpis?.tasa_homicidios ?? 0).toString(), change: "Por 100k hab", trend: "neutral", icon: "Skull" },
                         { title: "Población", value: "150,000", change: "Jamundí", trend: "neutral", icon: "Users" },
                     ],
-                    crimeTrendData: Array.isArray(trendData) ? trendData : [],
-                    crimeDistributionData: Array.isArray(distData) ? distData : []
+                    crimeTrendData: Array.isArray(trendData) && trendData.length > 0 ? trendData : [],
+                    crimeDistributionData: Array.isArray(distData) && distData.length > 0 ? distData : []
                 });
                 setMapData(features);
 
+                if (failedCount >= 3) {
+                    throw new Error("No se pudo obtener información de ningún servicio de datos.");
+                }
+
                 if (failedCount > 0) {
                     console.warn(`${failedCount} servicios de datos no respondieron.`);
+                    // Opcional: Podríamos mostrar un aviso parcial
                 }
 
             } catch (err) {
                 console.error("Error en Dashboard Público:", err);
-                setError(`No se pudo conectar con el servidor central (${API_BASE_URL}).`);
+                setError(`Problema de conexión: ${err.message || "El servidor no responde"}. Revisa tu internet o intenta de nuevo.`);
             } finally {
                 setLoading(false);
             }
