@@ -163,27 +163,45 @@ async def get_ai_alerts(db: Session = Depends(get_db)):
         "timestamp": datetime.now().isoformat()
     }
 @router.post("/chat_ciudadano")
-async def citizen_chat(data: dict):
+async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     """
     Chatbot público para ciudadanos: Proporciona información sobre rutas y convivencia.
+    Ahora incluye contexto de datos reales para responder preguntas estadísticas básicas.
     """
     user_message = data.get("message", "")
     if not user_message:
         return {"response": "Hola, ¿en qué puedo ayudarte?"}
 
+    # Obtener algunos datos estadísticos básicos (Públicos)
+    total_incidentes = db.query(Event).count()
+    homicidios = db.query(Event).join(EventType).filter(EventType.category == "HOMICIDIO").count()
+    
+    # Tendencia por año (para preguntas como "¿Cuántos en 2023?")
+    tendencia_anual = db.query(
+        func.extract('year', Event.occurrence_date).label('year'),
+        func.count(Event.id)
+    ).group_by('year').all()
+    stats_anuales = ", ".join([f"{int(y)}: {c} casos" for y, c in tendencia_anual])
+
     contexto = f"""
     Eres el Asistente Virtual del SISC Jamundí (Sistema de Información para la Seguridad y Convivencia).
-    Tu objetivo es guiar a los ciudadanos en:
-    1. Rutas de atención para víctimas (Hospital Piloto, Comisarías de Familia, Fiscalía).
-    2. Información sobre el Código Nacional de Seguridad y Convivencia Ciudadana (Ley 1801).
-    3. Promover la cultura de la denuncia y la convivencia pacífica.
+    Tu objetivo es guiar a los ciudadanos y responder dudas sobre seguridad con DATOS REALES.
+
+    DATOS ACTUALES DEL SISTEMA (USA ESTO PARA RESPONDER):
+    - Total histórico de incidentes en plataforma: {total_incidentes}
+    - Total de homicidios registrados: {homicidios}
+    - Resumen por años: {stats_anuales}
+    - Población de Jamundí: 150,000 habitantes.
 
     REGLAS DE RESPUESTA:
-    - Sé amable, empático y profesional.
-    - Si te preguntan por emergencias, SIEMPRE indica llamar al 123.
-    - NO reveles datos estadísticos internos ni nombres de funcionarios si no están en el portal público.
-    - Tus respuestas deben ser breves (máximo 100 palabras).
-    - El ciudadano te pregunta: "{user_message}"
+    1. Sé amable, empático y profesional.
+    2. SIEMPRE indica llamar al 123 ante emergencias.
+    3. PUEDES compartir las cifras estadísticas mencionadas arriba si te preguntan por ellas.
+    4. NO inventes cifras que no estén en la lista anterior.
+    5. NO reveles nombres de víctimas, direcciones exactas ni datos sensibles.
+    6. Tus respuestas deben ser breves (máximo 120 palabras).
+    
+    El ciudadano te pregunta: "{user_message}"
     """
 
     try:
@@ -195,4 +213,4 @@ async def citizen_chat(data: dict):
         return {"response": response_text}
     except Exception as e:
         print(f"Error en Chat Ciudadano ({AI_PROVIDER}): {e}")
-        return {"response": "Lo siento, tengo dificultades técnicas. Por favor, acude a la estación de policía más cercana o llama al 123 en caso de emergencia."}
+        return {"response": "Lo siento, tengo dificultades técnicas. Por favor, consulta los tableros de datos en el portal o llama al 123 en caso de emergencia."}
