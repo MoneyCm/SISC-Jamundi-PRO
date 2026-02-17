@@ -174,7 +174,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
 
     # Obtener algunos datos estadísticos básicos (Públicos)
     total_incidentes = db.query(Event).count()
-    homicidios = db.query(Event).join(EventType).filter(EventType.category == "HOMICIDIO").count()
+    homicidios = db.query(Event).join(EventType).filter(func.upper(EventType.category) == "HOMICIDIO").count()
     
     # Tendencia por año
     tendencia_anual = db.query(
@@ -184,12 +184,11 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     stats_anuales = ", ".join([f"{int(y)}: {c} casos" for y, c in tendencia_anual])
 
     # Detalle mensual de HOMICIDIOS (para preguntas específicas de mes/año)
-    # Obtenemos los últimos 24 meses de datos específicos de homicidios
     meses_hom = db.query(
         func.extract('year', Event.occurrence_date).label('year'),
         func.extract('month', Event.occurrence_date).label('month'),
         func.count(Event.id)
-    ).join(EventType).filter(EventType.category == "HOMICIDIO").group_by('year', 'month').order_by('year', 'month').all()
+    ).join(EventType).filter(func.upper(EventType.category) == "HOMICIDIO").group_by('year', 'month').order_by('year', 'month').all()
     
     # Formatear meses para el prompt: "Ene 2024: 5 casos, Feb 2024: 3 casos..."
     nombres_meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -209,9 +208,9 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     REGLAS DE RESPUESTA:
     1. Sé amable, empático y profesional.
     2. SIEMPRE indica llamar al 123 ante emergencias.
-    3. PUEDES compartir las cifras estadísticas mencionadas arriba si te preguntan por ellas.
-    4. NO inventes cifras que no estén en la lista anterior.
-    5. NO reveles nombres de víctimas, direcciones exactas ni datos sensibles.
+    3. PUEDES compartir las cifras estadísticas mencionadas arriba.
+    4. IMPORTANTE: Si el ciudadano pregunta por un mes o año que NO aparece en la lista anterior, responde que en ese periodo específico se registraron 0 casos en el sistema. NO digas que no tienes la información; usa el 0 como referente.
+    5. NO inventes cifras que no estén en la lista ni menciones nombres de víctimas.
     6. Tus respuestas deben ser breves (máximo 120 palabras).
     
     El ciudadano te pregunta: "{user_message}"
