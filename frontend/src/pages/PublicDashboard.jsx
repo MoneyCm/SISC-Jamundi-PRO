@@ -17,37 +17,55 @@ const PublicDashboard = ({ onLoginClick }) => {
     useEffect(() => {
         const fetchPublicData = async () => {
             try {
+                setLoading(true);
+                setError(null);
+
                 // Fetch basic stats (Public)
-                const [kpiRes, trendRes, distRes, mapRes] = await Promise.all([
+                const [kpiRes, trendRes, distRes, mapRes] = await Promise.allSettled([
                     fetch(`${API_BASE_URL}/analitica/estadisticas/kpis`),
                     fetch(`${API_BASE_URL}/analitica/estadisticas/tendencia`),
                     fetch(`${API_BASE_URL}/analitica/estadisticas/distribucion`),
                     fetch(`${API_BASE_URL}/analitica/eventos/geojson`)
                 ]);
 
-                if (!kpiRes.ok || !trendRes.ok || !distRes.ok || !mapRes.ok) {
-                    throw new Error("Error cargando los datos públicos.");
+                let kpis = { total_incidentes: 0, tasa_homicidios: 0 };
+                let trendData = [];
+                let distData = [];
+                let features = [];
+
+                if (kpiRes.status === 'fulfilled' && kpiRes.value.ok) {
+                    kpis = await kpiRes.value.json();
+                } else {
+                    console.error("KPI fetch failed");
                 }
 
-                const kpis = await kpiRes.json();
-                const trendData = await trendRes.json();
-                const distData = await distRes.json();
-                const geoData = await mapRes.json();
+                if (trendRes.status === 'fulfilled' && trendRes.value.ok) {
+                    trendData = await trendRes.value.json();
+                }
+
+                if (distRes.status === 'fulfilled' && distRes.value.ok) {
+                    distData = await distRes.value.json();
+                }
+
+                if (mapRes.status === 'fulfilled' && mapRes.value.ok) {
+                    const geo = await mapRes.value.json();
+                    features = geo.features || [];
+                }
 
                 setDashboardData({
                     kpiData: [
-                        { title: "Incidentes Reportados", value: kpis.total_incidentes.toString(), change: "Últimos 6 meses", trend: "neutral", icon: "Activity" },
-                        { title: "Tasa Homicidios", value: kpis.tasa_homicidios.toString(), change: "Por 100k hab", trend: "neutral", icon: "Skull" },
+                        { title: "Incidentes Reportados", value: (kpis?.total_incidentes ?? 0).toString(), change: "Últimos 6 meses", trend: "neutral", icon: "Activity" },
+                        { title: "Tasa Homicidios", value: (kpis?.tasa_homicidios ?? 0).toString(), change: "Por 100k hab", trend: "neutral", icon: "Skull" },
                         { title: "Población", value: "150,000", change: "Jamundí", trend: "neutral", icon: "Users" },
                     ],
-                    crimeTrendData: trendData,
-                    crimeDistributionData: distData
+                    crimeTrendData: Array.isArray(trendData) ? trendData : [],
+                    crimeDistributionData: Array.isArray(distData) ? distData : []
                 });
-                setMapData(geoData.features || []);
+                setMapData(features);
 
             } catch (err) {
                 console.error("Error en Dashboard Público:", err);
-                setError("Ocurrió un error al cargar la información pública.");
+                setError("Ocurrió un error al conectar con el servidor. Verifica tu conexión.");
             } finally {
                 setLoading(false);
             }
@@ -60,13 +78,22 @@ const PublicDashboard = ({ onLoginClick }) => {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh]">
                 <Loader className="w-12 h-12 text-primary animate-spin mb-4" />
-                <p className="text-slate-500 font-medium">Accediendo al Portal Ciudadano...</p>
+                <p className="text-slate-500 font-medium text-center">
+                    Accediendo al Portal Ciudadano SISC...<br />
+                    <span className="text-xs italic opacity-70">Conectando con: {API_BASE_URL}</span>
+                </p>
             </div>
         );
     }
 
     return (
         <div className="space-y-8 animate-fade-in max-w-7xl mx-auto px-4 py-6">
+            {error && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl">
+                    <p className="text-red-700 font-bold">Sin conexión de datos</p>
+                    <p className="text-red-600 text-sm">{error}</p>
+                </div>
+            )}
             {/* Header Ciudadano */}
             <div className="bg-gradient-to-r from-primary to-primary-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
