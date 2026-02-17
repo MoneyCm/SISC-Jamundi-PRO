@@ -9,13 +9,15 @@ import io
 from datetime import datetime, date
 import os
 
+from api.auth import analyst_or_admin
+
 router = APIRouter()
 
 # Configuración de Jinja2
 template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
 env = Environment(loader=FileSystemLoader(template_dir))
 
-@router.get("/generar-boletin")
+@router.get("/generar-boletin", dependencies=[Depends(analyst_or_admin)])
 async def generar_boletin_pdf(db: Session = Depends(get_db)):
     """
     Genera un boletín de seguridad oficial en PDF con estadísticas actuales.

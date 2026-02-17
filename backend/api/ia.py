@@ -5,6 +5,7 @@ from sqlalchemy import func
 import os
 import httpx
 from typing import Optional
+from api.auth import analyst_or_admin
 
 router = APIRouter()
 
@@ -17,7 +18,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "GEMINI").upper()
 
-print(f"SISC IA: Iniciando con Proveedor: {AI_PROVIDER}")
+print(f"SISC Jamundí AI: Iniciando con Proveedor: {AI_PROVIDER}")
 
 # Cache simple en memoria para evitar Rate Limits
 ia_cache = {
@@ -53,7 +54,7 @@ async def call_mistral(contexto):
         result = response.json()
         return result['choices'][0]['message']['content']
 
-@router.get("/insights")
+@router.get("/insights", dependencies=[Depends(analyst_or_admin)])
 async def get_ai_insights(db: Session = Depends(get_db)):
     """
     Genera un análisis narrativo basado en los datos actuales usando el proveedor configurado.
@@ -81,12 +82,14 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     top_barrio = db.query(Event.barrio, func.count(Event.id)).group_by(Event.barrio).order_by(func.count(Event.id).desc()).first()
     
     contexto = f"""
-    Eres el analista experto del Observatorio del Delito de Jamundí. 
+    Eres el analista experto del Sistema de Información para la Seguridad y Convivencia (SISC) de Jamundí. 
     Analiza estos datos actuales y da un resumen ejecutivo de un párrafo corto:
     - Total de incidentes registrados: {total}
     - Homicidios: {homicidios}
     - Barrio con mayor incidencia: {top_barrio[0] if top_barrio else 'N/A'} ({top_barrio[1] if top_barrio else 0} casos).
-    IMPORTANTE: Responde en español, tono profesional. Máximo 60 palabras. NO uses asteriscos ni formato Markdown, solo texto plano.
+    IMPORTANTE: Responde en español, tono profesional. Máximo 60 palabras. 
+    USA SIEMPRE el nombre 'SISC Jamundí' y NUNCA uses 'Observatorio del Delito'.
+    NO uses asteriscos ni formato Markdown, solo texto plano.
     """
 
     try:
@@ -110,12 +113,12 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error con IA ({AI_PROVIDER}): {e}")
         return {
-            "insight": f"El analista ({AI_PROVIDER}) está saturado. Reintentando en breve...",
+            "insight": f"El analista del SISC ({AI_PROVIDER}) está saturado. Reintentando en breve...",
             "status": "error",
             "detail": str(e)
         }
 
-@router.get("/alertas")
+@router.get("/alertas", dependencies=[Depends(analyst_or_admin)])
 async def get_ai_alerts(db: Session = Depends(get_db)):
     """
     Sistema de Alertas Tempranas: Detecta incrementos anómalos en delitos.

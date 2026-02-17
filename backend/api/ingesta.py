@@ -8,9 +8,11 @@ import uuid
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
+from api.auth import admin_only
+
 router = APIRouter()
 
-@router.post("/upload")
+@router.post("/upload", dependencies=[Depends(admin_only)])
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Recibe un archivo Excel/CSV, procesa los datos y los inserta en PostGIS.
@@ -108,7 +110,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error fatal procesando el archivo: {str(e)}")
 
-@router.post("/bulk")
+@router.post("/bulk", dependencies=[Depends(admin_only)])
 async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
     """
     Recibe una lista de eventos pre-analizados por la IA en JSON y los inserta.
@@ -116,6 +118,7 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
     report = {
         "total": len(data),
         "success_count": 0,
+        "skipped_count": 0,
         "error_count": 0,
         "errors": []
     }
@@ -171,6 +174,19 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
 
                 occ_date = parse_robust_date(item.get('fecha'))
                 occ_time = parse_robust_time(item.get('hora'))
+                barrio = str(item.get('barrio', 'Sin especificar'))
+
+                # 2.5 DETECCIÓN DE DUPLICADOS (Opción B elegida por el usuario)
+                existing_event = db.query(Event).filter(
+                    Event.occurrence_date == occ_date,
+                    Event.occurrence_time == occ_time,
+                    Event.event_type_id == event_type.id,
+                    Event.barrio == barrio
+                ).first()
+
+                if existing_event:
+                    report["skipped_count"] += 1
+                    continue
 
                 # 3. Geometría
                 try:
@@ -188,7 +204,7 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
                     event_type_id=event_type.id,
                     occurrence_date=occ_date,
                     occurrence_time=occ_time,
-                    barrio=str(item.get('barrio', 'Sin especificar')),
+                    barrio=barrio,
                     descripcion=str(item.get('descripcion', '')),
                     estado=str(item.get('estado', 'Abierto'))
                 )
@@ -214,18 +230,18 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
     db.commit() # Commit final de lo que quede pendiente
     return {
         "status": "success" if report["error_count"] == 0 else "partial_success",
-        "message": f"Carga masiva completada: {report['success_count']} registros integrados.",
+        "message": f"Carga masiva completada: {report['success_count']} nuevos, {report['skipped_count']} duplicados omitidos.",
         "report": report
     }
 
-@router.delete("/clear")
+@router.delete("/clear", dependencies=[Depends(admin_only)])
 def clear_all_events(db: Session = Depends(get_db)):
     """Elimina todos los eventos de la base de datos"""
     db.query(Event).delete()
     db.commit()
     return {"message": "Base de datos de eventos limpiada correctamente"}
 
-@router.delete("/{event_id}")
+@router.delete("/{event_id}", dependencies=[Depends(admin_only)])
 def delete_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
     """Elimina un evento específico"""
     event = db.query(Event).filter(Event.id == event_id).first()

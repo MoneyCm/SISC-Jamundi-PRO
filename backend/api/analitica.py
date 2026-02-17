@@ -1,25 +1,59 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
-from db.models import get_db, Event, EventType
+from db.models import get_db, Event, EventType, User
 from datetime import date
 from typing import Optional, List
 
+from api.auth import analyst_or_admin, get_current_user
+from jose import JWTError, jwt
+from core.security import SECRET_KEY, ALGORITHM
+
 router = APIRouter()
+
+async def get_optional_user(
+    db: Session = Depends(get_db),
+    token: Optional[str] = Query(None) # Opcional desde query para facilidad en mapas
+):
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        user = db.query(User).filter(User.username == username).first()
+        return user
+    except JWTError:
+        return None
 
 POBLACION_JAMUNDI = 150000
 
 @router.get("/estadisticas/kpis")
-def get_dashboard_kpis(db: Session = Depends(get_db)):
+def get_dashboard_kpis(
+    start_date: Optional[date] = None, 
+    end_date: Optional[date] = None, 
+    categories: Optional[List[str]] = Query(None),
+    db: Session = Depends(get_db)
+):
     """
-    Retorna los KPIs principales para las tarjetas del dashboard.
+    Retorna los KPIs principales filtrados para las tarjetas del dashboard.
     """
-    total = db.query(Event).count()
-    homicidios = db.query(Event).join(EventType).filter(EventType.category == "HOMICIDIO").count()
+    query = db.query(Event)
+    if start_date: query = query.filter(Event.occurrence_date >= start_date)
+    if end_date: query = query.filter(Event.occurrence_date <= end_date)
+    if categories:
+        query = query.join(EventType).filter(EventType.category.in_(categories))
+    
+    total = query.count()
+    
+    # Homicidios específicos para la tasa
+    hom_query = query.join(EventType).filter(EventType.category == "HOMICIDIO")
+    homicidios = hom_query.count()
     tasa = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
     
-    # Zonas críticas (Barrios con más de 10 incidentes)
-    zonas_criticas = db.query(Event.barrio).group_by(Event.barrio).having(func.count(Event.id) > 10).count()
+    # Zonas críticas (Barrios con más de 10 incidentes en el periodo)
+    zonas_criticas = query.group_by(Event.barrio).having(func.count(Event.id) > 10).count()
     
     return {
         "total_incidentes": total,
@@ -29,12 +63,16 @@ def get_dashboard_kpis(db: Session = Depends(get_db)):
     }
 
 @router.get("/estadisticas/tendencia")
-def get_tendencia_delictiva(db: Session = Depends(get_db)):
+def get_tendencia_delictiva(
+    start_date: Optional[date] = None, 
+    end_date: Optional[date] = None, 
+    categories: Optional[List[str]] = Query(None),
+    db: Session = Depends(get_db)
+):
     """
-    Retorna la tendencia mensual de delitos (Homicidios vs Otros).
+    Retorna la tendencia mensual de delitos (Homicidios vs Otros) con filtros.
     """
-    # Usamos date_trunc para agrupar por mes (PostgreSQL)
-    select_stmt = text("""
+    query_str = """
         SELECT 
             TO_CHAR(date_trunc('month', occurrence_date), 'Mon') as mes,
             COUNT(*) FILTER (WHERE et.category = 'HOMICIDIO') as homicidios,
@@ -42,12 +80,22 @@ def get_tendencia_delictiva(db: Session = Depends(get_db)):
             date_trunc('month', occurrence_date) as full_date
         FROM events e
         JOIN event_types et ON e.event_type_id = et.id
-        GROUP BY 1, 4
-        ORDER BY 4 ASC
-        LIMIT 6
-    """)
+        WHERE 1=1
+    """
+    params = {}
+    if start_date:
+        query_str += " AND occurrence_date >= :start_date"
+        params["start_date"] = start_date
+    if end_date:
+        query_str += " AND occurrence_date <= :end_date"
+        params["end_date"] = end_date
+    if categories:
+        query_str += " AND et.category IN :categories"
+        params["categories"] = tuple(categories)
+
+    query_str += " GROUP BY 1, 4 ORDER BY 4 ASC LIMIT 6"
     
-    results = db.execute(select_stmt).fetchall()
+    results = db.execute(text(query_str), params).fetchall()
     
     return [
         {"name": r.mes, "homicidios": r.homicidios, "hurtos": r.otros} 
@@ -55,14 +103,23 @@ def get_tendencia_delictiva(db: Session = Depends(get_db)):
     ]
 
 @router.get("/estadisticas/distribucion")
-def get_distribucion_delitos(db: Session = Depends(get_db)):
+def get_distribucion_delitos(
+    start_date: Optional[date] = None, 
+    end_date: Optional[date] = None, 
+    db: Session = Depends(get_db)
+):
     """
-    Retorna la distribución por tipo de delito para el gráfico de torta.
+    Retorna la distribución por tipo de delito con filtros térmporales.
     """
-    results = db.query(
+    query = db.query(
         EventType.category,
         func.count(Event.id).label('total')
-    ).join(Event).group_by(EventType.category).order_by(text('total DESC')).all()
+    ).join(Event)
+    
+    if start_date: query = query.filter(Event.occurrence_date >= start_date)
+    if end_date: query = query.filter(Event.occurrence_date <= end_date)
+    
+    results = query.group_by(EventType.category).order_by(text('total DESC')).all()
     
     return [{"name": r.category, "value": r.total} for r in results]
 
@@ -145,8 +202,20 @@ def get_eventos_geojson(
     start_date: Optional[date] = None, 
     end_date: Optional[date] = None, 
     categories: Optional[List[str]] = Query(None),
+    token: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
+    # Verificar si es usuario institucional
+    user = None
+    if token:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user = db.query(User).filter(User.username == payload.get("sub")).first()
+        except:
+            pass
+            
+    is_institutional = user is not None # Admin o Analista
+
     query = db.query(
         Event.id,
         Event.occurrence_date,
@@ -158,42 +227,51 @@ def get_eventos_geojson(
         func.ST_Y(text('location_geom::geometry')).label('lat')
     ).join(EventType).filter(text('location_geom IS NOT NULL'))
     
+    # ... filters ...
     if start_date:
         query = query.filter(Event.occurrence_date >= start_date)
     if end_date:
         query = query.filter(Event.occurrence_date <= end_date)
     
     if categories:
-        conditions = []
-        for cat in categories:
-            conditions.append(EventType.category.ilike(f"%{cat}%"))
-        query = query.filter(text(' OR '.join([f"event_types.category ILIKE '%{cat}%'" for cat in categories])))
-        # Re-escritura más segura con SQLAlchemy
         from sqlalchemy import or_
         query = query.filter(or_(*[EventType.category.ilike(f"%{cat}%") for cat in categories]))
         
     result = query.all()
     
     features = []
+    import random
     for row in result:
+        # Modo Abierto: Ofuscar coordenadas y ocultar descripción
+        lng = row.lng
+        lat = row.lat
+        descripcion = row.descripcion
+        
+        if not is_institutional:
+            # Añadir ruido de ~50-100 metros para proteger privacidad
+            lng += random.uniform(-0.0005, 0.0005)
+            lat += random.uniform(-0.0005, 0.0005)
+            descripcion = "Detalle reservado (Modo Abierto)"
+
         feature = {
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [row.lng, row.lat]
+                "coordinates": [lng, lat]
             },
             "properties": {
-                "id": str(row.id),
+                "id": str(row.id) if is_institutional else "HIDDEN",
                 "fecha": str(row.occurrence_date),
                 "categoria": row.category,
                 "subcategoria": row.subcategory,
                 "barrio": row.barrio,
-                "descripcion": row.descripcion
+                "descripcion": descripcion
             }
         }
         features.append(feature)
         
     return {
         "type": "FeatureCollection",
-        "features": features
+        "features": features,
+        "mode": "Institutional" if is_institutional else "Public"
     }

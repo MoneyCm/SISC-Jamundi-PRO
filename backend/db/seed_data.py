@@ -16,11 +16,9 @@ def seed():
     try:
         # 1. Asegurarse de que existan los roles
         roles_data = [
-            {"name": "Admin SISC", "description": "Administrador total del sistema"},
-            {"name": "Analista Observatorio", "description": "Usuario técnico para análisis y boletines"},
-            {"name": "Cargador de Datos", "description": "Enlace para subida de archivos"},
-            {"name": "Consulta Interna", "description": "Visualización de tableros directivos"},
-            {"name": "Público", "description": "Acceso limitado a datos agregados"}
+            {"name": "Administrador (Observatorio)", "description": "Control total del sistema e ingesta de datos"},
+            {"name": "Analista Institucional", "description": "Acceso a consulta de datos y reportes avanzados"},
+            {"name": "Ciudadano (Modo Abierto)", "description": "Acceso público limitado para transparencia ciudadana"}
         ]
         
         for r_data in roles_data:
@@ -30,9 +28,9 @@ def seed():
                 db.add(role)
         
         db.commit()
-        admin_role = db.query(Role).filter(Role.name == "Admin SISC").first()
+        admin_role = db.query(Role).filter(Role.name == "Administrador (Observatorio)").first()
 
-        # 2. Crear usuario admin por defecto si no existe
+        # 2. Crear o actualizar usuario admin por defecto
         admin_user = db.query(User).filter(User.username == "admin").first()
         if not admin_user:
             admin_user = User(
@@ -44,6 +42,10 @@ def seed():
             )
             db.add(admin_user)
             print("Usuario administrador creado.")
+        else:
+            admin_user.password_hash = get_password_hash("admin123")
+            admin_user.role_id = admin_role.id
+            print("Usuario administrador actualizado con nuevo hash.")
 
         # 3. Asegurarse de que existan los tipos de eventos básicos
         homicidio = db.query(EventType).filter(EventType.category == "HOMICIDIO").first()

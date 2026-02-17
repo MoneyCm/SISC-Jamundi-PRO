@@ -1,7 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X } from 'lucide-react';
 
-const Sidebar = ({ activePage, setActivePage, isOpen, onClose }) => {
+const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout }) => {
     const menuItems = [
         { id: 'dashboard', label: 'Tablero de Control', icon: LayoutDashboard },
         { id: 'map', label: 'Mapa del Delito', icon: Map },
@@ -15,24 +15,23 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose }) => {
             {/* Background decoration - subtle gradient */}
             <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
 
-            <div className="p-6 flex items-center justify-between border-b border-slate-800/50 relative z-10">
-                <div className="flex items-center space-x-4">
-                    <div className="bg-white p-1.5 rounded-xl shadow-inner flex items-center justify-center">
-                        <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-10 h-10 object-contain" />
-                    </div>
-                    <div className="flex flex-col">
-                        <h1 className="text-xl font-black tracking-tight text-white leading-none">Observatorio</h1>
-                        <span className="text-[10px] text-white font-bold uppercase tracking-[0.05em] mt-1 opacity-90">
-                            del Delito <span className="opacity-60">| Jamundí</span>
-                        </span>
-                    </div>
-                </div>
+            <div className="p-6 flex flex-col items-center relative z-10 border-b border-slate-800/50">
                 <button
                     onClick={onClose}
-                    className="md:hidden text-white/60 hover:text-white transition-colors"
+                    className="md:hidden absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
                 >
                     <X size={24} />
                 </button>
+
+                <div className="flex flex-col items-center space-y-4">
+                    <div className="bg-white p-3 rounded-2xl shadow-xl flex items-center justify-center transform group-hover:scale-105 transition-transform">
+                        <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-20 h-20 object-contain" />
+                    </div>
+                    <div className="text-center">
+                        <h1 className="text-5xl font-black tracking-tighter text-white">SISC</h1>
+                        <p className="text-[10px] text-white/70 font-bold uppercase tracking-[0.2em]">Jamundí | Seguridad</p>
+                    </div>
+                </div>
             </div>
 
             <nav className="flex-1 py-8 px-4 relative z-10">
@@ -66,10 +65,17 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose }) => {
                 </ul>
             </nav>
 
-            <div className="p-4 border-t border-slate-800/50 relative z-10">
+            <div className="p-4 border-t border-slate-800/50 relative z-10 space-y-2">
                 <button className="flex items-center space-x-3 text-white/70 hover:text-white hover:bg-white/10 px-4 py-3 rounded-xl transition-all w-full group">
                     <Settings size={20} className="group-hover:rotate-90 transition-transform duration-500" />
                     <span className="font-medium">Configuración</span>
+                </button>
+                <button
+                    onClick={onLogout}
+                    className="flex items-center space-x-3 text-red-300 hover:text-white hover:bg-red-500/20 px-4 py-3 rounded-xl transition-all w-full group"
+                >
+                    <X size={20} className="group-hover:rotate-90 transition-transform" />
+                    <span className="font-medium">Cerrar Sesión</span>
                 </button>
             </div>
         </aside>

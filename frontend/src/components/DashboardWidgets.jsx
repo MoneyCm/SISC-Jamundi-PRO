@@ -193,12 +193,12 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
                     <div className="p-2 bg-primary/20 rounded-lg">
                         <Brain className="text-primary w-5 h-5" />
                     </div>
-                    <h3 className="text-lg font-bold text-white">Perspectiva del Observatorio</h3>
+                    <h3 className="text-lg font-bold text-white">Perspectiva del SISC</h3>
                 </div>
                 {loading ? (
                     <div className="flex items-center space-x-3 text-slate-400">
                         <Activity className="animate-pulse w-4 h-4" />
-                        <p className="text-sm italic">El Observatorio está sintetizando patrones...</p>
+                        <p className="text-sm italic">El SISC está sintetizando patrones...</p>
                     </div>
                 ) : (
                     <p className="text-slate-300 text-sm leading-relaxed italic">

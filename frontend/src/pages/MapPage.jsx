@@ -28,7 +28,9 @@ const MapPage = () => {
             if (endDate) params.append('end_date', endDate);
             selectedCategories.forEach(cat => params.append('categories', cat));
 
-            const response = await fetch(`${API_BASE_URL}/analitica/eventos/geojson?${params.toString()}`);
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+            const response = await fetch(`${API_BASE_URL}/analitica/eventos/geojson?${params.toString()}`, { headers });
             if (!response.ok) throw new Error('Error al cargar datos del mapa');
 
             const data = await response.json();

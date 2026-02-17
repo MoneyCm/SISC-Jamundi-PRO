@@ -1,11 +1,12 @@
 const getApiBaseUrl = () => {
     const host = window.location.hostname;
 
-    // 1. Prioridad: Variable de entorno definida en build-time
-    const envUrl = import.meta.env?.VITE_API_URL;
-    if (envUrl) return envUrl.startsWith('http') ? envUrl : `https://${envUrl}`;
+    // 1. Detectar si estamos en un túnel de Cloudflare (Prioridad máxima para acceso web)
+    if (host.includes('trycloudflare.com')) {
+        return '/api';
+    }
 
-    // 2. Detectar si estamos en Render (frontend)
+    // 2. Detectar si estamos en Render (producción)
     if (host.includes('onrender.com')) {
         return 'https://sisc-backend.onrender.com';
     }
@@ -16,7 +17,13 @@ const getApiBaseUrl = () => {
         return `https://${baseUrl}`;
     }
 
-    // Localhost por defecto
+    // 4. Variable de entorno definida en build-time/docker (Si existe y no es localhost)
+    const envUrl = import.meta.env?.VITE_API_URL;
+    if (envUrl && !envUrl.includes('localhost')) {
+        return envUrl.startsWith('http') ? envUrl : `https://${envUrl}`;
+    }
+
+    // 5. Localhost por defecto (Desarrollo local)
     return 'http://localhost:8000';
 };
 

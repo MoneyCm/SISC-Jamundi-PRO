@@ -35,7 +35,10 @@ const DataPage = () => {
 
     const fetchIncidents = async () => {
         try {
-            const response = await fetch(API_URL);
+            const token = localStorage.getItem('token');
+            const response = await fetch(API_URL, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
             if (!response.ok) throw new Error('Error al cargar datos');
             const result = await response.json();
             setData(result);
@@ -86,7 +89,16 @@ const DataPage = () => {
         if (!confirm('¿Estás seguro de que deseas eliminar TODOS los incidentes? Esta acción no se puede deshacer.')) return;
 
         try {
-            const res = await fetch(`${API_BASE_URL}/ingesta/clear`, { method: 'DELETE' });
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Sesión expirada. Por favor, ingresa de nuevo.');
+                window.location.reload();
+                return;
+            }
+            const res = await fetch(`${API_BASE_URL}/ingesta/clear`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (res.ok) {
                 alert('Base de datos limpiada correctamente.');
                 fetchIncidents();
@@ -219,9 +231,18 @@ const DataPage = () => {
             setLoading(true);
             setIsAIModalOpen(false);
 
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Debes iniciar sesión para realizar esta acción.');
+                return;
+            }
+
             const response = await fetch(`${API_BASE_URL}/ingesta/bulk`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(analyzedData)
             });
 
@@ -241,7 +262,7 @@ const DataPage = () => {
         <div className="space-y-6">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-slate-100">
                 <div>
-                    <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">Bodega de Datos</h2>
+                    <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">SISC Jamundí - Bodega de Datos</h2>
                     <p className="text-slate-500 text-sm font-medium">Sincronización con SIEDCO y fuentes secundarias</p>
                 </div>
                 <div className="flex flex-wrap gap-2 w-full lg:w-auto">
@@ -290,7 +311,8 @@ const DataPage = () => {
                     </div>
                     <p className="text-sm text-slate-700">
                         Procesados <strong>{uploadReport.total}</strong> registros:
-                        <span className="text-green-600 mx-1">{uploadReport.success_count} exitosos</span> y
+                        <span className="text-green-600 mx-1">{uploadReport.success_count} nuevos</span>,
+                        <span className="text-blue-600 mx-1">{uploadReport.skipped_count || 0} duplicados omitidos</span> y
                         <span className="text-red-600 mx-1">{uploadReport.error_count} errores</span>.
                     </p>
 

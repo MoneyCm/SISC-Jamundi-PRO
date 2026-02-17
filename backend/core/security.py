@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
 from typing import Optional, Union, Any
 from jose import jwt
-from passlib.context import CryptContext
 import os
+import bcrypt
+from passlib.context import CryptContext
 
 # Configuración
 SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_key_for_development")
@@ -12,10 +13,24 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 día para desarrollo
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        # Intentar bcrypt directo para evitar fallos de passlib en algunos entornos
+        password_bytes = plain_password.encode('utf-8')
+        hash_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hash_bytes)
+    except Exception as e:
+        # Fallback a passlib si bcrypt falla (por si el hash no es bcrypt)
+        try:
+            return pwd_context.verify(plain_password, hashed_password)
+        except:
+            return False
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()

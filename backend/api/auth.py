@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
@@ -19,12 +20,20 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        print(f"AUTH DEBUG: Token recibido (len={len(token) if token else 0})")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        role: str = payload.get("role")
+        print(f"AUTH DEBUG: Payload decodificado: sub={username}, role={role}")
         if username is None:
+            print("AUTH DEBUG: Username es None")
             raise credentials_exception
-        token_data = TokenData(username=username, role=payload.get("role"))
-    except JWTError:
+        token_data = TokenData(username=username, role=role)
+    except JWTError as e:
+        print(f"AUTH DEBUG: JWTError: {e}")
+        raise credentials_exception
+    except Exception as e:
+        print(f"AUTH DEBUG: Exception: {e}")
         raise credentials_exception
         
     user = db.query(User).filter(User.username == token_data.username).first()
@@ -63,3 +72,29 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "is_active": current_user.is_active
     }
+
+# --- LOGICA DE ROLES Y PERMISOS ---
+
+class RoleChecker:
+    def __init__(self, allowed_roles: List[str]):
+        self.allowed_roles = allowed_roles
+
+    def __call__(self, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+        role = db.query(Role).filter(Role.id == current_user.role_id).first()
+        role_name = role.name if role else "Público"
+        
+        # El Administrador siempre tiene acceso a todo
+        if role_name == "Administrador (Observatorio)":
+            return current_user
+            
+        if role_name not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Acceso denegado. Se requiere uno de los siguientes roles: {', '.join(self.allowed_roles)}"
+            )
+        return current_user
+
+# Dependencias para usar en los otros archivos
+admin_only = RoleChecker(["Administrador (Observatorio)"])
+analyst_or_admin = RoleChecker(["Administrador (Observatorio)", "Analista Institucional"])
+public_access = RoleChecker(["Administrador (Observatorio)", "Analista Institucional", "Ciudadano (Modo Abierto)"])

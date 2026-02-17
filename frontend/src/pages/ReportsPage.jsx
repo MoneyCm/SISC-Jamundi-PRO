@@ -37,9 +37,23 @@ const ReportsPage = () => {
 
     const handleExportPDF = async () => {
         try {
-            window.open(`${API_BASE_URL}/reportes/generar-boletin`, '_blank');
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/reportes/generar-boletin`, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+
+            if (!response.ok) throw new Error('Acceso denegado o error de servidor');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Boletin_SISC_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
         } catch (err) {
-            alert('Error al generar el PDF. Asegúrate de que el backend esté activo.');
+            alert('Error al generar el PDF: ' + err.message);
         }
     };
 
