@@ -47,25 +47,37 @@ const PublicDashboard = ({ onLoginClick }) => {
                 let distData = [];
                 let features = [];
                 let failedCount = 0;
+                let errorDetails = [];
 
-                if (kpiRes.status === 'fulfilled' && kpiRes.value.ok) {
-                    kpis = await kpiRes.value.json();
-                } else failedCount++;
+                const processRes = async (res, name) => {
+                    if (res.status === 'fulfilled' && res.value.ok) {
+                        return await res.value.json();
+                    } else {
+                        failedCount++;
+                        const details = res.status === 'fulfilled'
+                            ? `${name}: Error ${res.value.status} (${res.value.statusText})`
+                            : `${name}: Conexión fallida (${res.reason})`;
+                        errorDetails.push(details);
+                        return null;
+                    }
+                };
 
-                if (trendRes.status === 'fulfilled' && trendRes.value.ok) {
-                    trendData = await trendRes.value.json();
-                } else failedCount++;
+                const kpiData = await processRes(kpiRes, "KPIs");
+                if (kpiData) kpis = kpiData;
 
-                if (distRes.status === 'fulfilled' && distRes.value.ok) {
-                    distData = await distRes.value.json();
-                } else failedCount++;
+                const trendD = await processRes(trendRes, "Tendencia");
+                if (trendD) trendData = trendD;
 
-                if (mapRes.status === 'fulfilled' && mapRes.value.ok) {
-                    const geo = await mapRes.value.json();
-                    features = geo.features || [];
-                } else failedCount++;
+                const distD = await processRes(distRes, "Distribución");
+                if (distD) distData = distD;
+
+                const geoData = await processRes(mapRes, "Mapa/GeoJSON");
+                if (geoData) features = geoData.features || [];
 
                 console.log("Datos cargados:", { kpis, trendData, distData, features });
+                if (errorDetails.length > 0) {
+                    console.warn("Detalles de errores de carga:", errorDetails);
+                }
 
                 setDashboardData({
                     kpiData: [
@@ -79,17 +91,12 @@ const PublicDashboard = ({ onLoginClick }) => {
                 setMapData(features);
 
                 if (failedCount >= 3) {
-                    throw new Error("No se pudo obtener información de ningún servicio de datos.");
-                }
-
-                if (failedCount > 0) {
-                    console.warn(`${failedCount} servicios de datos no respondieron.`);
-                    // Opcional: Podríamos mostrar un aviso parcial
+                    throw new Error(`Múltiples servicios fallaron: ${errorDetails.join(' | ')}`);
                 }
 
             } catch (err) {
                 console.error("Error en Dashboard Público:", err);
-                setError(`Problema de conexión: ${err.message || "El servidor no responde"}. Revisa tu internet o intenta de nuevo.`);
+                setError(`Problema de conexión: ${err.message || "El servidor no responde"}. Revisa tu internet o el estado del backend.`);
             } finally {
                 setLoading(false);
             }

@@ -1,30 +1,30 @@
 const getApiBaseUrl = () => {
     const host = window.location.hostname;
+    let url = 'http://localhost:8000'; // Default
 
-    // 1. Detectar si estamos en un túnel de Cloudflare (Prioridad máxima para acceso web)
-    if (host.includes('trycloudflare.com')) {
-        return '/api';
-    }
-
-    // 2. Detectar si estamos en Render (producción)
-    if (host.includes('onrender.com')) {
-        return 'https://sisc-backend.onrender.com';
-    }
-
-    // 3. Fallback para Codespaces
-    if (host.includes('app.github.dev')) {
-        const baseUrl = host.replace(/-\d+(?=\.app\.github\.dev)/, '-8000');
-        return `https://${baseUrl}`;
-    }
-
-    // 4. Variable de entorno definida en build-time/docker (Si existe y no es localhost)
+    // 1. Variable de entorno definida en build-time (Prioridad máxima en despliegue)
     const envUrl = import.meta.env?.VITE_API_URL;
     if (envUrl && !envUrl.includes('localhost')) {
-        return envUrl.startsWith('http') ? envUrl : `https://${envUrl}`;
+        url = envUrl.startsWith('http') ? envUrl : `https://${envUrl}`;
+    }
+    // 2. Detectar si estamos en un túnel de Cloudflare
+    else if (host.includes('trycloudflare.com')) {
+        url = '/api';
+    }
+    // 3. Detectar si estamos en Render (producción) - Intento inteligente
+    else if (host.includes('onrender.com')) {
+        // Intentamos adivinar el nombre basándonos en el frontend, 
+        // pero preferimos sisc-backend por defecto.
+        url = 'https://sisc-backend.onrender.com';
+    }
+    // 4. Fallback para Codespaces
+    else if (host.includes('app.github.dev')) {
+        const baseUrl = host.replace(/-\d+(?=\.app\.github\.dev)/, '-8000');
+        url = `https://${baseUrl}`;
     }
 
-    // 5. Localhost por defecto (Desarrollo local)
-    return 'http://localhost:8000';
+    console.log(`[API Config] Host: ${host} -> Backend URL: ${url}`);
+    return url;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

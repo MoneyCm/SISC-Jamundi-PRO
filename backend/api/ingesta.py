@@ -87,7 +87,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
 
                 # 5. Insertar geometría PostGIS
                 db.execute(
-                    func.text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
+                    text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
                     {"lng": lng, "lat": lat, "id": new_event.id}
                 )
                 
