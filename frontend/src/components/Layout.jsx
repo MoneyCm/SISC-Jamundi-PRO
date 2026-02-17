@@ -25,8 +25,8 @@ const Layout = ({ children, activePage, setActivePage, onLogout, isPublic }) => 
             />
 
             <div className="flex-1 flex flex-col min-w-0 h-full">
-                <Header onMenuClick={() => setSidebarOpen(true)} />
-                <main className="flex-1 overflow-y-auto p-4 md:p-8">
+                <Header onMenuClick={() => setSidebarOpen(true)} isPublic={isPublic} />
+                <main className={`flex-1 overflow-y-auto ${isPublic ? 'p-0' : 'p-4 md:p-8'}`}>
                     {children}
                 </main>
             </div>
