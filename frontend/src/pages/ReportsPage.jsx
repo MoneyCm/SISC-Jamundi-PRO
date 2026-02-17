@@ -62,8 +62,8 @@ const ReportsPage = () => {
             {/* Encabezado y Filtros */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 lg:p-6 rounded-xl shadow-sm border border-slate-100">
                 <div>
-                    <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">Boletines Técnicos</h2>
-                    <p className="text-slate-500 text-sm">Inteligencia estratégica de seguridad</p>
+                    <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">Boletines del Observatorio</h2>
+                    <p className="text-slate-500 text-sm italic">SISC Jamundí - Inteligencia Estratégica y Trazabilidad</p>
                 </div>
                 <div className="flex flex-wrap gap-2 w-full lg:w-auto">
                     <button className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors text-sm font-medium">

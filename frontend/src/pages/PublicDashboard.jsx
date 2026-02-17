@@ -21,37 +21,49 @@ const PublicDashboard = ({ onLoginClick }) => {
                 setLoading(true);
                 setError(null);
 
+                const fetchWithTimeout = async (url, timeout = 10000) => {
+                    const controller = new AbortController();
+                    const id = setTimeout(() => controller.abort(), timeout);
+                    try {
+                        const response = await fetch(url, { signal: controller.signal });
+                        clearTimeout(id);
+                        return response;
+                    } catch (e) {
+                        clearTimeout(id);
+                        throw e;
+                    }
+                };
+
                 // Fetch basic stats (Public)
                 const [kpiRes, trendRes, distRes, mapRes] = await Promise.allSettled([
-                    fetch(`${API_BASE_URL}/analitica/estadisticas/kpis`),
-                    fetch(`${API_BASE_URL}/analitica/estadisticas/tendencia`),
-                    fetch(`${API_BASE_URL}/analitica/estadisticas/distribucion`),
-                    fetch(`${API_BASE_URL}/analitica/eventos/geojson`)
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/kpis`),
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/tendencia`),
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/distribucion`),
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/eventos/geojson`)
                 ]);
 
                 let kpis = { total_incidentes: 0, tasa_homicidios: 0 };
                 let trendData = [];
                 let distData = [];
                 let features = [];
+                let failedCount = 0;
 
                 if (kpiRes.status === 'fulfilled' && kpiRes.value.ok) {
                     kpis = await kpiRes.value.json();
-                } else {
-                    console.error("KPI fetch failed");
-                }
+                } else failedCount++;
 
                 if (trendRes.status === 'fulfilled' && trendRes.value.ok) {
                     trendData = await trendRes.value.json();
-                }
+                } else failedCount++;
 
                 if (distRes.status === 'fulfilled' && distRes.value.ok) {
                     distData = await distRes.value.json();
-                }
+                } else failedCount++;
 
                 if (mapRes.status === 'fulfilled' && mapRes.value.ok) {
                     const geo = await mapRes.value.json();
                     features = geo.features || [];
-                }
+                } else failedCount++;
 
                 setDashboardData({
                     kpiData: [
@@ -64,9 +76,13 @@ const PublicDashboard = ({ onLoginClick }) => {
                 });
                 setMapData(features);
 
+                if (failedCount > 0) {
+                    console.warn(`${failedCount} servicios de datos no respondieron.`);
+                }
+
             } catch (err) {
                 console.error("Error en Dashboard Público:", err);
-                setError("Ocurrió un error al conectar con el servidor. Verifica tu conexión.");
+                setError(`No se pudo conectar con el servidor central (${API_BASE_URL}).`);
             } finally {
                 setLoading(false);
             }
@@ -90,9 +106,17 @@ const PublicDashboard = ({ onLoginClick }) => {
     return (
         <div className="space-y-8 animate-fade-in max-w-7xl mx-auto px-4 py-6">
             {error && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl">
-                    <p className="text-red-700 font-bold">Sin conexión de datos</p>
-                    <p className="text-red-600 text-sm">{error}</p>
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl flex justify-between items-center">
+                    <div>
+                        <p className="text-red-700 font-bold">Problema de conexión con la base de datos</p>
+                        <p className="text-red-600 text-sm">{error}</p>
+                    </div>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors"
+                    >
+                        Reintentar
+                    </button>
                 </div>
             )}
             {/* Header Ciudadano */}
