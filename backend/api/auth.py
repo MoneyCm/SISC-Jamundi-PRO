@@ -91,6 +91,16 @@ async def debug_users_permissions(
         "is_admin": role.name == "Administrador (Observatorio)" if role else False
     }
 
+@router.get("/force-roles-init")
+async def force_roles_initialization():
+    """Endpoint de emergencia para forzar la sincronización de roles"""
+    try:
+        from create_roles_v2 import init_db
+        init_db()
+        return {"status": "success", "message": "Roles y usuarios sincronizados manualmente."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # --- LOGICA DE ROLES Y PERMISOS ---
 
 class RoleChecker:
