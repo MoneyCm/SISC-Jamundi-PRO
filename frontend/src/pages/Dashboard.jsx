@@ -7,10 +7,10 @@ import { API_BASE_URL } from '../utils/apiConfig';
 
 const Dashboard = () => {
     const [dashboardData, setDashboardData] = useState({
-        kpiData: mockKpiData,
-        crimeTrendData: mockTrendData,
-        crimeDistributionData: mockDistributionData,
-        recentActivity: mockRecentActivity
+        kpiData: [],
+        crimeTrendData: [],
+        crimeDistributionData: [],
+        recentActivity: []
     });
     const [mapData, setMapData] = useState([]);
     const [loading, setLoading] = useState(true);
