@@ -62,36 +62,46 @@ export const TrendChart = ({ data }) => {
                 <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{new Date().getFullYear()}</span>
             </div>
             <div className="flex-1 w-full min-h-[300px]">
-                <ResponsiveContainer width="100%" height="100%" debounce={100}>
-                    <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="colorHurtos" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#384CF5" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#384CF5" stopOpacity={0} />
-                            </linearGradient>
-                            <linearGradient id="colorVif" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#FFB600" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#FFB600" stopOpacity={0} />
-                            </linearGradient>
-                            <linearGradient id="colorHomicidios" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#281FD0" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#281FD0" stopOpacity={0} />
-                            </linearGradient>
-                            <linearGradient id="colorLesiones" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#FFE000" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#FFE000" stopOpacity={0} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area type="monotone" dataKey="homicidios" stroke="#281FD0" strokeWidth={3} fillOpacity={1} fill="url(#colorHomicidios)" name="Homicidios" activeDot={{ r: 6, strokeWidth: 0 }} />
-                        <Area type="monotone" dataKey="hurtos" stroke="#384CF5" strokeWidth={3} fillOpacity={1} fill="url(#colorHurtos)" name="Hurtos" activeDot={{ r: 6, strokeWidth: 0 }} />
-                        <Area type="monotone" dataKey="vif" stroke="#FFB600" strokeWidth={3} fillOpacity={1} fill="url(#colorVif)" name="Violencia Intrafamiliar" activeDot={{ r: 6, strokeWidth: 0 }} />
-                        <Area type="monotone" dataKey="lesiones" stroke="#FFE000" strokeWidth={3} fillOpacity={1} fill="url(#colorLesiones)" name="Lesiones Personales" activeDot={{ r: 6, strokeWidth: 0 }} />
-                    </AreaChart>
-                </ResponsiveContainer>
+                {(!data || data.length === 0) ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                        <div className="p-4 bg-slate-50 rounded-full mb-3">
+                            <Activity size={32} className="text-slate-300" />
+                        </div>
+                        <p className="text-sm font-medium">No hay datos de tendencia disponibles</p>
+                        <p className="text-xs mt-1">Sube datos para visualizar el comportamiento.</p>
+                    </div>
+                ) : (
+                    <ResponsiveContainer width="100%" height="100%" debounce={100}>
+                        <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorHurtos" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#384CF5" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#384CF5" stopOpacity={0} />
+                                </linearGradient>
+                                <linearGradient id="colorVif" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#FFB600" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#FFB600" stopOpacity={0} />
+                                </linearGradient>
+                                <linearGradient id="colorHomicidios" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#281FD0" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#281FD0" stopOpacity={0} />
+                                </linearGradient>
+                                <linearGradient id="colorLesiones" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#FFE000" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#FFE000" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Area type="monotone" dataKey="homicidios" stroke="#281FD0" strokeWidth={3} fillOpacity={1} fill="url(#colorHomicidios)" name="Homicidios" activeDot={{ r: 6, strokeWidth: 0 }} />
+                            <Area type="monotone" dataKey="hurtos" stroke="#384CF5" strokeWidth={3} fillOpacity={1} fill="url(#colorHurtos)" name="Hurtos" activeDot={{ r: 6, strokeWidth: 0 }} />
+                            <Area type="monotone" dataKey="vif" stroke="#FFB600" strokeWidth={3} fillOpacity={1} fill="url(#colorVif)" name="Violencia Intrafamiliar" activeDot={{ r: 6, strokeWidth: 0 }} />
+                            <Area type="monotone" dataKey="lesiones" stroke="#FFE000" strokeWidth={3} fillOpacity={1} fill="url(#colorLesiones)" name="Lesiones Personales" activeDot={{ r: 6, strokeWidth: 0 }} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                )}
             </div>
         </div>
     );
@@ -104,32 +114,41 @@ export const DistributionChart = ({ data }) => {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 h-96 flex flex-col">
             <h3 className="text-lg font-bold text-slate-800 mb-2">Distribución por Delito</h3>
             <div className="flex-1 w-full min-h-[300px]">
-                <ResponsiveContainer width="100%" height="100%" debounce={100}>
-                    <PieChart>
-                        <Pie
-                            data={data}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                            stroke="none"
-                        >
-                            {data.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend
-                            verticalAlign="bottom"
-                            height={36}
-                            iconType="circle"
-                            iconSize={8}
-                            formatter={(value) => <span className="text-xs text-slate-600 font-medium ml-1">{value}</span>}
-                        />
-                    </PieChart>
-                </ResponsiveContainer>
+                {(!data || data.length === 0) ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                        <div className="p-4 bg-slate-50 rounded-full mb-3">
+                            <Activity size={32} className="text-slate-300" />
+                        </div>
+                        <p className="text-sm font-medium">No hay distribución disponible</p>
+                    </div>
+                ) : (
+                    <ResponsiveContainer width="100%" height="100%" debounce={100}>
+                        <PieChart>
+                            <Pie
+                                data={data}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                                stroke="none"
+                            >
+                                {data.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend
+                                verticalAlign="bottom"
+                                height={36}
+                                iconType="circle"
+                                iconSize={8}
+                                formatter={(value) => <span className="text-xs text-slate-600 font-medium ml-1">{value}</span>}
+                            />
+                        </PieChart>
+                    </ResponsiveContainer>
+                )}
             </div>
         </div>
     );
