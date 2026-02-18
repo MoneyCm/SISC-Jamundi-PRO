@@ -51,7 +51,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-export const TrendChart = ({ data }) => {
+export const TrendChart = ({ data, year }) => {
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 h-96 flex flex-col">
             <div className="flex justify-between items-center mb-6">
@@ -59,7 +59,7 @@ export const TrendChart = ({ data }) => {
                     <Activity size={20} className="text-primary" />
                     Tendencia Delictiva
                 </h3>
-                <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{new Date().getFullYear()}</span>
+                <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{year || new Date().getFullYear()}</span>
             </div>
             <div className="flex-1 w-full min-h-[300px]">
                 {(!data || data.length === 0) ? (
