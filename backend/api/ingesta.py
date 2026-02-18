@@ -8,11 +8,11 @@ import uuid
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
-from api.auth import admin_only
+from api.auth import admin_only, analyst_or_admin
 
 router = APIRouter()
 
-@router.post("/upload", dependencies=[Depends(admin_only)])
+@router.post("/upload", dependencies=[Depends(analyst_or_admin)])
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Recibe un archivo Excel/CSV, procesa los datos y los inserta en PostGIS.
@@ -110,7 +110,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error fatal procesando el archivo: {str(e)}")
 
-@router.post("/bulk", dependencies=[Depends(admin_only)])
+@router.post("/bulk", dependencies=[Depends(analyst_or_admin)])
 async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
     """
     Recibe una lista de eventos pre-analizados por la IA en JSON y los inserta.
@@ -234,14 +234,14 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
         "report": report
     }
 
-@router.delete("/clear", dependencies=[Depends(admin_only)])
+@router.delete("/clear", dependencies=[Depends(analyst_or_admin)])
 def clear_all_events(db: Session = Depends(get_db)):
     """Elimina todos los eventos de la base de datos"""
     db.query(Event).delete()
     db.commit()
     return {"message": "Base de datos de eventos limpiada correctamente"}
 
-@router.delete("/{event_id}", dependencies=[Depends(admin_only)])
+@router.delete("/{event_id}", dependencies=[Depends(analyst_or_admin)])
 def delete_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
     """Elimina un evento específico"""
     event = db.query(Event).filter(Event.id == event_id).first()

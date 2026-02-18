@@ -11,18 +11,20 @@ const iconMap = {
 
 export const KPICard = ({ data }) => {
     const Icon = iconMap[data.icon] || AlertTriangle;
-    const isUp = data.trend === 'up';
+    // En contexto de seguridad: "up" o "negative" es MALO (Rojo)
+    // "down" o "positive" es BUENO (Verde)
+    const isNegative = data.trend === 'up' || data.trend === 'negative';
     const isNeutral = data.trend === 'neutral';
 
     return (
         <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all duration-300 group">
             <div className="flex justify-between items-start mb-3 md:mb-4">
-                <div className={`p-2 md:p-3 rounded-xl transition-colors ${isUp ? 'bg-red-50 text-red-600 group-hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100'}`}>
+                <div className={`p-2 md:p-3 rounded-xl transition-colors ${isNegative ? 'bg-red-50 text-red-600 group-hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100'}`}>
                     <Icon size={20} strokeWidth={2} className="md:w-6 md:h-6" />
                 </div>
-                <div className={`flex items-center space-x-1 text-[10px] md:text-sm font-bold px-2 py-1 rounded-full ${isUp ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                <div className={`flex items-center space-x-1 text-[10px] md:text-sm font-bold px-2 py-1 rounded-full ${isNegative ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                     <span>{data.change}</span>
-                    {isUp ? <ArrowUpRight size={12} className="md:w-3.5 md:h-3.5" /> : <ArrowDownRight size={12} className="md:w-3.5 md:h-3.5" />}
+                    {isNegative ? <ArrowUpRight size={12} className="md:w-3.5 md:h-3.5" /> : <ArrowDownRight size={12} className="md:w-3.5 md:h-3.5" />}
                 </div>
             </div>
             <h3 className="text-slate-500 text-[10px] md:text-sm font-medium tracking-wide uppercase">{data.title}</h3>

@@ -27,7 +27,7 @@ async def get_optional_user(
     except JWTError:
         return None
 
-POBLACION_JAMUNDI = 150000
+POBLACION_JAMUNDI = 180942
 
 @router.get("/estadisticas/kpis")
 def get_dashboard_kpis(
@@ -222,16 +222,22 @@ def get_eventos_geojson(
     token: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    # Verificar si es usuario institucional
+    # Verificar permisos de roles
     user = None
+    sensitive_access = False
+    
     if token:
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            role_name = payload.get("role")
+            # Roles que pueden ver datos sensibles (Analista, Fuerza Pública, Admin)
+            if role_name in ["Administrador (Observatorio)", "Analista Institucional", "Enlace Fuerza Pública"]:
+                sensitive_access = True
             user = db.query(User).filter(User.username == payload.get("sub")).first()
         except:
             pass
-            
-    is_institutional = user is not None # Admin o Analista
+
+    is_institutional = sensitive_access
 
     query = db.query(
         Event.id,
@@ -292,3 +298,16 @@ def get_eventos_geojson(
         "features": features,
         "mode": "Institutional" if is_institutional else "Public"
     }
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "mode": "Institutional" if is_institutional else "Public"
+    }
+
+@router.get("/estadisticas/ultima-actualizacion")
+def get_ultima_fecha_datos(db: Session = Depends(get_db)):
+    """
+    Retorna la fecha del último evento registrado para ajustar los filtros del dashboard.
+    """
+    max_date = db.query(func.max(Event.occurrence_date)).scalar()
+    return {"ultima_fecha": max_date if max_date else date.today()}

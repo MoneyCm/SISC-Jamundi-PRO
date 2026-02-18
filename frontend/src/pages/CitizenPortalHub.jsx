@@ -61,16 +61,18 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
             {/* Hero Section */}
             <div className="bg-gradient-to-br from-[#281FD0] via-[#384CF5] to-indigo-800 text-white py-16 md:py-24 px-6 relative overflow-hidden">
                 <div className="max-w-6xl mx-auto relative z-10 text-center">
-                    <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 mb-8 animate-fade-in">
+                    <button
+                        onClick={() => onNavigate('pqr')}
+                        className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 mb-8 animate-fade-in hover:bg-white/20 transition-colors cursor-pointer"
+                    >
                         <Globe size={16} className="text-white/80" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-white/90">Ventanilla Única Digital de Jamundí</span>
-                    </div>
+                        <span className="text-xs font-bold uppercase tracking-widest text-white/90">Abrir Ventanilla Única (PQR)</span>
+                    </button>
                     <h1 className="text-4xl md:text-6xl font-black mb-6 tracking-tighter leading-none">
                         SISC <span className="text-white/80">Ciudadano</span>
                     </h1>
-                    <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto font-medium mb-10">
-                        Plataforma integral para la seguridad, transparencia y atención a víctimas.
-                        Herramientas tecnológicas al servicio de la convivencia ciudadana.
+                    <p className="text-lg md:text-xl text-white/80 max-w-3xl mx-auto font-medium mb-10">
+                        Fortalecemos la seguridad y convivencia ciudadana en Jamundí con un enfoque estratégico para proteger la vida, la integridad y el patrimonio de sus habitantes.
                     </p>
 
                     <div className="flex flex-wrap justify-center gap-4">

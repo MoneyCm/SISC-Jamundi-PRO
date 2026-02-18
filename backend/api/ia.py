@@ -10,7 +10,7 @@ from api.auth import analyst_or_admin
 router = APIRouter()
 
 # Configuración de Modelos
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-2.0-flash-lite"
 MISTRAL_MODEL = "open-mistral-7b"
 
 # Configuración desde .env
@@ -29,7 +29,7 @@ ia_cache = {
 }
 
 async def call_gemini(contexto):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": contexto}]}]}
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(url, json=payload)

@@ -95,6 +95,32 @@ class RoleChecker:
         return current_user
 
 # Dependencias para usar en los otros archivos
+# Dependencias para usar en los otros archivos
+# 1. Admin: Todo el poder
 admin_only = RoleChecker(["Administrador (Observatorio)"])
+
+# 2. Nivel Estratégico + Táctico (Analistas, Ejecutivos, Admin)
+executive_access = RoleChecker([
+    "Administrador (Observatorio)", 
+    "Analista Institucional", 
+    "Tomador de Decisiones (Ejecutivo)"
+])
+
+# 3. Nivel Operativo + Táctico (Fuerza Pública, Analistas, Admin)
+operational_access = RoleChecker([
+    "Administrador (Observatorio)", 
+    "Analista Institucional", 
+    "Enlace Fuerza Pública"
+])
+
+# 4. Acceso General Institucional (Todos los roles logueados)
+institutional_access = RoleChecker([
+    "Administrador (Observatorio)", 
+    "Analista Institucional", 
+    "Tomador de Decisiones (Ejecutivo)", 
+    "Enlace Fuerza Pública"
+])
+
+# legacy (mantener por compatibilidad si algo lo usa)
 analyst_or_admin = RoleChecker(["Administrador (Observatorio)", "Analista Institucional"])
 public_access = RoleChecker(["Administrador (Observatorio)", "Analista Institucional", "Ciudadano (Modo Abierto)"])

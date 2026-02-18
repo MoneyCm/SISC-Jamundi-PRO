@@ -7,6 +7,7 @@ import ReportsPage from './pages/ReportsPage';
 import DataPage from './pages/DataPage';
 import PublicDashboard from './pages/PublicDashboard';
 import LoginPage from './pages/LoginPage';
+import PQRPage from './pages/PQRPage';
 import CitizenPortalHub from './pages/CitizenPortalHub';
 import VictimRoutes from './pages/VictimRoutes';
 import SecureReporting from './pages/SecureReporting';
@@ -58,6 +59,8 @@ const App = () => {
           return <CommunityParticipation onBack={() => setPublicActivePage('hub')} />;
         case 'educational':
           return <div className="p-20 text-center">Módulo Educativo en Desarrollo</div>;
+        case 'pqr':
+          return <PQRPage onBack={() => setPublicActivePage('hub')} />;
         default:
           return <CitizenPortalHub
             onNavigate={(page) => setPublicActivePage(page)}
