@@ -23,6 +23,12 @@ services:
         value: 3.11.9
       - key: PORT
         value: 10000
+      - key: AI_PROVIDER
+        value: GEMINI
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
 
   # Frontend
   - type: static
