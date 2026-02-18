@@ -66,6 +66,12 @@ async def get_ai_insights(db: Session = Depends(get_db)):
         return {"insight": "Falta MISTRAL_API_KEY", "status": "error"}
 
     total = db.query(Event).count()
+    if total == 0:
+        return {
+            "insight": "El sistema se encuentra a la espera de nuevos datos para generar la Perspectiva de Seguridad.",
+            "status": "success",
+            "provider": AI_PROVIDER
+        }
     
     # Cache Check
     import time
