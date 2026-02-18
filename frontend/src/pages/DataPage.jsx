@@ -103,7 +103,8 @@ const DataPage = () => {
                 alert('Base de datos limpiada correctamente.');
                 fetchIncidents();
             } else {
-                throw new Error('No se pudo limpiar la base de datos.');
+                const errorData = await res.json();
+                throw new Error(errorData.detail || 'No se pudo limpiar la base de datos.');
             }
         } catch (err) {
             alert(err.message);

@@ -57,7 +57,14 @@ def init_db():
                 else:
                     print(f"❌ Error crítico: Rol '{u_data['role']}' no encontrado en el mapa para usuario {u_data['username']}")
             else:
-                print(f"ℹ️ Usuario existente: {u_data['username']}")
+                # Actualizar Rol si es necesario (CORRECCIÓN CRÍTICA PARA PRODUCCIÓN)
+                role_id = role_map.get(u_data["role"])
+                if role_id and user.role_id != role_id:
+                    print(f"🔄 Actualizando rol de {u_data['username']}: {user.role_id} -> {role_id}")
+                    user.role_id = role_id
+                    db.add(user)
+                else:
+                    print(f"ℹ️ Usuario verificado: {u_data['username']}")
         
         db.commit()
         print("\n✅ ¡Inicialización de Roles y Usuarios completada con éxito!")
