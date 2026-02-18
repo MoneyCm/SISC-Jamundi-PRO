@@ -27,6 +27,11 @@ async def lifespan(app: FastAPI):
         logger.info("Iniciando conexión con la base de datos...")
         create_tables()
         logger.info("Tablas de base de datos verificadas/creadas con éxito.")
+        
+        # Inicializar Roles y Usuarios automáticamente
+        from create_roles_v2 import init_db
+        init_db()
+        logger.info("Roles y usuarios verificados/creados con éxito.")
     except Exception as e:
         logger.error(f"Error crítico conectando a la base de datos: {e}")
         # No detenemos la app para que Render pueda mostrar los logs si es necesario

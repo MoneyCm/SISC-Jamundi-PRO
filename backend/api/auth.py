@@ -73,6 +73,24 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
         "is_active": current_user.is_active
     }
 
+@router.get("/debug-me")
+async def debug_users_permissions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retorna información detallada del rol para depuración"""
+    role = db.query(Role).filter(Role.id == current_user.role_id).first()
+    return {
+        "user_id": current_user.id,
+        "username": current_user.username,
+        "role_id_in_user_table": current_user.role_id,
+        "role_found_in_db": {
+            "id": role.id if role else None,
+            "name": role.name if role else "CRITICAL_ERROR_NO_ROLE_FOUND"
+        },
+        "is_admin": role.name == "Administrador (Observatorio)" if role else False
+    }
+
 # --- LOGICA DE ROLES Y PERMISOS ---
 
 class RoleChecker:
