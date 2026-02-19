@@ -82,6 +82,29 @@ class Proposal(Base):
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
     author_name = Column(String(100)) # Opcional, para identificar quién lo subió
 
+class SafetyFront(Base):
+    __tablename__ = "safety_fronts"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(200), nullable=False)
+    barrio = Column(String(100), nullable=False)
+    leader_name = Column(String(100), nullable=False)
+    contact_phone = Column(String(20), nullable=False)
+    status = Column(String(50), default="ACTIVO") # ACTIVO, INACTIVO
+    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+
+class SecureReport(Base):
+    __tablename__ = "secure_reports"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tipo = Column(String(100), nullable=False)
+    barrio = Column(String(100), nullable=False)
+    fecha = Column(Date, nullable=False)
+    hora = Column(Time, nullable=False)
+    descripcion = Column(Text, nullable=False)
+    es_anonimo = Column(Boolean, default=True)
+    nombre = Column(String(100), nullable=True)
+    contacto = Column(String(100), nullable=True)
+    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+
 def get_db():
     db = SessionLocal()
     try:

@@ -16,8 +16,11 @@ import { API_BASE_URL } from '../utils/apiConfig';
 
 const CommunityParticipation = ({ onBack }) => {
     const [proposals, setProposals] = useState([]);
+    const [safetyFronts, setSafetyFronts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [showFrontModal, setShowFrontModal] = useState(false);
+
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -25,30 +28,52 @@ const CommunityParticipation = ({ onBack }) => {
         barrio: '',
         author_name: ''
     });
+
+    const [frontData, setFrontData] = useState({
+        name: '',
+        barrio: '',
+        leader_name: '',
+        contact_phone: ''
+    });
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState(false);
 
     useEffect(() => {
-        fetchProposals();
+        fetchData();
     }, []);
 
-    const fetchProposals = async () => {
+    const fetchData = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/participacion/propuestas`);
-            if (response.ok) {
-                const data = await response.json();
-                setProposals(data);
-            }
+            await Promise.all([fetchProposals(), fetchSafetyFronts()]);
         } catch (err) {
-            console.error("Error fetching proposals:", err);
+            console.error("Error fetching data:", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchProposals = async () => {
+        const response = await fetch(`${API_BASE_URL}/participacion/propuestas`);
+        if (response.ok) {
+            const data = await response.json();
+            setProposals(data);
+        }
+    };
+
+    const fetchSafetyFronts = async () => {
+        const response = await fetch(`${API_BASE_URL}/participacion/frentes`);
+        if (response.ok) {
+            const data = await response.json();
+            setSafetyFronts(data);
         }
     };
 
     const handleInviteClick = (title) => {
         if (title === 'Propuestas de Convivencia') {
             setShowModal(true);
+        } else if (title === 'Frentes de Seguridad Local') {
+            setShowFrontModal(true);
         }
     };
 
@@ -77,12 +102,37 @@ const CommunityParticipation = ({ onBack }) => {
         }
     };
 
+    const handleFrontSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/participacion/frentes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(frontData)
+            });
+            if (response.ok) {
+                setSuccessMessage(true);
+                setFrontData({ name: '', barrio: '', leader_name: '', contact_phone: '' });
+                fetchSafetyFronts();
+                setTimeout(() => {
+                    setSuccessMessage(false);
+                    setShowFrontModal(false);
+                }, 3000);
+            }
+        } catch (err) {
+            alert("Error al registrar el frente.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const initiatives = [
         {
             title: 'Frentes de Seguridad Local',
             description: 'Organización de vecinos conectados para la prevención y alerta temprana en barrios.',
             icon: Handshake,
-            members: '45 frentes activos',
+            members: `${safetyFronts.length > 0 ? safetyFronts.length : 45} frentes activos`,
             color: 'emerald'
         },
         {
@@ -130,7 +180,7 @@ const CommunityParticipation = ({ onBack }) => {
                         <div
                             key={idx}
                             onClick={() => handleInviteClick(item.title)}
-                            className={`bg-white p-6 rounded-3xl shadow-lg border border-slate-100 hover:shadow-xl transition-all group ${item.title === 'Propuestas de Convivencia' ? 'cursor-pointer hover:border-emerald-200' : ''}`}
+                            className={`bg-white p-6 rounded-3xl shadow-lg border border-slate-100 hover:shadow-xl transition-all group ${(item.title === 'Propuestas de Convivencia' || item.title === 'Frentes de Seguridad Local') ? 'cursor-pointer hover:border-emerald-200' : ''}`}
                         >
                             <div className={`p-4 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform ${item.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
                                 item.color === 'amber' ? 'bg-amber-50 text-amber-600' :
@@ -337,6 +387,89 @@ const CommunityParticipation = ({ onBack }) => {
                                     className="w-full bg-emerald-600 text-white font-black py-4 rounded-xl hover:bg-emerald-700 transition-all shadow-lg active:scale-95 disabled:opacity-50 mt-4"
                                 >
                                     {isSubmitting ? 'ENVIANDO...' : 'PUBLICAR PROPUESTA'}
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal for new safety front */}
+            {showFrontModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="p-6 bg-emerald-700 text-white flex justify-between items-center">
+                            <h3 className="text-xl font-bold">Unirse o Crear Frente de Seguridad</h3>
+                            <button onClick={() => setShowFrontModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {successMessage ? (
+                            <div className="p-12 text-center space-y-4">
+                                <div className="bg-emerald-100 text-emerald-600 p-4 rounded-full w-fit mx-auto">
+                                    <CheckCircle2 size={48} />
+                                </div>
+                                <h4 className="text-2xl font-bold text-slate-800">¡Solicitud Enviada!</h4>
+                                <p className="text-slate-500">Tu interés ha sido registrado. Un coordinador del SISC se pondrá en contacto para formalizar el frente.</p>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleFrontSubmit} className="p-8 space-y-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Nombre del Frente / Sector</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        placeholder="Ej: Frente de Seguridad Barrio El Rosario"
+                                        className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 h-12"
+                                        value={frontData.name}
+                                        onChange={(e) => setFrontData({ ...frontData, name: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Barrio</label>
+                                        <input
+                                            required
+                                            type="text"
+                                            placeholder="Tu barrio"
+                                            className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 h-12"
+                                            value={frontData.barrio}
+                                            onChange={(e) => setFrontData({ ...frontData, barrio: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Teléfono de Contacto</label>
+                                        <input
+                                            required
+                                            type="tel"
+                                            placeholder="Celular"
+                                            className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 h-12"
+                                            value={frontData.contact_phone}
+                                            onChange={(e) => setFrontData({ ...frontData, contact_phone: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Líder / Representante</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        placeholder="Nombre completo"
+                                        className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 h-12"
+                                        value={frontData.leader_name}
+                                        onChange={(e) => setFrontData({ ...frontData, leader_name: e.target.value })}
+                                    />
+                                </div>
+
+                                <button
+                                    disabled={isSubmitting}
+                                    type="submit"
+                                    className="w-full bg-emerald-700 text-white font-black py-4 rounded-xl hover:bg-emerald-800 transition-all shadow-lg active:scale-95 disabled:opacity-50 mt-4"
+                                >
+                                    {isSubmitting ? 'ENVIANDO...' : 'SOLICITAR VÍNCULO A FRENTE'}
                                 </button>
                             </form>
                         )}

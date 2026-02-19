@@ -89,12 +89,24 @@ def get_tendencia_delictiva(
     """
     Retorna la tendencia mensual de delitos (Homicidios vs Otros) con filtros.
     """
-    query_str = """
+    # Determinar granularidad según el rango
+    intervalo = "month"
+    formato_sql = "Mon"
+    if start_date and end_date:
+        dias = (end_date - start_date).days
+        if dias <= 31:
+            intervalo = "day"
+            formato_sql = "DD Mon"
+        elif dias <= 120:
+            intervalo = "week"
+            formato_sql = "DD Mon" # Inicio de semana
+
+    query_str = f"""
         SELECT 
-            TO_CHAR(date_trunc('month', occurrence_date), 'Mon') as mes,
+            TO_CHAR(date_trunc('{intervalo}', occurrence_date), '{formato_sql}') as etiqueta,
             COUNT(*) FILTER (WHERE et.category = 'HOMICIDIO') as homicidios,
             COUNT(*) FILTER (WHERE et.category != 'HOMICIDIO') as otros,
-            date_trunc('month', occurrence_date) as full_date
+            date_trunc('{intervalo}', occurrence_date) as full_date
         FROM events e
         JOIN event_types et ON e.event_type_id = et.id
         WHERE 1=1
@@ -110,24 +122,38 @@ def get_tendencia_delictiva(
         query_str += " AND et.category IN :categories"
         params["categories"] = tuple(categories)
 
-    query_str += " GROUP BY 1, 4 ORDER BY 4 ASC LIMIT 6"
+    query_str += f" GROUP BY 1, 4 ORDER BY 4 DESC"
+    
+    # Si NO se provee fecha inicio, limitamos a los últimos 6 meses para contexto
+    if not start_date:
+        query_str += " LIMIT 6"
     
     results = db.execute(text(query_str), params).fetchall()
     
     # Mapeo manual de meses a Español para evitar dependencia de locale de DB
     MESES_ES = {
-        1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
-        7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"
+        "Jan": "Ene", "Feb": "Feb", "Mar": "Mar", "Apr": "Abr", "May": "May", "Jun": "Jun",
+        "Jul": "Jul", "Aug": "Ago", "Sep": "Sep", "Oct": "Oct", "Nov": "Nov", "Dec": "Dic"
     }
     
-    return [
+    def translate_label(label):
+        for en, es in MESES_ES.items():
+            if en in label:
+                return label.replace(en, es)
+        return label
+    
+    # Invertir para que se vea cronológico en el gráfico (Antiguo -> Nuevo)
+    trend_data = [
         {
-            "name": MESES_ES.get(r.full_date.month, r.mes), # Usar mes numérico para traducir
+            "name": translate_label(r.etiqueta), 
             "homicidios": r.homicidios, 
             "hurtos": r.otros
         } 
         for r in results
     ]
+    trend_data.reverse()
+    
+    return trend_data
 
 @router.get("/estadisticas/distribucion")
 def get_distribucion_delitos(
@@ -224,6 +250,52 @@ def get_tasa_homicidios(
         "poblacion_referencia": POBLACION_JAMUNDI
     }
 
+@router.get("/estadisticas/comparativa")
+def get_comparativa_periodos(
+    start1: date, 
+    end1: date, 
+    start2: date, 
+    end2: date,
+    db: Session = Depends(get_db)
+):
+    """
+    Compara dos periodos de tiempo seleccionados.
+    Útil para comparaciones Año tras Año (YoY).
+    """
+    def get_stats(s, e):
+        # Homicidios
+        homicidios = db.query(func.count(Event.id)).join(EventType).filter(
+            EventType.category == "HOMICIDIO",
+            Event.occurrence_date >= s,
+            Event.occurrence_date <= e
+        ).scalar() or 0
+        
+        # Otros delitos (Hurtos, Lesiones, etc)
+        otros = db.query(func.count(Event.id)).join(EventType).filter(
+            EventType.category != "HOMICIDIO",
+            Event.occurrence_date >= s,
+            Event.occurrence_date <= e
+        ).scalar() or 0
+        
+        return {"homicidios": homicidios, "otros": otros, "total": homicidios + otros}
+
+    periodo1 = get_stats(start1, end1)
+    periodo2 = get_stats(start2, end2)
+    
+    def calculate_change(p1, p2):
+        if p2 == 0: return 100 if p1 > 0 else 0
+        return round(((p1 - p2) / p2) * 100, 1)
+
+    return {
+        "periodo_actual": periodo1,
+        "periodo_anterior": periodo2,
+        "cambios_porcentaje": {
+            "homicidios": calculate_change(periodo1["homicidios"], periodo2["homicidios"]),
+            "otros": calculate_change(periodo1["otros"], periodo2["otros"]),
+            "total": calculate_change(periodo1["total"], periodo2["total"])
+        }
+    }
+
 @router.get("/eventos/geojson")
 def get_eventos_geojson(
     start_date: Optional[date] = None, 
@@ -312,7 +384,15 @@ def get_eventos_geojson(
 @router.get("/estadisticas/ultima-actualizacion")
 def get_ultima_fecha_datos(db: Session = Depends(get_db)):
     """
-    Retorna la fecha del último evento registrado para ajustar los filtros del dashboard.
+    Retorna el rango total de datos disponibles (primera y última fecha).
+    Útil para mostrar la cobertura de datos en el Dashboard.
     """
-    max_date = db.query(func.max(Event.occurrence_date)).scalar()
-    return {"ultima_fecha": max_date if max_date else date.today()}
+    stats = db.query(
+        func.min(Event.occurrence_date).label("min_date"),
+        func.max(Event.occurrence_date).label("max_date")
+    ).first()
+    
+    return {
+        "fecha_inicial": stats.min_date if stats.min_date else date.today(),
+        "ultima_fecha": stats.max_date if stats.max_date else date.today()
+    }

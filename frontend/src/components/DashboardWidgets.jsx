@@ -1,12 +1,13 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain, Users } from 'lucide-react';
 
 const iconMap = {
     AlertTriangle: AlertTriangle,
     Skull: Skull,
     Briefcase: Briefcase,
     Home: Home,
+    Users: Users,
 };
 
 export const KPICard = ({ data }) => {
@@ -75,16 +76,16 @@ export const TrendChart = ({ data, year }) => {
                         <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorHurtos" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#384CF5" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#384CF5" stopOpacity={0} />
+                                    <stop offset="5%" stopColor="#281FD0" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#281FD0" stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="colorVif" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#FFB600" stopOpacity={0.3} />
                                     <stop offset="95%" stopColor="#FFB600" stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="colorHomicidios" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#281FD0" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#281FD0" stopOpacity={0} />
+                                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="colorLesiones" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#FFE000" stopOpacity={0.3} />
@@ -95,8 +96,8 @@ export const TrendChart = ({ data, year }) => {
                             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
                             <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                             <Tooltip content={<CustomTooltip />} />
-                            <Area type="monotone" dataKey="homicidios" stroke="#281FD0" strokeWidth={3} fillOpacity={1} fill="url(#colorHomicidios)" name="Homicidios" activeDot={{ r: 6, strokeWidth: 0 }} />
-                            <Area type="monotone" dataKey="hurtos" stroke="#384CF5" strokeWidth={3} fillOpacity={1} fill="url(#colorHurtos)" name="Hurtos" activeDot={{ r: 6, strokeWidth: 0 }} />
+                            <Area type="monotone" dataKey="homicidios" stroke="#F97316" strokeWidth={3} fillOpacity={1} fill="url(#colorHomicidios)" name="Homicidios" activeDot={{ r: 6, strokeWidth: 0 }} />
+                            <Area type="monotone" dataKey="hurtos" stroke="#281FD0" strokeWidth={3} fillOpacity={1} fill="url(#colorHurtos)" name="Hurtos" activeDot={{ r: 6, strokeWidth: 0 }} />
                             <Area type="monotone" dataKey="vif" stroke="#FFB600" strokeWidth={3} fillOpacity={1} fill="url(#colorVif)" name="Violencia Intrafamiliar" activeDot={{ r: 6, strokeWidth: 0 }} />
                             <Area type="monotone" dataKey="lesiones" stroke="#FFE000" strokeWidth={3} fillOpacity={1} fill="url(#colorLesiones)" name="Lesiones Personales" activeDot={{ r: 6, strokeWidth: 0 }} />
                         </AreaChart>
@@ -380,6 +381,52 @@ export const EarlyWarningWidget = ({ alerts = [] }) => {
                     </div>
                 ))}
             </div>
+        </div>
+    );
+};
+
+export const CommunityInboxWidget = ({ items = [], loading }) => {
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 h-full flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Users size={20} className="text-emerald-600" />
+                    Bandeja de Participación
+                </h3>
+                <span className="text-[10px] font-bold bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md uppercase tracking-wider">Ciudadanía</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin">
+                {loading ? (
+                    <div className="flex justify-center py-10 italic text-slate-400 text-sm">Cargando solicitudes...</div>
+                ) : items.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-slate-300">
+                        <Users size={32} className="mb-2 opacity-20" />
+                        <p className="text-xs font-medium uppercase tracking-widest">Sin solicitudes pendientes</p>
+                    </div>
+                ) : (
+                    items.map((item) => (
+                        <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-emerald-200 transition-all group">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter ${item.tipo === 'PROPUESTA' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                                    }`}>
+                                    {item.tipo}
+                                </span>
+                                <span className="text-[10px] text-slate-400">{new Date(item.fecha).toLocaleDateString()}</span>
+                            </div>
+                            <h4 className="text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors uppercase tracking-tight">{item.titulo}</h4>
+                            <p className="text-[11px] text-slate-500 mt-1 font-medium italic">{item.subtitulo}</p>
+                            <div className="mt-3 p-2 bg-white/50 rounded-lg border border-slate-200/50">
+                                <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-2">{item.descripcion}</p>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <button className="mt-4 w-full py-2 text-xs font-bold text-slate-400 hover:text-emerald-600 border-t border-slate-50 transition-colors uppercase tracking-widest">
+                Gestionar en Módulo Social
+            </button>
         </div>
     );
 };
