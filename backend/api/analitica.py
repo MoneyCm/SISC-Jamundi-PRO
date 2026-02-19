@@ -114,8 +114,18 @@ def get_tendencia_delictiva(
     
     results = db.execute(text(query_str), params).fetchall()
     
+    # Mapeo manual de meses a Español para evitar dependencia de locale de DB
+    MESES_ES = {
+        1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
+        7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"
+    }
+    
     return [
-        {"name": r.mes, "homicidios": r.homicidios, "hurtos": r.otros} 
+        {
+            "name": MESES_ES.get(r.full_date.month, r.mes), # Usar mes numérico para traducir
+            "homicidios": r.homicidios, 
+            "hurtos": r.otros
+        } 
         for r in results
     ]
 
