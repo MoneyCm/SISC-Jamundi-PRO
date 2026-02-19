@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Date, Time, ForeignKey, Boolean, Text, text
+from sqlalchemy import create_engine, Column, Integer, String, Date, Time, ForeignKey, Boolean, Text, text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -70,6 +70,17 @@ class Event(Base):
     location_geom = Column(Text) 
     
     event_type = relationship("EventType")
+
+class Proposal(Base):
+    __tablename__ = "proposals"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=False)
+    category = Column(String(50), nullable=False) # ILUMINACION, PARQUES, ESPACIOS_COMUNES, OTROS
+    barrio = Column(String(100), nullable=False)
+    status = Column(String(50), default="PENDIENTE") # PENDIENTE, EN_CURSO, COMPLETADO
+    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    author_name = Column(String(100)) # Opcional, para identificar quién lo subió
 
 def get_db():
     db = SessionLocal()

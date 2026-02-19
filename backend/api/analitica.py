@@ -201,7 +201,7 @@ def get_tasa_homicidios(
 ):
     """
     Calcula la tasa de homicidios por cada 100k habitantes.
-    Fórmula: (Nº Homicidios / 150,000) * 100,000
+    Fórmula: (Nº Homicidios / 180,942) * 100,000
     """
     query = db.query(func.count(Event.id)).join(EventType).filter(EventType.category == "HOMICIDIO")
     
@@ -303,11 +303,6 @@ def get_eventos_geojson(
         }
         features.append(feature)
         
-    return {
-        "type": "FeatureCollection",
-        "features": features,
-        "mode": "Institutional" if is_institutional else "Public"
-    }
     return {
         "type": "FeatureCollection",
         "features": features,
