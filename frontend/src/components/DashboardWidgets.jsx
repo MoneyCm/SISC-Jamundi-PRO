@@ -204,39 +204,154 @@ export const RecentActivity = ({ data }) => {
 };
 
 export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport }) => {
+    const [chatOpen, setChatOpen] = React.useState(false);
+    const [messages, setMessages] = React.useState([]);
+    const [input, setInput] = React.useState('');
+    const [chatLoading, setChatLoading] = React.useState(false);
+    const scrollRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages, chatOpen]);
+
+    const handleSend = async (e) => {
+        e.preventDefault();
+        if (!input.trim() || chatLoading) return;
+
+        const userMsg = { id: Date.now(), text: input, sender: 'user' };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setChatLoading(true);
+
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/ia/chat_ciudadano`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: input })
+            });
+
+            if (!response.ok) throw new Error('Error de conexión');
+            const data = await response.json();
+
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                text: data.response || 'Error al procesar consulta.',
+                sender: 'ai'
+            }]);
+        } catch (err) {
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                text: 'Error de conexión con el servicio de IA.',
+                sender: 'ai'
+            }]);
+        } finally {
+            setChatLoading(false);
+        }
+    };
+
     return (
-        <div className="bg-slate-900 p-6 rounded-xl shadow-xl border border-slate-800 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <div className={`bg-slate-900 rounded-xl shadow-xl border border-slate-800 relative overflow-hidden group transition-all duration-500 ${chatOpen ? 'h-[500px]' : 'p-6'}`}>
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
                 <Brain size={120} className="text-primary" />
             </div>
-            <div className="relative z-10">
-                <div className="flex items-center space-x-3 mb-4">
-                    <div className="p-2 bg-primary/20 rounded-lg">
-                        <Brain className="text-primary w-5 h-5" />
+
+            <div className="relative z-10 h-full flex flex-col">
+                <div className={`flex items-center justify-between mb-4 ${chatOpen ? 'p-6 pb-2' : ''}`}>
+                    <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-primary/20 rounded-lg">
+                            <Brain className="text-primary w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-bold text-white">Perspectiva del SISC</h3>
                     </div>
-                    <h3 className="text-lg font-bold text-white">Perspectiva del SISC</h3>
+                    {chatOpen && (
+                        <button
+                            onClick={() => setChatOpen(false)}
+                            className="text-slate-400 hover:text-white transition-colors"
+                        >
+                            <Clock size={18} />
+                        </button>
+                    )}
                 </div>
-                {loading ? (
-                    <div className="flex items-center space-x-3 text-slate-400">
-                        <Activity className="animate-pulse w-4 h-4" />
-                        <p className="text-sm italic">El SISC está sintetizando patrones...</p>
-                    </div>
+
+                {!chatOpen ? (
+                    <>
+                        {loading ? (
+                            <div className="flex items-center space-x-3 text-slate-400">
+                                <Activity className="animate-pulse w-4 h-4" />
+                                <p className="text-sm italic">El SISC está sintetizando patrones...</p>
+                            </div>
+                        ) : (
+                            <p className="text-slate-300 text-sm leading-relaxed italic">
+                                "{insight}"
+                            </p>
+                        )}
+                        <div className="mt-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2 py-1 bg-white/5 rounded">
+                                    {provider || 'Analista Virtual'}
+                                </span>
+                                <button
+                                    onClick={() => setChatOpen(true)}
+                                    className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-400/10 px-3 py-1.5 rounded-lg border border-emerald-400/20"
+                                >
+                                    <Activity size={12} />
+                                    Consultar al SISC
+                                </button>
+                            </div>
+                            <button
+                                onClick={onTechnicalReport}
+                                className="text-xs text-primary font-bold hover:text-white transition-colors"
+                            >
+                                Ver reporte técnico
+                            </button>
+                        </div>
+                    </>
                 ) : (
-                    <p className="text-slate-300 text-sm leading-relaxed italic">
-                        "{insight}"
-                    </p>
+                    <>
+                        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-700">
+                            <div className="flex justify-start">
+                                <div className="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed bg-white/5 text-slate-300 border border-white/10 rounded-bl-none italic">
+                                    Hola analista. Estoy listo para profundizar en los datos que ves en el tablero. ¿Qué te gustaría consultar?
+                                </div>
+                            </div>
+                            {messages.map(msg => (
+                                <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${msg.sender === 'user'
+                                        ? 'bg-primary text-white rounded-br-none'
+                                        : 'bg-white/10 text-slate-200 border border-white/10 rounded-bl-none'}`}>
+                                        {msg.text}
+                                    </div>
+                                </div>
+                            ))}
+                            {chatLoading && (
+                                <div className="text-[10px] text-primary animate-pulse font-bold uppercase tracking-widest">
+                                    SISC Procesando...
+                                </div>
+                            )}
+                        </div>
+                        <form onSubmit={handleSend} className="p-4 bg-slate-800/50 border-t border-slate-800">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder="Pregunta sobre los datos del panel..."
+                                    className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary outline-none transition-all pr-10"
+                                    disabled={chatLoading}
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={!input.trim() || chatLoading}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-primary hover:text-white disabled:text-slate-600 transition-colors"
+                                >
+                                    <ArrowUpRight size={20} />
+                                </button>
+                            </div>
+                        </form>
+                    </>
                 )}
-                <div className="mt-4 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2 py-1 bg-white/5 rounded">
-                        {provider || 'AI Analista'}
-                    </span>
-                    <button
-                        onClick={onTechnicalReport}
-                        className="text-xs text-primary font-bold hover:text-white transition-colors"
-                    >
-                        Ver reporte técnico
-                    </button>
-                </div>
             </div>
         </div>
     );
