@@ -5,7 +5,7 @@ from sqlalchemy import func
 import os
 import httpx
 from typing import Optional
-from api.auth import analyst_or_admin
+from api.auth import analyst_or_admin, institutional_access
 
 router = APIRouter()
 
@@ -54,7 +54,7 @@ async def call_mistral(contexto):
         result = response.json()
         return result['choices'][0]['message']['content']
 
-@router.get("/insights", dependencies=[Depends(analyst_or_admin)])
+@router.get("/insights", dependencies=[Depends(institutional_access)])
 async def get_ai_insights(db: Session = Depends(get_db)):
     """
     Genera un análisis narrativo basado en los datos actuales usando el proveedor configurado.
@@ -124,7 +124,7 @@ async def get_ai_insights(db: Session = Depends(get_db)):
             "detail": str(e)
         }
 
-@router.get("/alertas", dependencies=[Depends(analyst_or_admin)])
+@router.get("/alertas", dependencies=[Depends(institutional_access)])
 async def get_ai_alerts(db: Session = Depends(get_db)):
     """
     Sistema de Alertas Tempranas: Detecta incrementos anómalos en delitos.
