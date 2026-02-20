@@ -21,6 +21,9 @@ class NationalCrimeStats(Base):
     
     cantidad = Column(Integer, default=1)
     
+    # Identificador único para evitar duplicados (hash de fecha + municipio + delito + cantidad)
+    hash_registro = Column(String(64), unique=True, index=True)
+    
     # Metadatos de origen
     fuente_archivo = Column(String(255)) # Nombre del archivo Excel origen
     fecha_corte_mindefensa = Column(Date) # Fecha de corte reportada en el archivo

@@ -12,6 +12,7 @@ import CitizenPortalHub from './pages/CitizenPortalHub';
 import VictimRoutes from './pages/VictimRoutes';
 import SecureReporting from './pages/SecureReporting';
 import CommunityParticipation from './pages/CommunityParticipation';
+import IntelligenceModule from './pages/IntelligenceModule';
 import SiscAIChatbot from './components/SiscAIChatbot';
 
 const App = () => {
@@ -57,6 +58,8 @@ const App = () => {
           return <SecureReporting onBack={() => setPublicActivePage('hub')} />;
         case 'participation':
           return <CommunityParticipation onBack={() => setPublicActivePage('hub')} />;
+        case 'intelligence':
+          return <IntelligenceModule />;
         case 'educational':
           return <div className="p-20 text-center">Módulo Educativo en Desarrollo</div>;
         case 'pqr':
@@ -78,6 +81,8 @@ const App = () => {
         return <ReportsPage />;
       case 'data':
         return <DataPage />;
+      case 'intelligence':
+        return <IntelligenceModule />;
       default:
         return <Dashboard />;
     }

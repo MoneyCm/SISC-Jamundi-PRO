@@ -28,7 +28,7 @@ class NationalStatsProcessor:
         text = text.replace(".", "")
         return text
 
-    def process_excel(self, file_content: bytes, filename: str) -> Generator[Dict, None, None]:
+    def process_excel(self, file_content: bytes, filename: str, inferred_crime_type: str = None) -> Generator[Dict, None, None]:
         """
         Procesa el archivo Excel y genera diccionarios listos para insertar en DB.
         """
@@ -70,6 +70,10 @@ class NationalStatsProcessor:
                         continue
                         
                     dept = row.get("DEPARTAMENTO")
+                    municipio_norm = self.normalize_text(municipio)
+                    
+                    # Determinar tipo de delito (Prioridad: Inferred > Filename)
+                    tipo_delito = inferred_crime_type or self._infer_crime_type(filename)
                     
                     # Determinar fecha y año
                     if has_date_col:
@@ -89,17 +93,23 @@ class NationalStatsProcessor:
                     if "TOTAL" in row:
                         cantidad = row["TOTAL"]
                     
+                    # Generar hash único para evitar duplicados
+                    import hashlib
+                    hash_input = f"{municipio_norm}|{fecha_obj}|{tipo_delito}|{cantidad}"
+                    registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+                    
                     # Construir objeto
                     yield {
                         "departamento": str(dept),
                         "municipio": str(municipio),
-                        "municipio_normalizado": self.normalize_text(municipio),
+                        "municipio_normalizado": municipio_norm,
                         "fecha_hecho": fecha_obj,
                         "anio": fecha_obj.year,
                         "mes": fecha_obj.month,
-                        "tipo_delito": self._infer_crime_type(filename),
+                        "tipo_delito": tipo_delito,
                         "cantidad": int(cantidad) if pd.notnull(cantidad) else 0,
                         "fuente_archivo": filename,
+                        "hash_registro": registro_hash,
                         "fecha_ingesta": datetime.utcnow()
                     }
                     
@@ -121,15 +131,38 @@ class NationalStatsProcessor:
     def _extract_year_from_filename(self, filename: str) -> int:
         import re
         match = re.search(r'20\d{2}', filename)
-        return int(match.group(0)) if match else datetime.now().year
+        # Default a 2025 si no se encuentra en el nombre, 
+        # mejor que usar datetime.now() que daría 2026 por ahora.
+        return int(match.group(0)) if match else 2025
 
     def _parse_date(self, date_val) -> date:
         if isinstance(date_val, (datetime, pd.Timestamp)):
             return date_val.date()
-        return datetime.now().date() # Fallback simple por ahora
+        if isinstance(date_val, str):
+            try:
+                return pd.to_datetime(date_val).date()
+            except:
+                pass
+        return None # Dejar que el llamador lo maneje
 
     def _infer_crime_type(self, filename: str) -> str:
-        name = self.normalize_text(filename)
+        name = self.normalize_text(filename).upper()
+        if "HOMICIDIO INTENCIONAL" in name: return "Homicidio Intencional"
+        if "HOMICIDIO ACCIDENTES" in name: return "Homicidio (Tránsito)"
+        if "LESIONES COMUNES" in name: return "Lesiones Personales"
+        if "LESIONES ACCIDENTES" in name: return "Lesiones (Tránsito)"
+        if "HURTO PERSONAS" in name: return "Hurto Personas"
+        if "HURTO COMERCIO" in name: return "Hurto Comercio"
+        if "HURTO RESIDENCIAS" in name: return "Hurto Residencias"
+        if "HURTO VEHICULOS" in name: return "Hurto Vehículos"
+        if "EXTORSION" in name: return "Extorsión"
+        if "SECUESTRO" in name: return "Secuestro"
+        if "SEXUALES" in name: return "Delitos Sexuales"
+        if "INTRAFAMILIAR" in name: return "Violencia Intrafamiliar"
+        if "TERRORISMO" in name: return "Terrorismo"
+        if "MEDIO AMBIENTE" in name: return "Delitos Ambientales"
+        if "INFORMATICOS" in name: return "Delitos Informáticos"
+        if "MASACRES" in name: return "Masacres"
         if "HOMICIDIO" in name: return "Homicidio"
         if "HURTO" in name: return "Hurto"
         return "Delito General"

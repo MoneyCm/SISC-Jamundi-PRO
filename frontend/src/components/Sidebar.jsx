@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic }) => {
     const menuItems = isPublic ? [
@@ -7,6 +7,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'map', label: 'Mapa de Incidencia', icon: Map },
     ] : [
         { id: 'dashboard', label: 'Tablero de Control', icon: LayoutDashboard },
+        { id: 'intelligence', label: 'Inteligencia Nacional', icon: Globe },
         { id: 'map', label: 'Mapa del Delito', icon: Map },
         { id: 'reports', label: 'Boletines y Reportes', icon: FileText },
         { id: 'data', label: 'Gestión de Datos', icon: Database },
