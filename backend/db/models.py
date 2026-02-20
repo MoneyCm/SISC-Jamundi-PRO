@@ -19,6 +19,9 @@ Base = declarative_base()
 
 def create_tables():
     try:
+        # Importar modelos de inteligencia para que SQLAlchemy los reconozca en el create_all
+        from db.models_intelligence import NationalCrimeStats, IngestionLog
+        
         Base.metadata.create_all(bind=engine)
         # Asegurar que PostGIS existe y la columna también
         with engine.connect() as conn:

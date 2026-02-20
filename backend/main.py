@@ -16,7 +16,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sisc_api")
 
-from api import analitica, ingesta, auth, reportes, ia
+from api import analitica, ingesta, auth, reportes, ia, intelligence
 from db.models import create_tables
 from contextlib import asynccontextmanager
 
