@@ -5,7 +5,7 @@ from sqlalchemy import func
 import os
 import httpx
 from typing import Optional
-from api.auth import analyst_or_admin
+from api.auth import analyst_or_admin, institutional_access
 
 router = APIRouter()
 
@@ -54,7 +54,7 @@ async def call_mistral(contexto):
         result = response.json()
         return result['choices'][0]['message']['content']
 
-@router.get("/insights", dependencies=[Depends(analyst_or_admin)])
+@router.get("/insights", dependencies=[Depends(institutional_access)])
 async def get_ai_insights(db: Session = Depends(get_db)):
     """
     Genera un análisis narrativo basado en los datos actuales usando el proveedor configurado.
@@ -124,7 +124,7 @@ async def get_ai_insights(db: Session = Depends(get_db)):
             "detail": str(e)
         }
 
-@router.get("/alertas", dependencies=[Depends(analyst_or_admin)])
+@router.get("/alertas", dependencies=[Depends(institutional_access)])
 async def get_ai_alerts(db: Session = Depends(get_db)):
     """
     Sistema de Alertas Tempranas: Detecta incrementos anómalos en delitos.
@@ -178,25 +178,33 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     if not user_message:
         return {"response": "Hola, ¿en qué puedo ayudarte?"}
 
-    # Obtener algunos datos estadísticos básicos (Públicos)
+    # 1. Total Incidentes
     total_incidentes = db.query(Event).count()
+
+    # 2. Homicidios Totales
     homicidios = db.query(Event).join(EventType).filter(func.upper(EventType.category) == "HOMICIDIO").count()
-    
-    # Tendencia por año
-    tendencia_anual = db.query(
+
+    # 3. Resumen por Año (Total)
+    anuales = db.query(
         func.extract('year', Event.occurrence_date).label('year'),
         func.count(Event.id)
-    ).group_by('year').all()
-    stats_anuales = ", ".join([f"{int(y)}: {c} casos" for y, c in tendencia_anual])
+    ).group_by('year').order_by('year').all()
+    stats_anuales = ", ".join([f"{int(y)}: {c} casos" for y, c in anuales])
 
-    # Detalle mensual de HOMICIDIOS (para preguntas específicas de mes/año)
+    # 4. Distribución por Categoría (para responder sobre cualquier delito)
+    distribucion = db.query(
+        EventType.category,
+        func.count(Event.id)
+    ).join(Event).group_by(EventType.category).all()
+    stats_categorias = ", ".join([f"{cat}: {count}" for cat, count in distribucion])
+
+    # 5. Detalle mensual de HOMICIDIOS (para el contexto)
     meses_hom = db.query(
         func.extract('year', Event.occurrence_date).label('year'),
         func.extract('month', Event.occurrence_date).label('month'),
         func.count(Event.id)
     ).join(EventType).filter(func.upper(EventType.category) == "HOMICIDIO").group_by('year', 'month').order_by('year', 'month').all()
     
-    # Formatear meses para el prompt: "Ene 2024: 5 casos, Feb 2024: 3 casos..."
     nombres_meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     stats_mensuales = ", ".join([f"{nombres_meses[int(m)]} {int(y)}: {c} casos" for y, m, c in meses_hom])
 
@@ -207,8 +215,9 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     DATOS ACTUALES DEL SISTEMA (USA ESTO PARA RESPONDER):
     - Total histórico de incidentes en plataforma: {total_incidentes}
     - Total de homicidios registrados: {homicidios}
-    - Resumen por años: {stats_anuales}
+    - Resumen anual de incidentes: {stats_anuales}
     - Detalle mensual de homicidios: {stats_mensuales}
+    - Distribución por categorías: {stats_categorias}
     - Población de Jamundí: 150,000 habitantes.
 
     REGLAS DE RESPUESTA:

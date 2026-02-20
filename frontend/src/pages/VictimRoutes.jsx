@@ -129,7 +129,7 @@ const VictimRoutes = ({ onBack }) => {
                                     <div className="p-2 bg-primary/10 text-primary rounded-lg font-bold text-xs">B</div>
                                     <div>
                                         <p className="font-bold text-slate-800">Comisaría de Familia</p>
-                                        <p className="text-sm text-slate-500">Antigua Estación de Tren. Lunes a Viernes 8:00 AM - 5:00 PM.</p>
+                                        <p className="text-sm text-slate-500">C.C. Caña Dulce, Local 92 (Cra 10 # 13-14). Lun - Vie: 8:00 AM - 12:00 M y 2:00 PM - 5:00 PM.</p>
                                     </div>
                                 </div>
                             </div>

@@ -61,12 +61,27 @@ const SecureReporting = ({ onBack }) => {
         e.preventDefault();
         setLoading(true);
         try {
-            // En un sistema real, esto iría a un endpoint de 'pre-denuncia' o 'reporte ciudadano'
-            // Por ahora, simulamos el éxito para demostrar el flujo UX
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            const token = localStorage.getItem('token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            };
+
+            const response = await fetch(`${API_BASE_URL}/participacion/reportes-seguros`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || "Error al enviar el reporte");
+            }
+
             setSubmitted(true);
         } catch (err) {
-            alert("Error al enviar el reporte. Por favor intenta de nuevo.");
+            console.error("Error submitting report:", err);
+            alert(`Error: ${err.message}`);
         } finally {
             setLoading(false);
         }
