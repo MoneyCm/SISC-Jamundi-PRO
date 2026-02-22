@@ -59,10 +59,27 @@ class NationalStatsProcessor:
             import gc
             gc.collect()
 
-            # Releer saltando el preámbulo
-            df = pd.read_excel(io.BytesIO(file_content), header=header_idx)
+            # Releer saltando el preámbulo y SOLO cargando las columnas estrictamente necesarias (Optimización OOM)
+            # Lista de posibles variaciones de nombres de columnas que sí nos importan
+            # Sin normalizar para la parte de lectura (ya que los espacios pueden estar presentes en el excel)
+            important_cols = [
+                "MUNICIPIO", "DEPARTAMENTO", 
+                "FECHA HECHO", "FECHA", "FECHA DANE", "FECHA_HECHO", "FECHA_DANE",
+                "CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS", "NUMERO CASOS"
+            ]
+            
+            def is_important_col(col_name):
+                # Validar la columna contra nuestra lista blanca para evitar cargar MBs de datos inútiles
+                norm_name = str(col_name).upper().strip()
+                return any(imp in norm_name for imp in important_cols)
 
-            # Normalizar nombres de columnas a mayúsculas
+            df = pd.read_excel(
+                io.BytesIO(file_content), 
+                header=header_idx, 
+                usecols=is_important_col
+            )
+
+            # Normalizar nombres de columnas post-lectura
             df.columns = [str(c).upper().strip().replace(" ", "_") if not pd.isna(c) else "" for c in df.columns]
             header_vals = df.columns.tolist()
             
