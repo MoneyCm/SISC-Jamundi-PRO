@@ -19,6 +19,9 @@ class NationalCrimeStats(Base):
     tipo_delito = Column(String(100), nullable=False, index=True) # Homicidio, Hurto Personas, etc.
     modalidad = Column(String(100)) # Arma de fuego, Blanca, etc.
     
+    genero = Column(String(50), index=True)
+    grupo_etario = Column(String(50), index=True) # Adultos, Menores de edad
+    
     cantidad = Column(Integer, default=1)
     
     # Identificador único para evitar duplicados (hash de fecha + municipio + delito + cantidad)

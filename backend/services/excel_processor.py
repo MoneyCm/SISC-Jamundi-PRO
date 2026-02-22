@@ -23,110 +23,128 @@ class NationalStatsProcessor:
         text = unicodedata.normalize('NFD', text).encode('ascii', 'ignore').decode('utf-8')
         text = text.upper().strip()
         
-        # Limpieza específica para municipios colombianos
+        # Limpieza específica para municipios colombianos y formatos de archivo
         text = text.replace(", D.C.", "").replace(" D.C.", "")
-        text = text.replace(".", "")
+        text = text.replace(".", "").replace("_", " ")
         return text
 
     def process_excel(self, file_content: bytes, filename: str, inferred_crime_type: str = None) -> Generator[Dict, None, None]:
         """
-        Procesa el archivo Excel y genera diccionarios listos para insertar en DB.
+        Procesa el archivo Excel usando pandas, que es mucho más robusto
+        para los archivos del MinDefensa que openpyxl raw.
         """
         try:
-            # Leer excel en memoria
-            xls = pd.ExcelFile(io.BytesIO(file_content))
+            # Leer excel en memoria con pandas
+            # Leer excel crudo sin headers para buscar donde empiezan (limitando a 20 filas para rendimiento)
+            df_raw = pd.read_excel(io.BytesIO(file_content), header=None, nrows=20)
             
-            # Asumimos que la primera hoja tiene los datos relevantes
-            # MinDefensa suele tener encabezados en filas 5-8. 
-            # Estrategia robusta: buscar la fila donde empieza "DEPARTAMENTO" o "MUNICIPIO"
-            df = pd.read_excel(xls, sheet_name=0, header=None)
-            
-            header_row_idx = self._find_header_row(df)
-            if header_row_idx == -1:
-                logger.error(f"No se encontró fila de encabezado en {filename}")
+            if df_raw.empty:
+                logger.error(f"El archivo {filename} está vacío.")
                 return
 
-            # Recargar con el encabezado correcto
-            df = pd.read_excel(xls, sheet_name=0, header=header_row_idx)
-            
-            # Normalizar nombres de columnas
-            df.columns = [self.normalize_text(str(c)) for c in df.columns]
-            
-            # Validar columnas mínimas
-            required_cols = ["MUNICIPIO", "DEPARTAMENTO"]
-            if not all(col in df.columns for col in required_cols):
-                logger.error(f"Faltan columnas requeridas en {filename}: {df.columns}")
+            header_idx = -1
+            # Buscar en las primeras 20 filas la palabra MUNICIPIO como indicador de header
+            for idx, row in df_raw.head(20).iterrows():
+                row_str = [str(x).upper().strip() for x in row.values if pd.notna(x)]
+                if any("MUNICIPIO" in v for v in row_str):
+                    header_idx = idx
+                    break
+
+            if header_idx == -1:
+                logger.error(f"No se encontró fila de encabezado válida en {filename}")
                 return
-                
-            # Identificar año del archivo o columnas de fecha
-            # Si el archivo es multianual, debe tener columna FECHA o ANIO
-            has_date_col = "FECHA" in df.columns
-            file_year = self._extract_year_from_filename(filename)
+
+            # Liberar memoria de df_raw
+            del df_raw
+            import gc
+            gc.collect()
+
+            # Releer saltando el preámbulo
+            df = pd.read_excel(io.BytesIO(file_content), header=header_idx)
+
+            # Normalizar nombres de columnas a mayúsculas
+            df.columns = [str(c).upper().strip().replace(" ", "_") if not pd.isna(c) else "" for c in df.columns]
+            header_vals = df.columns.tolist()
             
+            # Identificar columnas
+            col_municipio = "MUNICIPIO" if "MUNICIPIO" in header_vals else None
+            col_depto = "DEPARTAMENTO" if "DEPARTAMENTO" in header_vals else None
+            
+            if not col_municipio or not col_depto:
+                logger.error(f"Faltan columnas requeridas en {filename}: {header_vals}")
+                return
+            
+            # Fecha
+            col_fecha = None
+            for p_fecha in ["FECHA_HECHO", "FECHA", "FECHA_DANE"]:
+                if p_fecha in header_vals:
+                    col_fecha = p_fecha
+                    break
+                    
+            # Cantidad
+            col_cantidad = None
+            for p_cant in ["CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS"]:
+                if p_cant in header_vals:
+                    col_cantidad = p_cant
+                    break
+
+            file_year = self._extract_year_from_filename(filename)
+            tipo_delito = inferred_crime_type or self._infer_crime_type(filename)
+            
+            # Iterar sobre las filas (mucho más seguro con iterrows)
             for _, row in df.iterrows():
                 try:
-                    municipio = row.get("MUNICIPIO")
-                    if pd.isna(municipio) or municipio == "TOTAL":
+                    municipio = row[col_municipio]
+                    if pd.isna(municipio) or str(municipio).strip().upper() == "TOTAL" or str(municipio).strip() == "":
                         continue
                         
-                    dept = row.get("DEPARTAMENTO")
-                    municipio_norm = self.normalize_text(municipio)
+                    dept = row[col_depto] if col_depto else ""
+                    municipio_norm = self.normalize_text(str(municipio))
                     
-                    # Determinar tipo de delito (Prioridad: Inferred > Filename)
-                    tipo_delito = inferred_crime_type or self._infer_crime_type(filename)
+                    # Fecha
+                    fecha_obj = None
+                    if col_fecha and not pd.isna(row[col_fecha]):
+                        fecha_raw = row[col_fecha]
+                        fecha_obj = self._parse_date_openpyxl(fecha_raw) # Función reutilizada, maneja pd.Timestamp
                     
-                    # Determinar fecha y año
-                    if has_date_col:
-                        fecha_raw = row.get("FECHA")
-                        # Parsear fecha (asumiendo datetime o string)
-                        fecha_obj = self._parse_date(fecha_raw)
-                    else:
-                        # Si no hay fecha exacta, asumimos por nombre de columna (ej: Enero, Febrero...)
-                        # O si es consolidado anual, usamos 1ro de Enero
+                    if not fecha_obj:
                         fecha_obj = date(file_year, 1, 1)
 
-                    if not fecha_obj:
-                        continue
+                    # Cantidad
+                    cantidad = 1
+                    if col_cantidad and not pd.isna(row[col_cantidad]):
+                        try:
+                            cantidad = int(float(row[col_cantidad]))
+                        except (ValueError, TypeError):
+                            pass
 
-                    # Extraer conteo (sumar columnas de delitos si hay desglose)
-                    cantidad = row.get("CANTIDAD", 1) # Default 1 si es registro individual
-                    if "TOTAL" in row:
-                        cantidad = row["TOTAL"]
-                    
-                    # Generar hash único para evitar duplicados
+                    # Generar hash
                     import hashlib
-                    hash_input = f"{municipio_norm}|{fecha_obj}|{tipo_delito}|{cantidad}"
+                    import uuid
+                    # Incluimos un UUID para asegurar que no colisionen múltiples eventos del mismo día en el mismo municipio
+                    # Dado que la Policía y MinDefensa consolidan datos pero a veces hay múltiples filas iguales
+                    hash_input = f"{tipo_delito}|{filename}|{dept}|{municipio_norm}|{fecha_obj.isoformat()}|{cantidad}|{uuid.uuid4()}"
                     registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
                     
-                    # Construir objeto
                     yield {
-                        "departamento": str(dept),
+                        "departamento": str(dept) if not pd.isna(dept) else "",
                         "municipio": str(municipio),
                         "municipio_normalizado": municipio_norm,
                         "fecha_hecho": fecha_obj,
                         "anio": fecha_obj.year,
                         "mes": fecha_obj.month,
                         "tipo_delito": tipo_delito,
-                        "cantidad": int(cantidad) if pd.notnull(cantidad) else 0,
+                        "cantidad": cantidad,
                         "fuente_archivo": filename,
                         "hash_registro": registro_hash,
                         "fecha_ingesta": datetime.utcnow()
                     }
-                    
                 except Exception as row_err:
                     logger.warning(f"Error procesando fila en {filename}: {row_err}")
                     continue
                     
         except Exception as e:
             logger.error(f"Error general procesando Excel {filename}: {e}")
-
-    def _find_header_row(self, df) -> int:
-        """Busca la fila que contiene 'MUNICIPIO'"""
-        for i, row in df.iterrows():
-            row_vals = [str(x).upper() for x in row.values]
-            if "MUNICIPIO" in row_vals:
-                return i
-        return -1
 
     def _extract_year_from_filename(self, filename: str) -> int:
         import re
@@ -135,15 +153,18 @@ class NationalStatsProcessor:
         # mejor que usar datetime.now() que daría 2026 por ahora.
         return int(match.group(0)) if match else 2025
 
-    def _parse_date(self, date_val) -> date:
-        if isinstance(date_val, (datetime, pd.Timestamp)):
-            return date_val.date()
+    def _parse_date_openpyxl(self, date_val) -> date:
+        if isinstance(date_val, (datetime, pd.Timestamp, date)):
+            if hasattr(date_val, 'date') and callable(date_val.date):
+                return date_val.date()
+            return date_val
         if isinstance(date_val, str):
             try:
-                return pd.to_datetime(date_val).date()
+                # pandas to_datetime is very robust for strings like '01/01/2025'
+                return pd.to_datetime(date_val, dayfirst=True).date()
             except:
                 pass
-        return None # Dejar que el llamador lo maneje
+        return None
 
     def _infer_crime_type(self, filename: str) -> str:
         name = self.normalize_text(filename).upper()

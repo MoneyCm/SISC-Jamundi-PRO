@@ -31,11 +31,15 @@ ia_cache = {
 async def call_gemini(contexto):
     url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": contexto}]}]}
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(url, json=payload)
-        response.raise_for_status()
-        result = response.json()
-        return result['candidates'][0]['content']['parts'][0]['text']
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            return result['candidates'][0]['content']['parts'][0]['text']
+        except Exception as e:
+            print(f"Error llamando a Gemini: {e}")
+            raise
 
 async def call_mistral(contexto):
     url = "https://api.mistral.ai/v1/chat/completions"
@@ -48,11 +52,15 @@ async def call_mistral(contexto):
         "messages": [{"role": "user", "content": contexto}],
         "max_tokens": 150
     }
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        result = response.json()
-        return result['choices'][0]['message']['content']
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+            return result['choices'][0]['message']['content']
+        except Exception as e:
+            print(f"Error llamando a Mistral: {e}")
+            raise
 
 @router.get("/insights", dependencies=[Depends(institutional_access)])
 async def get_ai_insights(db: Session = Depends(get_db)):

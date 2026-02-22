@@ -158,14 +158,22 @@ const Dashboard = () => {
                     const aiData = await aiRes.json();
                     setAiInsight(aiData.insight);
                     setAiProvider(aiData.provider || 'IA');
+                } else if (aiRes.status === 401) {
+                    setAiInsight("La sesión de seguridad ha expirado. Por favor, inicie sesión nuevamente para visualizar los análisis de la IA y alertas estratégicas.");
+                    setAiProvider("SISTEMA");
                 }
                 if (alertsRes.ok) {
                     const alertsData = await alertsRes.json();
                     setAlerts(alertsData.alertas || []);
+                } else if (alertsRes.status === 401) {
+                    setAlerts([{ nivel: "ADVERTENCIA", mensaje: "Sesión expirada. Alertas en pausa hasta nuevo inicio de sesión.", actual: 0, anterior: 0 }]);
                 }
+
                 if (inboxRes.ok) {
                     const inboxData = await inboxRes.json();
                     setInboxItems(inboxData.items || []);
+                } else if (inboxRes.status === 401) {
+                    setInboxItems([{ id: 'exp', tipo: "SISTEMA", titulo: "Sesión Expirada", subtitulo: "Requiere autenticación", descripcion: "Inicie sesión nuevamente para ver solicitudes.", fecha: new Date().toISOString() }]);
                 }
             } catch (e) {
                 console.error(e);
