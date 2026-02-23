@@ -214,7 +214,7 @@ def run_ingestion_process(log_id: int):
             logger.info(f"Iniciando procesamiento de {file_info['name']} (Progreso: {new_detalles['progress']}%)")
 
             # Avanzar contador para la UI
-            processed_files += 1
+            processed_count += 1
 
             try:
                 # Seleccionar scraper adecuado vía URL
@@ -281,7 +281,6 @@ def run_ingestion_process(log_id: int):
                 gc.collect()
 
                 # Registro de éxito para este archivo
-                processed_count += 1
                 processed_file_list.append(file_info['name'])
                 log.detalles["processed_file_list"] = processed_file_list
                 flag_modified(log, "detalles")
