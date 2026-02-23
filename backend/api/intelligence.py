@@ -46,24 +46,55 @@ async def upload_intelligence_file(
         
         count = 0
         batch = []
-        BATCH_SIZE = 1000
+        BATCH_SIZE = 500
+        from sqlalchemy.dialects.postgresql import insert
         
-        for record in records_generator:
-            # Crear modelo
-            db_record = NationalCrimeStats(**record)
-            batch.append(db_record)
+        for record_dict in records_generator:
+            batch.append(record_dict)
             
             if len(batch) >= BATCH_SIZE:
-                db.bulk_save_objects(batch)
-                db.commit()
-                count += len(batch)
+                try:
+                    stmt = insert(NationalCrimeStats).values(batch)
+                    stmt = stmt.on_conflict_do_nothing(index_elements=['hash_registro'])
+                    db.execute(stmt)
+                    db.commit()
+                    count += len(batch)
+                except Exception as batch_err:
+                    db.rollback()
+                    logger.error(f"Error en bloque de carga manual: {batch_err}")
+                    # Reintento individual para no perder el bloque entero
+                    for r in batch:
+                        try:
+                            # Usar merge o check preventivo? 
+                            # Mejor stick to basic add + commit catch since it's manual and small-ish
+                            db.add(NationalCrimeStats(**r))
+                            db.commit()
+                            count += 1
+                        except:
+                            db.rollback()
+                            continue
                 batch = []
+                import gc
+                gc.collect()
         
         # Guardar remanente
         if batch:
-            db.bulk_save_objects(batch)
-            db.commit()
-            count += len(batch)
+            try:
+                stmt = insert(NationalCrimeStats).values(batch)
+                stmt = stmt.on_conflict_do_nothing(index_elements=['hash_registro'])
+                db.execute(stmt)
+                db.commit()
+                count += len(batch)
+            except Exception:
+                db.rollback()
+                for r in batch:
+                    try:
+                        db.add(NationalCrimeStats(**r))
+                        db.commit()
+                        count += 1
+                    except:
+                        db.rollback()
+                        continue
             
         # Actualizar log exitoso
         log_entry.estado = "SUCCESS"

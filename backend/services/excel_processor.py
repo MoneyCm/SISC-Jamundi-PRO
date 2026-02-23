@@ -106,8 +106,8 @@ class NationalStatsProcessor:
             file_year = self._extract_year_from_filename(filename)
             tipo_delito = inferred_crime_type or self._infer_crime_type(filename)
             
-            # Acumulador para Total Nacional
-            nacional_agg = {}
+            # Modo Estricto Jamundí: No acumulamos datos nacionales por ahora para optimizar recursos
+            # nacional_agg = {}
 
             # Iterar sobre las filas (mucho más seguro con iterrows)
             for _, row in df.iterrows():
@@ -168,35 +168,15 @@ class NationalStatsProcessor:
                             "fecha_ingesta": datetime.utcnow()
                         }
                     else:
-                        # Agregar al acumulador nacional
-                        # Agrupemos por fecha exacta para mantener la granularidad temporal
-                        key = fecha_obj
-                        if key not in nacional_agg:
-                            nacional_agg[key] = 0
-                        nacional_agg[key] += cantidad
+                        # Modo Estricto: Ignoramos el resto del país para evitar Error 500 por OOM
+                        continue
 
                 except Exception as row_err:
                     logger.warning(f"Error procesando fila en {filename}: {row_err}")
                     continue
 
-            # Al final del archivo, rendir los totales nacionales consolidados
-            for fecha_obj, total_cantidad in nacional_agg.items():
-                hash_input = f"{tipo_delito}|{filename}|NACIONAL|TOTAL_NACIONAL|{fecha_obj.isoformat()}|{total_cantidad}"
-                registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
-                
-                yield {
-                    "departamento": "NACIONAL",
-                    "municipio": "TOTAL NACIONAL",
-                    "municipio_normalizado": "TOTAL NACIONAL",
-                    "fecha_hecho": fecha_obj,
-                    "anio": fecha_obj.year,
-                    "mes": fecha_obj.month,
-                    "tipo_delito": tipo_delito,
-                    "cantidad": total_cantidad,
-                    "fuente_archivo": filename,
-                    "hash_registro": registro_hash,
-                    "fecha_ingesta": datetime.utcnow()
-                }
+            # Bloque de agregación nacional removido para optimización
+            pass
                     
         except Exception as e:
             logger.error(f"Error general procesando Excel {filename}: {e}")
