@@ -64,8 +64,8 @@ class NationalStatsProcessor:
             # Sin normalizar para la parte de lectura (ya que los espacios pueden estar presentes en el excel)
             important_cols = [
                 "MUNICIPIO", "DEPARTAMENTO", 
-                "FECHA HECHO", "FECHA", "FECHA DANE", "FECHA_HECHO", "FECHA_DANE",
-                "CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS", "NUMERO CASOS"
+                "FECHA", "CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS",
+                "SEXO", "GENERO", "ZONA", "EDAD", "MODALIDAD", "ARMA", "MEDIO"
             ]
             
             def is_important_col(col_name):
@@ -92,18 +92,16 @@ class NationalStatsProcessor:
                 return
             
             # Fecha
-            col_fecha = None
-            for p_fecha in ["FECHA_HECHO", "FECHA", "FECHA_DANE"]:
-                if p_fecha in header_vals:
-                    col_fecha = p_fecha
-                    break
-                    
+            col_fecha = next((c for c in header_vals if any(x in c for x in ["FECHA_HECHO", "FECHA_DANE", "FECHA"])), None)
+            
             # Cantidad
-            col_cantidad = None
-            for p_cant in ["CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS"]:
-                if p_cant in header_vals:
-                    col_cantidad = p_cant
-                    break
+            col_cantidad = next((c for c in header_vals if any(x in c for x in ["CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS"])), None)
+            
+            # Discriminadores Extra para evitar colisiones
+            col_sexo = next((c for c in header_vals if any(x in c for x in ["SEXO", "GENERO"])), None)
+            col_zona = next((c for c in header_vals if "ZONA" in c), None)
+            col_edad = next((c for c in header_vals if "EDAD" in c), None)
+            col_modalidad = next((c for c in header_vals if any(x in c for x in ["MODALIDAD", "ARMA", "MEDIO"])), None)
 
             file_year = self._extract_year_from_filename(filename)
             tipo_delito = inferred_crime_type or self._infer_crime_type(filename)
@@ -138,13 +136,19 @@ class NationalStatsProcessor:
                         except (ValueError, TypeError):
                             pass
 
+                    # Extraer discriminadores para el hash
+                    sexo = str(row[col_sexo]) if col_sexo and not pd.isna(row[col_sexo]) else ""
+                    zona = str(row[col_zona]) if col_zona and not pd.isna(row[col_zona]) else ""
+                    edad = str(row[col_edad]) if col_edad and not pd.isna(row[col_edad]) else ""
+                    mod = str(row[col_modalidad]) if col_modalidad and not pd.isna(row[col_modalidad]) else ""
+                    
                     # Generar hash e importar si es necesario
                     import hashlib
-                    import uuid
                     
                     if "JAMUNDI" in municipio_norm:
                         # Registro determinístico para evitar duplicados en re-ingestas
-                        hash_input = f"{tipo_delito}|{filename}|{dept}|{municipio_norm}|{fecha_obj.isoformat()}|{cantidad}"
+                        # Incluimos discriminadores para evitar colisiones en filas "idénticas" de un mismo archivo
+                        hash_input = f"{tipo_delito}|{filename}|{dept}|{municipio_norm}|{fecha_obj.isoformat()}|{cantidad}|{sexo}|{zona}|{edad}|{mod}"
                         registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
                         
                         yield {
@@ -156,6 +160,9 @@ class NationalStatsProcessor:
                             "mes": fecha_obj.month,
                             "tipo_delito": tipo_delito,
                             "cantidad": cantidad,
+                            "genero": sexo,
+                            "grupo_etario": edad,
+                            "modalidad": mod,
                             "fuente_archivo": filename,
                             "hash_registro": registro_hash,
                             "fecha_ingesta": datetime.utcnow()
