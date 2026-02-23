@@ -9,43 +9,9 @@ from services.excel_processor import NationalStatsProcessor
 import logging
 from datetime import datetime
 from api.ia import call_gemini, call_mistral, AI_PROVIDER, GEMINI_API_KEY, MISTRAL_API_KEY
-from sqlalchemy import text # Para el sync manual del esquema
 
 router = APIRouter(tags=["Intelligence"])
 logger = logging.getLogger("sisc_api")
-
-@router.get("/sync-schema")
-async def sync_intelligence_schema(db: Session = Depends(get_db)):
-    """
-    Sincroniza el esquema de la base de datos añadiendo las columnas faltantes.
-    Útil para corregir errores 500 tras actualizaciones de modelos.
-    """
-    try:
-        # 1. Columnas para national_crime_stats
-        columns_to_add = [
-            ("genero", "VARCHAR(50)"),
-            ("grupo_etario", "VARCHAR(50)"),
-            ("modalidad", "VARCHAR(100)"),
-            ("hash_registro", "VARCHAR(64) UNIQUE")
-        ]
-        
-        results = []
-        for col_name, col_type in columns_to_add:
-            # SQL compatible con PostgreSQL para añadir columnas si no existen
-            sql = f"ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS {col_name} {col_type};"
-            db.execute(text(sql))
-            results.append(f"Columna {col_name} verificada/añadida.")
-            
-        # 2. Columnas para ingestion_logs
-        db.execute(text("ALTER TABLE ingestion_logs ADD COLUMN IF NOT EXISTS archivos_procesados INTEGER DEFAULT 0;"))
-        db.execute(text("ALTER TABLE ingestion_logs ADD COLUMN IF NOT EXISTS detalles JSONB;"))
-        
-        db.commit()
-        return {"status": "success", "messages": results}
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error sincronizando esquema: {e}")
-        return {"status": "error", "detail": str(e)}
 
 @router.post("/upload")
 async def upload_intelligence_file(
