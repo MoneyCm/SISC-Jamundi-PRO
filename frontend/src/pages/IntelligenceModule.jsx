@@ -48,6 +48,23 @@ const IntelligenceModule = () => {
     const [chatLoading, setChatLoading] = useState(false);
     const scrollRef = useRef(null);
 
+    const [canManage, setCanManage] = useState(false);
+
+    // Ayudante para decodificar JWT sin dependencias externas
+    const decodeToken = (token) => {
+        if (!token) return null;
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        } catch (e) {
+            return null;
+        }
+    };
+
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -184,6 +201,15 @@ const IntelligenceModule = () => {
     };
 
     useEffect(() => {
+        const token = localStorage.getItem('token');
+        const payload = decodeToken(token);
+        if (payload) {
+            const role = payload.role;
+            const allowedRoles = ["Administrador (Observatorio)", "Analista Institucional"];
+            setCanManage(allowedRoles.includes(role));
+        } else {
+            setCanManage(false);
+        }
         fetchMunicipios();
         fetchYears();
     }, []);
@@ -250,8 +276,11 @@ const IntelligenceModule = () => {
                 } else {
                     setUploading(false);
                 }
+            } else if (response.status === 401) {
+                setIngestStatus({ text: "Tu sesión ha expirado. Por favor, cierra sesión e ingresa nuevamente para sincronizar datos.", type: "error" });
+                setUploading(false);
             } else {
-                setIngestStatus({ text: "Error al iniciar la sincronización.", type: "error" });
+                setIngestStatus({ text: "Error al iniciar la sincronización. Verifica tus permisos.", type: "error" });
                 setUploading(false);
             }
         } catch (error) {
@@ -285,8 +314,10 @@ const IntelligenceModule = () => {
             if (response.ok) {
                 setIngestStatus({ text: `Éxito: ${data.message} (${data.records_inserted} registros)`, type: "success" });
                 fetchStats();
+            } else if (response.status === 401) {
+                setIngestStatus({ text: "Error de autenticación: Tu sesión ha expirado. Por favor, re-inicia sesión.", type: "error" });
             } else {
-                setIngestStatus({ text: `Error: ${data.detail || 'Fallo en la carga'}`, type: "error" });
+                setIngestStatus({ text: `Error: ${data.detail || 'Fallo en la carga. Verifique el formato del archivo.'}`, type: "error" });
             }
         } catch (error) {
             console.error("Error uploading file:", error);
@@ -311,24 +342,28 @@ const IntelligenceModule = () => {
                     <p className="text-slate-500 mt-1">Comparativa estratégica con datos oficiales de MinDefensa</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={handleAutoIngest}
-                        disabled={uploading}
-                        className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                    >
-                        {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}
-                        Sincronizar con la Web
-                    </Button>
-                    <Button
-                        variant="default"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                        className="bg-indigo-600 hover:bg-indigo-700 shadow-lg border-none"
-                    >
-                        {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        Cargar Excel Manual
-                    </Button>
+                    {canManage && (
+                        <>
+                            <Button
+                                variant="outline"
+                                onClick={handleAutoIngest}
+                                disabled={uploading}
+                                className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                            >
+                                {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}
+                                Sincronizar con la Web
+                            </Button>
+                            <Button
+                                variant="default"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={uploading}
+                                className="bg-indigo-600 hover:bg-indigo-700 shadow-lg border-none"
+                            >
+                                {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                                Cargar Excel Manual
+                            </Button>
+                        </>
+                    )}
                 </div>
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".xlsx,.xls" />
             </div>
