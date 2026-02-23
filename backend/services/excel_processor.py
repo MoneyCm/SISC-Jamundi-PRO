@@ -108,6 +108,9 @@ class NationalStatsProcessor:
             file_year = self._extract_year_from_filename(filename)
             tipo_delito = inferred_crime_type or self._infer_crime_type(filename)
             
+            # Acumulador para Total Nacional
+            nacional_agg = {}
+
             # Iterar sobre las filas (mucho más seguro con iterrows)
             for _, row in df.iterrows():
                 try:
@@ -135,30 +138,58 @@ class NationalStatsProcessor:
                         except (ValueError, TypeError):
                             pass
 
-                    # Generar hash
+                    # Generar hash e importar si es necesario
                     import hashlib
                     import uuid
-                    # Incluimos un UUID para asegurar que no colisionen múltiples eventos del mismo día en el mismo municipio
-                    # Dado que la Policía y MinDefensa consolidan datos pero a veces hay múltiples filas iguales
-                    hash_input = f"{tipo_delito}|{filename}|{dept}|{municipio_norm}|{fecha_obj.isoformat()}|{cantidad}|{uuid.uuid4()}"
-                    registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
                     
-                    yield {
-                        "departamento": str(dept) if not pd.isna(dept) else "",
-                        "municipio": str(municipio),
-                        "municipio_normalizado": municipio_norm,
-                        "fecha_hecho": fecha_obj,
-                        "anio": fecha_obj.year,
-                        "mes": fecha_obj.month,
-                        "tipo_delito": tipo_delito,
-                        "cantidad": cantidad,
-                        "fuente_archivo": filename,
-                        "hash_registro": registro_hash,
-                        "fecha_ingesta": datetime.utcnow()
-                    }
+                    if "JAMUNDI" in municipio_norm:
+                        # Incluimos un UUID para asegurar que no colisionen múltiples eventos del mismo día
+                        hash_input = f"{tipo_delito}|{filename}|{dept}|{municipio_norm}|{fecha_obj.isoformat()}|{cantidad}|{uuid.uuid4()}"
+                        registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+                        
+                        yield {
+                            "departamento": str(dept) if not pd.isna(dept) else "",
+                            "municipio": str(municipio),
+                            "municipio_normalizado": municipio_norm,
+                            "fecha_hecho": fecha_obj,
+                            "anio": fecha_obj.year,
+                            "mes": fecha_obj.month,
+                            "tipo_delito": tipo_delito,
+                            "cantidad": cantidad,
+                            "fuente_archivo": filename,
+                            "hash_registro": registro_hash,
+                            "fecha_ingesta": datetime.utcnow()
+                        }
+                    else:
+                        # Agregar al acumulador nacional
+                        # Agrupemos por fecha exacta para mantener la granularidad temporal
+                        key = fecha_obj
+                        if key not in nacional_agg:
+                            nacional_agg[key] = 0
+                        nacional_agg[key] += cantidad
+
                 except Exception as row_err:
                     logger.warning(f"Error procesando fila en {filename}: {row_err}")
                     continue
+
+            # Al final del archivo, rendir los totales nacionales consolidados
+            for fecha_obj, total_cantidad in nacional_agg.items():
+                hash_input = f"{tipo_delito}|{filename}|NACIONAL|TOTAL_NACIONAL|{fecha_obj.isoformat()}|{total_cantidad}"
+                registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+                
+                yield {
+                    "departamento": "NACIONAL",
+                    "municipio": "TOTAL NACIONAL",
+                    "municipio_normalizado": "TOTAL_NACIONAL",
+                    "fecha_hecho": fecha_obj,
+                    "anio": fecha_obj.year,
+                    "mes": fecha_obj.month,
+                    "tipo_delito": tipo_delito,
+                    "cantidad": total_cantidad,
+                    "fuente_archivo": filename,
+                    "hash_registro": registro_hash,
+                    "fecha_ingesta": datetime.utcnow()
+                }
                     
         except Exception as e:
             logger.error(f"Error general procesando Excel {filename}: {e}")

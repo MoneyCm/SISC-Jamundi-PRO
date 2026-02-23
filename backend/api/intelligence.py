@@ -289,9 +289,9 @@ async def get_national_stats(municipio: str = "JAMUNDI", anio: int = 2025, db: S
     ).group_by(NationalCrimeStats.tipo_delito).all()
 
     # 3. Obtener promedios nacionales por delito para el mismo año
-    # Nueva Lógica Refinada: Total Nacional / Todos los municipios conocidos (evita sesgo de subreporte)
-    # Primero: Contar todos los municipios que existen en la base de datos (de cualquier año)
-    total_municipios_conocidos = db.query(func.count(func.distinct(NationalCrimeStats.municipio_normalizado))).scalar() or 1
+    # Segundo: Obtener la suma nacional total por delito para el año actual
+    # Como agrupamos todos los demás en 'TOTAL_NACIONAL', el total son ~1122 municipios físicos reales en Colombia.
+    total_municipios_conocidos = 1122
     
     # Segundo: Obtener la suma nacional total por delito para el año actual
     national_sums = db.query(
@@ -368,7 +368,7 @@ async def get_intelligence_insights(municipio: str = "JAMUNDI", anio: int = 2025
         ).group_by(NationalCrimeStats.tipo_delito).all()
 
         # Nueva Lógica Refinada
-        total_municipios_conocidos = db.query(func.count(func.distinct(NationalCrimeStats.municipio_normalizado))).scalar() or 1
+        total_municipios_conocidos = 1122
         
         national_sums = db.query(
             NationalCrimeStats.tipo_delito,
