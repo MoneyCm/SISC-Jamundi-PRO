@@ -148,34 +148,64 @@ def run_ingestion_process(log_id: int):
         scraper_policia = PoliciaScraper()
         processor = NationalStatsProcessor()
         
-        # Combinar listas de archivos de ambas fuentes
+        # 1. Obtener archivos ya procesados exitosamente en el pasado
+        processed_files_names = set()
+        past_successful_logs = db_bg.query(IngestionLog).filter(
+            IngestionLog.estado == 'SUCCESS',
+            IngestionLog.id < log_id
+        ).all()
+        for p_log in past_successful_logs:
+            if p_log.detalles and "processed_file_list" in p_log.detalles:
+                processed_files_names.update(p_log.detalles["processed_file_list"])
+
+        # 2. Combinar listas de archivos de ambas fuentes
         files_md = scraper_mindefensa.fetch_available_files()
-        
         try:
             files_policia = scraper_policia.fetch_available_files()
         except Exception as e:
             logger.warning(f"No se pudieron obtener archivos de la Policía: {e}")
             files_policia = []
             
-        files = files_md + files_policia
+        all_remote_files = files_md + files_policia
         
-        total_files = len(files)
-        log.detalles = {"found_files": total_files, "file_list": [f['name'] for f in files]}
+        # 3. Filtrado inteligente
+        current_year = datetime.now().year
+        files_to_process = []
+        skipped_files = []
+        
+        for f in all_remote_files:
+            file_year = f.get('year', 2025)
+            # Solo omitir si es un año pasado Y ya fue procesado con éxito
+            if file_year < current_year and f['name'] in processed_files_names:
+                skipped_files.append(f['name'])
+            else:
+                files_to_process.append(f)
+
+        total_files = len(files_to_process)
+        log.detalles = {
+            "found_files": len(all_remote_files),
+            "files_to_process": total_files,
+            "skipped_count": len(skipped_files),
+            "skipped_files": skipped_files,
+            "processed_file_list": [] # Se llenará conforme se procesen
+        }
         db_bg.commit()
         
         records_inserted = 0
-        processed_files = 0
-        total_inserted = 0 # Initialize total_inserted
+        processed_count = 0
+        total_inserted = 0
         
-        for file_info in files:
+        processed_file_list = []
+        
+        for file_info in files_to_process:
             # ACTUALIZAR PROGRESO AL INICIO DE CADA ARCHIVO
             import copy
             from sqlalchemy.orm.attributes import flag_modified
             
             new_detalles = copy.deepcopy(log.detalles) if log.detalles else {}
             new_detalles["current_file"] = file_info['name']
-            new_detalles["processed_files"] = processed_files 
-            new_detalles["progress"] = round((processed_files / total_files) * 100) if total_files > 0 else 0
+            new_detalles["processed_files"] = processed_count 
+            new_detalles["progress"] = round((processed_count / total_files) * 100) if total_files > 0 else 0
             
             log.detalles = new_detalles
             flag_modified(log, "detalles")
@@ -249,11 +279,19 @@ def run_ingestion_process(log_id: int):
                 if 'content' in locals(): del content
                 import gc
                 gc.collect()
+
+                # Registro de éxito para este archivo
+                processed_count += 1
+                processed_file_list.append(file_info['name'])
+                log.detalles["processed_file_list"] = processed_file_list
+                flag_modified(log, "detalles")
+                db_bg.commit()
+
             except Exception as loop_err:
                 logger.error(f"Error inesperado procesando archivo {file_info['name']}: {loop_err}")
             
         log.estado = "SUCCESS"
-        log.archivos_procesados = processed_files
+        log.archivos_procesados = processed_count
         log.registros_insertados = total_inserted
         log.fecha_fin = datetime.utcnow()
         db_bg.commit()

@@ -143,8 +143,8 @@ class NationalStatsProcessor:
                     import uuid
                     
                     if "JAMUNDI" in municipio_norm:
-                        # Incluimos un UUID para asegurar que no colisionen múltiples eventos del mismo día
-                        hash_input = f"{tipo_delito}|{filename}|{dept}|{municipio_norm}|{fecha_obj.isoformat()}|{cantidad}|{uuid.uuid4()}"
+                        # Registro determinístico para evitar duplicados en re-ingestas
+                        hash_input = f"{tipo_delito}|{filename}|{dept}|{municipio_norm}|{fecha_obj.isoformat()}|{cantidad}"
                         registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
                         
                         yield {
