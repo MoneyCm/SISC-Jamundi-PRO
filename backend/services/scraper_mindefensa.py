@@ -61,7 +61,7 @@ class MinDefensaScraper:
                 "name": f"{name}.xlsx",
                 "category": self._infer_category(name), 
                 "url": url,
-                "year": 2025,
+                "year": self._extract_year_from_filename(f"{name}.xlsx"),
                 "type": "excel"
             })
             logger.info(f"Archivo registrado: {name}")
@@ -85,7 +85,10 @@ class MinDefensaScraper:
 
     def _extract_year_from_filename(self, filename: str) -> int:
         match = re.search(r'20\d{2}', filename)
-        return int(match.group(0)) if match else 2025
+        if match:
+            return int(match.group(0))
+        # Si no hay año en el nombre, usamos el año actual para registros nuevos
+        return datetime.now().year
 
     def download_file(self, url: str) -> Optional[bytes]:
         try:

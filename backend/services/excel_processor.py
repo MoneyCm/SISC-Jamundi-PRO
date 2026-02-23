@@ -180,7 +180,7 @@ class NationalStatsProcessor:
                 yield {
                     "departamento": "NACIONAL",
                     "municipio": "TOTAL NACIONAL",
-                    "municipio_normalizado": "TOTAL_NACIONAL",
+                    "municipio_normalizado": "TOTAL NACIONAL",
                     "fecha_hecho": fecha_obj,
                     "anio": fecha_obj.year,
                     "mes": fecha_obj.month,

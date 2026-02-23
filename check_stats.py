@@ -1,36 +1,59 @@
+import sys
 import os
-from sqlalchemy import create_engine, text
-import pandas as pd
 
-def check_hom_stats():
-    url = os.getenv("DATABASE_URL", "postgresql://sisc_user:sisc_password@localhost:5432/sisc_jamundi")
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
+# Añadir el path del backend para importar modelos
+sys.path.append(os.path.join(os.getcwd(), 'backend'))
+
+from db.models import SessionLocal
+from db.models_intelligence import NationalCrimeStats
+from sqlalchemy import func
+
+def check_stats():
+    db = SessionLocal()
+    anio = 2025
+    tipo_delito = "Homicidio Intencional"
     
-    engine = create_engine(url)
-    query = """
-    SELECT 
-        EXTRACT(YEAR FROM occurrence_date) as year,
-        EXTRACT(MONTH FROM occurrence_date) as month,
-        COUNT(*) as count
-    FROM events e
-    JOIN event_types et ON e.event_type_id = et.id
-    WHERE et.category = 'HOMICIDIO'
-    GROUP BY 1, 2
-    ORDER BY 1, 2
-    """
+    # 1. Datos de Jamundí
+    jamundi = db.query(
+        func.sum(NationalCrimeStats.cantidad)
+    ).filter(
+        NationalCrimeStats.municipio_normalizado == "JAMUNDI",
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.tipo_delito == tipo_delito
+    ).scalar() or 0
     
-    try:
-        with engine.connect() as conn:
-            results = conn.execute(text(query)).fetchall()
-            if not results:
-                print("No se encontraron homicidios en la base de datos.")
-            else:
-                print("Estadísticas de Homicidios:")
-                for r in results:
-                    print(f"Año: {int(r.year)}, Mes: {int(r.month)}, Conteo: {r.count}")
-    except Exception as e:
-        print(f"Error consultando la base de datos: {e}")
+    # 2. Promedio nacional (mi nueva lógica)
+    subquery = db.query(
+        NationalCrimeStats.municipio_normalizado,
+        func.sum(NationalCrimeStats.cantidad).label("total_municipio")
+    ).filter(
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.tipo_delito == tipo_delito
+    ).group_by(
+        NationalCrimeStats.municipio_normalizado
+    ).subquery()
+
+    avg_nacional = db.query(
+        func.avg(subquery.c.total_municipio)
+    ).scalar() or 0
+    
+    # 3. Conteo de municipios reportando
+    count_municipios = db.query(
+        func.count(func.distinct(NationalCrimeStats.municipio_normalizado))
+    ).filter(
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.tipo_delito == tipo_delito
+    ).scalar() or 0
+
+    print(f"ANIO: {anio}")
+    print(f"DELITO: {tipo_delito}")
+    print(f"JAMUNDI TOTAL: {jamundi}")
+    print(f"PROMEDIO NACIONAL (de {count_municipios} municipios): {avg_nacional}")
+    if avg_nacional > 0:
+        diff = (jamundi - avg_nacional) / avg_nacional * 100
+        print(f"DIFERENCIA: {diff:.2f}%")
+    
+    db.close()
 
 if __name__ == "__main__":
-    check_hom_stats()
+    check_stats()

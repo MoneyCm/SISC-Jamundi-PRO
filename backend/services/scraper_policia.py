@@ -76,7 +76,8 @@ class PoliciaScraper:
         match = re.search(r'20\d{2}', filename)
         if match:
             return int(match.group(0))
-        return 2024 # Default prudente
+        from datetime import datetime
+        return datetime.now().year # Default dinámico
 
 # Para facilitar testing rápido
 if __name__ == '__main__':
