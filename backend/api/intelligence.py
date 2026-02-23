@@ -76,6 +76,25 @@ async def upload_intelligence_file(
         # Procesar generator
         records_generator = processor.process_excel(contents, file.filename)
         
+        # OBTENER AÑO PARA LIMPIEZA PREVENTIVA
+        # El año se extrae del nombre del archivo en el procesador
+        anio_archivo = processor._extract_year_from_filename(file.filename)
+        municipio_target = "JAMUNDI" # Por defecto para este proyecto, o extraer del archivo si es posible
+        
+        # Limpiar datos previos del mismo año y municipio para evitar duplicados/datos viejos
+        # Solo para manual upload para asegurar que sea el "borrón y cuenta nueva"
+        try:
+            target_norm = processor.normalize_text(municipio_target)
+            deleted = db.query(NationalCrimeStats).filter(
+                NationalCrimeStats.anio == anio_archivo,
+                NationalCrimeStats.municipio_normalizado == target_norm
+            ).delete(synchronize_session=False)
+            db.commit()
+            logger.info(f"Limpieza preventiva: {deleted} registros eliminados para {municipio_target} año {anio_archivo}")
+        except Exception as clean_err:
+            db.rollback()
+            logger.warning(f"Error en limpieza preventiva (no crítico): {clean_err}")
+
         count = 0
         batch = []
         BATCH_SIZE = 500
