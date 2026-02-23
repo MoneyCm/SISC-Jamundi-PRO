@@ -9,9 +9,41 @@ from services.excel_processor import NationalStatsProcessor
 import logging
 from datetime import datetime
 from api.ia import call_gemini, call_mistral, AI_PROVIDER, GEMINI_API_KEY, MISTRAL_API_KEY
+from sqlalchemy import text, func
 
 router = APIRouter(tags=["Intelligence"])
 logger = logging.getLogger("sisc_api")
+
+@router.get("/diagnose")
+async def diagnose_data(municipio: str, anio: int, db: Session = Depends(get_db)):
+    """
+    Lista las fuentes y conteos de registros para un municipio y año específico.
+    Ayuda a identificar datos duplicados o archivos incorrectos.
+    """
+    try:
+        results = db.query(
+            NationalCrimeStats.tipo_delito,
+            NationalCrimeStats.fuente_archivo,
+            func.count(NationalCrimeStats.id).label("filas"),
+            func.sum(NationalCrimeStats.cantidad).label("total_casos")
+        ).filter(
+            NationalCrimeStats.municipio_normalizado.like(f"%{municipio.upper()}%"),
+            NationalCrimeStats.anio == anio
+        ).group_by(
+            NationalCrimeStats.tipo_delito,
+            NationalCrimeStats.fuente_archivo
+        ).all()
+        
+        return [
+            {
+                "delito": r[0],
+                "archivo": r[1],
+                "filas": r[2],
+                "total": r[3]
+            } for r in results
+        ]
+    except Exception as e:
+        return {"error": str(e)}
 
 @router.post("/upload")
 async def upload_intelligence_file(
