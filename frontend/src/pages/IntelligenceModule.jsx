@@ -36,6 +36,7 @@ const IntelligenceModule = () => {
     const [selectedYear, setSelectedYear] = useState(2025);
     const [selectedMunicipio, setSelectedMunicipio] = useState("JAMUNDI");
     const [municipios, setMunicipios] = useState([]);
+    const [availableYears, setAvailableYears] = useState([2025, 2024, 2023]);
     const [stats, setStats] = useState({ summary: [], trend: [] });
     const [insight, setInsight] = useState(null);
     const [insightLoading, setInsightLoading] = useState(false);
@@ -161,8 +162,30 @@ const IntelligenceModule = () => {
         }
     };
 
+    const fetchYears = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/api/intelligence/years`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    setAvailableYears(data);
+                    // Si el año seleccionado no está en la lista, elegir el más reciente
+                    if (!data.includes(selectedYear)) {
+                        setSelectedYear(data[0]);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching years:", error);
+        }
+    };
+
     useEffect(() => {
         fetchMunicipios();
+        fetchYears();
     }, []);
 
     useEffect(() => {
@@ -469,9 +492,9 @@ const IntelligenceModule = () => {
                             value={selectedYear}
                             onChange={(e) => setSelectedYear(Number(e.target.value))}
                         >
-                            <option value={2025}>2025</option>
-                            <option value={2024}>2024</option>
-                            <option value={2023}>2023</option>
+                            {availableYears.map(year => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
                         </select>
                     </div>
                     <Button variant="outline" onClick={fetchStats} className="mt-5">

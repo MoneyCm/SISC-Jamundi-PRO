@@ -347,6 +347,15 @@ async def get_available_municipios(db: Session = Depends(get_db)):
         for m in municipios
     ]
 
+@router.get("/years")
+async def get_available_years(db: Session = Depends(get_db)):
+    """
+    Retorna la lista de años únicos que tienen datos cargados en el sistema.
+    """
+    from sqlalchemy import func
+    anios = db.query(NationalCrimeStats.anio).distinct().order_by(NationalCrimeStats.anio.desc()).all()
+    return [a.anio for a in anios]
+
 @router.get("/insights")
 async def get_intelligence_insights(municipio: str = "JAMUNDI", anio: int = 2025, db: Session = Depends(get_db)):
     """
