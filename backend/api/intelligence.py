@@ -413,11 +413,13 @@ async def get_national_stats(municipio: str = "JAMUNDI", anio: int = 2025, db: S
     total_municipios_conocidos = 1122
     
     # Segundo: Obtener la suma nacional total por delito para el año actual
+    # IMPORTANTE: Excluir 'TOTAL NACIONAL' para no duplicar la suma
     national_sums = db.query(
         NationalCrimeStats.tipo_delito,
         func.sum(NationalCrimeStats.cantidad).label("sum_total")
     ).filter(
-        NationalCrimeStats.anio == anio
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.municipio_normalizado != 'TOTAL NACIONAL'
     ).group_by(NationalCrimeStats.tipo_delito).all()
     
     # Convertir a dict de promedios "reales" (Suma / Población total de municipios)
