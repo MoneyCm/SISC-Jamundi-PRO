@@ -156,8 +156,8 @@ const App = () => {
         return <UniversalIngesta
           setActivePage={setActivePage}
           setReportId={setSelectedReportId}
-          datasetCode="HOMICIDIOS"
-          label="Homicidios"
+          datasetCode="HOMICIDIO_INTENCIONAL"
+          label="Homicidios (Intencional)"
         />;
       default:
         return <Dashboard />;

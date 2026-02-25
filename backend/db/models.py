@@ -31,10 +31,13 @@ def create_tables():
                 # Usar text() para SQL crudo
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS location_geom GEOMETRY(Point, 4326);"))
+                conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS dq_report_id UUID;"))
+                conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS ingestion_id UUID;"))
+                conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS source_name VARCHAR(100);"))
                 conn.commit()
-                print("PostGIS y columna location_geom verificados con éxito.")
+                print("PostGIS y columnas de trazabilidad verificadas con éxito.")
             except Exception as e:
-                print(f"Nota: No se pudo verificar la columna geom (puede que ya exista o falten permisos): {e}")
+                print(f"Nota: No se pudo verificar la estructura de la tabla events: {e}")
                 # No hacemos rollback aquí para no invalidar la conexión si falla el DDL
     except Exception as e:
         print(f"Error fatal durante create_tables: {e}")

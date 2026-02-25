@@ -21,22 +21,27 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
     const [assetStatus, setAssetStatus] = useState(null);
     const fileInputRef = useRef(null);
 
+    const safeDatasetCode = typeof datasetCode === 'string' ? datasetCode : (datasetCode?.code || "SECUESTRO");
+
     useEffect(() => {
         checkAssetStatus();
-    }, [datasetCode]);
+    }, [safeDatasetCode]);
 
     const checkAssetStatus = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/mindefensa/assets/${datasetCode}`, {
+            const response = await fetch(`${API_BASE_URL}/mindefensa/assets/${safeDatasetCode}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
                 const data = await response.json();
                 setAssetStatus(data);
+            } else {
+                setAssetStatus(null);
             }
         } catch (err) {
             console.error("Error checking asset status:", err);
+            setAssetStatus(null);
         }
     };
 
@@ -52,11 +57,11 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
 
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('source_name', `${datasetCode}_MINDEFENSA`);
+        formData.append('source_name', `${safeDatasetCode}_MINDEFENSA`);
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/ingesta/gate/${datasetCode.toLowerCase()}`, {
+            const response = await fetch(`${API_BASE_URL}/ingesta/gate/${safeDatasetCode.toLowerCase()}`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
