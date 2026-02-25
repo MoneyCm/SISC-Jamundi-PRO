@@ -21,6 +21,8 @@ def create_tables():
     try:
         # Importar modelos de inteligencia para que SQLAlchemy los reconozca en el create_all
         from db.models_intelligence import NationalCrimeStats, IngestionLog
+        from db.models_dq import DqReport, DqIssue
+        from db.models_mindefensa import MindefensaAsset
         
         Base.metadata.create_all(bind=engine)
         # Asegurar que PostGIS existe y la columna también
@@ -71,6 +73,12 @@ class Event(Base):
     descripcion = Column(Text)
     # PostGIS geom (usamos un proxy de texto para que SQLAlchemy lo vea)
     location_geom = Column(Text) 
+    
+    # Trazabilidad
+    dq_report_id = Column(UUID(as_uuid=True), ForeignKey("dq_reports.id"), nullable=True)
+    ingestion_id = Column(UUID(as_uuid=True), nullable=True)
+    source_name = Column(String(100))
+    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
     
     event_type = relationship("EventType")
 

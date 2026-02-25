@@ -250,3 +250,109 @@ def delete_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
     db.delete(event)
     db.commit()
     return {"message": "Evento eliminado correctamente"}
+
+# --- GATE DE INGESTA NUEVO ---
+from services import dq_service
+from db import crud_dq
+
+@router.post("/gate/{dataset_code}", dependencies=[Depends(analyst_or_admin)])
+async def upload_with_gate(
+    dataset_code: str,
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db)
+):
+    """
+    Universal Ingestion Gate:
+    1. Verifica status en el catálogo MinDefensa.
+    2. Ejecuta DQ (Data Quality).
+    3. Persiste reporte DQ.
+    4. Bloquea si hay semáforo ROJO.
+    5. Carga datos si pasa el gate.
+    """
+    dataset_code = dataset_code.upper()
+    source_name = f"{dataset_code}_MINDEFENSA"
+    contents = await file.read()
+    
+    # 0. Verificar si el asset de MinDefensa en el catálogo está actualizado
+    from db.models_mindefensa import MindefensaAsset
+    asset = db.query(MindefensaAsset).filter(MindefensaAsset.dataset_code == dataset_code).first()
+    if asset and asset.status == "UPDATED":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"El dataset de {dataset_code} en MinDefensa fue actualizado. Por favor, descargue la versión más reciente antes de ingestar.",
+                "dataset_code": dataset_code,
+                "last_change": asset.last_change_detected_at.isoformat() if asset.last_change_detected_at else None
+            }
+        )
+
+    # 1 y 2. DQ y Persistencia de evidencia
+    report_data = dq_service.run_dq(contents, file.filename, source_name)
+    db_report = crud_dq.create_dq_report(db, report_data)
+    
+    # 3. Validar Semáforo
+    if report_data.get("semaforo") == "ROJO":
+        raise HTTPException(
+            status_code=422, 
+            detail={
+                "message": "Archivo rechazado por fallos críticos de calidad.",
+                "report_id": str(db_report.id),
+                "semaforo": "ROJO",
+                "issues_count": len(report_data.get("issues", []))
+            }
+        )
+    
+    # 4. Ingesta (Si pasó el gate)
+    try:
+        df = pd.read_excel(io.BytesIO(contents), engine="openpyxl")
+        # El sistema espera ciertas columnas para Event, aquí usamos el mapeo de Mindefensa
+        ingestion_id = uuid.uuid4()
+        success_count = 0
+        
+        for index, row in df.iterrows():
+            try:
+                # Mapeo flexible
+                # Buscamos columnas comunes en MinDefensa: FECHA_HECHO, FECHA, MUNICIPIO, DEPARTAMENTO, etc
+                row_dict = {k.upper(): v for k, v in row.to_dict().items()}
+                
+                fecha_val = row_dict.get('FECHA_HECHO') or row_dict.get('FECHA')
+                if not fecha_val: continue
+                
+                occ_date = pd.to_datetime(fecha_val).date()
+                cond = str(row_dict.get('DESCRIPCION CONDUCTA') or row_dict.get('DELITO') or dataset_code).upper().strip()
+                
+                # Buscar o crear tipo
+                event_type = db.query(EventType).filter(EventType.category == cond).first()
+                if not event_type:
+                    event_type = EventType(category=cond, is_delicto=True)
+                    db.add(event_type)
+                    db.flush()
+
+                new_event = Event(
+                    external_id=str(uuid.uuid4()),
+                    event_type_id=event_type.id,
+                    occurrence_date=occ_date,
+                    occurrence_time=datetime.strptime("00:00", "%H:%M").time(),
+                    barrio=str(row_dict.get('MUNICIPIO') or row_dict.get('BARRIO') or 'Jamundí'),
+                    descripcion=f"Ingesta DQ: {source_name}",
+                    # Trazabilidad
+                    dq_report_id=db_report.id,
+                    ingestion_id=ingestion_id,
+                    source_name=source_name
+                )
+                db.add(new_event)
+                success_count += 1
+            except Exception:
+                continue
+        
+        db.commit()
+        return {
+            "status": "success",
+            "message": f"Ingesta completada: {success_count} registros cargados.",
+            "report_id": db_report.id,
+            "ingestion_id": ingestion_id
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error procesando ingesta: {str(e)}")

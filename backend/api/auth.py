@@ -8,7 +8,7 @@ from db.models import get_db, User, Role
 from db.schemas import Token, TokenData
 
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="ingesta/auth/login") # Ajustado al prefijo en main.py si es necesario
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 async def get_current_user(
     db: Session = Depends(get_db),

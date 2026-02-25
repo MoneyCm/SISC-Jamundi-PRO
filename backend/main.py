@@ -16,7 +16,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sisc_api")
 
-from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion
+from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa
 from db.models import create_tables
 from contextlib import asynccontextmanager
 
@@ -78,13 +78,15 @@ app.add_middleware(
 def read_root():
     return {"message": "SISC Jamundí API is running"}
 
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(analitica.router, prefix="/analitica", tags=["analitica"])
-app.include_router(reportes.router, prefix="/reportes", tags=["reportes"])
-app.include_router(ia.router, prefix="/ia", tags=["ia"])
-app.include_router(ingesta.router, prefix="/ingesta", tags=["ingesta"])
-app.include_router(participacion.router, prefix="/participacion", tags=["participacion"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(analitica.router, prefix="/api/analitica", tags=["analitica"])
+app.include_router(reportes.router, prefix="/api/reportes", tags=["reportes"])
+app.include_router(ia.router, prefix="/api/ia", tags=["ia"])
+app.include_router(ingesta.router, prefix="/api/ingesta", tags=["ingesta"])
+app.include_router(mindefensa.router, prefix="/api/mindefensa", tags=["mindefensa"])
+app.include_router(participacion.router, prefix="/api/participacion", tags=["participacion"])
 app.include_router(intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
+app.include_router(dq.router, prefix="/api/dq", tags=["dq"])
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
