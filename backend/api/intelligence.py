@@ -141,7 +141,7 @@ async def upload_intelligence_file(
                     stmt = stmt.on_conflict_do_update(
                         index_elements=['source_id', 'event_fingerprint'],
                         set_={
-                            "cantidad": record_dict["cantidad"],
+                            "cantidad": TerritorialContext.cantidad + record_dict["cantidad"],
                             "fuente_archivo": record_dict["fuente_archivo"]
                         }
                     )
@@ -161,7 +161,7 @@ async def upload_intelligence_file(
                     stmt = stmt.on_conflict_do_update(
                         index_elements=['source_id', 'event_fingerprint'],
                         set_={
-                            "cantidad": record_dict["cantidad"],
+                            "cantidad": NationalCrimeStats.cantidad + record_dict["cantidad"],
                             "fuente_archivo": record_dict["fuente_archivo"]
                         }
                     )

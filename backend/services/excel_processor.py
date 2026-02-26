@@ -97,10 +97,11 @@ class NationalStatsProcessor:
                 return
 
             header_idx = -1
-            # Buscar en las primeras 20 filas la palabra MUNICIPIO como indicador de header
+            # Buscar en las primeras 20 filas un indicador de header
+            indicators = ["MUNICIPIO", "MPIO", "LUGAR", "CONDUCTA", "FECHA_HECHO"]
             for idx, row in df_raw.head(20).iterrows():
                 row_str = [str(x).upper().strip() for x in row.values if pd.notna(x)]
-                if any("MUNICIPIO" in v for v in row_str):
+                if any(any(ind in v for ind in indicators) for v in row_str):
                     header_idx = idx
                     break
 
@@ -117,13 +118,12 @@ class NationalStatsProcessor:
             # Lista de posibles variaciones de nombres de columnas que sí nos importan
             # Sin normalizar para la parte de lectura (ya que los espacios pueden estar presentes en el excel)
             important_cols = [
-                "MUNICIPIO", "DEPARTAMENTO", "AÑO", "ANIO", "SEMANA", "BARRIO", "CONDUCTA",
+                "MUNICIPIO", "MPIO", "LUGAR", "DEPARTAMENTO", "DTO", "AÑO", "ANIO", "SEMANA", "BARRIO", "CONDUCTA",
                 "FECHA", "CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS",
                 "SEXO", "GENERO", "ZONA", "EDAD", "MODALIDAD", "ARMA", "MEDIO",
                 "NOMBRE_FUERZA", "ACCION", "CATEGORIA", "COD_MUNI", "CVE_MUNI",
                 "COD_DEPTO", "UNIDADES"
             ]
-            
             def is_important_col(col_name):
                 # Validar la columna contra nuestra lista blanca para evitar cargar MBs de datos inútiles
                 norm_name = str(col_name).upper().strip()
@@ -140,8 +140,8 @@ class NationalStatsProcessor:
             header_vals = df.columns.tolist()
             
             # Identificar columnas (Flexibilizado para SEM/VIF)
-            col_municipio = next((c for c in header_vals if any(x in c for x in ["MUNICIPIO", "HECHOS.MUNICIPIO", "MUNICIPIO_HECHO"])), None)
-            col_depto = next((c for c in header_vals if any(x in c for x in ["DEPARTAMENTO", "DEPTO", "DEPARTAMENTO_HECHO"])), None)
+            col_municipio = next((c for c in header_vals if any(x in c for x in ["MUNICIPIO", "HECHOS.MUNICIPIO", "MUNICIPIO_HECHO", "LUGAR", "MPIO"])), None)
+            col_depto = next((c for c in header_vals if any(x in c for x in ["DEPARTAMENTO", "DEPTO", "DEPARTAMENTO_HECHO", "DTO"])), None)
             
             if not col_municipio:
                 logger.error(f"Faltan columna de MUNICIPIO en {filename}: {header_vals}")
