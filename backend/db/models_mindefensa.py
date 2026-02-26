@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, BigInteger, DateTime, JSON
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime
-from db.models import Base
+from .session import Base
 
 class MindefensaAsset(Base):
     __tablename__ = "mindefensa_assets"

@@ -1,35 +1,20 @@
-from sqlalchemy import create_engine, Column, Integer, String, Date, Time, ForeignKey, Boolean, Text, text, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy import Column, Integer, String, Date, Time, ForeignKey, Boolean, Text, text, DateTime
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-import os
-
-# Configuración de la URL de la base de datos
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://sisc_user:sisc_password@localhost:5432/sisc_jamundi")
-
-# Fix para Render/SQLAlchemy: cambiar postgres:// por postgresql://
-if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
-    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"client_encoding": "utf8"})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
+from .session import Base, engine, SessionLocal, get_db
 
 def create_tables():
     try:
-        # Importar modelos de inteligencia para que SQLAlchemy los reconozca en el create_all
-        from db.models_intelligence import NationalCrimeStats, IngestionLog
+        from db.models_intelligence import NationalCrimeStats, IngestionLog, TerritorialContext
         from db.models_dq import DqReport, DqIssue
         from db.models_mindefensa import MindefensaAsset
         from db.models_alerts import IntelligenceAlert
+        from db.models_auth import User, Role, Permission, AuditLog, AccessRequest
         
         Base.metadata.create_all(bind=engine)
-        # Asegurar que PostGIS existe y la columna también
         with engine.connect() as conn:
             try:
-                # Usar text() para SQL crudo
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS location_geom GEOMETRY(Point, 4326);"))
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS dq_report_id UUID;"))
@@ -45,27 +30,14 @@ def create_tables():
                 conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS semana INTEGER;"))
                 
                 conn.commit()
-                print("PostGIS y columnas de trazabilidad verificadas con éxito.")
+                print("Estructura de Base de Datos verificada con éxito.")
             except Exception as e:
-                print(f"Nota: No se pudo verificar la estructura de la tabla events: {e}")
-                # No hacemos rollback aquí para no invalidar la conexión si falla el DDL
+                print(f"Nota: No se pudo verificar la estructura de la tabla: {e}")
     except Exception as e:
         print(f"Error fatal durante create_tables: {e}")
 
-class Role(Base):
-    __tablename__ = "roles"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), unique=True, nullable=False)
-    description = Column(Text)
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String(50), unique=True, index=True)
-    email = Column(String(100), unique=True, index=True)
-    password_hash = Column(String(255))
-    role_id = Column(Integer, ForeignKey("roles.id"))
-    is_active = Column(Boolean, default=True)
+# Re-exportar User y Role para compatibilidad con código existente
+from .models_auth import User, Role
 
 class EventType(Base):
     __tablename__ = "event_types"
@@ -84,10 +56,8 @@ class Event(Base):
     barrio = Column(String(100))
     estado = Column(String(50), default="Abierto")
     descripcion = Column(Text)
-    # PostGIS geom (usamos un proxy de texto para que SQLAlchemy lo vea)
     location_geom = Column(Text) 
     
-    # Trazabilidad
     dq_report_id = Column(UUID(as_uuid=True), ForeignKey("dq_reports.id"), nullable=True)
     ingestion_id = Column(UUID(as_uuid=True), nullable=True)
     source_name = Column(String(100))
@@ -100,11 +70,11 @@ class Proposal(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
-    category = Column(String(50), nullable=False) # ILUMINACION, PARQUES, ESPACIOS_COMUNES, OTROS
+    category = Column(String(50), nullable=False) 
     barrio = Column(String(100), nullable=False)
-    status = Column(String(50), default="PENDIENTE") # PENDIENTE, EN_CURSO, COMPLETADO
+    status = Column(String(50), default="PENDIENTE") 
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
-    author_name = Column(String(100)) # Opcional, para identificar quién lo subió
+    author_name = Column(String(100))
 
 class SafetyFront(Base):
     __tablename__ = "safety_fronts"
@@ -113,7 +83,7 @@ class SafetyFront(Base):
     barrio = Column(String(100), nullable=False)
     leader_name = Column(String(100), nullable=False)
     contact_phone = Column(String(20), nullable=False)
-    status = Column(String(50), default="ACTIVO") # ACTIVO, INACTIVO
+    status = Column(String(50), default="ACTIVO") 
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
 
 class SecureReport(Base):
@@ -128,10 +98,3 @@ class SecureReport(Base):
     nombre = Column(String(100), nullable=True)
     contacto = Column(String(100), nullable=True)
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()

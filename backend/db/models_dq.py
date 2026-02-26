@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Big
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 import uuid
-from db.models import Base
+from .session import Base
 
 class DqReport(Base):
     __tablename__ = "dq_reports"

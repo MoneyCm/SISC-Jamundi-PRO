@@ -20,6 +20,9 @@ import MindefensaMonitor from './pages/MindefensaMonitor';
 import RegionalContext from './pages/RegionalContext';
 import RNMCModule from './pages/RNMCModule';
 import AlertsFeed from './pages/AlertsFeed';
+import UsersManagement from './pages/UsersManagement';
+import AccessRequests from './pages/AccessRequests';
+import AuditLog from './pages/AuditLog';
 
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -27,9 +30,10 @@ const App = () => {
   const [activePage, setActivePage] = useState('dashboard');
   const [publicActivePage, setPublicActivePage] = useState('hub');
   const [isAuthenticated, setIsAuthenticated] = useState(false); // New state
-  const [userRole, setUserRole] = useState(null); // New state
-  const [isLoading, setIsLoading] = useState(true); // New state
-  const [selectedReportId, setSelectedReportId] = useState(null); // State for sharing DQ reports
+  const [userRoles, setUserRoles] = useState(JSON.parse(localStorage.getItem('userRoles') || '[]'));
+  const [dataLevel, setDataLevel] = useState(parseInt(localStorage.getItem('dataLevel') || '1'));
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedReportId, setSelectedReportId] = useState(null);
   const [selectedDataset, setSelectedDataset] = useState({ code: 'SECUESTRO', label: 'Secuestro' });
   const [rnmcFilters, setRnmcFilters] = useState(null);
 
@@ -38,39 +42,44 @@ const App = () => {
     setActivePage('ingesta_universal');
   };
 
-  // Verificación de token al montar app (Modified useEffect)
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
-    const role = localStorage.getItem('userRole');
+    const roles = JSON.parse(localStorage.getItem('userRoles') || '[]');
+    const dl = parseInt(localStorage.getItem('dataLevel') || '1');
     if (storedToken) {
       setIsAuthenticated(true);
-      setUserRole(role);
-      setToken(storedToken); // Keep existing token state
-      setAppMode('authenticated'); // Keep existing appMode state
+      setUserRoles(roles);
+      setDataLevel(dl);
+      setToken(storedToken);
+      setAppMode('authenticated');
     }
     const timer = setTimeout(() => setIsLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
 
-  const handleLoginSuccess = (newToken, role) => { // Modified to accept role
+  const handleLoginSuccess = (newToken, roles, dl) => {
     setToken(newToken);
-    localStorage.setItem('token', newToken); // Store token
-    localStorage.setItem('userRole', role); // Store role
-    setIsAuthenticated(true); // New state update
-    setUserRole(role); // New state update
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('userRoles', JSON.stringify(roles));
+    localStorage.setItem('dataLevel', dl.toString());
+    setIsAuthenticated(true);
+    setUserRoles(roles);
+    setDataLevel(dl);
     setAppMode('authenticated');
-    setActivePage('dashboard'); // Set active page after login
+    setActivePage('dashboard');
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    localStorage.removeItem('userRole'); // Remove role
+    localStorage.removeItem('userRoles');
+    localStorage.removeItem('dataLevel');
     setToken(null);
-    setIsAuthenticated(false); // New state update
-    setUserRole(null); // New state update
+    setIsAuthenticated(false);
+    setUserRoles([]);
+    setDataLevel(1);
     setAppMode('public');
     setPublicActivePage('hub');
-    setActivePage('dashboard'); // Reset active page on logout
+    setActivePage('dashboard');
   };
 
   const isPublic = appMode === 'public';
@@ -129,7 +138,13 @@ const App = () => {
 
     switch (activePage) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard userRoles={userRoles} dataLevel={dataLevel} />;
+      case 'users':
+        return <UsersManagement />;
+      case 'access_requests':
+        return <AccessRequests userRoles={userRoles} />;
+      case 'audit':
+        return <AuditLog />;
       case 'map':
         return <MapPage />;
       case 'reports':
@@ -182,6 +197,8 @@ const App = () => {
       setActivePage={setActivePage}
       onLogout={handleLogout}
       isPublic={isPublic}
+      userRoles={userRoles}
+      dataLevel={dataLevel}
     >
       <div className="animate-fade-in h-full">
         {renderContent()}

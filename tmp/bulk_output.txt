@@ -1,0 +1,24 @@
+﻿--- Iniciando Carga Masiva desde: C:/Users/USER/Downloads ---
+
+>> Analizando: 2017.xlsx
+   [NationalProcessor] 231 registros procesados.
+
+>> Analizando: 2018.xlsx
+   [NationalProcessor] 1830 registros procesados.
+
+>> Analizando: 2019.xlsx
+   [NationalProcessor] 3135 registros procesados.
+
+>> Analizando: 2023.xlsx
+   [NationalProcessor] 6689 registros procesados.
+
+>> Analizando: 2024.xlsx
+   [NationalProcessor] 7015 registros procesados.
+
+>> Analizando: AFECTACIËN A LA FUERZA P┌BLICA.xlsx
+   [NationalProcessor] 112 registros procesados.
+
+>> Analizando: ALCALDIA.xlsx
+   [NationalProcessor] 258 registros procesados.
+
+>> Analizando: ASPERSION (1).xlsx

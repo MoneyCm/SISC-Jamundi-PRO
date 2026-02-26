@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Date, Float, DateTime, Index, ForeignKey, Table, UniqueConstraint, Text, Boolean, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from .models import Base
+from .session import Base
 import datetime
 import uuid
 

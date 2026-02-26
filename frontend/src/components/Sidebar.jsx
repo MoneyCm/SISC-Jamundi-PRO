@@ -1,26 +1,36 @@
 import React from 'react';
 import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle2, Zap, ShieldCheck, ShieldAlert, Layers, Bell } from 'lucide-react';
 
-const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic }) => {
-    const menuItems = isPublic ? [
-        { id: 'dashboard', label: 'Portal Ciudadano', icon: LayoutDashboard },
-        { id: 'map', label: 'Mapa de Incidencia', icon: Map },
-    ] : [
-        { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, category: 'HOME' },
+const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
+    const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
+    const isAnalyst = userRoles.includes('ANALYST') || isAdmin;
+    const isDirective = userRoles.includes('DIRECTIVE') || isAdmin;
+    const isUploader = userRoles.includes('SOURCE_UPLOADER') || isAdmin;
+    const isSteward = userRoles.includes('STEWARD') || isAdmin;
 
-        { id: 'ingesta_secuestro', label: 'Nueva Ingesta', icon: ShieldAlert, category: 'OPERACIONES Y CARGA' },
-        { id: 'monitoring', label: 'Estado de Fuentes', icon: Zap, category: 'OPERACIONES Y CARGA' },
-        { id: 'dq', label: 'Auditoría DQ', icon: ShieldCheck, category: 'OPERACIONES Y CARGA' },
+    const allItems = [
+        { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, category: 'HOME', show: true },
 
-        { id: 'map', label: 'Mapa del Delito', icon: Map, category: 'ANÁLISIS Y ESTRATEGIA' },
-        { id: 'intelligence', label: 'Insights IA', icon: Globe, category: 'ANÁLISIS Y ESTRATEGIA' },
-        { id: 'regional_context', label: 'Contexto Regional', icon: Layers, category: 'ANÁLISIS Y ESTRATEGIA' },
-        { id: 'alerts', label: 'Muro de Alertas', icon: Bell, category: 'ANÁLISIS Y ESTRATEGIA' },
-        { id: 'rnmc', label: 'RNMC / Medidas', icon: FileText, category: 'ANÁLISIS Y ESTRATEGIA' },
+        { id: 'users', label: 'Gestión Usuarios', icon: ShieldAlert, category: 'ADMINISTRACIÓN', show: isAdmin },
+        { id: 'access_requests', label: 'Solicitudes', icon: Bell, category: 'ADMINISTRACIÓN', show: isAdmin || userRoles.includes('DATA_OWNER') },
 
-        { id: 'data', label: 'Bodega de Datos', icon: Database, category: 'GESTIÓN Y SALIDA' },
-        { id: 'reports', label: 'Boletines y Reportes', icon: FileText, category: 'GESTIÓN Y SALIDA' },
+        { id: 'ingesta_universal', label: 'Carga de Datos', icon: Zap, category: 'OPERACIONES', show: isUploader },
+        { id: 'monitoring', label: 'Fuentes Externas', icon: Globe, category: 'OPERACIONES', show: isUploader || isSteward },
+        { id: 'dq', label: 'Calidad (DQ)', icon: ShieldCheck, category: 'OPERACIONES', show: isSteward },
+
+        { id: 'map', label: 'Mapa Interactivo', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        { id: 'intelligence', label: 'Análisis IA', icon: Zap, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        { id: 'alerts', label: 'Alertas Tempranas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        { id: 'rnmc', label: 'Medidas Policia', icon: FileText, category: 'ESTRATEGIA', show: isAnalyst },
+
+        { id: 'reports', label: 'Reportes PDF', icon: FileText, category: 'SALIDA', show: isDirective || isAnalyst },
+        { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },
     ];
+
+    const menuItems = isPublic ? [
+        { id: 'dashboard', label: 'Portal Ciudadano', icon: LayoutDashboard, category: 'HOME', show: true },
+        { id: 'map', label: 'Mapa Público', icon: Map, category: 'HOME', show: true },
+    ] : allItems.filter(item => item.show);
 
     // Helper to render grouped items
     const categories = [...new Set(menuItems.map(item => item.category))];

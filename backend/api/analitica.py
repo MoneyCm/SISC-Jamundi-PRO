@@ -1,31 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from db.models import get_db, Event, EventType, User
 from datetime import date
 from typing import Optional, List
 
-from api.auth import analyst_or_admin, get_current_user
-from jose import JWTError, jwt
-from core.security import SECRET_KEY, ALGORITHM
+from api.auth import get_current_user, get_optional_user, log_audit
 
 router = APIRouter()
-
-async def get_optional_user(
-    db: Session = Depends(get_db),
-    token: Optional[str] = Query(None) # Opcional desde query para facilidad en mapas
-):
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            return None
-        user = db.query(User).filter(User.username == username).first()
-        return user
-    except JWTError:
-        return None
 
 POBLACION_JAMUNDI = 180942
 
@@ -297,29 +279,16 @@ def get_comparativa_periodos(
     }
 
 @router.get("/eventos/geojson")
-def get_eventos_geojson(
+async def get_eventos_geojson(
     start_date: Optional[date] = None, 
     end_date: Optional[date] = None, 
     categories: Optional[List[str]] = Query(None),
-    token: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
 ):
-    # Verificar permisos de roles
-    user = None
-    sensitive_access = False
-    
-    if token:
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            role_name = payload.get("role")
-            # Roles que pueden ver datos sensibles (Analista, Fuerza Pública, Admin)
-            if role_name in ["Administrador (Observatorio)", "Analista Institucional", "Enlace Fuerza Pública"]:
-                sensitive_access = True
-            user = db.query(User).filter(User.username == payload.get("sub")).first()
-        except:
-            pass
-
-    is_institutional = sensitive_access
+    # Definir Nivel de Acceso
+    data_level = current_user.data_level_max if current_user else 1
+    is_institutional = data_level >= 2
 
     query = db.query(
         Event.id,

@@ -6,7 +6,10 @@ import ComparisonWidget from '../components/ComparisonWidget';
 import { Loader, Download, RefreshCcw } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
-const Dashboard = () => {
+const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
+    const isCitizen = userRoles.length === 0;
+    const isInstitutional = dataLevel >= 2;
+
     const [dashboardData, setDashboardData] = useState({
         kpiData: [],
         crimeTrendData: [],

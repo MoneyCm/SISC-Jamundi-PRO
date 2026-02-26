@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, DateTime, Text, text, Index, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
-from db.models import Base
+from .session import Base
 import uuid
 from datetime import datetime
 

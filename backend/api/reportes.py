@@ -9,7 +9,7 @@ import io
 from datetime import datetime, date
 import os
 
-from api.auth import analyst_or_admin
+from api.auth import institutional_access
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ router = APIRouter()
 template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
 env = Environment(loader=FileSystemLoader(template_dir))
 
-@router.get("/generar-boletin", dependencies=[Depends(analyst_or_admin)])
+@router.get("/generar-boletin", dependencies=[Depends(institutional_access)])
 async def generar_boletin_pdf(anio: int = None, db: Session = Depends(get_db)):
     """
     Genera un boletín de seguridad oficial en PDF con estadísticas actuales y comparativas YoY.

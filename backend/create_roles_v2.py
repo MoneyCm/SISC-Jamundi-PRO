@@ -1,73 +1,86 @@
 from sqlalchemy.orm import Session
 from db.models import SessionLocal, Role, User, engine, Base
+from db.models_auth import Permission
 from core.security import get_password_hash
 import sys
+import uuid
 
 def init_db():
-    print("🚀 Iniciando script de creación de usuarios...")
+    print("🚀 Iniciando script de creación de sistema institucional de usuarios...")
     db = SessionLocal()
     try:
-        # 1. Crear Roles
+        # 1. Crear Roles según especificación
         roles_data = [
-            {"name": "Analista Institucional", "description": "Acceso total a datos, reportes y mapas sin censura."},
-            {"name": "Tomador de Decisiones (Ejecutivo)", "description": "Acceso a dashboards estratégicos y alertas."},
-            {"name": "Enlace Fuerza Pública", "description": "Acceso a mapa táctico operativo."},
-            {"name": "Administrador (Observatorio)", "description": "Control total del sistema."}
+            {"code": "TI_ADMIN", "name": "Administrador TI", "description": "Control total técnico, gestión de seguridad y auditoría."},
+            {"code": "FUNC_ADMIN", "name": "Administrador Funcional", "description": "Gestión de usuarios N1/N2 y roles de negocio."},
+            {"code": "DATA_OWNER", "name": "Dueño de Datos", "description": "Aprobadador final de acceso a datos restringidos (N3)."},
+            {"code": "STEWARD", "name": "Custodio de Datos", "description": "Administra catálogo, calidad y anonimización."},
+            {"code": "ANALYST", "name": "Analista Profesional", "description": "Acceso a datos institucionales (N2) para analítica avanzada."},
+            {"code": "DIRECTIVE", "name": "Directivo / Secretario", "description": "Acceso a dashboards estratégicos y alertas."},
+            {"code": "SOURCE_UPLOADER", "name": "Cargador de Fuentes", "description": "Permiso para subir archivos a la plataforma."},
+            {"code": "PORTAL_EDITOR", "name": "Editor de Portal", "description": "Edita boletines y contenido público."},
+            {"code": "PORTAL_ADMIN", "name": "Admin de Portal", "description": "Publica y gestiona el Portal Ciudadano."}
         ]
 
-        print("--- Creando Roles ---")
+        print("--- Creando/Actualizando Roles ---")
         role_map = {}
         for r_data in roles_data:
-            role = db.query(Role).filter(Role.name == r_data["name"]).first()
+            role = db.query(Role).filter(Role.code == r_data["code"]).first()
             if not role:
-                print(f"➕ Creando nuevo rol: {r_data['name']}")
-                role = Role(name=r_data["name"], description=r_data["description"])
+                print(f"➕ Creando nuevo rol: {r_data['name']} ({r_data['code']})")
+                role = Role(code=r_data["code"], name=r_data["name"], description=r_data["description"])
                 db.add(role)
-                db.commit() # Commit parcial para asegurar disponibilidad
+                db.commit()
                 db.refresh(role)
             else:
-                print(f"ℹ️ Rol existente: {r_data['name']} (ID: {role.id})")
+                print(f"ℹ️ Rol existente: {r_data['code']}")
+            role_map[r_data["code"]] = role
+
+        # 2. Crear Administrador Inicial
+        admin_data = {
+            "username": "admin",
+            "email": "admin@jamundi.gov.co",
+            "password": "admin_password", # Cambiar en primera sesión
+            "full_name": "Administrador de Sistema SISC",
+            "role_codes": ["TI_ADMIN", "FUNC_ADMIN", "DATA_OWNER"],
+            "data_level_max": 3
+        }
+
+        print("\n--- Verificando Superusuario ---")
+        admin_user = db.query(User).filter(User.username == admin_data["username"]).first()
+        if not admin_user:
+            print(f"➕ Creando superusuario: {admin_data['username']}")
+            hashed_pwd = get_password_hash(admin_data["password"])
+            admin_user = User(
+                username=admin_data["username"],
+                email=admin_data["email"],
+                password_hash=hashed_pwd,
+                full_name=admin_data["full_name"],
+                data_level_max=admin_data["data_level_max"],
+                is_active=True
+            )
+            db.add(admin_user)
+            db.flush()
             
-            role_map[r_data["name"]] = role.id
+            # Asignar roles
+            for code in admin_data["role_codes"]:
+                role = role_map.get(code)
+                if role:
+                    admin_user.roles.append(role)
+            db.commit()
+        else:
+            print(f"ℹ️ Superusuario verificado: {admin_user.username}")
+            # Asegurar que tiene los roles correctos si es necesario
+            current_role_codes = [r.code for r in admin_user.roles]
+            for code in admin_data["role_codes"]:
+                if code not in current_role_codes:
+                    role = role_map.get(code)
+                    if role:
+                        admin_user.roles.append(role)
+                        print(f"➕ Rol {code} asignado a admin")
+            db.commit()
 
-        # 2. Crear Usuarios Demo
-        users_data = [
-            {"username": "analista_demo", "email": "analista@jamundi.gov.co", "password": "sisc_analista", "role": "Analista Institucional"},
-            {"username": "ejecutivo_demo", "email": "despacho@jamundi.gov.co", "password": "sisc_ejecutivo", "role": "Tomador de Decisiones (Ejecutivo)"},
-            {"username": "policia_demo", "email": "comandante@policia.gov.co", "password": "sisc_policia", "role": "Enlace Fuerza Pública"},
-            {"username": "admin_sisc", "email": "admin@sisc.gov.co", "password": "admin_password", "role": "Administrador (Observatorio)"}
-        ]
-
-        print("\n--- Creando Usuarios ---")
-        for u_data in users_data:
-            user = db.query(User).filter(User.username == u_data["username"]).first()
-            if not user:
-                role_id = role_map.get(u_data["role"])
-                if role_id:
-                    print(f"➕ Creando usuario: {u_data['username']} para rol ID {role_id}")
-                    hashed_pwd = get_password_hash(u_data["password"])
-                    new_user = User(
-                        username=u_data["username"],
-                        email=u_data["email"],
-                        password_hash=hashed_pwd,
-                        role_id=role_id,
-                        is_active=True
-                    )
-                    db.add(new_user)
-                else:
-                    print(f"❌ Error crítico: Rol '{u_data['role']}' no encontrado en el mapa para usuario {u_data['username']}")
-            else:
-                # Actualizar Rol si es necesario (CORRECCIÓN CRÍTICA PARA PRODUCCIÓN)
-                role_id = role_map.get(u_data["role"])
-                if role_id and user.role_id != role_id:
-                    print(f"🔄 Actualizando rol de {u_data['username']}: {user.role_id} -> {role_id}")
-                    user.role_id = role_id
-                    db.add(user)
-                else:
-                    print(f"ℹ️ Usuario verificado: {u_data['username']}")
-        
-        db.commit()
-        print("\n✅ ¡Inicialización de Roles y Usuarios completada con éxito!")
+        print("\n✅ ¡Inicialización completada con éxito!")
 
     except Exception as e:
         print(f"❌ Error fatal durante la inicialización: {e}")

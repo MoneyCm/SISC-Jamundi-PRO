@@ -16,7 +16,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sisc_api")
 
-from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa
+from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa, users
 from db.models import create_tables
 from contextlib import asynccontextmanager
 
@@ -87,6 +87,7 @@ app.include_router(mindefensa.router, prefix="/api/mindefensa", tags=["mindefens
 app.include_router(participacion.router, prefix="/api/participacion", tags=["participacion"])
 app.include_router(intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
 app.include_router(dq.router, prefix="/api/dq", tags=["dq"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

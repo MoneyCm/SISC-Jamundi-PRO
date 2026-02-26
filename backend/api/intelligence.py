@@ -5,7 +5,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from db.models import get_db
-from api.auth import get_current_user
+from api.auth import get_current_user, get_optional_user, log_audit, require_role, institutional_access
 from db.models import User
 from db.models_intelligence import (
     NationalCrimeStats,
@@ -44,9 +44,10 @@ logger = logging.getLogger("sisc_api")
 
 @router.post("/upload")
 async def upload_intelligence_file(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(["SOURCE_UPLOADER", "TI_ADMIN"]))
 ):
     """
     Carga manual de archivos Excel de MinDefensa.
@@ -239,7 +240,12 @@ async def upload_intelligence_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/ingest")
-async def trigger_ingestion(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def trigger_ingestion(
+    request: Request,
+    background_tasks: BackgroundTasks, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["TI_ADMIN"]))
+):
     """
     Inicia el proceso de descarga e ingesta de datos nacionales en segundo plano.
     """
@@ -308,7 +314,8 @@ async def get_rnmc_stats(
     type: str = "monthly",
     anio: int = None,
     valor: int = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access)
 ):
     """
     Retorna estadísticas estables de RNMC para el Tab Estratégico.
@@ -1356,57 +1363,62 @@ async def download_report_pdf(
     token: str = None,
     db: Session = Depends(get_db),
     request: Request = None,
-    current_user: User = Depends(get_current_user) # FastAPI will try to resolve this
+    user: Optional[User] = Depends(get_optional_user) # Nueva dependencia opcional
 ):
     """
     Descarga segura de PDF: requiere JWT o un Token válido.
+    Genera marca de agua personalizada por descarga.
     """
     report = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
-    if not report or not report.pdf_path or not os.path.exists(report.pdf_path):
-        raise HTTPException(status_code=404, detail="PDF no disponible. Genérelo primero.")
+    if not report:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
     
     token_db = None
     user_id = None
+    user_name = "INVITADO"
     
-    # 1. Validación por Token (si viene)
+    # 1. Validación por Token Externo
     if token:
         from db.models_intelligence import ReportDownloadToken
         token_db = db.query(ReportDownloadToken).filter(
             ReportDownloadToken.token == token,
             ReportDownloadToken.report_run_id == report_run_id,
-            ReportDownloadToken.expires_at > datetime.now(),
+            ReportDownloadToken.expires_at > datetime.utcnow(),
             ReportDownloadToken.is_used == False
         ).first()
         
-        if not token_db:
-             # Si el token es inválido, intentamos ver si tiene sesión activa (FastAPI ya lo hizo en Depends)
-             if not current_user:
-                 raise HTTPException(status_code=403, detail="Token inválido o expirado y sin sesión activa.")
-    
-    # 2. Validación por Sesión (si no hay token o falló)
+    # 2. Validación por Sesión si no hay token
     if not token_db:
-        if not current_user:
-            raise HTTPException(status_code=401, detail="Se requiere autenticación")
-        user_id = current_user.id
+        if not user:
+            raise HTTPException(status_code=401, detail="Se requiere autenticación o token válido")
+        user_id = user.id
+        user_name = user.full_name or user.username
+    else:
+        user_name = f"PORTAL_EXTERNO_{token_db.token[:6]}"
 
-    # 3. Auditoría
-    DistributionService.audit_download(
+    # 3. Auditoría Institucional
+    await log_audit(
         db, 
-        report_run_id, 
-        user_id=user_id, 
-        token_id=token_db.id if token_db else None,
-        ip=request.client.host if request else None
+        "PDF_EXPORT", 
+        actor_id=str(user_id) if user_id else None, 
+        module="REPORTS",
+        target={"report_id": report_run_id, "period": report.period_key},
+        level=2,
+        request=request
     )
     
-    # Si uso token, marcarlo como usado (Un solo uso según requerimiento)
+    # 4. Generar PDF bajo demanda con Marca de Agua
+    # Esto asegura que el PDF servido tenga el nombre del usuario que lo descarga
+    pdf_path = PdfReportService.generate_pdf(db, report, user_name=user_name)
+    
     if token_db:
         token_db.is_used = True
         db.commit()
 
     return FileResponse(
-        report.pdf_path,
+        pdf_path,
         media_type='application/pdf',
-        filename=os.path.basename(report.pdf_path)
+        filename=os.path.basename(pdf_path)
     )
 
 @router.post("/reports/{report_run_id}/notify")
@@ -1769,7 +1781,11 @@ async def get_available_years(db: Session = Depends(get_db)):
     return [a.anio for a in anios]
 
 @router.get("/territorial-context")
-async def get_territorial_context(fuente: str = "ASPERSION", db: Session = Depends(get_db)):
+async def get_territorial_context(
+    fuente: str = "ASPERSION", 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access)
+):
     """
     Retorna datos agregados de contexto territorial (ej: Aspersión) para el Valle del Cauca.
     """
@@ -1799,7 +1815,12 @@ async def get_territorial_context(fuente: str = "ASPERSION", db: Session = Depen
     }
 
 @router.get("/insights")
-async def get_intelligence_insights(municipio: str = "JAMUNDI", anio: int = 2025, db: Session = Depends(get_db)):
+async def get_intelligence_insights(
+    municipio: str = "JAMUNDI", 
+    anio: int = 2025, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access)
+):
     """
     Genera un análisis comparativo narrativo usando IA basado en los datos de MinDefensa.
     """

@@ -30,8 +30,16 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
             }
 
             const data = await response.json();
-            localStorage.setItem('token', data.access_token);
-            onLoginSuccess(data.access_token);
+            const token = data.access_token;
+            localStorage.setItem('token', token);
+
+            // Fetch profile
+            const profileRes = await fetch(`${API_BASE_URL}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const profile = await profileRes.json();
+
+            onLoginSuccess(token, profile.roles, profile.data_level_max);
 
         } catch (err) {
             setError(err.message);
