@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, date
 from typing import List, Dict, Generator
 import io
+import hashlib
 
 logger = logging.getLogger("sisc_api")
 
@@ -28,7 +29,60 @@ class NationalStatsProcessor:
         text = text.replace(".", "").replace("_", " ")
         return text
 
+    def _generate_fingerprint(self, source_id: str, row: pd.Series, fecha_iso: str, cod_muni: str = None) -> str:
+        """
+        Genera un fingerprint determinístico basado en la fuente (IDEMPOTENCIA).
+        Regla: NO usar CANTIDAD ni FILENAME en el hash para permitir actualizaciones.
+        """
+        
+        # A) AFECTACION_FUERZA_PUBLICA
+        if source_id == "AFECTACION_FUERZA_PUBLICA":
+            fuerza = str(row.get('NOMBRE_FUERZA', ''))
+            accion = str(row.get('ACCION', ''))
+            categoria = str(row.get('CATEGORIA', ''))
+            muni = cod_muni or str(row.get('COD_MUNI', ''))
+            raw = f"{fecha_iso}|{muni}|{fuerza}|{accion}|{categoria}"
+            
+        # B) ASPERSION
+        elif source_id == "ASPERSION":
+            muni = cod_muni or str(row.get('COD_MUNI', ''))
+            unidades = str(row.get('UNIDADES_DE_MEDIDA', ''))
+            raw = f"{fecha_iso}|{muni}|{unidades}"
+            
+        # C) SEM_POLICIA
+        elif source_id == "SEM_POLICIA":
+            # FECHA_HECHO + DESCRIPCION_CONDUCTA + BARRIO/VEREDA + (INTERVALOS_HORA o HORA24) + MODALIDAD + ARMAS_MEDIOS
+            conducta = str(row.get('DESCRIPCION_CONDUCTA', row.get('CONDUCTA', '')))
+            barrio = str(row.get('BARRIOS_HECHO', row.get('BARRIO', row.get('VEREDA', ''))))
+            # Prioridad de hora: HORA24 > HORA_HECHO > INTERVALOS_HORA
+            hora = str(row.get('HORA24', row.get('HORA_HECHO', row.get('INTERVALOS_HORA', ''))))
+            modo = str(row.get('MODALIDAD', ''))
+            armas = str(row.get('ARMAS_MEDIOS', row.get('ARMA_MEDIO', '')))
+            muni = str(row.get('MUNICIPIO_HECHO', str(row.get('HECHOS.MUNICIPIO', 'JAMUNDI'))))
+            raw = f"{fecha_iso}|{muni}|{conducta}|{barrio}|{hora}|{modo}|{armas}"
+            
+        else:
+            # Fallback genérico para otras fuentes
+            # TIPO_DELITO + FECHA + MUNICIPIO + BARRIO + GENERO + MODALIDAD
+            delito = str(row.get('DESCRIPCION_CONDUCTA', row.get('DELITO', '')))
+            muni = str(row.get('MUNICIPIO_HECHO', 'JAMUNDI'))
+            barrio = str(row.get('BARRIOS_HECHO', ''))
+            gen = str(row.get('GENERO', ''))
+            mod = str(row.get('MODALIDAD', ''))
+            raw = f"{fecha_iso}|{muni}|{delito}|{barrio}|{gen}|{mod}"
+            
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    def _infer_crime_type_id(self, name: str) -> str:
+        name = name.upper()
+        if "ASPERSION" in name: return "ASPERSION"
+        if "AFECTACION" in name or "FUERZA PUBLICA" in name: return "AFECTACION_FUERZA_PUBLICA"
+        if "SEM" in name or "SEMANAL" in name: return "SEM_POLICIA"
+        if "RNMC" in name or "MEDIDAS GESTIONADAS" in name: return "INSPECCION_MEDIDAS_RNMC"
+        return "GENERIC_CRIME"
+
     def process_excel(self, file_content: bytes, filename: str, inferred_crime_type: str = None) -> Generator[Dict, None, None]:
+        # ... logic anterior hasta el loop ...
         """
         Procesa el archivo Excel usando pandas, que es mucho más robusto
         para los archivos del MinDefensa que openpyxl raw.
@@ -63,9 +117,11 @@ class NationalStatsProcessor:
             # Lista de posibles variaciones de nombres de columnas que sí nos importan
             # Sin normalizar para la parte de lectura (ya que los espacios pueden estar presentes en el excel)
             important_cols = [
-                "MUNICIPIO", "DEPARTAMENTO", 
+                "MUNICIPIO", "DEPARTAMENTO", "AÑO", "ANIO", "SEMANA", "BARRIO", "CONDUCTA",
                 "FECHA", "CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS",
-                "SEXO", "GENERO", "ZONA", "EDAD", "MODALIDAD", "ARMA", "MEDIO"
+                "SEXO", "GENERO", "ZONA", "EDAD", "MODALIDAD", "ARMA", "MEDIO",
+                "NOMBRE_FUERZA", "ACCION", "CATEGORIA", "COD_MUNI", "CVE_MUNI",
+                "COD_DEPTO", "UNIDADES"
             ]
             
             def is_important_col(col_name):
@@ -83,12 +139,12 @@ class NationalStatsProcessor:
             df.columns = [str(c).upper().strip().replace(" ", "_") if not pd.isna(c) else "" for c in df.columns]
             header_vals = df.columns.tolist()
             
-            # Identificar columnas
-            col_municipio = "MUNICIPIO" if "MUNICIPIO" in header_vals else None
-            col_depto = "DEPARTAMENTO" if "DEPARTAMENTO" in header_vals else None
+            # Identificar columnas (Flexibilizado para SEM/VIF)
+            col_municipio = next((c for c in header_vals if any(x in c for x in ["MUNICIPIO", "HECHOS.MUNICIPIO", "MUNICIPIO_HECHO"])), None)
+            col_depto = next((c for c in header_vals if any(x in c for x in ["DEPARTAMENTO", "DEPTO", "DEPARTAMENTO_HECHO"])), None)
             
-            if not col_municipio or not col_depto:
-                logger.error(f"Faltan columnas requeridas en {filename}: {header_vals}")
+            if not col_municipio:
+                logger.error(f"Faltan columna de MUNICIPIO en {filename}: {header_vals}")
                 return
             
             # Fecha
@@ -102,14 +158,25 @@ class NationalStatsProcessor:
             col_zona = next((c for c in header_vals if "ZONA" in c), None)
             col_edad = next((c for c in header_vals if "EDAD" in c), None)
             col_modalidad = next((c for c in header_vals if any(x in c for x in ["MODALIDAD", "ARMA", "MEDIO"])), None)
+            
+            # Columnas específicas Fuerza Pública
+            col_fuerza = next((c for c in header_vals if "NOMBRE_FUERZA" in c), None)
+            col_accion = next((c for c in header_vals if "ACCION" in c), None)
+            col_categoria = next((c for c in header_vals if "CATEGORIA" in c), None)
+            col_codigo_dane = next((c for c in header_vals if any(x in c for x in ["COD_MUNI", "CVE_MUNI"])), None)
 
             file_year = self._extract_year_from_filename(filename)
             tipo_delito = inferred_crime_type or self._infer_crime_type(filename)
             
-            # Modo Estricto Jamundí: No acumulamos datos nacionales por ahora para optimizar recursos
-            # nacional_agg = {}
+            # --- DETECTAR SI ES ASPERSIÓN ---
+            is_aspersion = tipo_delito == "ASPERSION" or all(x in header_vals for x in ["COD_DEPTO", "COD_MUNI", "UNIDADES_DE_MEDIDA"])
+            
+            # Columnas específicas Aspersión
+            col_cod_depto = next((c for c in header_vals if "COD_DEPTO" in c), None)
+            col_cod_muni = next((c for c in header_vals if "COD_MUNI" in c), None)
+            col_unidades = next((c for c in header_vals if "UNIDADES_DE_MEDIDA" in c), None)
 
-            # Iterar sobre las filas (mucho más seguro con iterrows)
+            # Iterar sobre las filas
             for _, row in df.iterrows():
                 try:
                     municipio = row[col_municipio]
@@ -123,48 +190,102 @@ class NationalStatsProcessor:
                     fecha_obj = None
                     if col_fecha and not pd.isna(row[col_fecha]):
                         fecha_raw = row[col_fecha]
-                        fecha_obj = self._parse_date_openpyxl(fecha_raw) # Función reutilizada, maneja pd.Timestamp
+                        fecha_obj = self._parse_date_openpyxl(fecha_raw)
                     
                     if not fecha_obj:
                         fecha_obj = date(file_year, 1, 1)
 
-                    # Cantidad
-                    cantidad = 1
+                    # Cantidad (como float para hectáreas)
+                    cantidad_val = 1.0
                     if col_cantidad and not pd.isna(row[col_cantidad]):
                         try:
-                            cantidad = int(float(row[col_cantidad]))
+                            cantidad_val = float(row[col_cantidad])
                         except (ValueError, TypeError):
                             pass
 
+                    # ASPERSIÓN: Guardar en contexto territorial (VALLE o JAMUNDI)
+                    if is_aspersion:
+                        cod_d = int(row[col_cod_depto]) if col_cod_depto and not pd.isna(row[col_cod_depto]) else 0
+                        cod_m = int(row[col_cod_muni]) if col_cod_muni and not pd.isna(row[col_cod_muni]) else 0
+                        unidad = str(row[col_unidades]) if col_unidades and not pd.isna(row[col_unidades]) else "HECTAREA"
+                        
+                        # Filtro Regional: Solo Valle (76) o Jamundi (76364)
+                        if cod_d == 76:
+                            event_fingerprint = self._generate_fingerprint("ASPERSION", row, fecha_obj.isoformat(), str(cod_m))
+                            
+                            yield {
+                                "fuente_type": "TERRITORIAL_CONTEXT",
+                                "source_id": "ASPERSION", # Legacy support
+                                "fuente_id": "ASPERSION",
+                                "departamento": str(dept),
+                                "municipio": str(municipio),
+                                "codigo_muni": cod_m,
+                                "codigo_depto": cod_d,
+                                "fecha_hecho": fecha_obj,
+                                "anio": fecha_obj.year,
+                                "mes": fecha_obj.month,
+                                "cantidad": cantidad_val,
+                                "unidad_medida": unidad,
+                                "fuente_archivo": filename,
+                                "event_fingerprint": event_fingerprint,
+                                "hash_registro": event_fingerprint # Legacy support
+                            }
+                        continue
+
+                    # --- LÓGICA ORIGINAL PARA CRIMEN ---
                     # Extraer discriminadores para el hash
                     sexo = str(row[col_sexo]) if col_sexo and not pd.isna(row[col_sexo]) else ""
                     zona = str(row[col_zona]) if col_zona and not pd.isna(row[col_zona]) else ""
                     edad = str(row[col_edad]) if col_edad and not pd.isna(row[col_edad]) else ""
                     mod = str(row[col_modalidad]) if col_modalidad and not pd.isna(row[col_modalidad]) else ""
                     
-                    # Generar hash e importar si es necesario
-                    import hashlib
+                    # Fuerza Pública
+                    fuerza = str(row[col_fuerza]) if col_fuerza and not pd.isna(row[col_fuerza]) else ""
+                    acc = str(row[col_accion]) if col_accion and not pd.isna(row[col_accion]) else ""
+                    cat_grado = str(row[col_categoria]) if col_categoria and not pd.isna(row[col_categoria]) else ""
+                    cod_dane = str(row[col_codigo_dane]) if col_codigo_dane and not pd.isna(row[col_codigo_dane]) else ""
                     
-                    if "JAMUNDI" in municipio_norm:
-                        # Registro determinístico para evitar duplicados en re-ingestas
-                        # Incluimos discriminadores para evitar colisiones en filas "idénticas" de un mismo archivo
-                        hash_input = f"{tipo_delito}|{filename}|{dept}|{municipio_norm}|{fecha_obj.isoformat()}|{cantidad}|{sexo}|{zona}|{edad}|{mod}"
-                        registro_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+                    # Búsqueda de Barrio (para SEM)
+                    col_barrio = next((c for c in header_vals if "BARRIO" in c), None)
+                    barrio_raw = str(row[col_barrio]) if col_barrio and not pd.isna(row[col_barrio]) else ""
+
+                    # Generar hash e importar si es necesario
+                    
+                    # Validación Jamundí Extendida
+                    es_jamundi = "JAMUNDI" in municipio_norm or cod_dane == "76364"
+                    if es_jamundi:
+                        current_source_id = self._infer_crime_type_id(filename)
+                        event_fingerprint = self._generate_fingerprint(current_source_id, row, fecha_obj.isoformat(), cod_dane)
                         
+                        # Extraer Semana para SEM
+                        semana_val = None
+                        if "NOSEMANA" in header_vals:
+                            semana_val = row["NOSEMANA"]
+                        elif "SEMANA" in header_vals:
+                            semana_val = row["SEMANA"]
+
                         yield {
-                            "departamento": str(dept) if not pd.isna(dept) else "",
+                            "source_id": self._infer_crime_type_id(filename),
+                            "departamento": str(dept) if not pd.isna(dept) else "VALLE DEL CAUCA",
                             "municipio": str(municipio),
                             "municipio_normalizado": municipio_norm,
+                            "barrio": str(barrio_raw) if barrio_raw else None,
                             "fecha_hecho": fecha_obj,
                             "anio": fecha_obj.year,
                             "mes": fecha_obj.month,
-                            "tipo_delito": tipo_delito,
-                            "cantidad": cantidad,
+                            "semana": int(semana_val) if semana_val and not pd.isna(semana_val) else None,
+                            "tipo_delito": str(row.get("DESCRIPCION_CONDUCTA", tipo_delito)),
+                            "cantidad": int(cantidad_val),
                             "genero": sexo,
                             "grupo_etario": edad,
                             "modalidad": mod,
+                            "institucion": fuerza,
+                            "accion": acc,
+                            "categoria_grado": cat_grado,
+                            "codigo_dane": cod_dane or ("76364" if "JAMUNDI" in municipio_norm else None),
                             "fuente_archivo": filename,
-                            "hash_registro": registro_hash,
+                            "event_fingerprint": event_fingerprint,
+                            "hash_registro": event_fingerprint, # Legacy support
                             "fecha_ingesta": datetime.utcnow()
                         }
                     else:
@@ -203,6 +324,7 @@ class NationalStatsProcessor:
 
     def _infer_crime_type(self, filename: str) -> str:
         name = self.normalize_text(filename).upper()
+        if "ASPERSION" in name: return "ASPERSION"
         if "HOMICIDIO INTENCIONAL" in name: return "Homicidio Intencional"
         if "HOMICIDIO ACCIDENTES" in name: return "Homicidio (Tránsito)"
         if "LESIONES COMUNES" in name: return "Lesiones Personales"
@@ -221,4 +343,6 @@ class NationalStatsProcessor:
         if "MASACRES" in name: return "Masacres"
         if "HOMICIDIO" in name: return "Homicidio"
         if "HURTO" in name: return "Hurto"
+        if "AFECTACION" in name: return "Afectación Fuerza Pública"
+        if "RNMC" in name or "MEDIDAS GESTIONADAS" in name: return "RNMC (Medidas Gestionadas)"
         return "Delito General"

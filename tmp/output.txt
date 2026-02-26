@@ -1,0 +1,9 @@
+﻿--- Iniciando Ingesti¾n de prueba: REPORTE MNEDIDAS GESTIONADAS 1 ENERO 18 FEBREERO 2026.xlsx ---
+
+Resultado JSON devuelto:
+{
+    "inserted": 0,
+    "updated": 2,
+    "total": 2
+}
+Error durante la prueba: 'charmap' codec can't encode character '\u2705' in position 2: character maps to <undefined>

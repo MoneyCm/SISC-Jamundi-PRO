@@ -1,15 +1,42 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session # Rebuild v2
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, UploadFile, File, Request, Query
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
+from typing import Optional, List
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from db.models import get_db
 from api.auth import get_current_user
 from db.models import User
-from db.models_intelligence import NationalCrimeStats, IngestionLog
+from db.models_intelligence import (
+    NationalCrimeStats,
+    IngestionLog,
+    TerritorialContext,
+    IngestionFile,
+    ReportRun,
+    RNMCMeasure,
+)
+from db.models_alerts import IntelligenceAlert, IntelligenceAlertSnapshot
 from services.scraper_mindefensa import MinDefensaScraper
 from services.excel_processor import NationalStatsProcessor
+from services.pdf_report_service import PdfReportService
+from services.distribution_service import DistributionService
+from services.rnmc_service import RNMCService
+from services.ingest_rnmc import RNMCIngestor
+from services.intelligence_service import IntelligenceService
+from services.report_automation_service import ReportAutomationService
+from services.alerts_rnmc import generate_rnmc_alerts
+from services.alerts_prioritizer import compute_action_score, get_scoring_config
+from services.ai_prioritizer import build_ai_rationale
+from weasyprint import HTML, CSS
 import logging
+import hashlib
+import json
+import os
 from datetime import datetime
+from io import BytesIO
 from api.ia import call_gemini, call_mistral, AI_PROVIDER, GEMINI_API_KEY, MISTRAL_API_KEY
-from sqlalchemy import text, func
+from sqlalchemy import text, func, desc
+from uuid import UUID
 
 router = APIRouter(tags=["Intelligence"])
 logger = logging.getLogger("sisc_api")
@@ -40,102 +67,176 @@ async def upload_intelligence_file(
     db.refresh(log_entry)
 
     try:
+        import uuid
+        ingestion_id = uuid.uuid4()
         contents = await file.read()
+        file_hash = hashlib.sha256(contents).hexdigest()
+        
         processor = NationalStatsProcessor()
+        # Consumir generator para validar y obtener source_id
+        all_records = list(processor.process_excel(contents, file.filename))
         
-        # Procesar generator
-        records_generator = processor.process_excel(contents, file.filename)
+        if not all_records:
+            return {
+                "ingestion_id": str(ingestion_id),
+                "status": "REJECTED", 
+                "message": "Archivo vacío o sin registros válidos", 
+                "records": 0
+            }
+            
+        source_id = all_records[0].get("source_id", "GENERIC_CRIME")
         
-        # OBTENER AÑO PARA LIMPIEZA PREVENTIVA
-        # El año se extrae del nombre del archivo en el procesador
-        anio_archivo = processor._extract_year_from_filename(file.filename)
-        municipio_target = "JAMUNDI" # Por defecto para este proyecto, o extraer del archivo si es posible
+        # 0. Verificar Idempotencia
+        existing_file = db.query(IngestionFile).filter(
+            IngestionFile.file_hash == file_hash,
+            IngestionFile.source_type == source_id
+        ).first()
         
-        # Limpiar datos previos del mismo año y municipio para evitar duplicados/datos viejos
-        # Solo para manual upload para asegurar que sea el "borrón y cuenta nueva"
-        try:
-            target_norm = processor.normalize_text(municipio_target)
-            deleted = db.query(NationalCrimeStats).filter(
-                NationalCrimeStats.anio == anio_archivo,
-                NationalCrimeStats.municipio_normalizado == target_norm
-            ).delete(synchronize_session=False)
-            db.commit()
-            logger.info(f"Limpieza preventiva: {deleted} registros eliminados para {municipio_target} año {anio_archivo}")
-        except Exception as clean_err:
-            db.rollback()
-            logger.warning(f"Error en limpieza preventiva (no crítico): {clean_err}")
+        if existing_file:
+            logger.info(f"El archivo {file.filename} ya fue procesado como {source_id}.")
+            return {
+                "ingestion_id": str(existing_file.ingestion_id),
+                "source_id": source_id,
+                "file_hash": file_hash,
+                "status": "REJECTED",
+                "message": "Archivo ya procesado para esta fuente",
+                "inserted_count": 0,
+                "updated_count": 0,
+                "skipped_count": existing_file.records_count,
+                "periodo": existing_file.periodo_detectado
+            }
+
+        # 1. Detectar Periodo y Distribución
+        fechas = [r.get("fecha_hecho") for r in all_records if r.get("fecha_hecho")]
+        anos = sorted(list(set([r.get("anio") for r in all_records if r.get("anio")])))
+        semanas = sorted(list(set([r.get("semana") for r in all_records if r.get("semana")])))
+        distribucion_anio = {}
+        for r in all_records:
+            a = r.get("anio")
+            distribucion_anio[a] = distribucion_anio.get(a, 0) + 1
+            
+        periodo_min = min(fechas) if fechas else None
+        periodo_max = max(fechas) if fechas else None
+        periodo_str = f"{periodo_min} a {periodo_max}" if periodo_min else "Desconocido"
+
+        # Alerta de años extraños
+        alertas = []
+        for a in anos:
+            if a < 2000 or a > datetime.now().year + 1:
+                alertas.append(f"Atención: Año detectado fuera de rango normal: {a}")
 
         count = 0
-        batch = []
-        BATCH_SIZE = 500
         from sqlalchemy.dialects.postgresql import insert
         
-        for record_dict in records_generator:
-            batch.append(record_dict)
-            
-            if len(batch) >= BATCH_SIZE:
-                try:
-                    stmt = insert(NationalCrimeStats).values(batch)
-                    stmt = stmt.on_conflict_do_nothing(index_elements=['hash_registro'])
+        # 2. Transacción Atómica
+        with db.begin_nested():
+            for record_dict in all_records:
+                # Forzar source_id SEM_POLICIA si es una carga SEM
+                if source_id == "SEM_POLICIA":
+                    record_dict["source_id"] = "SEM_POLICIA"
+                    
+                if record_dict.get("fuente_type") == "TERRITORIAL_CONTEXT":
+                    record_dict.pop("fuente_type", None)
+                    stmt = insert(TerritorialContext).values(record_dict)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['source_id', 'event_fingerprint'],
+                        set_={
+                            "cantidad": record_dict["cantidad"],
+                            "fuente_archivo": record_dict["fuente_archivo"]
+                        }
+                    )
                     db.execute(stmt)
-                    db.commit()
-                    count += len(batch)
-                except Exception as batch_err:
-                    db.rollback()
-                    logger.error(f"Error en bloque de carga manual: {batch_err}")
-                    # Reintento individual para no perder el bloque entero
-                    for r in batch:
-                        try:
-                            # Usar merge o check preventivo? 
-                            # Mejor stick to basic add + commit catch since it's manual and small-ish
-                            db.add(NationalCrimeStats(**r))
-                            db.commit()
-                            count += 1
-                        except:
-                            db.rollback()
-                            continue
-                batch = []
-                import gc
-                gc.collect()
-        
-        # Guardar remanente
-        if batch:
-            try:
-                stmt = insert(NationalCrimeStats).values(batch)
-                stmt = stmt.on_conflict_do_nothing(index_elements=['hash_registro'])
-                db.execute(stmt)
-                db.commit()
-                count += len(batch)
-            except Exception:
-                db.rollback()
-                for r in batch:
-                    try:
-                        db.add(NationalCrimeStats(**r))
-                        db.commit()
-                        count += 1
-                    except:
-                        db.rollback()
-                        continue
+                    count += 1
+                elif source_id == "INSPECCION_MEDIDAS_RNMC":
+                    # RNMC usa su propio ingestor para lógica de fingerprints específica
+                    ingestor = RNMCIngestor(db)
+                    res = ingestor.process_file(contents, file.filename)
+                    # Resumen de filas afectadas (insertadas + actualizadas)
+                    inserted = int(res.get("inserted", 0))
+                    updated = int(res.get("updated", 0))
+                    total = int(res.get("total", 0))
+                    count = inserted + updated
+                else:
+                    stmt = insert(NationalCrimeStats).values(record_dict)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['source_id', 'event_fingerprint'],
+                        set_={
+                            "cantidad": record_dict["cantidad"],
+                            "fuente_archivo": record_dict["fuente_archivo"]
+                        }
+                    )
+                    db.execute(stmt)
+                    count += 1
+
+            # 3. Registrar archivo como procesado
+            new_file_ref = IngestionFile(
+                ingestion_id=ingestion_id,
+                filename=file.filename,
+                source_type=source_id,
+                file_hash=file_hash,
+                inserted_count=count,
+                updated_count=0,
+                skipped_count=0,
+                records_count=count,
+                periodo_detectado=periodo_str,
+                periodo_detectado_min=periodo_min,
+                periodo_detectado_max=periodo_max,
+                anios_incluidos=anos,
+                semanas_incluidas=semanas,
+                status="COMPLETED"
+            )
+            db.add(new_file_ref)
             
-        # Actualizar log exitoso
-        log_entry.estado = "SUCCESS"
-        log_entry.registros_insertados = count
-        log_entry.fecha_fin = datetime.utcnow()
+            log_entry.estado = "COMPLETED"
+            log_entry.registros_insertados = count
+            log_entry.detalles = {
+                "ingestion_id": str(ingestion_id),
+                "source_id": source_id, 
+                "filename": file.filename,
+                "periodo": periodo_str,
+                "distribucion": distribucion_anio,
+                "alertas": alertas
+            }
+
         db.commit()
-        
-        return {
-            "message": "Archivo procesado exitosamente",
-            "filename": file.filename,
-            "records_inserted": count
+        base_response = {
+            "ingestion_id": str(ingestion_id),
+            "source_id": source_id,
+            "file_hash": file_hash,
+            "status": "COMPLETED",
+            "message": "Carga multi-año exitosa con trazabilidad institucional",
+            "inserted_count": count,
+            "periodo_detectado": periodo_str,
+            "anios_incluidos": anos,
+            "distribucion_anio": distribucion_anio,
+            "alertas": alertas
         }
-        
+
+        # En el caso RNMC, propagar detalles extras del ingestor (detect sheet, etc.)
+        if source_id == "INSPECCION_MEDIDAS_RNMC":
+            base_response.update({
+                "inserted": int(res.get("inserted", 0)),
+                "updated": int(res.get("updated", 0)),
+                "total": int(res.get("total", 0)),
+                "detected_sheet": res.get("detected_sheet"),
+                "header_row": res.get("header_row"),
+                "columns_detected": res.get("columns_detected"),
+                "ingestor_error": res.get("error"),
+                "df_shape": res.get("df_shape"),
+                "municipio_uniques": res.get("municipio_uniques"),
+                "detail": res.get("detail"),
+            })
+
+        return base_response
+
     except Exception as e:
-        # Log error
-        log_entry.estado = "ERROR"
+        db.rollback()
+        log_entry.estado = "FAILED"
         log_entry.errores = str(e)
         log_entry.fecha_fin = datetime.utcnow()
         db.commit()
-        raise HTTPException(status_code=500, detail=f"Error procesando archivo: {str(e)}")
+        logger.error(f"Fallo crítico en ingestión: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/ingest")
 async def trigger_ingestion(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -153,6 +254,1185 @@ async def trigger_ingestion(background_tasks: BackgroundTasks, db: Session = Dep
     background_tasks.add_task(run_ingestion_process, log_id)
     
     return {"status": "started", "log_id": log_id, "message": "Ingesta iniciada en segundo plano"}
+
+@router.get("/stats/compare")
+async def get_crime_comparison(
+    source_id: str = "SEM_POLICIA",
+    type: str = "weekly",
+    anio: int = None,
+    semana: int = None,
+    mes: int = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna comparativo automático (WoW/MoM y YoY) para una fuente.
+    """
+    value = None
+    if anio:
+        value = {"anio": anio, "semana": semana, "mes": mes}
+        
+    res = IntelligenceService.get_comparison(db, source_id, type=type, value=value)
+    if not res:
+        return {"status": "error", "message": "No se encontraron datos para la fuente especificada"}
+        
+    report = IntelligenceService.format_comparison_report(res)
+    return report
+
+@router.get("/stats/ytd")
+async def get_crime_ytd(
+    source_id: str = "SEM_POLICIA",
+    anio: int = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna comparativo YTD (Year-To-Date) para una fuente.
+    """
+    res = IntelligenceService.get_ytd_comparison(db, source_id, anio=anio)
+    return res
+
+@router.get("/stats/accumulated")
+async def get_crime_accumulated(
+    source_id: str = "SEM_POLICIA",
+    start_mm_dd: str = "01-01",
+    end_mm_dd: str = "12-31",
+    db: Session = Depends(get_db)
+):
+    """
+    Acumulado de un periodo específico para todos los años disponibles.
+    """
+    res = IntelligenceService.get_multi_year_accumulated(db, source_id, start_mm_dd, end_mm_dd)
+    return res
+
+@router.get("/stats/rnmc")
+async def get_rnmc_stats(
+    type: str = "monthly",
+    anio: int = None,
+    valor: int = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna estadísticas estables de RNMC para el Tab Estratégico.
+    Mapea a la estructura requerida por la UI Premium.
+    """
+    raw = RNMCService.get_rnmc_comparison(db, mode=type, anio=anio, valor=valor)
+    if not raw:
+        # Estructura vacía estable
+        return {
+            "range": {"from": None, "to": None},
+            "group": type,
+            "kpis": {"total": 0, "pagadas": 0, "en_proceso": 0, "ratificadas": 0, "recaudo": 0, "efectividad_pct": 0},
+            "series": [],
+            "by_estado": [],
+            "top_medidas": [],
+            "top_localidades": [],
+            "comparisons": {}
+        }
+
+    actual = raw["actual"]
+    series = RNMCService.get_series(db, mode="month" if type == "monthly" else "week")
+
+    return {
+        "range": actual["periodo"],
+        "group": type,
+        "kpis": {
+            "total": actual["total_registros"],
+            "pagadas": actual["pagos_conteo"],
+            "en_proceso": actual.get("especificos", {}).get("en_proceso", 0),
+            "ratificadas": actual.get("especificos", {}).get("ratificada", 0),
+            "recaudo": actual["recaudo_total"],
+            "efectividad_pct": actual.get("porcentaje_pagado", 0)
+        },
+        "series": series,
+        "by_estado": [{"estado": k, "total": v} for k, v in actual["top_estados"].items()],
+        "top_medidas": [{"medida": k, "total": v} for k, v in actual["top_medidas"].items()],
+        "top_localidades": [{"localidad": k, "total": v} for k, v in actual["top_localidades"].items()],
+        "comparisons": {
+            "wow": raw.get("prev") if type == "weekly" else None,
+            "mom": raw.get("prev") if type == "monthly" else None,
+            "yoy": raw.get("yoy")
+        }
+    }
+
+@router.get("/rnmc/medidas/backlog")
+async def get_rnmc_backlog(
+    from_date: str = None,
+    to_date: str = None,
+    min_dias: int = None,
+    estado: str = None,
+    medida: str = None,
+    localidad: str = None,
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    Lista medidas filtrables (backlog) para la UI operativa.
+    """
+    return RNMCService.get_backlog(
+        db, from_date, to_date, min_dias, estado, medida, localidad, page, page_size
+    )
+
+@router.get("/rnmc/medidas/history")
+async def get_rnmc_history(
+    source_id: str = "INSPECCION_MEDIDAS_RNMC",
+    event_fingerprint: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna el historial de cambios de estado para una medida específica.
+    """
+    if not event_fingerprint:
+        raise HTTPException(status_code=400, detail="event_fingerprint es requerido")
+        
+    res = RNMCService.get_measure_history(db, source_id, event_fingerprint)
+    if not res:
+        raise HTTPException(status_code=404, detail="Medida no encontrada")
+    return res
+
+class TriggerReportRequest(BaseModel):
+    type: str = "all"
+    source_id: str = "SEM_POLICIA"
+    period: Optional[str] = None
+    force: bool = False
+    forced_by: Optional[str] = None
+    forced_reason: Optional[str] = None
+
+@router.post("/reports/trigger")
+async def trigger_auto_reports(
+    req: TriggerReportRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Dispara la generación de reportes automáticos (Protegido por API Key).
+    Incluye soporte para periodos específicos (ej. 2026-W08).
+    """
+    api_key = request.headers.get("X-API-KEY")
+    expected_key = os.getenv("SISC_REPORT_TRIGGER_KEY")
+    
+    if expected_key and api_key != expected_key:
+        raise HTTPException(status_code=403, detail="Acceso denegado: API Key inválida o no configurada")
+
+    # Parsing de periodo (opcional)
+    anio, valor = None, None
+    if req.period:
+        try:
+            if "-W" in req.period:
+                anio_str, valor_str = req.period.split("-W")
+                anio, valor = int(anio_str), int(valor_str)
+            elif "-M" in req.period:
+                anio_str, valor_str = req.period.split("-M")
+                anio, valor = int(anio_str), int(valor_str)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Formato de periodo inválido. Use YYYY-WXX o YYYY-MXX")
+
+    results = {}
+    if req.source_id == "INSPECCION_MEDIDAS_RNMC":
+        # Mapear types a los internos de RNMC
+        if req.type in ["all", "weekly", "RNMC_WEEKLY"]:
+            results["weekly"] = ReportAutomationService.run_rnmc_report(
+                db, "SEMANAL", anio=anio, valor=valor, forces=req.force
+            )
+        if req.type in ["all", "monthly", "RNMC_MONTHLY"]:
+            results["monthly"] = ReportAutomationService.run_rnmc_report(
+                db, "MENSUAL", anio=anio, valor=valor, forces=req.force
+            )
+        if req.type in ["all", "ytd"]:
+            results["ytd"] = ReportAutomationService.run_rnmc_report(
+                db, "YTD", anio=anio, forces=req.force
+            )
+    else:
+        if req.type in ["all", "weekly"]:
+            results["weekly"] = ReportAutomationService.run_weekly_report(
+                db, req.source_id, forces=req.force, forced_by=req.forced_by, forced_reason=req.forced_reason
+            )
+        if req.type in ["all", "monthly"]:
+            results["monthly"] = ReportAutomationService.run_monthly_report(
+                db, req.source_id, forces=req.force, forced_by=req.forced_by, forced_reason=req.forced_reason
+            )
+        
+    return {"status": "success", "executed": {k: v.id if v else None for k, v in results.items()}, "source": req.source_id}
+
+@router.get("/reports/history")
+async def get_report_history(
+    type: str = None,
+    source_id: str = "SEM_POLICIA",
+    db: Session = Depends(get_db)
+):
+    from db.models_intelligence import ReportRun
+    query = db.query(ReportRun).filter(ReportRun.source_id == source_id)
+    if type:
+        query = query.filter(ReportRun.report_type == type.upper())
+    
+    reports = query.order_by(ReportRun.generated_at.desc()).limit(20).all()
+    return reports
+
+# --- ALERT FEED ENDPOINTS ---
+
+@router.get("/alerts")
+async def list_alerts(
+    source: str = None,
+    status: str = "OPEN",
+    severity: str = None,
+    tier: str = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Lista las alertas del muro de inteligencia, ordenadas por score (Fase 3).
+    """
+    query = db.query(IntelligenceAlert)
+    
+    if source:
+        query = query.filter(IntelligenceAlert.source == source)
+    if status:
+        query = query.filter(IntelligenceAlert.status == status)
+    if severity:
+        query = query.filter(IntelligenceAlert.severity == severity)
+    if tier:
+        query = query.filter(IntelligenceAlert.priority_tier == tier)
+        
+    total = query.count()
+    # Ordenar por action_score desc, luego por updated_at
+    alerts = query.order_by(desc(IntelligenceAlert.action_score), desc(IntelligenceAlert.updated_at)).offset(offset).limit(limit).all()
+    
+    return {
+        "total": total,
+        "items": alerts,
+        "limit": limit,
+        "offset": offset
+    }
+
+
+def _build_alerts_query(
+    db: Session,
+    source: str,
+    status: str,
+    severity: Optional[str],
+    tiers: Optional[list],
+    from_date: Optional[str],
+    to_date: Optional[str],
+    limit: int,
+):
+    """
+    Helper compartido para exportaciones y snapshots.
+    Aplica filtros básicos y ordena por score descendente.
+    """
+    query = db.query(IntelligenceAlert).filter(IntelligenceAlert.source == source)
+
+    if status:
+        query = query.filter(IntelligenceAlert.status == status)
+    if severity:
+        query = query.filter(IntelligenceAlert.severity == severity)
+    if tiers:
+        query = query.filter(IntelligenceAlert.priority_tier.in_(tiers))
+
+    # Filtro por rango de fechas usando created_at para trazabilidad estable
+    if from_date:
+        try:
+            from_dt = datetime.fromisoformat(from_date)
+            query = query.filter(IntelligenceAlert.created_at >= from_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Parámetro 'from' inválido. Use formato YYYY-MM-DD.")
+    if to_date:
+        try:
+            to_dt = datetime.fromisoformat(to_date)
+            query = query.filter(IntelligenceAlert.created_at <= to_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Parámetro 'to' inválido. Use formato YYYY-MM-DD.")
+
+    capped_limit = min(max(limit, 1), 1000)
+
+    return query.order_by(
+        desc(IntelligenceAlert.action_score),
+        desc(IntelligenceAlert.updated_at),
+    ).limit(capped_limit)
+
+
+def _sanitize_metrics(metrics: dict) -> dict:
+    """
+    Elimina posibles campos sensibles de métricas (PII o expediente completo).
+    """
+    if not metrics:
+        return {}
+    clean = dict(metrics)
+    # Campos que nunca deben exportarse en claro
+    for key in ["expediente", "documento", "identificacion", "nombre_completo"]:
+        clean.pop(key, None)
+    return clean
+
+
+def _serialize_alert_for_export(alert: IntelligenceAlert) -> dict:
+    metrics = _sanitize_metrics(alert.metrics or {})
+    entity_ref = alert.entity_ref or {}
+
+    return {
+        "created_at": alert.created_at.isoformat() if alert.created_at else None,
+        "updated_at": alert.updated_at.isoformat() if alert.updated_at else None,
+        "source": alert.source,
+        "alert_type": alert.alert_type,
+        "severity": alert.severity,
+        "priority_tier": alert.priority_tier,
+        "action_score": float(alert.action_score or 0),
+        "dias": metrics.get("dias"),
+        "valor_neto": metrics.get("valor_neto"),
+        "valor_pagado": metrics.get("valor_pagado"),
+        "estado": metrics.get("estado"),
+        "localidad": metrics.get("localidad"),
+        "medida": metrics.get("medida"),
+        "source_id": entity_ref.get("source_id"),
+        "event_fingerprint": entity_ref.get("event_fingerprint"),
+        "recommended_action": alert.recommended_action,
+        "rationale_md": alert.rationale_md,
+    }
+
+
+@router.get("/alerts/export/excel")
+async def export_alerts_excel(
+    source: str = "RNMC",
+    status: str = "OPEN",
+    severity: Optional[str] = None,
+    tier: Optional[str] = Query(None, description="Tier único o lista separada por comas, ej: P1,P2"),
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+    limit: int = 500,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Genera y retorna un XLSX en streaming con el ranking de alertas.
+    No persiste archivos en disco.
+    """
+    tiers = None
+    if tier:
+        tiers = [t.strip() for t in tier.split(",") if t.strip()]
+
+    query = _build_alerts_query(
+        db=db,
+        source=source,
+        status=status,
+        severity=severity,
+        tiers=tiers,
+        from_date=from_date,
+        to_date=to_date,
+        limit=limit,
+    )
+
+    alerts = query.all()
+    rows = [_serialize_alert_for_export(a) for a in alerts]
+
+    # Construir resumen
+    from collections import Counter
+
+    tier_counts = Counter(r.get("priority_tier") or "SIN_TIER" for r in rows)
+    severity_counts = Counter(r.get("severity") or "SIN_SEVERIDAD" for r in rows)
+
+    p1_unpaid_value = sum(
+        float(r.get("valor_neto") or 0)
+        for r in rows
+        if r.get("priority_tier") == "P1" and not (r.get("valor_pagado") or 0)
+    )
+    total_recaudo = sum(float(r.get("valor_pagado") or 0) for r in rows)
+
+    scoring_config = get_scoring_config()
+    scoring_config_hash = hashlib.sha256(
+        json.dumps(scoring_config, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+    # Construir Excel en memoria
+    from openpyxl import Workbook
+
+    wb = Workbook()
+
+    # Sheet 1: Ranking
+    ws_rank = wb.active
+    ws_rank.title = "Ranking"
+
+    headers = [
+        "created_at",
+        "updated_at",
+        "source",
+        "alert_type",
+        "severity",
+        "priority_tier",
+        "action_score",
+        "dias",
+        "valor_neto",
+        "valor_pagado",
+        "estado",
+        "localidad",
+        "medida",
+        "source_id",
+        "event_fingerprint",
+        "recommended_action",
+        "rationale_md",
+    ]
+    ws_rank.append(headers)
+    for r in rows:
+        ws_rank.append([r.get(h) for h in headers])
+
+    # Sheet 2: Summary
+    ws_summary = wb.create_sheet(title="Summary")
+    ws_summary.append(["Métrica", "Valor"])
+    ws_summary.append(["Total alertas", len(rows)])
+    for tier_key, count in tier_counts.items():
+        ws_summary.append([f"Alertas {tier_key}", count])
+    for sev_key, count in severity_counts.items():
+        ws_summary.append([f"Severidad {sev_key}", count])
+    ws_summary.append(["Valor neto P1 sin pago", p1_unpaid_value])
+    ws_summary.append(["Recaudo total (valor_pagado)", total_recaudo])
+
+    # Sheet 3: Config
+    ws_cfg = wb.create_sheet(title="Config")
+    ws_cfg.append(["Clave", "Valor"])
+    for key, value in scoring_config.items():
+        ws_cfg.append([key, value])
+    ws_cfg.append([])
+    ws_cfg.append(["scoring_config_sha256", scoring_config_hash])
+    ws_cfg.append(["generated_at_utc", datetime.utcnow().isoformat()])
+    ws_cfg.append(["source", source])
+    ws_cfg.append(["status", status])
+    ws_cfg.append(["tiers", ",".join(tiers) if tiers else ""])
+    ws_cfg.append(["from", from_date or ""])
+    ws_cfg.append(["to", to_date or ""])
+
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    filename = f"alerts_ranking_{source}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/alerts/export/csv")
+async def export_alerts_csv(
+    source: str = "RNMC",
+    status: str = "OPEN",
+    severity: Optional[str] = None,
+    tier: Optional[str] = Query(None, description="Tier único o lista separada por comas, ej: P1,P2"),
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+    limit: int = 500,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Exportación rápida en CSV del ranking de alertas.
+    """
+    tiers = None
+    if tier:
+        tiers = [t.strip() for t in tier.split(",") if t.strip()]
+
+    query = _build_alerts_query(
+        db=db,
+        source=source,
+        status=status,
+        severity=severity,
+        tiers=tiers,
+        from_date=from_date,
+        to_date=to_date,
+        limit=limit,
+    )
+    alerts = query.all()
+    rows = [_serialize_alert_for_export(a) for a in alerts]
+
+    headers = [
+        "created_at",
+        "updated_at",
+        "source",
+        "alert_type",
+        "severity",
+        "priority_tier",
+        "action_score",
+        "dias",
+        "valor_neto",
+        "valor_pagado",
+        "estado",
+        "localidad",
+        "medida",
+        "source_id",
+        "event_fingerprint",
+        "recommended_action",
+        "rationale_md",
+    ]
+
+    import csv
+
+    stream = BytesIO()
+    writer = csv.writer(stream)
+    writer.writerow(headers)
+    for r in rows:
+        writer.writerow([r.get(h, "") for h in headers])
+    stream.seek(0)
+
+    filename = f"alerts_ranking_{source}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(
+        stream,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+async def process_alert_ai(alert_id: UUID, db: Session):
+    """Tarea en background para generar el rationale de la IA."""
+    alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == alert_id).first()
+    if not alert: return
+    
+    # Preparamos el input del score (ya calculado)
+    scoring_data = {
+        "action_score": float(alert.action_score or 0),
+        "priority_tier": alert.priority_tier
+    }
+    
+    ai_res = await build_ai_rationale(alert, scoring_data)
+    if ai_res.get("ai_rationale_md"):
+        alert.ai_rationale_md = ai_res["ai_rationale_md"]
+        alert.ai_provider = ai_res["ai_provider"]
+        alert.ai_request_id = ai_res["ai_request_id"]
+        db.commit()
+
+
+class AlertsSnapshotRequest(BaseModel):
+    source: str = "RNMC"
+    status: str = "OPEN"
+    tiers: Optional[List[str]] = None
+    severity: Optional[str] = None
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+    limit: int = 500
+
+
+def _create_snapshot_from_rows(
+    db: Session,
+    source: str,
+    filters: dict,
+    rows: List[dict],
+    scoring_config: dict,
+):
+    """
+    Crea (o reutiliza) un snapshot inmutable a partir de filas ya serializadas.
+    """
+    payload = {"alerts": rows}
+    payload_str = json.dumps(payload, sort_keys=True, default=str)
+    payload_sha256 = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+
+    # Intentar reutilizar snapshot por hash (idempotencia)
+    existing = db.query(IntelligenceAlertSnapshot).filter(
+        IntelligenceAlertSnapshot.payload_sha256 == payload_sha256
+    ).first()
+    if existing:
+        return existing
+
+    snapshot = IntelligenceAlertSnapshot(
+        source=source,
+        filters=filters,
+        scoring_config=scoring_config,
+        payload_json=payload,
+        payload_sha256=payload_sha256,
+    )
+    db.add(snapshot)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Carrera poco probable: recuperar el existente por hash
+        snapshot = db.query(IntelligenceAlertSnapshot).filter(
+            IntelligenceAlertSnapshot.payload_sha256 == payload_sha256
+        ).first()
+    db.refresh(snapshot)
+    return snapshot
+
+
+def _build_alerts_pdf_html(
+    rows: List[dict],
+    scoring_config: dict,
+    snapshot_id: str,
+    payload_sha256: str,
+    filters: dict,
+):
+    """
+    Construye HTML para el PDF ejecutivo del ranking de alertas RNMC.
+    """
+    total = len(rows)
+    p1 = [r for r in rows if r.get("priority_tier") == "P1"]
+    p2 = [r for r in rows if r.get("priority_tier") == "P2"]
+    p3 = [r for r in rows if r.get("priority_tier") == "P3"]
+
+    top_p1 = sorted(p1, key=lambda r: float(r.get("action_score") or 0), reverse=True)[:10]
+
+    valor_neto_p1_sin_pago = sum(
+        float(r.get("valor_neto") or 0)
+        for r in p1
+        if not (r.get("valor_pagado") or 0)
+    )
+
+    from collections import Counter
+
+    localidades_p1 = Counter(r.get("localidad") or "SIN_LOCALIDAD" for r in p1)
+    top_localidades = localidades_p1.most_common(5)
+
+    period_label = "Sin rango definido"
+    if filters.get("from") or filters.get("to"):
+        period_label = f"{filters.get('from') or '...'} a {filters.get('to') or '...'}"
+
+    scoring_config_hash = hashlib.sha256(
+        json.dumps(scoring_config, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+    # HTML simple de 1–2 páginas
+    rows_html = ""
+    for r in top_p1:
+        rows_html += f"""
+        <tr>
+            <td>{r.get('localidad') or '-'}</td>
+            <td>{r.get('medida') or '-'}</td>
+            <td>{r.get('dias') or '-'}</td>
+            <td>{r.get('valor_neto') or 0:,.0f}</td>
+            <td>{r.get('action_score') or 0:.2f}</td>
+            <td>{(r.get('recommended_action') or '').split('.')[0]}</td>
+        </tr>
+        """
+
+    loc_rows = ""
+    for loc, cnt in top_localidades:
+        loc_rows += f"""
+        <tr>
+            <td>{loc}</td>
+            <td>{cnt}</td>
+        </tr>
+        """
+
+    html = f"""
+    <html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Ranking RNMC - SISC Jamundí</title>
+        <style>
+            @page {{
+                size: A4;
+                margin: 2cm;
+            }}
+            body {{
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                color: #0f172a;
+                line-height: 1.5;
+                font-size: 11pt;
+            }}
+            h1, h2, h3 {{
+                color: #0f172a;
+            }}
+            .header {{
+                border-bottom: 2px solid #0f172a;
+                padding-bottom: 8px;
+                margin-bottom: 18px;
+            }}
+            .kpi-grid {{
+                display: flex;
+                gap: 16px;
+                margin-bottom: 18px;
+            }}
+            .card {{
+                flex: 1;
+                border-radius: 8px;
+                border: 1px solid #e2e8f0;
+                padding: 10px 12px;
+                background: #f8fafc;
+            }}
+            .card-label {{
+                font-size: 9pt;
+                text-transform: uppercase;
+                color: #64748b;
+                font-weight: bold;
+            }}
+            .card-value {{
+                font-size: 18pt;
+                font-weight: bold;
+                color: #0f172a;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 10px;
+                margin-bottom: 10px;
+            }}
+            th, td {{
+                border: 1px solid #e2e8f0;
+                padding: 6px 8px;
+                font-size: 9pt;
+            }}
+            th {{
+                background-color: #f1f5f9;
+                text-align: left;
+            }}
+            .audit-box {{
+                margin-top: 18px;
+                padding: 10px 12px;
+                border-radius: 8px;
+                border: 1px solid #e2e8f0;
+                background: #f9fafb;
+                font-size: 8.5pt;
+            }}
+            .audit-row {{
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 4px;
+            }}
+            .audit-label {{
+                color: #64748b;
+                font-weight: bold;
+            }}
+            .audit-value {{
+                color: #0f172a;
+                font-family: monospace;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>SISC Jamundí — Ranking Ejecutivo RNMC</h1>
+            <div style="font-size: 10pt; color: #64748b;">
+                Fuente: RNMC · Periodo: {period_label} · Generado: {datetime.utcnow().isoformat()} (UTC)
+            </div>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="card">
+                <div class="card-label">Total alertas consideradas</div>
+                <div class="card-value">{total}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Prioridad Inmediata (P1)</div>
+                <div class="card-value">{len(p1)}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Gestión semanal (P2)</div>
+                <div class="card-value">{len(p2)}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Monitoreo (P3)</div>
+                <div class="card-value">{len(p3)}</div>
+            </div>
+        </div>
+
+        <h2>Top 10 alertas P1 por score</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Localidad</th>
+                    <th>Medida</th>
+                    <th>Días</th>
+                    <th>Valor Neto</th>
+                    <th>Score</th>
+                    <th>Razón Corta</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+
+        <h2>Resumen de cartera prioritaria</h2>
+        <p>Monto neto estimado sin pago en Tier P1: <strong>${valor_neto_p1_sin_pago:,.0f}</strong></p>
+
+        <h3>Top localidades por número de P1</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Localidad</th>
+                    <th>Alertas P1</th>
+                </tr>
+            </thead>
+            <tbody>
+                {loc_rows}
+            </tbody>
+        </table>
+
+        <div class="audit-box">
+            <div style="font-weight: bold; text-transform: uppercase; margin-bottom: 6px;">Sello de evidencia digital</div>
+            <div class="audit-row">
+                <span class="audit-label">Snapshot ID</span>
+                <span class="audit-value">{snapshot_id}</span>
+            </div>
+            <div class="audit-row">
+                <span class="audit-label">Payload SHA256</span>
+                <span class="audit-value">{payload_sha256}</span>
+            </div>
+            <div class="audit-row">
+                <span class="audit-label">Scoring config hash</span>
+                <span class="audit-value">{scoring_config_hash}</span>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html
+
+
+class AlertsPdfExportRequest(BaseModel):
+    source: str = "RNMC"
+    status: str = "OPEN"
+    tiers: Optional[List[str]] = None
+    severity: Optional[str] = None
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+    limit: int = 500
+    snapshot_id: Optional[UUID] = None
+
+@router.post("/alerts/prioritize")
+async def prioritize_alerts(
+    source: str = "RNMC",
+    ai: bool = True,
+    bg_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Fase 3: Ejecuta el scoring de prioridad para todas las alertas OPEN de una fuente.
+    """
+    alerts = db.query(IntelligenceAlert).filter(
+        IntelligenceAlert.source == source,
+        IntelligenceAlert.status == "OPEN"
+    ).all()
+    
+    count = 0
+    for alert in alerts:
+        score_res = compute_action_score(alert)
+        for k, v in score_res.items():
+            setattr(alert, k, v)
+        
+        if ai and bg_tasks:
+            bg_tasks.add_task(process_alert_ai, alert.id, db)
+        
+        count += 1
+    
+    db.commit()
+    return {"status": "success", "prioritized_count": count, "ai_tasks_queued": ai}
+
+
+@router.post("/alerts/snapshot")
+async def create_alerts_snapshot(
+    req: AlertsSnapshotRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Crea un snapshot inmutable del ranking de alertas (sin PII) y lo persiste en DB.
+    """
+    query = _build_alerts_query(
+        db=db,
+        source=req.source,
+        status=req.status,
+        severity=req.severity,
+        tiers=req.tiers,
+        from_date=req.from_date,
+        to_date=req.to_date,
+        limit=req.limit,
+    )
+    alerts = query.all()
+    rows = [_serialize_alert_for_export(a) for a in alerts]
+    scoring_config = get_scoring_config()
+
+    filters = {
+        "source": req.source,
+        "status": req.status,
+        "tiers": req.tiers,
+        "severity": req.severity,
+        "from": req.from_date,
+        "to": req.to_date,
+        "limit": req.limit,
+    }
+
+    snapshot = _create_snapshot_from_rows(
+        db=db,
+        source=req.source,
+        filters=filters,
+        rows=rows,
+        scoring_config=scoring_config,
+    )
+
+    return {
+        "snapshot_id": str(snapshot.id),
+        "sha256": snapshot.payload_sha256,
+        "created_at": snapshot.created_at,
+        "source": snapshot.source,
+    }
+
+@router.get("/alerts/{alert_id}")
+async def get_alert_detail(
+    alert_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alerta no encontrada")
+    return alert
+
+@router.post("/alerts/{alert_id}/ack")
+async def acknowledge_alert(
+    alert_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alerta no encontrada")
+    
+    alert.status = "ACK"
+    db.commit()
+    return {"status": "success", "message": "Alerta marcada como reconocida"}
+
+@router.post("/alerts/{alert_id}/dismiss")
+async def dismiss_alert(
+    alert_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alerta no encontrada")
+    
+    alert.status = "DISMISSED"
+    db.commit()
+    return {"status": "success", "message": "Alerta descartada"}
+
+@router.post("/alerts/rnmc/generate")
+async def trigger_rnmc_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # Solo usuarios autenticados
+):
+    """
+    Genera alertas manualmente para el módulo RNMC.
+    """
+    res = generate_rnmc_alerts(db)
+    return res
+
+
+@router.post("/alerts/export/pdf")
+async def export_alerts_pdf(
+    req: AlertsPdfExportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Genera un PDF ejecutivo on-demand para el ranking de alertas.
+    Si no se proporciona snapshot_id, crea un snapshot nuevo y lo usa como evidencia.
+    """
+    if req.snapshot_id:
+        snapshot = db.query(IntelligenceAlertSnapshot).filter(
+            IntelligenceAlertSnapshot.id == req.snapshot_id
+        ).first()
+        if not snapshot:
+            raise HTTPException(status_code=404, detail="Snapshot no encontrado")
+
+        scoring_config = snapshot.scoring_config or get_scoring_config()
+        payload = snapshot.payload_json or {}
+        rows = payload.get("alerts", [])
+        filters = snapshot.filters or {}
+        snapshot_id_str = str(snapshot.id)
+        payload_sha256 = snapshot.payload_sha256
+    else:
+        query = _build_alerts_query(
+            db=db,
+            source=req.source,
+            status=req.status,
+            severity=req.severity,
+            tiers=req.tiers,
+            from_date=req.from_date,
+            to_date=req.to_date,
+            limit=req.limit,
+        )
+        alerts = query.all()
+        rows = [_serialize_alert_for_export(a) for a in alerts]
+        scoring_config = get_scoring_config()
+        filters = {
+            "source": req.source,
+            "status": req.status,
+            "tiers": req.tiers,
+            "severity": req.severity,
+            "from": req.from_date,
+            "to": req.to_date,
+            "limit": req.limit,
+        }
+        snapshot = _create_snapshot_from_rows(
+            db=db,
+            source=req.source,
+            filters=filters,
+            rows=rows,
+            scoring_config=scoring_config,
+        )
+        snapshot_id_str = str(snapshot.id)
+        payload_sha256 = snapshot.payload_sha256
+
+    html = _build_alerts_pdf_html(
+        rows=rows,
+        scoring_config=scoring_config,
+        snapshot_id=snapshot_id_str,
+        payload_sha256=payload_sha256,
+        filters=filters,
+    )
+
+    css = CSS(
+        string="""
+        @page { size: A4; margin: 2cm; }
+    """
+    )
+    pdf_io = BytesIO()
+    HTML(string=html).write_pdf(pdf_io, stylesheets=[css])
+    pdf_io.seek(0)
+
+    filename = f"alerts_ranking_{filters.get('source', 'RNMC')}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return StreamingResponse(
+        pdf_io,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/alerts/scoring-config")
+async def get_alerts_scoring_config(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Devuelve la configuración actual de scoring (pesos y umbrales) para transparencia en UI.
+    """
+    return get_scoring_config()
+
+@router.get("/reports/{report_run_id}")
+async def get_report_detail(
+    report_run_id: int,
+    db: Session = Depends(get_db)
+):
+    report = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    return report
+
+@router.post("/reports/{report_run_id}/export/pdf")
+async def generate_report_pdf(
+    report_run_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Genera PDF si no existe y devuelve metadatos + enlace seguro.
+    """
+    report = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    
+    # Generar PDF si no existe
+    pdf_path = PdfReportService.generate_pdf(db, report)
+    
+    # Generar token de descarga de un solo uso
+    token_obj = DistributionService.generate_secure_token(db, report_run_id)
+    base_url = str(request.base_url).rstrip('/')
+    secure_link = f"{base_url}/api/intelligence/reports/{report_run_id}/export/pdf?token={token_obj.token}"
+    
+    # Convertir generated_at a hora de Bogotá (UTC-5)
+    from datetime import timedelta
+    generated_at_bogota = (report.pdf_generated_at - timedelta(hours=5)).isoformat() if report.pdf_generated_at else None
+    
+    return {
+        "status": "success",
+        "report_run_id": report.id,
+        "report_type": report.report_type,
+        "period_key": report.period_key,
+        "generated_at_bogota": generated_at_bogota,
+        "pdf_sha256": report.pdf_sha256,
+        "download_link": secure_link
+    }
+
+
+@router.get("/reports/{report_run_id}/export/pdf")
+async def download_report_pdf(
+    report_run_id: int,
+    token: str = None,
+    db: Session = Depends(get_db),
+    request: Request = None,
+    current_user: User = Depends(get_current_user) # FastAPI will try to resolve this
+):
+    """
+    Descarga segura de PDF: requiere JWT o un Token válido.
+    """
+    report = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
+    if not report or not report.pdf_path or not os.path.exists(report.pdf_path):
+        raise HTTPException(status_code=404, detail="PDF no disponible. Genérelo primero.")
+    
+    token_db = None
+    user_id = None
+    
+    # 1. Validación por Token (si viene)
+    if token:
+        from db.models_intelligence import ReportDownloadToken
+        token_db = db.query(ReportDownloadToken).filter(
+            ReportDownloadToken.token == token,
+            ReportDownloadToken.report_run_id == report_run_id,
+            ReportDownloadToken.expires_at > datetime.now(),
+            ReportDownloadToken.is_used == False
+        ).first()
+        
+        if not token_db:
+             # Si el token es inválido, intentamos ver si tiene sesión activa (FastAPI ya lo hizo en Depends)
+             if not current_user:
+                 raise HTTPException(status_code=403, detail="Token inválido o expirado y sin sesión activa.")
+    
+    # 2. Validación por Sesión (si no hay token o falló)
+    if not token_db:
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Se requiere autenticación")
+        user_id = current_user.id
+
+    # 3. Auditoría
+    DistributionService.audit_download(
+        db, 
+        report_run_id, 
+        user_id=user_id, 
+        token_id=token_db.id if token_db else None,
+        ip=request.client.host if request else None
+    )
+    
+    # Si uso token, marcarlo como usado (Un solo uso según requerimiento)
+    if token_db:
+        token_db.is_used = True
+        db.commit()
+
+    return FileResponse(
+        report.pdf_path,
+        media_type='application/pdf',
+        filename=os.path.basename(report.pdf_path)
+    )
+
+@router.post("/reports/{report_run_id}/notify")
+async def notify_report_results(
+    report_run_id: int,
+    group: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Dispara la notificación manual/automática a un grupo.
+    """
+    # 1. Asegurar que existe PDF
+    report = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
+    if not report or not report.pdf_path:
+         raise HTTPException(status_code=400, detail="Debe generar el PDF antes de notificar.")
+    
+    base_url = str(request.base_url).rstrip("/")
+    # Generar un token para el link de distribución
+    token_obj = DistributionService.generate_secure_token(db, report_run_id)
+    secure_link = f"{base_url}/api/intelligence/reports/{report_run_id}/export/pdf?token={token_obj.token}"
+    
+    result = DistributionService.notify_group(db, report_run_id, group, secure_link)
+    result["secure_link_generated"] = secure_link
+    return result
 
 @router.get("/ingest/status/{log_id}")
 async def get_ingestion_status(log_id: int, db: Session = Depends(get_db)):
@@ -404,20 +1684,61 @@ async def get_national_stats(municipio: str = "JAMUNDI", anio: int = 2025, db: S
         NationalCrimeStats.anio == anio
     ).group_by(NationalCrimeStats.mes).order_by(NationalCrimeStats.mes).all()
 
-    # Formatear respuesta
+    # 5. LÓGICA DE COMPARATIVA (WoW / YoY)
+    # Obtener totales del año anterior (mismo municipio)
+    yoy_data = db.query(
+        NationalCrimeStats.tipo_delito,
+        func.sum(NationalCrimeStats.cantidad).label("total")
+    ).filter(
+        NationalCrimeStats.municipio_normalizado == target_municipio,
+        NationalCrimeStats.anio == anio - 1
+    ).group_by(NationalCrimeStats.tipo_delito).all()
+    yoy_dict = {row.tipo_delito: int(row.total) for row in yoy_data}
+
+    # Formatear respuesta con comparativas
     result_data = []
     for row in local_data:
+        local_total = int(row.total)
+        yoy_total = yoy_dict.get(row.tipo_delito, 0)
+        
+        # Variación YoY
+        yoy_var = local_total - yoy_total
+        yoy_pct = round((yoy_var / yoy_total * 100), 1) if yoy_total > 0 else (100.0 if local_total > 0 else 0.0)
+
         result_data.append({
             "delito": row.tipo_delito,
-            "local": int(row.total),
-            "nacional_avg": round(avg_dict.get(row.tipo_delito, 0), 2)
+            "local": local_total,
+            "nacional_avg": round(avg_dict.get(row.tipo_delito, 0), 2),
+            "yoy_total": yoy_total,
+            "yoy_var": yoy_var,
+            "yoy_pct": yoy_pct
+        })
+
+    # 6. Datos Específicos Fuerza Pública
+    fp_data = db.query(
+        NationalCrimeStats.accion,
+        NationalCrimeStats.institucion,
+        func.sum(NationalCrimeStats.cantidad).label("total")
+    ).filter(
+        NationalCrimeStats.municipio_normalizado == target_municipio,
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.tipo_delito == "Afectación Fuerza Pública"
+    ).group_by(NationalCrimeStats.accion, NationalCrimeStats.institucion).all()
+
+    fuerza_publica_summary = []
+    for fp in fp_data:
+        fuerza_publica_summary.append({
+            "accion": fp.accion,
+            "institucion": fp.institucion,
+            "total": int(fp.total)
         })
 
     return {
         "municipio": municipio,
         "anio": anio,
         "summary": result_data,
-        "trend": [{"mes": row.mes, "cantidad": int(row.total)} for row in trend_data]
+        "trend": [{"mes": row.mes, "cantidad": int(row.total)} for row in trend_data],
+        "fuerza_publica": fuerza_publica_summary
     }
 
 @router.get("/municipios")
@@ -446,6 +1767,36 @@ async def get_available_years(db: Session = Depends(get_db)):
     from sqlalchemy import func
     anios = db.query(NationalCrimeStats.anio).distinct().order_by(NationalCrimeStats.anio.desc()).all()
     return [a.anio for a in anios]
+
+@router.get("/territorial-context")
+async def get_territorial_context(fuente: str = "ASPERSION", db: Session = Depends(get_db)):
+    """
+    Retorna datos agregados de contexto territorial (ej: Aspersión) para el Valle del Cauca.
+    """
+    # 1. Total por departamento (Valle = 76)
+    valle_data = db.query(
+        TerritorialContext.municipio,
+        func.sum(TerritorialContext.cantidad).label("total")
+    ).filter(
+        TerritorialContext.fuente_id == fuente,
+        TerritorialContext.codigo_depto == 76
+    ).group_by(TerritorialContext.municipio).order_by(func.sum(TerritorialContext.cantidad).desc()).all()
+
+    # 2. Serie temporal regional
+    trend_valle = db.query(
+        TerritorialContext.anio,
+        func.sum(TerritorialContext.cantidad).label("total")
+    ).filter(
+        TerritorialContext.fuente_id == fuente,
+        TerritorialContext.codigo_depto == 76
+    ).group_by(TerritorialContext.anio).order_by(TerritorialContext.anio).all()
+
+    return {
+        "fuente": fuente,
+        "region": "VALLE DEL CAUCA",
+        "top_municipios": [{"municipio": r.municipio, "total": float(r.total)} for r in valle_data],
+        "trend": [{"anio": r.anio, "total": float(r.total)} for r in trend_valle]
+    }
 
 @router.get("/insights")
 async def get_intelligence_insights(municipio: str = "JAMUNDI", anio: int = 2025, db: Session = Depends(get_db)):

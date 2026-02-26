@@ -116,46 +116,57 @@
 
     <div class="summary-grid">
         <div class="card">
-            <div class="label">Total Incidentes</div>
+            <div class="label">Incidentes {{ periodo }}</div>
             <div class="value">{{ total_incidentes }}</div>
+            <div style="font-size: 9pt; color: {% if var_total_pct > 0 %}#b91c1c{% else %}#15803d{% endif %}; font-weight: bold;">
+                {{ "▲" if var_total_pct > 0 else "▼" }} {{ var_total_pct }}% YoY
+            </div>
         </div>
         <div class="card">
-            <div class="label">Tasa Homicidios</div>
-            <div class="value">{{ tasa_homicidios }}</div>
+            <div class="label">Año Anterior</div>
+            <div class="value">{{ total_yoy }}</div>
         </div>
         <div class="card">
-            <div class="label">Zonas Críticas</div>
+            <div class="label">Sectores con Reporte</div>
             <div class="value">{{ total_barrios }}</div>
         </div>
     </div>
 
-    <h2>Distribución por Tipo de Delito</h2>
+    <h2>Análisis por Tipo de Delito (Comparativa YoY)</h2>
     <table>
         <thead>
             <tr>
                 <th>Categoría</th>
-                <th>Cantidad</th>
-                <th>Porcentaje</th>
+                <th>Actual</th>
+                <th>Año Anterior</th>
+                <th>Variación %</th>
+                <th>% del Total</th>
             </tr>
         </thead>
         <tbody>
             {% for item in delitos %}
             <tr>
-                <td>{{ item.name }}</td>
+                <td style="font-weight: bold;">{{ item.name }}</td>
                 <td>{{ item.value }}</td>
+                <td>{{ item.prev_value }}</td>
+                <td style="color: {% if item.var_pct > 0 %}#b91c1c{% else %}#15803d{% endif %}; font-weight: bold;">
+                    {{ "+" if item.var_pct > 0 else "" }}{{ item.var_pct }}%
+                </td>
                 <td>{{ item.percent }}%</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <h2>Top 5 Barrios con Mayor Incidencia</h2>
+    <div style="page-break-before: always;"></div>
+
+    <h2>Focalización Territorial: Top Barrios</h2>
     <table>
         <thead>
             <tr>
                 <th>Barrio / Vereda</th>
                 <th>No. Incidentes</th>
-                <th>Nivel de Riesgo</th>
+                <th>Nivel de Incidencia</th>
             </tr>
         </thead>
         <tbody>
@@ -164,7 +175,7 @@
                 <td>{{ item.name }}</td>
                 <td>{{ item.delitos }}</td>
                 <td>
-                    {% if item.delitos > 10 %}
+                    {% if item.delitos > 5 %}
                     <span class="tag tag-high">ALTO</span>
                     {% else %}
                     <span class="tag tag-medium">MEDIO</span>

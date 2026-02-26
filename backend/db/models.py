@@ -23,6 +23,7 @@ def create_tables():
         from db.models_intelligence import NationalCrimeStats, IngestionLog
         from db.models_dq import DqReport, DqIssue
         from db.models_mindefensa import MindefensaAsset
+        from db.models_alerts import IntelligenceAlert
         
         Base.metadata.create_all(bind=engine)
         # Asegurar que PostGIS existe y la columna también
@@ -34,6 +35,15 @@ def create_tables():
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS dq_report_id UUID;"))
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS ingestion_id UUID;"))
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS source_name VARCHAR(100);"))
+                
+                # Columnas para Inteligencia / Fuerza Pública
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS institucion VARCHAR(100);"))
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS accion VARCHAR(100);"))
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS categoria_grado VARCHAR(100);"))
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS codigo_dane VARCHAR(20);"))
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS barrio VARCHAR(150);"))
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS semana INTEGER;"))
+                
                 conn.commit()
                 print("PostGIS y columnas de trazabilidad verificadas con éxito.")
             except Exception as e:

@@ -1,0 +1,20 @@
+﻿import pandas as pd
+import unicodedata
+import hashlib
+import logging
+import re
+from datetime import datetime, date
+from typing import List, Dict, Generator, Optional, Tuple
+import io
+from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert
+from db.models_intelligence import RNMCMeasure, IngestionFile, RNMCStatusHistory
+
+logger = logging.getLogger("sisc_api")
+
+# --- HeurÃ­stica robusta para localizar la tabla RNMC en cualquier hoja ---
+
+REQUIRED_KEYS = {"FECHA_ACTUACION", "MEDIDA", "ESTADO"}  # MÃ­nimo obligatorio
+ID_KEYS = {"EXPEDIENTE", "ID_REGISTRA", "ID_REGISTRO"}   # AlgÃºn identificador
+
+ALIASES = {

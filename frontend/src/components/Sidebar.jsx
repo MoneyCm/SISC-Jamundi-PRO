@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle2, Zap, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle2, Zap, ShieldCheck, ShieldAlert, Layers, Bell } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic }) => {
     const menuItems = isPublic ? [
@@ -14,6 +14,9 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
 
         { id: 'map', label: 'Mapa del Delito', icon: Map, category: 'ANÁLISIS Y ESTRATEGIA' },
         { id: 'intelligence', label: 'Insights IA', icon: Globe, category: 'ANÁLISIS Y ESTRATEGIA' },
+        { id: 'regional_context', label: 'Contexto Regional', icon: Layers, category: 'ANÁLISIS Y ESTRATEGIA' },
+        { id: 'alerts', label: 'Muro de Alertas', icon: Bell, category: 'ANÁLISIS Y ESTRATEGIA' },
+        { id: 'rnmc', label: 'RNMC / Medidas', icon: FileText, category: 'ANÁLISIS Y ESTRATEGIA' },
 
         { id: 'data', label: 'Bodega de Datos', icon: Database, category: 'GESTIÓN Y SALIDA' },
         { id: 'reports', label: 'Boletines y Reportes', icon: FileText, category: 'GESTIÓN Y SALIDA' },

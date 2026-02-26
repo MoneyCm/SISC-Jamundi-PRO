@@ -18,59 +18,91 @@ template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templat
 env = Environment(loader=FileSystemLoader(template_dir))
 
 @router.get("/generar-boletin", dependencies=[Depends(analyst_or_admin)])
-async def generar_boletin_pdf(db: Session = Depends(get_db)):
+async def generar_boletin_pdf(anio: int = None, db: Session = Depends(get_db)):
     """
-    Genera un boletín de seguridad oficial en PDF con estadísticas actuales.
+    Genera un boletín de seguridad oficial en PDF con estadísticas actuales y comparativas YoY.
     """
-    return {"message": "Generación de PDF deshabilitada temporalmente por falta de librería WeasyPrint"}
-    # try:
-    #     # 1. Recopilar KPI Generales
-    #     total_incidentes = db.query(Event).count()
-    #     tasa_homicidios_raw = db.query(func.count(Event.id)).join(EventType).filter(EventType.category == "HOMICIDIO").scalar() or 0
-    #     tasa_homicidios = round((tasa_homicidios_raw / 150000) * 100000, 2)
+    if not anio:
+        anio = datetime.now().year
+
+    try:
+        from db.models_intelligence import NationalCrimeStats
         
-    #     # 2. Distribución por Delito (Top 5)
-    #     delitos_query = db.query(
-    #         EventType.category, 
-    #         func.count(Event.id).label('total')
-    #     ).join(Event).group_by(EventType.category).order_by(func.count(Event.id).desc()).limit(5).all()
+        # 1. Recopilar Datos Año Actual
+        local_data = db.query(
+            NationalCrimeStats.tipo_delito,
+            func.sum(NationalCrimeStats.cantidad).label("total")
+        ).filter(
+            NationalCrimeStats.municipio_normalizado == "JAMUNDI",
+            NationalCrimeStats.anio == anio
+        ).group_by(NationalCrimeStats.tipo_delito).all()
+
+        total_incidentes = sum(int(row.total) for row in local_data)
         
-    #     delitos_data = []
-    #     for d in delitos_query:
-    #         percent = round((d.total / total_incidentes * 100), 1) if total_incidentes > 0 else 0
-    #         delitos_data.append({"name": d.category, "value": d.total, "percent": percent})
+        # 2. Datos Año Anterior (YoY)
+        yoy_data = db.query(
+            NationalCrimeStats.tipo_delito,
+            func.sum(NationalCrimeStats.cantidad).label("total")
+        ).filter(
+            NationalCrimeStats.municipio_normalizado == "JAMUNDI",
+            NationalCrimeStats.anio == anio - 1
+        ).group_by(NationalCrimeStats.tipo_delito).all()
+        yoy_dict = {row.tipo_delito: int(row.total) for row in yoy_data}
+        total_yoy = sum(yoy_dict.values())
 
-    #     # 3. Top Barrios
-    #     barrios_query = db.query(
-    #         Event.barrio, 
-    #         func.count(Event.id).label('total')
-    #     ).group_by(Event.barrio).order_by(func.count(Event.id).desc()).limit(5).all()
+        # 3. Preparar lista de delitos con comparativa
+        delitos_data = []
+        for d in local_data:
+            c_val = int(d.total)
+            p_val = yoy_dict.get(d.tipo_delito, 0)
+            var_pct = round(((c_val - p_val) / p_val * 100), 1) if p_val > 0 else 100.0
+            delitos_data.append({
+                "name": d.tipo_delito,
+                "value": c_val,
+                "prev_value": p_val,
+                "percent": round((c_val / total_incidentes * 100), 1) if total_incidentes > 0 else 0,
+                "var_pct": var_pct
+            })
         
-    #     barrios_data = [{"name": b.barrio or "Sin especificar", "delitos": b.total} for b in barrios_query]
+        delitos_data = sorted(delitos_data, key=lambda x: x['value'], reverse=True)
 
-    #     # 4. Renderizar HTML con Jinja2
-    #     template = env.get_template("boletin.html")
-    #     html_content = template.render(
-    #         periodo="Histórico Actualizado",
-    #         fecha_generacion=datetime.now().strftime("%d/%m/%Y %H:%M"),
-    #         total_incidentes=total_incidentes,
-    #         tasa_homicidios=tasa_homicidios,
-    #         total_barrios=len(barrios_query),
-    #         delitos=delitos_data,
-    #         barrios=barrios_data
-    #     )
+        # 4. Top Barrios
+        barrios_query = db.query(
+            NationalCrimeStats.barrio,
+            func.sum(NationalCrimeStats.cantidad).label("total")
+        ).filter(
+            NationalCrimeStats.municipio_normalizado == "JAMUNDI",
+            NationalCrimeStats.anio == anio
+        ).group_by(NationalCrimeStats.barrio).order_by(func.sum(NationalCrimeStats.cantidad).desc()).limit(10).all()
+        
+        barrios_data = []
+        for b in barrios_query:
+            if not b.barrio: continue
+            barrios_data.append({"name": b.barrio, "delitos": int(b.total)})
 
-    #     # 5. Convertir a PDF con WeasyPrint
-    #     # pdf_file = io.BytesIO()
-    #     # HTML(string=html_content).write_pdf(pdf_file)
-    #     # pdf_file.seek(0)
+        # 5. Renderizar HTML
+        template = env.get_template("boletin.html")
+        html_content = template.render(
+            periodo=f"Anual {anio}",
+            fecha_generacion=datetime.now().strftime("%d/%m/%Y %H:%M"),
+            total_incidentes=total_incidentes,
+            total_yoy=total_yoy,
+            var_total_pct=round(((total_incidentes - total_yoy) / total_yoy * 100), 1) if total_yoy > 0 else 0,
+            total_barrios=len(barrios_data),
+            delitos=delitos_data,
+            barrios=barrios_data
+        )
 
-    #     # return StreamingResponse(
-    #     #     pdf_file, 
-    #     #     media_type="application/pdf",
-    #     #     headers={"Content-Disposition": "attachment; filename=boletin_seguridad_jamundi.pdf"}
-    #     # )
+        # Nota: WeasyPrint tiene problemas de DLLs en Windows. 
+        # Como alternativa para este entorno, devolvemos el HTML para previsualización 
+        # o usamos una técnica de impresión si estuviera disponible.
+        # Por ahora, habilitamos el retorno del HTML oficial para que el frontend lo maneje o lo imprima.
+        return StreamingResponse(
+            io.BytesIO(html_content.encode()), 
+            media_type="text/html",
+            headers={"Content-Disposition": f"inline; filename=boletin_{anio}.html"}
+        )
 
-    # except Exception as e:
-    #     print(f"Error generando PDF: {e}")
-    #     raise HTTPException(status_code=500, detail=f"No se pudo generar el reporte: {str(e)}")
+    except Exception as e:
+        print(f"Error generando boletín: {e}")
+        raise HTTPException(status_code=500, detail=f"No se pudo generar el reporte: {str(e)}")

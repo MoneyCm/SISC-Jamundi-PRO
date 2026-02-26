@@ -17,6 +17,9 @@ import DataQuality from './pages/DataQuality';
 import SiscAIChatbot from './components/SiscAIChatbot';
 import UniversalIngesta from './pages/UniversalIngesta';
 import MindefensaMonitor from './pages/MindefensaMonitor';
+import RegionalContext from './pages/RegionalContext';
+import RNMCModule from './pages/RNMCModule';
+import AlertsFeed from './pages/AlertsFeed';
 
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -28,6 +31,7 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true); // New state
   const [selectedReportId, setSelectedReportId] = useState(null); // State for sharing DQ reports
   const [selectedDataset, setSelectedDataset] = useState({ code: 'SECUESTRO', label: 'Secuestro' });
+  const [rnmcFilters, setRnmcFilters] = useState(null);
 
   const handleIngestDataset = (code, label) => {
     setSelectedDataset({ code, label });
@@ -136,6 +140,12 @@ const App = () => {
         return <MindefensaMonitor onIngest={handleIngestDataset} />; // Render MindefensaMonitor component
       case 'intelligence':
         return <IntelligenceModule />;
+      case 'regional_context':
+        return <RegionalContext />;
+      case 'alerts':
+        return <AlertsFeed onPageChange={setActivePage} setExternalFilters={setRnmcFilters} />;
+      case 'rnmc':
+        return <RNMCModule externalFilters={rnmcFilters} clearExternalFilters={() => setRnmcFilters(null)} />;
       case 'dq':
         return <DataQuality initialReportId={selectedReportId} />;
       case 'ingesta_universal':

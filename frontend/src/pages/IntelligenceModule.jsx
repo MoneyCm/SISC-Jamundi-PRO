@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, TrendingUp, Upload, Activity, BarChart2, Clock, ArrowUpRight, Brain } from "lucide-react";
+import { Loader2, TrendingUp, Upload, Activity, BarChart2, Clock, ArrowUpRight, Brain, ShieldAlert, Download } from "lucide-react";
 import {
     BarChart,
     Bar,
@@ -36,7 +36,7 @@ const IntelligenceModule = () => {
     const [selectedYear, setSelectedYear] = useState(2025);
     const [selectedMunicipio, setSelectedMunicipio] = useState("JAMUNDI");
     const [municipios, setMunicipios] = useState([]);
-    const [availableYears, setAvailableYears] = useState([2025, 2024, 2023]);
+    const [availableYears, setAvailableYears] = useState([2026, 2025, 2024, 2023]);
     const [stats, setStats] = useState({ summary: [], trend: [] });
     const [insight, setInsight] = useState(null);
     const [insightLoading, setInsightLoading] = useState(false);
@@ -112,7 +112,7 @@ const IntelligenceModule = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const url = `${API_BASE_URL}/api/intelligence/stats?municipio=${selectedMunicipio}&anio=${selectedYear}`;
+            const url = `${API_BASE_URL}/intelligence/stats?municipio=${selectedMunicipio}&anio=${selectedYear}`;
             console.log("Fetching stats from:", url);
 
             const response = await fetch(url, {
@@ -141,7 +141,7 @@ const IntelligenceModule = () => {
         setInsightLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const url = `${API_BASE_URL}/api/intelligence/insights?municipio=${selectedMunicipio}&anio=${selectedYear}`;
+            const url = `${API_BASE_URL}/intelligence/insights?municipio=${selectedMunicipio}&anio=${selectedYear}`;
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -163,7 +163,7 @@ const IntelligenceModule = () => {
     const fetchMunicipios = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/api/intelligence/municipios`, {
+            const response = await fetch(`${API_BASE_URL}/intelligence/municipios`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -182,7 +182,7 @@ const IntelligenceModule = () => {
     const fetchYears = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/api/intelligence/years`, {
+            const response = await fetch(`${API_BASE_URL}/intelligence/years`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -219,6 +219,26 @@ const IntelligenceModule = () => {
         fetchStats();
     }, [selectedMunicipio, selectedYear]);
 
+    const downloadBoletin = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const url = `${API_BASE_URL}/reportes/generar-boletin?anio=${selectedYear}`;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const html = await response.text();
+                const blob = new Blob([html], { type: 'text/html' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `Boletin_SISC_${selectedYear}.html`;
+                link.click();
+            }
+        } catch (error) {
+            console.error("Error downloading bulletin:", error);
+        }
+    };
+
     useEffect(() => {
         if (stats.summary && stats.summary.length > 0) {
             fetchInsight();
@@ -231,7 +251,7 @@ const IntelligenceModule = () => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/api/intelligence/ingest`, {
+            const response = await fetch(`${API_BASE_URL}/intelligence/ingest`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -245,7 +265,7 @@ const IntelligenceModule = () => {
                 if (logId) {
                     const checkInterval = setInterval(async () => {
                         try {
-                            const statusRes = await fetch(`${API_BASE_URL}/api/intelligence/ingest/status/${logId}`, {
+                            const statusRes = await fetch(`${API_BASE_URL}/intelligence/ingest/status/${logId}`, {
                                 headers: { 'Authorization': `Bearer ${token}` }
                             });
                             if (statusRes.ok) {
@@ -300,7 +320,7 @@ const IntelligenceModule = () => {
 
         try {
             const token = localStorage.getItem('token');
-            const url = `${API_BASE_URL}/api/intelligence/upload`;
+            const url = `${API_BASE_URL}/intelligence/upload`;
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -344,6 +364,14 @@ const IntelligenceModule = () => {
                 <div className="flex gap-2">
                     {canManage && (
                         <>
+                            <Button
+                                variant="outline"
+                                onClick={downloadBoletin}
+                                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                            >
+                                <Download className="mr-2 h-4 w-4" />
+                                Descargar Boletín YoY
+                            </Button>
                             <Button
                                 variant="outline"
                                 onClick={handleAutoIngest}
@@ -551,12 +579,16 @@ const IntelligenceModule = () => {
                                 {item.local}
                                 <span className="text-xs text-slate-400 font-normal ml-2">/ {item.nacional_avg} avg</span>
                             </div>
-                            <p className={`text-xs mt-1 flex items-center ${item.local > item.nacional_avg ? 'text-red-600' : 'text-emerald-600'}`}>
-                                <span className="font-bold mr-1">
-                                    {item.nacional_avg > 0 ? (((item.local - item.nacional_avg) / item.nacional_avg) * 100).toFixed(1) : 0}%
-                                </span>
-                                {item.local > item.nacional_avg ? 'más alto' : 'más bajo'} que el promedio
-                            </p>
+                            <div className="flex flex-col gap-1 mt-2">
+                                <p className={`text-[10px] flex items-center ${item.local > item.nacional_avg ? 'text-red-500' : 'text-emerald-500'}`}>
+                                    <TrendingUp className="mr-1 h-3 w-3" />
+                                    {item.nacional_avg > 0 ? (((item.local - item.nacional_avg) / item.nacional_avg) * 100).toFixed(1) : 0}% vs Nacional
+                                </p>
+                                <p className={`text-[10px] font-bold flex items-center ${item.yoy_pct > 2 ? 'text-red-600' : (item.yoy_pct < -2 ? 'text-emerald-600' : 'text-slate-500')}`}>
+                                    <Activity className="mr-1 h-3 w-3" />
+                                    {item.yoy_pct > 0 ? `+${item.yoy_pct}%` : `${item.yoy_pct}%`} YoY (vs {selectedYear - 1})
+                                </p>
+                            </div>
                         </CardContent>
                     </Card>
                 ))}
@@ -566,6 +598,49 @@ const IntelligenceModule = () => {
                     </Card>
                 )}
             </div>
+
+            {/* Nueva Sección: Afectación Fuerza Pública */}
+            {stats.fuerza_publica && stats.fuerza_publica.length > 0 && (
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="h-8 w-1 bg-indigo-600 rounded-full"></div>
+                        <h2 className="font-black text-slate-800 tracking-tight uppercase text-sm">Afectación a la Fuerza Pública</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {/* Agrupar por Acción (Herido/Asesinado) */}
+                        {['HERIDO', 'ASESINADO'].map(accion => {
+                            const total = stats.fuerza_publica
+                                .filter(item => item.accion === accion)
+                                .reduce((acc, curr) => acc + curr.total, 0);
+
+                            if (total === 0) return null;
+
+                            return (
+                                <Card key={accion} className="relative overflow-hidden group hover:shadow-lg transition-all border-none shadow-sm bg-white">
+                                    <div className={`absolute top-0 left-0 w-full h-1 ${accion === 'ASESINADO' ? 'bg-red-600' : 'bg-orange-400'}`}></div>
+                                    <CardContent className="pt-6">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{accion}</p>
+                                            <ShieldAlert className={accion === 'ASESINADO' ? 'text-red-500' : 'text-orange-500'} size={16} />
+                                        </div>
+                                        <div className="text-3xl font-black text-slate-800 mb-1">{total}</div>
+                                        <div className="space-y-1 mt-3 pt-3 border-t border-slate-50">
+                                            {stats.fuerza_publica
+                                                .filter(item => item.accion === accion)
+                                                .map((item, idx) => (
+                                                    <div key={idx} className="flex justify-between text-[10px] font-bold">
+                                                        <span className="text-slate-500">{item.institucion}</span>
+                                                        <span className="text-slate-800">{item.total}</span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Gráficas Principales */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
