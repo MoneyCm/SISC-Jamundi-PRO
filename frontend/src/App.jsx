@@ -25,25 +25,11 @@ import AccessRequests from './pages/AccessRequests';
 import AuditLog from './pages/AuditLog';
 
 const App = () => {
-  // Inicialización defensiva de estados desde localStorage
-  const getInitialRoles = () => {
-    try {
-      const roles = localStorage.getItem('userRoles');
-      return roles ? JSON.parse(roles) : [];
-    } catch {
-      return [];
-    }
-  };
-
   const [token, setToken] = useState(localStorage.getItem('token'));
-  const [userRoles, setUserRoles] = useState(getInitialRoles());
-  const [dataLevel, setDataLevel] = useState(() => {
-    const dl = localStorage.getItem('dataLevel');
-    return dl ? parseInt(dl) : 1;
-  });
-
-  const [isAuthenticated, setIsAuthenticated] = useState(!!token);
-  const [appMode, setAppMode] = useState(token ? 'authenticated' : 'public');
+  const [userRoles, setUserRoles] = useState([]);
+  const [dataLevel, setDataLevel] = useState(1);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [appMode, setAppMode] = useState('loading'); // Nuevo estado inicial
   const [activePage, setActivePage] = useState('dashboard');
   const [publicActivePage, setPublicActivePage] = useState('hub');
   const [isLoading, setIsLoading] = useState(true);
@@ -57,72 +43,70 @@ const App = () => {
   };
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      // Sincronizar estados si hay token
-      setIsAuthenticated(true);
-      setAppMode('authenticated');
-    }
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
+    const initApp = () => {
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
+        try {
+          const roles = JSON.parse(localStorage.getItem('userRoles') || '[]');
+          const dl = parseInt(localStorage.getItem('dataLevel') || '1');
+          setToken(storedToken);
+          setUserRoles(roles);
+          setDataLevel(dl);
+          setIsAuthenticated(true);
+          setAppMode('authenticated');
+        } catch (e) {
+          localStorage.clear();
+          setAppMode('public');
+        }
+      } else {
+        setAppMode('public');
+      }
+      setTimeout(() => setIsLoading(false), 500);
+    };
+    initApp();
   }, []);
 
   const handleLoginSuccess = (newToken, roles, dl) => {
     setToken(newToken);
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('userRoles', JSON.stringify(roles));
-    localStorage.setItem('dataLevel', dl.toString());
+    setUserRoles(roles || []);
+    setDataLevel(dl || 1);
     setIsAuthenticated(true);
-    setUserRoles(roles);
-    setDataLevel(dl);
     setAppMode('authenticated');
     setActivePage('dashboard');
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('userRoles', JSON.stringify(roles || []));
+    localStorage.setItem('dataLevel', (dl || 1).toString());
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userRoles');
-    localStorage.removeItem('dataLevel');
+    localStorage.clear();
     setToken(null);
     setIsAuthenticated(false);
     setUserRoles([]);
-    setDataLevel(1);
     setAppMode('public');
     setPublicActivePage('hub');
     setActivePage('dashboard');
   };
 
-  const isPublic = appMode === 'public';
-
-  if (isLoading) { // New loading state
+  if (isLoading || appMode === 'loading') {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-slate-500 font-medium">Cargando SISC Jamundí...</p>
+          <p className="text-slate-500 font-medium font-display uppercase tracking-widest text-[10px]">Iniciando SISC Jamundí...</p>
         </div>
       </div>
     );
   }
 
-  useEffect(() => {
-    // Reducción a login solo si estamos en modo autenticado pero realmente no hay credenciales
-    if (!isLoading && !isAuthenticated && appMode === 'authenticated') {
-      const storedToken = localStorage.getItem('token');
-      if (!storedToken) {
-        setAppMode('login');
-      } else {
-        setIsAuthenticated(true);
-      }
-    }
-  }, [isLoading, isAuthenticated, appMode]);
-
   if (appMode === 'login') {
     return <LoginPage
-      onLoginSuccess={(t, r, dl) => handleLoginSuccess(t, r || [], dl || 1)}
+      onLoginSuccess={handleLoginSuccess}
       onBackClick={() => setAppMode('public')}
     />;
   }
+
+  const isPublic = appMode === 'public';
 
   const renderContent = () => {
     if (isPublic) {
