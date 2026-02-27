@@ -12,28 +12,38 @@ def create_tables():
         from db.models_alerts import IntelligenceAlert
         from db.models_auth import User, Role, Permission, AuditLog, AccessRequest
         
-        Base.metadata.create_all(bind=engine)
         with engine.connect() as conn:
             try:
+                # 0. REPARACIÓN PRE-CREACIÓN: Transición Legacy a RBAC v2
+                # Verificamos si la tabla roles existe y si su ID es ENTERO (legacy)
+                check_roles = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'roles' AND column_name = 'id';")).fetchone()
+                
+                if check_roles and check_roles[0] in ('integer', 'int4'):
+                    print("⚠️ ESTRUCTURA LEGACY DETECTADA. Limpiando para migración a UUID...")
+                    # Eliminar tablas en orden de dependencia para evitar errores de FK
+                    conn.execute(text("DROP TABLE IF EXISTS role_permissions CASCADE;"))
+                    conn.execute(text("DROP TABLE IF EXISTS user_roles CASCADE;"))
+                    conn.execute(text("DROP TABLE IF EXISTS access_requests CASCADE;"))
+                    conn.execute(text("DROP TABLE IF EXISTS roles CASCADE;"))
+                    conn.execute(text("DROP TABLE IF EXISTS permissions CASCADE;"))
+                    # No borramos users para no perder datos, pero le quitamos el role_id si lo tiene
+                    conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS role_id;"))
+                    conn.commit()
+                    print("✅ Limpieza completada. Recreando tablas con nueva arquitectura...")
+                
+                # 1. Crear extensiones necesarias
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"))
-                
-                # REPARACIÓN DE TABLA ROLES (Transición Legacy a RBAC v2)
-                # Verificar si la tabla roles tiene 'id' como ENTERO (legacy)
-                res = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'roles' AND column_name = 'id';")).fetchone()
-                if res and res[0] in ('integer', 'int4'):
-                    print("⚠️ Detectada tabla 'roles' con estructura antigua. Migrando...")
-                    # Eliminar tablas dependientes en orden para recrearlas con UUID
-                    conn.execute(text("DROP TABLE IF EXISTS user_roles CASCADE;"))
-                    conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS role_id CASCADE;"))
-                    conn.execute(text("DROP TABLE IF EXISTS roles CASCADE;"))
-                    conn.commit()
-                    # Recrear todo con la nueva estructura de SQLAlchemy (UUIDs)
-                    Base.metadata.create_all(bind=engine)
-                    print("✅ Tabla 'roles' recreada con UUID.")
-                else:
-                    # Si ya es UUID, asegurar que tenga la columna 'code'
-                    conn.execute(text("ALTER TABLE roles ADD COLUMN IF NOT EXISTS code VARCHAR(50) UNIQUE;"))
+                conn.commit()
+            except Exception as e:
+                print(f"⚠️ Error inicializando extensiones o limpiando tablas: {e}")
+
+        # 2. Ahora sí, crear tablas según modelos actuales (SQLAlchemy)
+        Base.metadata.create_all(bind=engine)
+
+        # 3. Ajustes post-creación (ALTER TABLE para columnas de negocio)
+        with engine.connect() as conn:
+            try:
                 
                 # Otras columnas necesarias
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS location_geom GEOMETRY(Point, 4326);"))
