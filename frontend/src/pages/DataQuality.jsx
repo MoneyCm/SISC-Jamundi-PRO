@@ -345,15 +345,19 @@ const DataQuality = ({ initialReportId }) => {
                                         <div className="space-y-8">
                                             <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b pb-2">Distribución Territorial (Top 10)</h4>
                                             <div className="h-80">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <BarChart data={Object.entries(report.profiles.top_values.MUNICIPIO).map(([k, v]) => ({ name: k, value: v }))} layout="vertical">
-                                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                                        <XAxis type="number" hide />
-                                                        <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
-                                                        <Tooltip cursor={{ fill: '#f8fafc' }} />
-                                                        <Bar dataKey="value" fill="#4f46e5" radius={[0, 4, 4, 0]} barSize={20} />
-                                                    </BarChart>
-                                                </ResponsiveContainer>
+                                                {report.profiles?.top_values?.MUNICIPIO ? (
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <BarChart data={Object.entries(report.profiles.top_values.MUNICIPIO).map(([k, v]) => ({ name: k, value: v }))} layout="vertical">
+                                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                                            <XAxis type="number" hide />
+                                                            <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                                                            <Tooltip cursor={{ fill: '#f8fafc' }} />
+                                                            <Bar dataKey="value" fill="#4f46e5" radius={[0, 4, 4, 0]} barSize={20} />
+                                                        </BarChart>
+                                                    </ResponsiveContainer>
+                                                ) : (
+                                                    <div className="h-full flex items-center justify-center text-slate-400 italic text-xs">Datos territoriales no disponibles para este reporte</div>
+                                                )}
                                             </div>
                                         </div>
 
@@ -404,6 +408,8 @@ const DataQuality = ({ initialReportId }) => {
                                                 <tbody>
                                                     {loadingIssues ? (
                                                         <tr><td colSpan="4" className="text-center py-20"><Loader2 className="animate-spin inline mr-2" /> Analizando muestras...</td></tr>
+                                                    ) : (issues || []).length === 0 ? (
+                                                        <tr><td colSpan="4" className="text-center py-20 text-slate-400 italic">No se encontraron hallazgos específicos</td></tr>
                                                     ) : issues.map(issue => (
                                                         <tr key={issue.id || Math.random()} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                                                             <td className="px-5 py-4">

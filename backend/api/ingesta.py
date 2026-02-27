@@ -258,7 +258,8 @@ from db import crud_dq
 @router.post("/gate/{dataset_code}", dependencies=[Depends(analyst_or_admin)])
 async def upload_with_gate(
     dataset_code: str,
-    file: UploadFile = File(...), 
+    file: UploadFile = File(...),
+    force: bool = False,
     db: Session = Depends(get_db)
 ):
     """
@@ -266,7 +267,7 @@ async def upload_with_gate(
     1. Verifica status en el catálogo MinDefensa.
     2. Ejecuta DQ (Data Quality).
     3. Persiste reporte DQ.
-    4. Bloquea si hay semáforo ROJO.
+    4. Bloquea si hay semáforo ROJO (a menos que force=True).
     5. Carga datos si pasa el gate.
     """
     dataset_code = dataset_code.upper()
@@ -276,7 +277,7 @@ async def upload_with_gate(
     # 0. Verificar si el asset de MinDefensa en el catálogo está actualizado
     from db.models_mindefensa import MindefensaAsset
     asset = db.query(MindefensaAsset).filter(MindefensaAsset.dataset_code == dataset_code).first()
-    if asset and asset.status == "UPDATED":
+    if asset and asset.status == "UPDATED" and not force:
         raise HTTPException(
             status_code=409,
             detail={
@@ -290,8 +291,8 @@ async def upload_with_gate(
     report_data = dq_service.run_dq(contents, file.filename, source_name)
     db_report = crud_dq.create_dq_report(db, report_data)
     
-    # 3. Validar Semáforo
-    if report_data.get("semaforo") == "ROJO":
+    # 3. Validar Semáforo — omitir bloqueo si force=True
+    if report_data.get("semaforo") == "ROJO" and not force:
         raise HTTPException(
             status_code=422, 
             detail={
@@ -304,15 +305,21 @@ async def upload_with_gate(
     
     # 4. Ingesta (Si pasó el gate)
     try:
-        df = pd.read_excel(io.BytesIO(contents), engine="openpyxl")
+        if file.filename.lower().endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents), encoding='utf-8')
+        else:
+            df = pd.read_excel(io.BytesIO(contents), engine="openpyxl")
+            
         # El sistema espera ciertas columnas para Event, aquí usamos el mapeo de Mindefensa
         ingestion_id = uuid.uuid4()
         success_count = 0
         
+        # Asegurar columnas en mayúsculas para el mapeo
+        df.columns = [str(c).strip().upper() for c in df.columns]
+        
         for index, row in df.iterrows():
             try:
                 # Mapeo flexible
-                # Buscamos columnas comunes en MinDefensa: FECHA_HECHO, FECHA, MUNICIPIO, DEPARTAMENTO, etc
                 row_dict = {k.upper(): v for k, v in row.to_dict().items()}
                 
                 fecha_val = row_dict.get('FECHA_HECHO') or row_dict.get('FECHA')

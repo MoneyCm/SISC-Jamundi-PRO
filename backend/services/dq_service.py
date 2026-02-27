@@ -7,15 +7,23 @@ import json
 import unicodedata
 
 # 1. Configuración de Esquema Requerido
+# Columnas núcleo — siempre deben estar presentes
 REQUIRED_COLUMNS = [
-    "FECHA_HECHO", 
-    "COD_DEPTO", 
-    "DEPARTAMENTO", 
-    "COD_MUNI", 
-    "MUNICIPIO", 
-    "DESCRIPCION CONDUCTA", 
+    "FECHA_HECHO",
+    "COD_DEPTO",
+    "DEPARTAMENTO",
+    "COD_MUNI",
+    "MUNICIPIO",
     "CANTIDAD"
 ]
+
+# Columnas opcionales que enriquecen la validación si existen
+OPTIONAL_COLUMNS = ["DESCRIPCION CONDUCTA", "ZONA", "SEXO", "ARMAS MEDIOS"]
+
+# Aliases: si no existe CANTIDAD, buscar estas columnas (en orden) y renombrarlas
+CANTIDAD_ALIASES = ["VICTIMAS", "CANTIDAD_VICTIMAS", "CASOS", "TOTAL"]
+# Columnas que pueden ser inferidas si faltan
+OPTIONAL_INFERRABLE = ["DESCRIPCION CONDUCTA"]
 
 def make_serializable(obj: Any) -> Any:
     """Convierte tipos de numpy/pandas a tipos nativos de Python para JSON."""
@@ -54,23 +62,68 @@ def run_dq(file_bytes: bytes, filename: str, source_name: str = None) -> Dict[st
     Motor de Calidad de Datos (DQ).
     Ejecuta validación de esquema, normalización, reglas de negocio, consistencia y perfilamiento.
     """
-    # 1. Lectura
+    # 1. Lectura con detección de formato agresiva
+    df = None
+    last_error = ""
+    
+    # Intento 1: Excel Moderno (.xlsx)
     try:
         df = pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
     except Exception as e:
+        last_error = str(e)
+        
+    # Intento 2: Excel Antiguo (.xls)
+    if df is None:
+        try:
+            df = pd.read_excel(io.BytesIO(file_bytes), engine="xlrd")
+        except:
+            pass
+            
+    # Intento 3: CSV / Texto Plano (Forzado)
+    if df is None:
+        for enc in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+            try:
+                # sep=None con engine='python' detecta automáticamente el separador (, ; \t |)
+                df = pd.read_csv(io.BytesIO(file_bytes), encoding=enc, sep=None, engine='python')
+                if df is not None and len(df.columns) > 1:
+                    break
+                df = None
+            except:
+                continue
+
+    if df is None:
         return {
             "filename": filename,
-            "error": f"Error leyendo Excel: {str(e)}", 
+            "error": f"Error crítico: El archivo no es un Excel válido ni un CSV legible. Detalles: {last_error}", 
             "schema_ok": False,
             "semaforo": "ROJO",
-            "issues": [{"severity": "ERROR", "field": "FILE", "rule": f"No se pudo leer el archivo: {str(e)}", "count": 1}]
+            "issues": [{"severity": "ERROR", "field": "FILE", "rule": f"Formato no reconocido: {last_error}", "count": 1}]
         }
 
     rows_count = len(df)
-    cols_found = [str(c).strip() for c in df.columns]
-    missing_cols = [c for c in REQUIRED_COLUMNS if c not in cols_found]
-    extra_cols = [c for c in cols_found if c not in REQUIRED_COLUMNS]
+    # Normalizar nombres de columnas (strip de espacios)
+    df.columns = [str(c).strip() for c in df.columns]
+    cols_found = list(df.columns)
 
+    # --- Resolución de alias para CANTIDAD ---
+    if "CANTIDAD" not in cols_found:
+        for alias in CANTIDAD_ALIASES:
+            if alias in cols_found:
+                df = df.rename(columns={alias: "CANTIDAD"})
+                cols_found = list(df.columns)
+                break
+
+    # --- DESCRIPCION CONDUCTA es opcional: si no existe, se crea vacía ---
+    if "DESCRIPCION CONDUCTA" not in cols_found:
+        # Intentar derivarla del nombre del archivo / source
+        conduct_value = source_name.replace("_MINDEFENSA", "").replace("_", " ") if source_name else filename
+        df["DESCRIPCION CONDUCTA"] = conduct_value
+        cols_found = list(df.columns)
+
+    missing_cols = [c for c in REQUIRED_COLUMNS if c not in cols_found]
+    extra_cols = [c for c in cols_found if c not in REQUIRED_COLUMNS and c not in OPTIONAL_COLUMNS
+                  and not c.endswith("_KEY")]
+    
     if missing_cols:
         return {
             "filename": filename,
@@ -80,12 +133,13 @@ def run_dq(file_bytes: bytes, filename: str, source_name: str = None) -> Dict[st
             "extra_cols": extra_cols,
             "score_overall": 0.0,
             "semaforo": "ROJO",
-            "issues": [{"severity": "ERROR", "field": "SCHEMA", "rule": f"Faltan columnas requeridas: {', '.join(missing_cols)}", "count": 1}]
+            "issues": [{"severity": "ERROR", "field": "SCHEMA",
+                        "rule": f"Faltan columnas requeridas: {', '.join(missing_cols)}", "count": 1}]
         }
 
     # 2. Normalización
     df_clean = df.copy()
-    
+
     # Texto y Keys
     text_cols = ["DEPARTAMENTO", "MUNICIPIO", "DESCRIPCION CONDUCTA"]
     for col in text_cols:

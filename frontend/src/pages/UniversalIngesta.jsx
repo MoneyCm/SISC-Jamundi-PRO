@@ -19,7 +19,9 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
     const [reportInfo, setReportInfo] = useState(null);
     const [error, setError] = useState(null);
     const [assetStatus, setAssetStatus] = useState(null);
+    const [forcing, setForcing] = useState(false);
     const fileInputRef = useRef(null);
+    const forceInputRef = useRef(null);
 
     const safeDatasetCode = typeof datasetCode === 'string' ? datasetCode : (datasetCode?.code || "SECUESTRO");
 
@@ -51,7 +53,9 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
         await startUpload(file);
     };
 
-    const startUpload = async (file) => {
+    const startUpload = async (file, force = false) => {
+        if (force) setForcing(true);
+        else setForcing(false);
         setStatus('uploading');
         setError(null);
 
@@ -59,9 +63,11 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
         formData.append('file', file);
         formData.append('source_name', `${safeDatasetCode}_MINDEFENSA`);
 
+        const forceParam = force ? '?force=true' : '';
+
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/ingesta/gate/${safeDatasetCode.toLowerCase()}`, {
+            const response = await fetch(`${API_BASE_URL}/ingesta/gate/${safeDatasetCode.toLowerCase()}${forceParam}`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
@@ -79,7 +85,6 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                 });
             } else if (response.status === 422) {
                 setStatus('rejected');
-                // Manejar tanto el detalle personalizado como el error de validación estándar de FastAPI
                 const detail = data.detail;
                 if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
                     setReportInfo(detail);
@@ -100,8 +105,9 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
             setError(err.message);
             setStatus('idle');
         } finally {
-            // Reset input so the same file can be uploaded again if needed
             if (fileInputRef.current) fileInputRef.current.value = '';
+            if (forceInputRef.current) forceInputRef.current.value = '';
+            setForcing(false);
         }
     };
 
@@ -142,6 +148,14 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                         className="hidden"
                         accept=".xlsx,.xls"
                         onChange={handleFileChange}
+                    />
+                    {/* Input oculto para forzar ingesta */}
+                    <input
+                        type="file"
+                        ref={forceInputRef}
+                        className="hidden"
+                        accept=".xlsx,.xls"
+                        onChange={(e) => { const f = e.target.files[0]; if (f) startUpload(f, true); }}
                     />
                     <div className="bg-slate-100 p-8 rounded-full mb-6 group-hover:bg-indigo-600 transition-all duration-500 group-hover:scale-110 shadow-inner">
                         <Upload className="h-12 w-12 text-slate-400 group-hover:text-white" />
@@ -205,7 +219,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                         </div>
                     </div>
 
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 flex-wrap justify-center">
                         <button
                             onClick={() => setStatus('idle')}
                             className="px-10 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-200 transition-all active:scale-95"
@@ -219,16 +233,24 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                             >
                                 <RefreshCcw size={16} /> Ir al Monitor
                             </button>
-                        ) : reportInfo.report_id && (
-                            <button
-                                onClick={() => {
-                                    setReportId(reportInfo.report_id);
-                                    setActivePage('dq');
-                                }}
-                                className="px-10 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-700 transition-all flex items-center gap-2 shadow-xl shadow-red-200 active:scale-95"
-                            >
-                                <FileSearch size={16} /> Auditoría Detallada
-                            </button>
+                        ) : (
+                            <>
+                                {reportInfo.report_id && (
+                                    <button
+                                        onClick={() => { setReportId(reportInfo.report_id); setActivePage('dq'); }}
+                                        className="px-8 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-700 transition-all flex items-center gap-2 shadow-xl shadow-red-200 active:scale-95"
+                                    >
+                                        <FileSearch size={16} /> Auditoría
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => forceInputRef.current?.click()}
+                                    title="Salta el gate de calidad e ingesta el archivo tal como está"
+                                    className="px-8 py-4 bg-orange-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-orange-600 transition-all flex items-center gap-2 shadow-xl shadow-orange-200 active:scale-95"
+                                >
+                                    <ShieldAlert size={16} /> Forzar Ingesta
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>

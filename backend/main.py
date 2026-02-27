@@ -16,7 +16,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sisc_api")
 
-from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa, users
+from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa, users, policia
 logger.info(f"DEBUG: Intelligence module from: {intelligence.__file__}")
 from db.models import create_tables
 from contextlib import asynccontextmanager
@@ -93,6 +93,7 @@ app.include_router(reportes.router, prefix="/api/reportes", tags=["reportes"])
 app.include_router(ia.router, prefix="/api/ia", tags=["ia"])
 app.include_router(ingesta.router, prefix="/api/ingesta", tags=["ingesta"])
 app.include_router(mindefensa.router, prefix="/api/mindefensa", tags=["mindefensa"])
+app.include_router(policia.router, prefix="/api/policia", tags=["policia"])
 app.include_router(participacion.router, prefix="/api/participacion", tags=["participacion"])
 app.include_router(intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
 app.include_router(dq.router, prefix="/api/dq", tags=["dq"])
