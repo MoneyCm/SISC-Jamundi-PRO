@@ -95,9 +95,13 @@ const App = () => {
     );
   }
 
-  if (!isAuthenticated && appMode === 'authenticated') { // Redirect to login if not authenticated but appMode is 'authenticated'
-    setAppMode('login');
-  }
+  useEffect(() => {
+    // Si estamos en modo autenticado pero no hay token real o no está validado,
+    // mandar a login, pero solo después del primer render para evitar loops.
+    if (!isLoading && !isAuthenticated && appMode === 'authenticated' && !localStorage.getItem('token')) {
+      setAppMode('login');
+    }
+  }, [isLoading, isAuthenticated, appMode]);
 
   if (appMode === 'login') {
     return <LoginPage

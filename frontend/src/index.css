@@ -53,7 +53,7 @@
 
   .glass-card:hover {
     @apply -translate-y-1;
-    border-color: var(--accent-cyan);
+    border-color: var(--accent);
   }
 }
 
