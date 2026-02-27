@@ -1,3 +1,5 @@
+# SISC Jamundí - Sistema de Información para la Seguridad
+# Last Deployment Trigger: 2026-02-27 11:45
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
 from fastapi.exception_handlers import http_exception_handler
