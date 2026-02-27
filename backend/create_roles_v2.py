@@ -47,7 +47,12 @@ def init_db():
         }
 
         print("\n--- Verificando Superusuario ---")
-        admin_user = db.query(User).filter(User.username == admin_data["username"]).first()
+        # Buscar por username O por email (para migración admin -> admin_sisc)
+        admin_user = db.query(User).filter(
+            (User.username == admin_data["username"]) | 
+            (User.email == admin_data["email"])
+        ).first()
+        
         if not admin_user:
             print(f"➕ Creando superusuario: {admin_data['username']}")
             hashed_pwd = get_password_hash(admin_data["password"])
@@ -61,27 +66,28 @@ def init_db():
             )
             db.add(admin_user)
             db.flush()
+        else:
+            print(f"ℹ️ Superusuario encontrado (ID: {admin_user.id}). Asegurando credenciales...")
+            # Forzar username a admin_sisc si era diferente (Migración)
+            if admin_user.username != admin_data["username"]:
+                print(f"🔄 Migrando username: {admin_user.username} -> {admin_data['username']}")
+                admin_user.username = admin_data["username"]
             
-            # Asignar roles
-            for code in admin_data["role_codes"]:
+            # Asegurar contraseña correcta (admin_password)
+            admin_user.password_hash = get_password_hash(admin_data["password"])
+            admin_user.is_active = True
+            db.flush()
+            
+        # Asignar roles (común para creación y update)
+        current_role_codes = [r.code for r in admin_user.roles]
+        for code in admin_data["role_codes"]:
+            if code not in current_role_codes:
                 role = role_map.get(code)
                 if role:
                     admin_user.roles.append(role)
-            db.commit()
-        else:
-            print(f"ℹ️ Superusuario verificado: {admin_user.username}")
-            # Asegurar contraseña correcta (admin_password)
-            admin_user.password_hash = get_password_hash(admin_data["password"])
-            
-            # Asegurar que tiene los roles correctos si es necesario
-            current_role_codes = [r.code for r in admin_user.roles]
-            for code in admin_data["role_codes"]:
-                if code not in current_role_codes:
-                    role = role_map.get(code)
-                    if role:
-                        admin_user.roles.append(role)
-                        print(f"➕ Rol {code} asignado a admin_sisc")
-            db.commit()
+                    print(f"➕ Rol {code} asignado a {admin_user.username}")
+        
+        db.commit()
 
         print("\n✅ ¡Inicialización completada con éxito!")
 
