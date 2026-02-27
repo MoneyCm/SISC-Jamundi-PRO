@@ -18,26 +18,22 @@ def create_tables():
                 # Verificamos si la tabla roles existe y si su ID es ENTERO (legacy)
                 check_roles = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'roles' AND column_name = 'id';")).fetchone()
                 
-                # También verificamos user_roles por si acaso
-                check_user_roles = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'user_roles' AND column_name = 'role_id';")).fetchone()
+                # Verificar si la tabla users tiene la nueva columna full_name
+                check_users_new = conn.execute(text("SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'full_name';")).fetchone()
                 
                 legacy_detected = False
                 if check_roles and check_roles[0] in ('integer', 'int4'): legacy_detected = True
-                if check_user_roles and check_user_roles[0] in ('integer', 'int4'): legacy_detected = True
+                if not check_users_new: legacy_detected = True # Si no tiene full_name, es estructura antigua
                 
                 if legacy_detected:
-                    print("🚨 ESTRUCTURA LEGACY CRÍTICA DETECTADA. Iniciando limpieza total de Auth...")
-                    # Forzar borrado de todo lo que use IDs de Roles/Usuarios antiguos
+                    print("🚨 ESTRUCTURA LEGACY CRÍTICA DETECTADA (Roles o Usuarios antiguos). Limpiando...")
+                    # Forzar borrado de todo el subsistema de Auth para recrearlo limpio
                     tables_to_drop = [
                         "role_permissions", "user_roles", "access_requests", 
-                        "audit_log", "roles", "permissions", "user_permissions"
+                        "audit_log", "roles", "permissions", "user_permissions", "users"
                     ]
                     for table in tables_to_drop:
                         conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE;"))
-                    
-                    # Limpiar la tabla users de columnas legacy
-                    conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS role_id CASCADE;"))
-                    conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_admin CASCADE;"))
                     
                     conn.commit()
                     print("✅ Tablas legacy eliminadas. El sistema las recreará con UUID.")
