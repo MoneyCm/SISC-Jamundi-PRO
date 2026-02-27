@@ -24,6 +24,7 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     # Crear tablas al iniciar de forma segura
     try:
+        logger.info("🚀 SISTEMA INICIANDO - MODO MIGRACIÓN ACTIVADO 🚀")
         logger.info("Iniciando conexión con la base de datos...")
         create_tables()
         logger.info("Tablas de base de datos verificadas/creadas con éxito.")
