@@ -121,17 +121,7 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                 </div>
             </div>
 
-            {/* Chatbot Floating Banner Placeholder */}
-            <div className="fixed bottom-8 right-8 z-50">
-                <div className="relative">
-                    <div className="absolute -top-12 right-0 bg-white px-4 py-2 rounded-xl shadow-lg border border-slate-100 text-xs font-bold text-slate-700 animate-bounce whitespace-nowrap">
-                        ¿Cómo puedo ayudarte hoy? 🤖
-                    </div>
-                    <button className="bg-primary hover:bg-primary-600 text-white p-5 rounded-full shadow-2xl transition-all transform hover:scale-110 active:scale-95 group">
-                        <MessageCircle size={28} className="group-hover:rotate-12 transition-transform" />
-                    </button>
-                </div>
-            </div>
+            {/* El chatbot real se renderiza globalmente en App.jsx */}
 
             {/* Footer */}
             <footer className="mt-auto bg-slate-900 text-white py-16 px-6">
