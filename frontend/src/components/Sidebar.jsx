@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle2, Zap, ShieldCheck, ShieldAlert, Layers, Bell } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle2, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -13,6 +13,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
 
         { id: 'users', label: 'Gestión Usuarios', icon: ShieldAlert, category: 'ADMINISTRACIÓN', show: isAdmin },
         { id: 'access_requests', label: 'Solicitudes', icon: Bell, category: 'ADMINISTRACIÓN', show: isAdmin || userRoles.includes('DATA_OWNER') },
+        { id: 'audit', label: 'Audit Log', icon: Activity, category: 'ADMINISTRACIÓN', show: isAdmin },
 
         { id: 'ingesta_universal', label: 'Carga de Datos', icon: Zap, category: 'OPERACIONES', show: isUploader },
         { id: 'monitoring', label: 'Fuentes Externas', icon: Globe, category: 'OPERACIONES', show: isUploader || isSteward },

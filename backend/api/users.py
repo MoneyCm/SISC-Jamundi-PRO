@@ -183,5 +183,6 @@ async def get_audit_logs(
         "target": l.target_ref,
         "level": l.data_level,
         "ip": l.ip,
+        "user_agent": l.user_agent,
         "created_at": l.created_at
     } for l in logs]

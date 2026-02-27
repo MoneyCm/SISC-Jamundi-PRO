@@ -2,7 +2,12 @@ import os
 import hashlib
 import datetime
 from markdown2 import markdown
-from weasyprint import HTML, CSS
+try:
+    from weasyprint import HTML, CSS
+    WEASYPRINT_AVAILABLE = True
+except Exception as e:
+    print(f"⚠️ WeasyPrint no disponible: {e}")
+    WEASYPRINT_AVAILABLE = False
 from sqlalchemy.orm import Session
 from db.models_intelligence import ReportRun
 import logging
@@ -30,6 +35,12 @@ class PdfReportService:
         html_content = PdfReportService._build_html(report, content_hash, user_name)
         
         # 4. Generar PDF con WeasyPrint
+        if not WEASYPRINT_AVAILABLE:
+            logger.error("No se puede generar PDF: WeasyPrint no está instalado o faltan librerías de sistema.")
+            report.pdf_path = "ERROR_NO_WEASYPRINT"
+            db.commit()
+            return None
+
         css = CSS(string=f"""
             @page {{ 
                 size: A4; margin: 2cm; 

@@ -2,34 +2,45 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. Seguridad y Usuarios
+-- 1. Seguridad y Usuarios (RBAC v2)
 CREATE TABLE roles (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
     description TEXT
 );
 
-INSERT INTO roles (name, description) VALUES 
-('Admin SISC', 'Control total del sistema'),
-('Analista Observatorio', 'Generación de reportes y analítica'),
-('Cargador de datos', 'Solo ingesta de archivos'),
-('Consulta interna', 'Visualización de tableros protegidos'),
-('Público', 'Acceso a datos agregados abiertos');
+-- Los roles se insertarán vía create_roles_v2.py, pero dejamos unos básicos por respaldo
+INSERT INTO roles (id, code, name, description) VALUES 
+(uuid_generate_v4(), 'TI_ADMIN', 'Administrador TI', 'Control total técnico y seguridad'),
+(uuid_generate_v4(), 'ANALYST', 'Analista', 'Acceso a datos institucionales');
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role_id INT REFERENCES roles(id),
+    full_name VARCHAR(150),
+    is_active BOOLEAN DEFAULT TRUE,
+    data_level_max SMALLINT DEFAULT 1,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    is_active BOOLEAN DEFAULT TRUE
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Usuario admin por defecto (password: admin123) - Obviamente esto se cambia en producción
--- Hash generado de ejemplo para desarrollo
-INSERT INTO users (username, email, password_hash, role_id) 
-VALUES ('admin', 'admin@jamundi.gov.co', '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6L6s57RwRXWux.72', 1);
+CREATE TABLE user_roles (
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, role_id)
+);
+
+-- Usuario admin por defecto (password: admin123)
+-- Nota: En producción esto se maneja por variables de entorno
+INSERT INTO users (id, username, email, password_hash, full_name, data_level_max) 
+VALUES ('00000000-0000-0000-0000-000000000000', 'admin', 'admin@jamundi.gov.co', '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6L6s57RwRXWux.72', 'Admin SISC', 3);
+
+INSERT INTO user_roles (user_id, role_id)
+SELECT '00000000-0000-0000-0000-000000000000', id FROM roles WHERE code = 'TI_ADMIN';
 
 -- 2. Fuentes y Convenios
 CREATE TABLE sources (

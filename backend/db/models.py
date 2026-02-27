@@ -16,6 +16,26 @@ def create_tables():
         with engine.connect() as conn:
             try:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"))
+                
+                # REPARACIÓN DE TABLA ROLES (Transición Legacy a RBAC v2)
+                # Verificar si la tabla roles tiene 'id' como ENTERO (legacy)
+                res = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'roles' AND column_name = 'id';")).fetchone()
+                if res and res[0] in ('integer', 'int4'):
+                    print("⚠️ Detectada tabla 'roles' con estructura antigua. Migrando...")
+                    # Eliminar tablas dependientes en orden para recrearlas con UUID
+                    conn.execute(text("DROP TABLE IF EXISTS user_roles CASCADE;"))
+                    conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS role_id CASCADE;"))
+                    conn.execute(text("DROP TABLE IF EXISTS roles CASCADE;"))
+                    conn.commit()
+                    # Recrear todo con la nueva estructura de SQLAlchemy (UUIDs)
+                    Base.metadata.create_all(bind=engine)
+                    print("✅ Tabla 'roles' recreada con UUID.")
+                else:
+                    # Si ya es UUID, asegurar que tenga la columna 'code'
+                    conn.execute(text("ALTER TABLE roles ADD COLUMN IF NOT EXISTS code VARCHAR(50) UNIQUE;"))
+                
+                # Otras columnas necesarias
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS location_geom GEOMETRY(Point, 4326);"))
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS dq_report_id UUID;"))
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS ingestion_id UUID;"))

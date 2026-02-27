@@ -27,7 +27,10 @@ from services.report_automation_service import ReportAutomationService
 from services.alerts_rnmc import generate_rnmc_alerts
 from services.alerts_prioritizer import compute_action_score, get_scoring_config
 from services.ai_prioritizer import build_ai_rationale
-from weasyprint import HTML, CSS
+try:
+    from weasyprint import HTML, CSS
+except Exception as e:
+    print(f"⚠️ WeasyPrint no disponible en inteligencia: {e}")
 import logging
 import hashlib
 import json
@@ -311,6 +314,7 @@ async def get_crime_accumulated(
 
 @router.get("/stats/rnmc")
 async def get_rnmc_stats(
+    request: Request,
     type: str = "monthly",
     anio: int = None,
     valor: int = None,
@@ -321,6 +325,15 @@ async def get_rnmc_stats(
     Retorna estadísticas estables de RNMC para el Tab Estratégico.
     Mapea a la estructura requerida por la UI Premium.
     """
+    await log_audit(
+        db,
+        "RNMC_STATS_VIEW",
+        actor_id=str(current_user.id),
+        module="RNMC",
+        target={"type": type, "anio": anio},
+        level=2,
+        request=request
+    )
     raw = RNMCService.get_rnmc_comparison(db, mode=type, anio=anio, valor=valor)
     if not raw:
         # Estructura vacía estable
@@ -598,6 +611,7 @@ def _serialize_alert_for_export(alert: IntelligenceAlert) -> dict:
 
 @router.get("/alerts/export/excel")
 async def export_alerts_excel(
+    request: Request,
     source: str = "RNMC",
     status: str = "OPEN",
     severity: Optional[str] = None,
@@ -612,6 +626,16 @@ async def export_alerts_excel(
     Genera y retorna un XLSX en streaming con el ranking de alertas.
     No persiste archivos en disco.
     """
+    # Auditoría
+    await log_audit(
+        db,
+        "ALERTS_EXPORT_EXCEL",
+        actor_id=str(current_user.id),
+        module="RNMC",
+        target={"source": source, "status": status},
+        level=2,
+        request=request
+    )
     tiers = None
     if tier:
         tiers = [t.strip() for t in tier.split(",") if t.strip()]
@@ -719,6 +743,7 @@ async def export_alerts_excel(
 
 @router.get("/alerts/export/csv")
 async def export_alerts_csv(
+    request: Request,
     source: str = "RNMC",
     status: str = "OPEN",
     severity: Optional[str] = None,
@@ -732,6 +757,16 @@ async def export_alerts_csv(
     """
     Exportación rápida en CSV del ranking de alertas.
     """
+    # Auditoría
+    await log_audit(
+        db,
+        "ALERTS_EXPORT_CSV",
+        actor_id=str(current_user.id),
+        module="RNMC",
+        target={"source": source, "status": status},
+        level=2,
+        request=request
+    )
     tiers = None
     if tier:
         tiers = [t.strip() for t in tier.split(",") if t.strip()]
@@ -1223,6 +1258,7 @@ async def trigger_rnmc_alerts(
 @router.post("/alerts/export/pdf")
 async def export_alerts_pdf(
     req: AlertsPdfExportRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1230,6 +1266,16 @@ async def export_alerts_pdf(
     Genera un PDF ejecutivo on-demand para el ranking de alertas.
     Si no se proporciona snapshot_id, crea un snapshot nuevo y lo usa como evidencia.
     """
+    # Auditoría
+    await log_audit(
+        db,
+        "ALERTS_EXPORT_PDF",
+        actor_id=str(current_user.id),
+        module="RNMC",
+        target={"source": req.source, "snapshot_id": str(req.snapshot_id) if req.snapshot_id else "NEW"},
+        level=2,
+        request=request
+    )
     if req.snapshot_id:
         snapshot = db.query(IntelligenceAlertSnapshot).filter(
             IntelligenceAlertSnapshot.id == req.snapshot_id
@@ -1427,11 +1473,21 @@ async def notify_report_results(
     group: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(["TI_ADMIN", "FUNC_ADMIN", "ANALYST"]))
 ):
     """
     Dispara la notificación manual/automática a un grupo.
     """
+    # Auditoría
+    await log_audit(
+        db,
+        "REPORT_NOTIFY",
+        actor_id=str(current_user.id),
+        module="REPORTS",
+        target={"report_id": report_run_id, "group": group},
+        level=2,
+        request=request
+    )
     # 1. Asegurar que existe PDF
     report = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
     if not report or not report.pdf_path:
@@ -1782,6 +1838,7 @@ async def get_available_years(db: Session = Depends(get_db)):
 
 @router.get("/territorial-context")
 async def get_territorial_context(
+    request: Request,
     fuente: str = "ASPERSION", 
     db: Session = Depends(get_db),
     current_user: User = Depends(institutional_access)
@@ -1789,6 +1846,15 @@ async def get_territorial_context(
     """
     Retorna datos agregados de contexto territorial (ej: Aspersión) para el Valle del Cauca.
     """
+    await log_audit(
+        db,
+        "TERRITORIAL_CONTEXT_VIEW",
+        actor_id=str(current_user.id),
+        module="INTELLIGENCE",
+        target={"fuente": fuente},
+        level=2,
+        request=request
+    )
     # 1. Total por departamento (Valle = 76)
     valle_data = db.query(
         TerritorialContext.municipio,
@@ -1816,6 +1882,7 @@ async def get_territorial_context(
 
 @router.get("/insights")
 async def get_intelligence_insights(
+    request: Request,
     municipio: str = "JAMUNDI", 
     anio: int = 2025, 
     db: Session = Depends(get_db),
@@ -1824,6 +1891,15 @@ async def get_intelligence_insights(
     """
     Genera un análisis comparativo narrativo usando IA basado en los datos de MinDefensa.
     """
+    await log_audit(
+        db,
+        "AI_INSIGHTS_VIEW",
+        actor_id=str(current_user.id),
+        module="INTELLIGENCE",
+        target={"municipio": municipio, "anio": anio},
+        level=2,
+        request=request
+    )
     try:
         from sqlalchemy import func
         
