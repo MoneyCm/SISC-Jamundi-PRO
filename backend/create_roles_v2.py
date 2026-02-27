@@ -70,6 +70,9 @@ def init_db():
             db.commit()
         else:
             print(f"ℹ️ Superusuario verificado: {admin_user.username}")
+            # Asegurar contraseña correcta (admin_password)
+            admin_user.password_hash = get_password_hash(admin_data["password"])
+            
             # Asegurar que tiene los roles correctos si es necesario
             current_role_codes = [r.code for r in admin_user.roles]
             for code in admin_data["role_codes"]:
@@ -77,7 +80,7 @@ def init_db():
                     role = role_map.get(code)
                     if role:
                         admin_user.roles.append(role)
-                        print(f"➕ Rol {code} asignado a admin")
+                        print(f"➕ Rol {code} asignado a admin_sisc")
             db.commit()
 
         print("\n✅ ¡Inicialización completada con éxito!")
