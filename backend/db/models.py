@@ -18,28 +18,49 @@ def create_tables():
                 # Verificamos si la tabla roles existe y si su ID es ENTERO (legacy)
                 check_roles = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'roles' AND column_name = 'id';")).fetchone()
                 
-                if check_roles and check_roles[0] in ('integer', 'int4'):
-                    print("⚠️ ESTRUCTURA LEGACY DETECTADA. Limpiando para migración a UUID...")
-                    # Eliminar tablas en orden de dependencia para evitar errores de FK
-                    conn.execute(text("DROP TABLE IF EXISTS role_permissions CASCADE;"))
-                    conn.execute(text("DROP TABLE IF EXISTS user_roles CASCADE;"))
-                    conn.execute(text("DROP TABLE IF EXISTS access_requests CASCADE;"))
-                    conn.execute(text("DROP TABLE IF EXISTS roles CASCADE;"))
-                    conn.execute(text("DROP TABLE IF EXISTS permissions CASCADE;"))
-                    # No borramos users para no perder datos, pero le quitamos el role_id si lo tiene
-                    conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS role_id;"))
+                # También verificamos user_roles por si acaso
+                check_user_roles = conn.execute(text("SELECT data_type FROM information_schema.columns WHERE table_name = 'user_roles' AND column_name = 'role_id';")).fetchone()
+                
+                legacy_detected = False
+                if check_roles and check_roles[0] in ('integer', 'int4'): legacy_detected = True
+                if check_user_roles and check_user_roles[0] in ('integer', 'int4'): legacy_detected = True
+                
+                if legacy_detected:
+                    print("🚨 ESTRUCTURA LEGACY CRÍTICA DETECTADA. Iniciando limpieza total de Auth...")
+                    # Forzar borrado de todo lo que use IDs de Roles/Usuarios antiguos
+                    tables_to_drop = [
+                        "role_permissions", "user_roles", "access_requests", 
+                        "audit_log", "roles", "permissions", "user_permissions"
+                    ]
+                    for table in tables_to_drop:
+                        conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE;"))
+                    
+                    # Limpiar la tabla users de columnas legacy
+                    conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS role_id CASCADE;"))
+                    conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS is_admin CASCADE;"))
+                    
                     conn.commit()
-                    print("✅ Limpieza completada. Recreando tablas con nueva arquitectura...")
+                    print("✅ Tablas legacy eliminadas. El sistema las recreará con UUID.")
+                else:
+                    # Si ya es UUID, asegurar que tenga la columna 'code'
+                    if check_roles:
+                        conn.execute(text("ALTER TABLE roles ADD COLUMN IF NOT EXISTS code VARCHAR(50) UNIQUE;"))
+                        conn.commit()
                 
                 # 1. Crear extensiones necesarias
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"))
                 conn.commit()
             except Exception as e:
-                print(f"⚠️ Error inicializando extensiones o limpiando tablas: {e}")
+                print(f"⚠️ Error durante la fase PRE-CREACIÓN: {e}")
+                # Si falla el commit anterior, intentamos seguir
+                try: conn.rollback()
+                except: pass
 
         # 2. Ahora sí, crear tablas según modelos actuales (SQLAlchemy)
+        print("🛠️ Ejecutando Base.metadata.create_all...")
         Base.metadata.create_all(bind=engine)
+        print("✅ Base.metadata.create_all finalizado.")
 
         # 3. Ajustes post-creación (ALTER TABLE para columnas de negocio)
         with engine.connect() as conn:
