@@ -6,8 +6,8 @@ def test():
     print("--- INICIANDO VERIFICACIÓN DE API ---")
     try:
         # 1. Test Login
-        login_url = "http://localhost:8000/auth/login"
-        login_data = urllib.parse.urlencode({"username": "admin", "password": "admin123"}).encode()
+        login_url = "http://localhost:8000/api/auth/login"
+        login_data = urllib.parse.urlencode({"username": "admin_sisc", "password": "admin_password"}).encode()
         req = urllib.request.Request(login_url, data=login_data)
         with urllib.request.urlopen(req) as response:
             res = json.loads(response.read().decode())
@@ -15,7 +15,7 @@ def test():
             print(f"PASS: Login exitoso. Token obtenido.")
         
         # 2. Test Bulk (Authorization Header)
-        bulk_url = "http://localhost:8000/ingesta/bulk"
+        bulk_url = "http://localhost:8000/api/ingesta/bulk"
         payload = json.dumps([{
             "fecha": "2024-01-01",
             "hora": "12:00",

@@ -18,15 +18,24 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
             formDataBody.append('username', formData.username);
             formDataBody.append('password', formData.password);
 
-            const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            // Asegurar que no haya doble slash si API_BASE_URL termina en /
+            const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+
+            const response = await fetch(`${baseUrl}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: formDataBody
             });
 
             if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.detail || "Error en el inicio de sesión");
+                let errorMessage = "Error en el inicio de sesión";
+                try {
+                    const data = await response.json();
+                    errorMessage = data.detail || errorMessage;
+                } catch (e) {
+                    errorMessage = `Error ${response.status}: El servidor no respondió con JSON válido`;
+                }
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
@@ -34,11 +43,15 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
             localStorage.setItem('token', token);
 
             // Fetch profile
-            const profileRes = await fetch(`${API_BASE_URL}/auth/me`, {
+            const profileRes = await fetch(`${baseUrl}/auth/me`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const profile = await profileRes.json();
 
+            if (!profileRes.ok) {
+                throw new Error("No se pudo cargar el perfil del usuario");
+            }
+
+            const profile = await profileRes.json();
             onLoginSuccess(token, profile.roles, profile.data_level_max);
 
         } catch (err) {
