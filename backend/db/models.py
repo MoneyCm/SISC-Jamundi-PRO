@@ -69,12 +69,30 @@ def create_tables():
                 conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS source_name VARCHAR(100);"))
                 
                 # Columnas para Inteligencia / Fuerza Pública
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS source_id VARCHAR(50);"))
+                conn.execute(text("UPDATE national_crime_stats SET source_id = 'GENERIC_CRIME' WHERE source_id IS NULL;"))
+                
                 conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS institucion VARCHAR(100);"))
                 conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS accion VARCHAR(100);"))
                 conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS categoria_grado VARCHAR(100);"))
                 conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS codigo_dane VARCHAR(20);"))
                 conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS barrio VARCHAR(150);"))
                 conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS semana INTEGER;"))
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS genero VARCHAR(50);"))
+                conn.execute(text("ALTER TABLE national_crime_stats ADD COLUMN IF NOT EXISTS grupo_etario VARCHAR(50);"))
+                
+                # Asegurar índice único para ON CONFLICT
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_ncs_source_fingerprint ON national_crime_stats (source_id, event_fingerprint);"))
+
+                # Territorial Context
+                conn.execute(text("ALTER TABLE territorial_context ADD COLUMN IF NOT EXISTS source_id VARCHAR(50);"))
+                conn.execute(text("UPDATE territorial_context SET source_id = 'GENERIC_CONTEXT' WHERE source_id IS NULL;"))
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_tc_source_fingerprint ON territorial_context (source_id, event_fingerprint);"))
+
+                # RNMC Measures
+                conn.execute(text("ALTER TABLE rnmc_measures ADD COLUMN IF NOT EXISTS source_id VARCHAR(50);"))
+                conn.execute(text("UPDATE rnmc_measures SET source_id = 'INSPECCION_MEDIDAS_RNMC' WHERE source_id IS NULL;"))
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_rnmc_source_fingerprint ON rnmc_measures (source_id, event_fingerprint);"))
                 
                 conn.commit()
                 print("Estructura de Base de Datos verificada con éxito.")
