@@ -29,7 +29,7 @@ const MindefensaMonitor = ({ onIngest }) => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/minddefensa/assets`, {
+            const response = await fetch(`${API_BASE_URL}/mindefensa/assets`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) {
@@ -40,7 +40,7 @@ const MindefensaMonitor = ({ onIngest }) => {
                 throw new Error(data.detail || "Respuesta del servidor no es válida");
             }
             if (data.length === 0) {
-                await fetch(`${API_BASE_URL}/minddefensa/assets/seed`, {
+                await fetch(`${API_BASE_URL}/mindefensa/assets/seed`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -49,7 +49,7 @@ const MindefensaMonitor = ({ onIngest }) => {
             }
             setAssets(data);
         } catch (err) {
-            console.error("Error fetching minddefensa assets:", err);
+            console.error("Error fetching mindefensa assets:", err);
         } finally {
             setLoading(false);
         }
@@ -61,8 +61,8 @@ const MindefensaMonitor = ({ onIngest }) => {
         try {
             const token = localStorage.getItem('token');
             const url = datasetCode
-                ? `${API_BASE_URL}/minddefensa/assets/check?dataset_code=${datasetCode}`
-                : `${API_BASE_URL}/minddefensa/assets/check`;
+                ? `${API_BASE_URL}/mindefensa/assets/check?dataset_code=${datasetCode}`
+                : `${API_BASE_URL}/mindefensa/assets/check`;
 
             await fetch(url, {
                 method: 'POST',

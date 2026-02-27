@@ -17,6 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sisc_api")
 
 from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa, users
+logger.info(f"DEBUG: Intelligence module from: {intelligence.__file__}")
 from db.models import create_tables
 from contextlib import asynccontextmanager
 

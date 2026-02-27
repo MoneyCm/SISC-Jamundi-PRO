@@ -44,6 +44,33 @@ from uuid import UUID
 router = APIRouter(tags=["Intelligence"])
 logger = logging.getLogger("sisc_api")
 
+@router.get("/executive-brief")
+async def get_executive_brief(db: Session = Depends(get_db)):
+    """
+    Retorna un resumen ejecutivo ágil con IA y fechas de corte para Jamundí.
+    """
+    from sqlalchemy import func
+    from db.models_intelligence import NationalCrimeStats
+    from services.intelligence_service import IntelligenceService
+    
+    count_jamundi = db.query(func.count(NationalCrimeStats.id)).filter(
+        NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%')
+    ).scalar()
+    
+    delitos_disponibles = db.query(NationalCrimeStats.tipo_delito).filter(
+        NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%')
+    ).distinct().all()
+    
+    briefs = await IntelligenceService.get_executive_brief(db)
+    
+    return {
+        "debug": {
+            "total_jamundi": count_jamundi,
+            "delitos": [d[0] for d in delitos_disponibles]
+        },
+        "briefs": briefs
+    }
+
 
 @router.post("/upload")
 async def upload_intelligence_file(
@@ -1704,6 +1731,32 @@ def run_ingestion_process(log_id: int):
             db_bg.commit()
     finally:
         db_bg.close()
+
+@router.get("/executive-brief")
+async def get_executive_brief(db: Session = Depends(get_db)):
+    """
+    Retorna un resumen ejecutivo ágil con IA y fechas de corte para Jamundí.
+    """
+    from sqlalchemy import func
+    from db.models_intelligence import NationalCrimeStats
+    
+    count_jamundi = db.query(func.count(NationalCrimeStats.id)).filter(
+        NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%')
+    ).scalar()
+    
+    delitos_disponibles = db.query(NationalCrimeStats.tipo_delito).filter(
+        NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%')
+    ).distinct().all()
+    
+    briefs = await IntelligenceService.get_executive_brief(db)
+    
+    return {
+        "debug": {
+            "total_jamundi": count_jamundi,
+            "delitos": [d[0] for d in delitos_disponibles]
+        },
+        "briefs": briefs
+    }
 
 @router.get("/stats")
 async def get_national_stats(municipio: str = "JAMUNDI", anio: int = 2025, db: Session = Depends(get_db)):
