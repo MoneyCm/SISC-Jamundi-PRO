@@ -279,7 +279,7 @@ const DataQuality = ({ initialReportId }) => {
                                         Reporte: {report.filename}
                                     </h2>
                                     <p className="text-slate-400 text-sm font-bold flex items-center gap-2">
-                                        <Calendar size={14} /> {new Date().toLocaleDateString()} • {report.rows_total.toLocaleString()} registros auditados
+                                        <Calendar size={14} /> {new Date().toLocaleDateString()} • {(report.rows_total || 0).toLocaleString()} registros auditados
                                     </p>
                                 </div>
                             </div>
@@ -298,15 +298,15 @@ const DataQuality = ({ initialReportId }) => {
                             <Card className="p-6 flex flex-col items-center justify-center bg-white relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 -mr-12 -mt-12 rounded-full group-hover:scale-110 transition-transform" />
                                 <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 relative">Score Global</div>
-                                <div className={`text-5xl font-black relative ${getScoreColor(report.score_overall)}`}>
-                                    {Math.round(report.score_overall * 100)}%
+                                <div className={`text-5xl font-black relative ${getScoreColor(report.score_overall || 0)}`}>
+                                    {Math.round((report.score_overall || 0) * 100)}%
                                 </div>
                             </Card>
 
                             <Card className="p-6 flex flex-col">
                                 <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Hallazgos Críticos</div>
                                 <div className="text-4xl font-black text-red-500">
-                                    {report.issues.filter(i => i.severity === 'ERROR').reduce((acc, i) => acc + i.count, 0).toLocaleString()}
+                                    {(report.issues || []).filter(i => i.severity === 'ERROR').reduce((acc, i) => acc + i.count, 0).toLocaleString()}
                                 </div>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase mt-auto leading-relaxed">Requieren corrección inmediata para ingesta</p>
                             </Card>
@@ -314,7 +314,7 @@ const DataQuality = ({ initialReportId }) => {
                             <Card className="p-6">
                                 <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Advertencias</div>
                                 <div className="text-4xl font-black text-amber-500">
-                                    {report.issues.filter(i => i.severity === 'WARNING').reduce((acc, i) => acc + i.count, 0).toLocaleString()}
+                                    {(report.issues || []).filter(i => i.severity === 'WARNING').reduce((acc, i) => acc + i.count, 0).toLocaleString()}
                                 </div>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase mt-auto leading-relaxed">Revisiones manuales recomendadas</p>
                             </Card>
@@ -433,30 +433,32 @@ const DataQuality = ({ initialReportId }) => {
 
                                 {activeTab === 'profile' && (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">
-                                        {Object.entries(report.profiles.columns).map(([col, data]) => (
+                                        {report.profiles?.columns ? Object.entries(report.profiles.columns).map(([col, data]) => (
                                             <div key={col} className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:ring-2 hover:ring-indigo-500/20 transition-all">
                                                 <h5 className="font-black text-slate-800 text-xs mb-4 pb-2 border-b uppercase tracking-tighter truncate" title={col}>{col}</h5>
                                                 <div className="space-y-3">
                                                     <div className="flex justify-between items-center bg-slate-50 px-3 py-1.5 rounded-lg">
                                                         <span className="text-[10px] font-black text-slate-400">TIPO</span>
-                                                        <span className="text-[10px] font-bold text-slate-600 font-mono">{data.dtype.toUpperCase()}</span>
+                                                        <span className="text-[10px] font-bold text-slate-600 font-mono">{data.dtype?.toUpperCase() || 'N/A'}</span>
                                                     </div>
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-[10px] font-black text-slate-400">UNICIDAD</span>
-                                                        <span className="text-xs font-black text-indigo-600">{data.nunique.toLocaleString()}</span>
+                                                        <span className="text-xs font-black text-indigo-600">{(data.nunique || 0).toLocaleString()}</span>
                                                     </div>
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-[10px] font-black text-slate-400">INTEGRIDAD</span>
                                                         <span className={`text-xs font-black ${data.nulls > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                                            {100 - Math.round(data.null_pct)}%
+                                                            {100 - Math.round(data.null_pct || 0)}%
                                                         </span>
                                                     </div>
                                                     <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                                        <div className={`h-full bg-emerald-500`} style={{ width: `${100 - data.null_pct}%` }} />
+                                                        <div className={`h-full bg-emerald-500`} style={{ width: `${100 - (data.null_pct || 0)}%` }} />
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))}
+                                        )) : (
+                                            <div className="col-span-4 py-20 text-center text-slate-400 italic">Perfil de columnas no disponible para este reporte</div>
+                                        )}
                                     </div>
                                 )}
 
@@ -513,7 +515,7 @@ const DataQuality = ({ initialReportId }) => {
                                                         <PieChart>
                                                             <Pie
                                                                 data={[
-                                                                    { name: 'Únicos', value: report.rows_total - (report.samples?.exact_duplicates?.length || 0) },
+                                                                    { name: 'Únicos', value: (report.rows_total || 0) - (report.samples?.exact_duplicates?.length || 0) },
                                                                     { name: 'Duplicados', value: report.samples?.exact_duplicates?.length || 0 }
                                                                 ]}
                                                                 innerRadius={60}
@@ -568,15 +570,19 @@ const DataQuality = ({ initialReportId }) => {
                                     <div className="space-y-8 animate-fade-in">
                                         <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b pb-2">Tendencia Histórica Auditada</h4>
                                         <div className="h-96">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={Object.entries(report.profiles.anual_sum).map(([key, val]) => ({ year: key, count: val }))}>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                    <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
-                                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
-                                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
-                                                    <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={4} dot={{ r: 6, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
-                                                </LineChart>
-                                            </ResponsiveContainer>
+                                            {report.profiles?.anual_sum ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <LineChart data={Object.entries(report.profiles.anual_sum).map(([key, val]) => ({ year: key, count: val }))}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                        <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
+                                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
+                                                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
+                                                        <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={4} dot={{ r: 6, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="h-full flex items-center justify-center text-slate-400 italic">Datos de tendencia no disponibles para este reporte</div>
+                                            )}
                                         </div>
                                     </div>
                                 )}

@@ -305,10 +305,8 @@ async def upload_with_gate(
     
     # 4. Ingesta (Si pasó el gate)
     try:
-        if file.filename.lower().endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(contents), encoding='utf-8')
-        else:
-            df = pd.read_excel(io.BytesIO(contents), engine="openpyxl")
+        from services.file_reader import smart_read_file
+        df = smart_read_file(contents)
             
         # El sistema espera ciertas columnas para Event, aquí usamos el mapeo de Mindefensa
         ingestion_id = uuid.uuid4()
