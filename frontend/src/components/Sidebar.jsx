@@ -51,12 +51,14 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
                 </button>
 
                 <div className="flex flex-col items-center space-y-4">
-                    <div className="bg-white p-3 rounded-2xl shadow-xl flex items-center justify-center transform group-hover:scale-105 transition-transform">
-                        <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-20 h-20 object-contain" />
+                    <div className="bg-white p-1 rounded-2xl shadow-xl flex items-center justify-center transform group-hover:scale-105 transition-transform">
+                        <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-[116px] h-[116px] object-contain" />
                     </div>
-                    <div className="text-center">
-                        <h1 className="text-5xl font-black tracking-tighter text-white">SISC</h1>
-                        <p className="text-[10px] text-white/70 font-bold uppercase tracking-[0.2em]">Jamundí | Seguridad</p>
+                    <div className="text-center px-2">
+                        <h1 className="text-6xl font-black tracking-tighter text-white leading-none">SISC</h1>
+                        <p className="text-[11px] text-white/60 font-bold uppercase tracking-widest mt-2">Sistema de Información para la</p>
+                        <p className="text-[16px] text-white font-black uppercase tracking-tight leading-tight">Seguridad y Convivencia</p>
+                        <p className="text-[14px] text-white/50 font-black uppercase tracking-[0.3em] mt-4 border-t border-white/10 pt-2">Jamundí</p>
                     </div>
                 </div>
             </div>

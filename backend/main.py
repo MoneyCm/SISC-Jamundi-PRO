@@ -22,20 +22,27 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Crear tablas al iniciar de forma segura
-    try:
-        logger.info("🚀 SISTEMA INICIANDO - MODO MIGRACIÓN ACTIVADO 🚀")
-        logger.info("Iniciando conexión con la base de datos...")
-        create_tables()
-        logger.info("Tablas de base de datos verificadas/creadas con éxito.")
-        
-        # Inicializar Roles y Usuarios automáticamente
-        from create_roles_v2 import init_db
-        init_db()
-        logger.info("Roles y usuarios verificados/creados con éxito.")
-    except Exception as e:
-        logger.error(f"Error crítico conectando a la base de datos: {e}")
-        # No detenemos la app para que Render pueda mostrar los logs si es necesario
+    # Iniciamos las migraciones en un hilo separado para NO bloquear el inicio del servidor.
+    # Esto es CRÍTICO para Render, ya que si la BD tarda en conectar, Render mata el proceso por "Port scan timeout".
+    import threading
+    
+    def run_migrations_task():
+        try:
+            logger.info("🛠️ [Iniciando] Verificando esquema de base de datos en segundo plano...")
+            create_tables()
+            logger.info("✅ [OK] Tablas verificadas.")
+            
+            from create_roles_v2 import init_db
+            init_db()
+            logger.info("✅ [OK] Roles y usuarios inicializados.")
+        except Exception as e:
+            logger.error(f"❌ [ERROR] Fallo en la inicialización de BD: {e}")
+            logger.error(traceback.format_exc())
+
+    # Lanzar en modo daemon para que no bloquee el apagado si algo sale mal
+    logger.info("🛰️ Lanzando tarea de inicialización en segundo plano...")
+    threading.Thread(target=run_migrations_task, daemon=True).start()
+    
     yield
 
 app = FastAPI(title="SISC Jamundí - Sistema de Información para la Seguridad", version="0.1.0", lifespan=lifespan)

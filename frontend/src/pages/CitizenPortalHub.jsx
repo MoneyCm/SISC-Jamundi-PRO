@@ -129,7 +129,7 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                     <div className="space-y-6">
                         <div className="flex items-center gap-3">
                             <div className="bg-white p-2 rounded-lg">
-                                <img src="/assets/escudo.png" alt="Escudo Jamundí" className="h-8 w-auto" />
+                                <img src="/assets/escudo.png" alt="Escudo Jamundí" className="h-10 w-auto" />
                             </div>
                             <div>
                                 <h4 className="font-black tracking-tighter text-xl">SISC <span className="text-white/50">Jamundí</span></h4>
