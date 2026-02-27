@@ -37,7 +37,7 @@ CREATE TABLE user_roles (
 -- Usuario admin por defecto (password: admin123)
 -- Nota: En producción esto se maneja por variables de entorno
 INSERT INTO users (id, username, email, password_hash, full_name, data_level_max) 
-VALUES ('00000000-0000-0000-0000-000000000000', 'admin', 'admin@jamundi.gov.co', '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6L6s57RwRXWux.72', 'Admin SISC', 3);
+VALUES ('00000000-0000-0000-0000-000000000000', 'admin_sisc', 'admin@jamundi.gov.co', '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6L6s57RwRXWux.72', 'Admin SISC', 3);
 
 INSERT INTO user_roles (user_id, role_id)
 SELECT '00000000-0000-0000-0000-000000000000', id FROM roles WHERE code = 'TI_ADMIN';

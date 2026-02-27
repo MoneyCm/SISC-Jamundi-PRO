@@ -38,7 +38,7 @@ def init_db():
 
         # 2. Crear Administrador Inicial
         admin_data = {
-            "username": "admin",
+            "username": "admin_sisc",
             "email": "admin@jamundi.gov.co",
             "password": "admin_password", # Cambiar en primera sesión
             "full_name": "Administrador de Sistema SISC",
