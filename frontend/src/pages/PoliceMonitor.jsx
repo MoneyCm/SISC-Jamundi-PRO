@@ -1,20 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import {
-    RefreshCcw,
-    ExternalLink,
-    AlertCircle,
-    CheckCircle2,
-    AlertTriangle,
-    Clock,
-    Database,
-    Search,
-    Info,
-    ArrowUpRight,
-    Loader2
-} from 'lucide-react';
+import { RefreshCcw, ExternalLink, AlertCircle, CheckCircle2, AlertTriangle, Clock, Database, Search, Info } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
-const MindefensaMonitor = ({ onIngest }) => {
+const PoliceMonitor = ({ onIngest }) => {
     const [assets, setAssets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [checking, setChecking] = useState(false);
@@ -29,53 +17,48 @@ const MindefensaMonitor = ({ onIngest }) => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/minddefensa/assets`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const response = await fetch(`${API_BASE_URL}/policia/assets`, {
+                headers: { Authorization: `Bearer ${token}` },
             });
-            if (!response.ok) {
-                throw new Error(`Error ${response.status}`);
-            }
             const data = await response.json();
             if (!Array.isArray(data)) {
-                throw new Error(data.detail || "Respuesta del servidor no es válida");
+                throw new Error(data.detail || 'Respuesta del servidor no es válida');
             }
             if (data.length === 0) {
-                await fetch(`${API_BASE_URL}/minddefensa/assets/seed`, {
+                // Si no hay assets, sembramos los iniciales
+                await fetch(`${API_BASE_URL}/policia/assets/seed`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 });
                 fetchAssets();
                 return;
             }
             setAssets(data);
         } catch (err) {
-            console.error("Error fetching minddefensa assets:", err);
+            console.error('Error fetching police assets:', err);
         } finally {
             setLoading(false);
         }
     };
-
 
     const handleCheckUpdates = async (datasetCode = null) => {
         setChecking(true);
         try {
             const token = localStorage.getItem('token');
             const url = datasetCode
-                ? `${API_BASE_URL}/minddefensa/assets/check?dataset_code=${datasetCode}`
-                : `${API_BASE_URL}/minddefensa/assets/check`;
-
+                ? `${API_BASE_URL}/policia/assets/check?dataset_code=${datasetCode}`
+                : `${API_BASE_URL}/policia/assets/check`;
             await fetch(url, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
             await fetchAssets();
         } catch (err) {
-            console.error("Error checking updates:", err);
+            console.error('Error checking police updates:', err);
         } finally {
             setChecking(false);
         }
     };
-
 
     const getStatusBadge = (status) => {
         switch (status) {
@@ -106,16 +89,17 @@ const MindefensaMonitor = ({ onIngest }) => {
         }
     };
 
-    const filteredAssets = assets.filter(a => {
-        const matchesSearch = a.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const filteredAssets = assets.filter((a) => {
+        const matchesSearch =
+            a.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             a.dataset_code.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = filterStatus === 'ALL' || a.status === filterStatus;
         return matchesSearch && matchesStatus;
     });
 
-    const updatedCount = assets.filter(a => a.status === 'UPDATED').length;
+    const updatedCount = assets.filter((a) => a.status === 'UPDATED').length;
 
-    // Helper to group by category
+    // Agrupar por categoría (si existe)
     const groupedAssets = filteredAssets.reduce((groups, asset) => {
         const category = asset.category || 'OTROS';
         if (!groups[category]) groups[category] = [];
@@ -128,18 +112,17 @@ const MindefensaMonitor = ({ onIngest }) => {
     return (
         <div className="space-y-6 animate-fade-in pb-10">
             {/* Header */}
-            <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-2xl relative overflow-hidden">
+            <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-2xl relative overflow-hidden group">
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <div className="p-2 bg-indigo-500 rounded-xl">
-                                <Database size={24} />
+                                <Database size={24} className="text-white" />
                             </div>
-                            <h2 className="text-3xl font-black tracking-tight">Monitor de Activos MinDefensa</h2>
+                            <h2 className="text-3xl font-black tracking-tight">Monitor de Activos Policía</h2>
                         </div>
                         <p className="text-slate-400 text-sm font-medium max-w-xl">
-                            Seguimiento en tiempo real de los datasets oficiales del Ministerio de Defensa.
-                            El sistema detecta cambios en el origen para prevenir la ingesta de datos obsoletos.
+                            Seguimiento en tiempo real de los datasets oficiales de la Policía Nacional. El sistema detecta cambios en el origen para prevenir la ingesta de datos obsoletos.
                         </p>
                     </div>
                     <button
@@ -151,7 +134,7 @@ const MindefensaMonitor = ({ onIngest }) => {
                         REVISAR TODAS LAS ACTUALIZACIONES
                     </button>
                 </div>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 rounded-full -mr-32 -mt-32 blur-3xl" />
             </div>
 
             {/* Stats Overview */}
@@ -185,7 +168,7 @@ const MindefensaMonitor = ({ onIngest }) => {
                     />
                 </div>
                 <div className="flex gap-2 bg-white p-1.5 border border-slate-200 rounded-2xl">
-                    {['ALL', 'UPDATED', 'UNCHANGED', 'ERROR'].map(s => (
+                    {['ALL', 'UPDATED', 'UNCHANGED', 'ERROR'].map((s) => (
                         <button
                             key={s}
                             onClick={() => setFilterStatus(s)}
@@ -201,73 +184,71 @@ const MindefensaMonitor = ({ onIngest }) => {
             <div className="space-y-8">
                 {loading ? (
                     <div className="bg-white rounded-3xl p-20 text-center border border-slate-100 shadow-xl">
-                        <Loader2 className="mx-auto h-10 w-10 text-slate-200 animate-spin" />
+                        <RefreshCcw className="mx-auto h-10 w-10 text-slate-200 animate-spin" />
                     </div>
                 ) : categories.length === 0 ? (
                     <div className="bg-white rounded-3xl p-20 text-center text-slate-400 italic border border-slate-100 shadow-xl">
                         No se encontraron activos con estos criterios
                     </div>
-                ) : categories.map(category => (
-                    <div key={category} className="space-y-4">
-                        <div className="flex items-center gap-3 px-2">
-                            <div className="h-px w-8 bg-slate-200" />
-                            <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">{category}</h3>
-                            <div className="h-px flex-1 bg-slate-100" />
-                        </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {groupedAssets[category].map((asset) => (
-                                <div key={asset.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <div className="font-black text-slate-800 text-sm group-hover:text-indigo-600 transition-colors uppercase tracking-tight">
-                                                {asset.display_name}
+                ) : (
+                    categories.map((category) => (
+                        <div key={category} className="space-y-4">
+                            <div className="flex items-center gap-3 px-2">
+                                <div className="h-px w-8 bg-slate-200" />
+                                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">{category}</h3>
+                                <div className="h-px flex-1 bg-slate-100" />
+                            </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {groupedAssets[category].map((asset) => (
+                                    <div key={asset.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <div className="font-black text-slate-800 text-sm group-hover:text-indigo-600 transition-colors uppercase tracking-tight">
+                                                    {asset.display_name}
+                                                </div>
+                                                <div className="font-mono text-[9px] text-slate-400 font-bold tracking-tighter">
+                                                    ID: {asset.dataset_code}
+                                                </div>
                                             </div>
-                                            <div className="font-mono text-[9px] text-slate-400 font-bold tracking-tighter">
-                                                ID: {asset.dataset_code}
-                                            </div>
+                                            {getStatusBadge(asset.status)}
                                         </div>
-                                        {getStatusBadge(asset.status)}
-                                    </div>
-
-                                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50">
-                                        <div className="flex gap-1">
-                                            <a
-                                                href={asset.file_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                title="Descargar archivo original"
-                                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                            >
-                                                <ArrowUpRight size={16} />
-                                            </a>
+                                        <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50">
+                                            <div className="flex gap-1">
+                                                <a
+                                                    href={asset.file_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    title="Descargar archivo original"
+                                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                                >
+                                                    <ExternalLink size={16} />
+                                                </a>
+                                                <button
+                                                    onClick={() => handleCheckUpdates(asset.dataset_code)}
+                                                    title="Revisar actualizaciones"
+                                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                                >
+                                                    <RefreshCcw size={16} className={checking ? 'animate-spin' : ''} />
+                                                </button>
+                                            </div>
                                             <button
-                                                onClick={() => handleCheckUpdates(asset.dataset_code)}
-                                                title="Revisar actualizaciones"
-                                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                                onClick={() => onIngest(asset.dataset_code, asset.display_name)}
+                                                className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black hover:bg-indigo-600 transition-all shadow-lg active:scale-95 uppercase tracking-widest"
                                             >
-                                                <RefreshCcw size={16} className={checking ? 'animate-spin' : ''} />
+                                                CARGAR DATOS
                                             </button>
                                         </div>
-
-                                        <button
-                                            onClick={() => onIngest(asset.dataset_code, asset.display_name)}
-                                            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black hover:bg-indigo-600 transition-all shadow-lg active:scale-95 uppercase tracking-widest"
-                                        >
-                                            CARGAR DATOS
-                                        </button>
+                                        {asset.last_checked_at && (
+                                            <div className="mt-3 flex items-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-tight">
+                                                <Clock size={10} /> Vigencia: {new Date(asset.last_checked_at).toLocaleDateString()}
+                                            </div>
+                                        )}
                                     </div>
-
-                                    {asset.last_checked_at && (
-                                        <div className="mt-3 flex items-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-tight">
-                                            <Clock size={10} /> Vigencia: {new Date(asset.last_checked_at).toLocaleDateString()}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    ))
+                )}
             </div>
 
             {/* Info Footer */}
@@ -276,9 +257,7 @@ const MindefensaMonitor = ({ onIngest }) => {
                 <div>
                     <h4 className="font-black text-sm text-indigo-900 uppercase tracking-widest mb-1">¿Cómo funciona la detección?</h4>
                     <p className="text-xs text-indigo-700/80 font-medium leading-relaxed">
-                        El sistema realiza peticiones de cabecera (HEAD) a los servidores de MinDefensa.
-                        Comparamos los valores de <strong>ETag</strong>, <strong>Last-Modified</strong> y <strong>Content-Length</strong>.
-                        Si cualquiera de estos valores cambia, el activo se marca como <strong>UPDATED</strong> y se bloquea su ingesta manual hasta que se confirme la carga del nuevo archivo.
+                        El sistema realiza peticiones de cabecera (HEAD) a los servidores de la Policía Nacional. Comparamos los valores de <strong>ETag</strong>, <strong>Last-Modified</strong> y <strong>Content-Length</strong>. Si cualquiera de estos valores cambia, el activo se marca como <strong>UPDATED</strong> y se bloquea su ingesta manual hasta que se confirme la carga del nuevo archivo.
                     </p>
                 </div>
             </div>
@@ -286,4 +265,4 @@ const MindefensaMonitor = ({ onIngest }) => {
     );
 };
 
-export default MindefensaMonitor;
+export default PoliceMonitor;

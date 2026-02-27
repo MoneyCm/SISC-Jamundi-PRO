@@ -17,6 +17,7 @@ import DataQuality from './pages/DataQuality';
 import SiscAIChatbot from './components/SiscAIChatbot';
 import UniversalIngesta from './pages/UniversalIngesta';
 import MindefensaMonitor from './pages/MindefensaMonitor';
+import PoliceMonitor from './pages/PoliceMonitor';
 import RegionalContext from './pages/RegionalContext';
 import RNMCModule from './pages/RNMCModule';
 import AlertsFeed from './pages/AlertsFeed';
@@ -153,8 +154,11 @@ const App = () => {
         return <ReportsPage />;
       case 'data':
         return <DataPage />;
-      case 'monitoring': // Added new case for monitoring
-        return <MindefensaMonitor onIngest={handleIngestDataset} />; // Render MindefensaMonitor component
+      case 'monitoring': // Added new case for monitoring (MinDefensa)
+        return <MindefensaMonitor onIngest={handleIngestDataset} />;
+      case 'police_monitor': // New case for Police assets monitor
+        return <PoliceMonitor onIngest={handleIngestDataset} />;
+
       case 'intelligence':
         return <IntelligenceModule />;
       case 'regional_context':
