@@ -202,3 +202,61 @@ is_admin = SecurityChecker(allowed_roles=["TI_ADMIN", "FUNC_ADMIN"])
 is_data_owner = SecurityChecker(allowed_roles=["DATA_OWNER"])
 institutional_access = SecurityChecker(min_data_level=2)
 restricted_access = SecurityChecker(min_data_level=3)
+
+# backend/api/auth.py
+from fastapi import Depends, HTTPException, status
+
+# ✅ Ajusta esto al nombre real de tu función
+# ej: from api.auth import get_current_user
+def admin_only(user = Depends(get_current_user)):
+    """
+    Guard compat: usado por ingesta.py
+    Permite solo ADMIN (o el claim equivalente en tu JWT).
+    """
+    # Ajusta la lógica a tu modelo/claims reales:
+    role = getattr(user, "role", None) or getattr(user, "rol", None)
+    roles = set(getattr(user, "roles", []) or [])
+    is_admin = getattr(user, "is_admin", False) or (role == "ADMIN") or ("ADMIN" in roles)
+
+    if not is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    return user
+
+def analyst_or_admin(user = Depends(get_current_user)):
+    """
+    Guard compat: usado por ingesta.py
+    Permite ANALYST o ADMIN.
+    """
+    role = getattr(user, "role", None) or getattr(user, "rol", None)
+    roles = set(getattr(user, "roles", []) or [])
+    is_admin = getattr(user, "is_admin", False) or (role == "ADMIN") or ("ADMIN" in roles)
+    is_analyst = getattr(user, "is_analyst", False) or (role == "ANALYST") or ("ANALYST" in roles)
+
+    if not (is_admin or is_analyst):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Analyst or admin only")
+    return user
+
+    admin_only = require_admin
+analyst_or_admin = require_analyst_or_admin
+
+from fastapi import Depends, HTTPException, status
+
+def admin_only(user=Depends(get_current_user)):
+    roles = set(getattr(user, "roles", []) or [])
+    role = getattr(user, "role", None) or getattr(user, "rol", None)
+
+    is_admin = getattr(user, "is_admin", False) or (role == "ADMIN") or ("ADMIN" in roles)
+    if not is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    return user
+
+def analyst_or_admin(user=Depends(get_current_user)):
+    roles = set(getattr(user, "roles", []) or [])
+    role = getattr(user, "role", None) or getattr(user, "rol", None)
+
+    is_admin = getattr(user, "is_admin", False) or (role == "ADMIN") or ("ADMIN" in roles)
+    is_analyst = getattr(user, "is_analyst", False) or (role == "ANALYST") or ("ANALYST" in roles)
+
+    if not (is_admin or is_analyst):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Analyst or admin only")
+    return user
