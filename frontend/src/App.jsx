@@ -25,13 +25,27 @@ import AccessRequests from './pages/AccessRequests';
 import AuditLog from './pages/AuditLog';
 
 const App = () => {
+  // Inicialización defensiva de estados desde localStorage
+  const getInitialRoles = () => {
+    try {
+      const roles = localStorage.getItem('userRoles');
+      return roles ? JSON.parse(roles) : [];
+    } catch {
+      return [];
+    }
+  };
+
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [userRoles, setUserRoles] = useState(getInitialRoles());
+  const [dataLevel, setDataLevel] = useState(() => {
+    const dl = localStorage.getItem('dataLevel');
+    return dl ? parseInt(dl) : 1;
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState(!!token);
   const [appMode, setAppMode] = useState(token ? 'authenticated' : 'public');
   const [activePage, setActivePage] = useState('dashboard');
   const [publicActivePage, setPublicActivePage] = useState('hub');
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // New state
-  const [userRoles, setUserRoles] = useState(JSON.parse(localStorage.getItem('userRoles') || '[]'));
-  const [dataLevel, setDataLevel] = useState(parseInt(localStorage.getItem('dataLevel') || '1'));
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReportId, setSelectedReportId] = useState(null);
   const [selectedDataset, setSelectedDataset] = useState({ code: 'SECUESTRO', label: 'Secuestro' });
@@ -44,13 +58,9 @@ const App = () => {
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
-    const roles = JSON.parse(localStorage.getItem('userRoles') || '[]');
-    const dl = parseInt(localStorage.getItem('dataLevel') || '1');
     if (storedToken) {
+      // Sincronizar estados si hay token
       setIsAuthenticated(true);
-      setUserRoles(roles);
-      setDataLevel(dl);
-      setToken(storedToken);
       setAppMode('authenticated');
     }
     const timer = setTimeout(() => setIsLoading(false), 800);
@@ -96,16 +106,20 @@ const App = () => {
   }
 
   useEffect(() => {
-    // Si estamos en modo autenticado pero no hay token real o no está validado,
-    // mandar a login, pero solo después del primer render para evitar loops.
-    if (!isLoading && !isAuthenticated && appMode === 'authenticated' && !localStorage.getItem('token')) {
-      setAppMode('login');
+    // Reducción a login solo si estamos en modo autenticado pero realmente no hay credenciales
+    if (!isLoading && !isAuthenticated && appMode === 'authenticated') {
+      const storedToken = localStorage.getItem('token');
+      if (!storedToken) {
+        setAppMode('login');
+      } else {
+        setIsAuthenticated(true);
+      }
     }
   }, [isLoading, isAuthenticated, appMode]);
 
   if (appMode === 'login') {
     return <LoginPage
-      onLoginSuccess={handleLoginSuccess}
+      onLoginSuccess={(t, r, dl) => handleLoginSuccess(t, r || [], dl || 1)}
       onBackClick={() => setAppMode('public')}
     />;
   }
