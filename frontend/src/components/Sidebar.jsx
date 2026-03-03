@@ -11,7 +11,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
     const allItems = [
         { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, category: 'HOME', show: true },
         // Monitor de fuentes externas (MinDefensa)
-        { id: 'monitoring', label: 'Fuentes Externas', icon: Globe, category: 'OPERACIONES', show: isUploader || isSteward },
+        { id: 'monitoring', label: 'Monitor Mindefensa', icon: Globe, category: 'OPERACIONES', show: isUploader || isSteward },
         // Nuevo monitor de activos de la Policía Nacional
         { id: 'police_monitor', label: 'Monitor Policía', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward },
 
@@ -19,7 +19,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'access_requests', label: 'Solicitudes', icon: Bell, category: 'ADMINISTRACIÓN', show: isAdmin || userRoles.includes('DATA_OWNER') },
         { id: 'audit', label: 'Audit Log', icon: Activity, category: 'ADMINISTRACIÓN', show: isAdmin },
 
-        { id: 'ingesta_universal', label: 'Carga de Datos', icon: Zap, category: 'OPERACIONES', show: isUploader },
+        { id: 'ingesta_universal', label: 'Cargue Mindefensa', icon: Zap, category: 'OPERACIONES', show: isUploader },
 
         { id: 'dq', label: 'Calidad (DQ)', icon: ShieldCheck, category: 'OPERACIONES', show: isSteward },
 
