@@ -4,10 +4,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from db.models import get_db, Event, EventType
 from jinja2 import Environment, FileSystemLoader
-# from weasyprint import HTML
 import io
 from datetime import datetime, date
 import os
+import base64
 
 from api.auth import institutional_access
 
@@ -25,11 +25,14 @@ async def generar_boletin_pdf(anio: int = None, db: Session = Depends(get_db)):
     if not anio:
         anio = datetime.now().year
 
+    try:
+        from db.models_intelligence import NationalCrimeStats
+        
         # 0. Obtener Fecha de Corte (Dato más reciente)
-        fecha_corte_raw = db.query(func.max(NationalCrimeStats.occurrence_date)).filter(
+        fecha_corte_raw = db.query(func.max(NationalCrimeStats.fecha_hecho)).filter(
             NationalCrimeStats.municipio_normalizado == "JAMUNDI"
         ).scalar()
-        fecha_corte = fecha_corte_raw.strftime("%d/%m/%Y") if fecha_corte_raw else "No disponible"
+        fecha_corte = fecha_corte_raw.strftime("%d/%m/%Y") if fecha_corte_raw else datetime.now().strftime("%d/%m/%Y")
 
         # 1. Recopilar Datos Año Actual
         local_data = db.query(
@@ -58,26 +61,37 @@ async def generar_boletin_pdf(anio: int = None, db: Session = Depends(get_db)):
         for d in local_data:
             c_val = int(d.total)
             p_val = yoy_dict.get(d.tipo_delito, 0)
-            var_pct = round(((c_val - p_val) / p_val * 100), 1) if p_val > 0 else 100.0
+            var_pct = round(((c_val - p_val) / max(1, p_val) * 100), 1)
             delitos_data.append({
                 "name": d.tipo_delito,
                 "value": c_val,
                 "prev_value": p_val,
-                "percent": round((c_val / total_incidentes * 100), 1) if total_incidentes > 0 else 0,
+                "percent": round((c_val / max(1, total_incidentes) * 100), 1),
                 "var_pct": var_pct
             })
         
         delitos_data = sorted(delitos_data, key=lambda x: x['value'], reverse=True)
 
-        # 4. Top Barrios (Omitido para brevedad en este ejemplo)
+        # 4. Barrios (Top 10)
+        barrios_query = db.query(
+            NationalCrimeStats.barrio,
+            func.sum(NationalCrimeStats.cantidad).label("total")
+        ).filter(
+            NationalCrimeStats.municipio_normalizado == "JAMUNDI",
+            NationalCrimeStats.anio == anio
+        ).group_by(NationalCrimeStats.barrio).order_by(func.sum(NationalCrimeStats.cantidad).desc()).limit(10).all()
+        
         barrios_data = []
+        for b in barrios_query:
+            if b.barrio:
+                barrios_data.append({"name": b.barrio, "delitos": int(b.total)})
 
         # 4.1 Cargar Escudo Base64
         logo_base64 = ""
         try:
-            import base64
-            # Buscamos el escudo en la carpeta de activos del monitor
-            logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "monitor-mindefensa", "escudo_jamundi.png")
+            # Ruta relativa al proyecto para el escudo
+            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            logo_path = os.path.join(base_path, "monitor-mindefensa", "escudo_jamundi.png")
             if os.path.exists(logo_path):
                 with open(logo_path, "rb") as img_f:
                     encoded = base64.b64encode(img_f.read()).decode("utf-8")
@@ -88,22 +102,18 @@ async def generar_boletin_pdf(anio: int = None, db: Session = Depends(get_db)):
         # 5. Renderizar HTML
         template = env.get_template("boletin.html")
         html_content = template.render(
-            periodo=f"Anual {anio}",
+            periodo=str(anio),
             logo_base64=logo_base64,
             fecha_generacion=datetime.now().strftime("%d/%m/%Y %H:%M"),
             fecha_corte=fecha_corte,
             total_incidentes=total_incidentes,
             total_yoy=total_yoy,
-            var_total_pct=round(((total_incidentes - total_yoy) / total_yoy * 100), 1) if total_yoy > 0 else 0,
+            var_total_pct=round(((total_incidentes - total_yoy) / max(1, total_yoy) * 100), 1),
             total_barrios=len(barrios_data),
             delitos=delitos_data,
             barrios=barrios_data
         )
 
-        # Nota: WeasyPrint tiene problemas de DLLs en Windows. 
-        # Como alternativa para este entorno, devolvemos el HTML para previsualización 
-        # o usamos una técnica de impresión si estuviera disponible.
-        # Por ahora, habilitamos el retorno del HTML oficial para que el frontend lo maneje o lo imprima.
         return StreamingResponse(
             io.BytesIO(html_content.encode()), 
             media_type="text/html",
@@ -112,4 +122,4 @@ async def generar_boletin_pdf(anio: int = None, db: Session = Depends(get_db)):
 
     except Exception as e:
         print(f"Error generando boletín: {e}")
-        raise HTTPException(status_code=500, detail=f"No se pudo generar el reporte: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error en servidor: {str(e)}")
