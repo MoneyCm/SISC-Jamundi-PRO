@@ -176,20 +176,6 @@ const App = () => {
           datasetCode={selectedDataset?.code || "SECUESTRO"}
           label={selectedDataset?.label || "Secuestro"}
         />;
-      case 'ingesta_secuestro':
-        return <UniversalIngesta
-          setActivePage={setActivePage}
-          setReportId={setSelectedReportId}
-          datasetCode="SECUESTRO"
-          label="Secuestro"
-        />;
-      case 'ingesta_homicidio':
-        return <UniversalIngesta
-          setActivePage={setActivePage}
-          setReportId={setSelectedReportId}
-          datasetCode="HOMICIDIO_INTENCIONAL"
-          label="Homicidios (Intencional)"
-        />;
       default:
         return <Dashboard />;
     }

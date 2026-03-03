@@ -16,10 +16,6 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'police_monitor', label: 'Monitor Policía', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward },
 
         { id: 'users', label: 'Gestión Usuarios', icon: ShieldAlert, category: 'ADMINISTRACIÓN', show: isAdmin },
-        { id: 'access_requests', label: 'Solicitudes', icon: Bell, category: 'ADMINISTRACIÓN', show: isAdmin || userRoles.includes('DATA_OWNER') },
-        { id: 'audit', label: 'Audit Log', icon: Activity, category: 'ADMINISTRACIÓN', show: isAdmin },
-
-        { id: 'ingesta_universal', label: 'Cargue Mindefensa', icon: Zap, category: 'OPERACIONES', show: isUploader },
 
         { id: 'dq', label: 'Calidad (DQ)', icon: ShieldCheck, category: 'OPERACIONES', show: isSteward },
 
