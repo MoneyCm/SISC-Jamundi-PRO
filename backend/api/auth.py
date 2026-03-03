@@ -31,20 +31,24 @@ async def log_audit(
     level: int = 1,
     request: Optional[Request] = None,
 ):
-    ip = request.client.host if request and request.client else None
-    ua = request.headers.get("user-agent") if request else None
+    try:
+        ip = request.client.host if request and request.client else None
+        ua = request.headers.get("user-agent") if request else None
 
-    log = AuditLog(
-        actor_user_id=actor_id,
-        action=action,
-        module=module,
-        target_ref=target,
-        data_level=level,
-        ip=ip,
-        user_agent=ua,
-    )
-    db.add(log)
-    db.commit()
+        log = AuditLog(
+            actor_user_id=actor_id,
+            action=action,
+            module=module,
+            target_ref=target,
+            data_level=level,
+            ip=ip,
+            user_agent=ua,
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        print(f"⚠️ Error de auditoría (no crítico): {e}")
+        db.rollback()
 
 
 # ----------------------------
