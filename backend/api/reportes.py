@@ -24,20 +24,19 @@ async def generar_boletin_pdf(
     db: Session = Depends(get_db)
 ):
     """
-    Genera un boletín de seguridad oficial en PDF con estadísticas actuales y comparativas YoY.
-    Soporta autenticación por query parameter para apertura en nueva pestaña.
+    Genera un boletín de seguridad oficial en PDF.
+    Validación manual de token para máxima compatibilidad.
     """
-    # Validar token manualmente si viene por query
-    if token:
-        try:
-            from core.security import decode_access_token
-            decode_access_token(token)
-        except:
-            raise HTTPException(status_code=401, detail="Token inválido")
-    else:
-        # Si no hay token en la URL, intentar el flujo normal de headers
-        # (Esto es un fallback, el frontend enviará el token en la URL)
-        raise HTTPException(status_code=401, detail="Autenticación requerida")
+    if not token:
+        raise HTTPException(status_code=401, detail="Token faltante")
+        
+    try:
+        from core.security import decode_access_token
+        # Validar el token. Si falla, lanza excepción.
+        decode_access_token(token)
+    except Exception as e:
+        print(f"Error de token: {e}")
+        raise HTTPException(status_code=401, detail="Sesión inválida")
 
     if not anio:
         anio = datetime.now().year
@@ -103,18 +102,20 @@ async def generar_boletin_pdf(
             if b.barrio:
                 barrios_data.append({"name": b.barrio, "delitos": int(b.total)})
 
-        # 4.1 Cargar Escudo Base64
+        # 4.1 Cargar Escudo Base64 (Ruta Interna)
         logo_base64 = ""
         try:
-            # Ruta relativa al proyecto para el escudo
-            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            logo_path = os.path.join(base_path, "monitor-mindefensa", "escudo_jamundi.png")
+            import base64
+            # Buscamos el escudo dentro de la carpeta templates del backend
+            logo_path = os.path.join(template_dir, "escudo_jamundi.png")
             if os.path.exists(logo_path):
                 with open(logo_path, "rb") as img_f:
                     encoded = base64.b64encode(img_f.read()).decode("utf-8")
                     logo_base64 = f"data:image/png;base64,{encoded}"
+            else:
+                print(f"⚠️ Aviso: No se encontró el escudo en {logo_path}")
         except Exception as e:
-            print(f"Aviso: No se pudo cargar el escudo: {e}")
+            print(f"❌ Error cargando escudo: {e}")
 
         # 5. Renderizar HTML
         template = env.get_template("boletin.html")
