@@ -1,12 +1,8 @@
 services:
-  # Base de Datos
-  - type: db
-    name: sisc-db
-    databaseName: sisc_jamundi
-    user: sisc_user
-    plan: free
+  # El servicio de base de datos interna de Render ha sido eliminado 
+  # porque expira el 05-03-2026. Ahora usamos NEON (PostgreSQL Serverless).
 
-  # Backend
+  # Backend (SISC-Jamundí API)
   - type: web
     name: sisc-backend
     runtime: python
@@ -16,9 +12,7 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: sisc-db
-          property: connectionString
+        value: postgresql://neondb_owner:npg_5NY7BeOiHqoX@ep-holy-lake-aiso6dd5-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: PORT
@@ -30,7 +24,7 @@ services:
       - key: MISTRAL_API_KEY
         sync: false
 
-  # Frontend
+  # Frontend (SISC-Jamundí Web)
   - type: static
     name: sisc-frontend
     runtime: static
