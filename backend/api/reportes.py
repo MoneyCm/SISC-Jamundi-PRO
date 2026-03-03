@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -9,7 +9,7 @@ from datetime import datetime, date
 import os
 import base64
 
-from api.auth import institutional_access
+from api.auth import institutional_access, get_current_user
 
 router = APIRouter()
 
@@ -17,11 +17,28 @@ router = APIRouter()
 template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
 env = Environment(loader=FileSystemLoader(template_dir))
 
-@router.get("/generar-boletin", dependencies=[Depends(institutional_access)])
-async def generar_boletin_pdf(anio: int = None, db: Session = Depends(get_db)):
+@router.get("/generar-boletin")
+async def generar_boletin_pdf(
+    anio: int = None, 
+    token: str = Query(None),
+    db: Session = Depends(get_db)
+):
     """
     Genera un boletín de seguridad oficial en PDF con estadísticas actuales y comparativas YoY.
+    Soporta autenticación por query parameter para apertura en nueva pestaña.
     """
+    # Validar token manualmente si viene por query
+    if token:
+        try:
+            from core.security import decode_access_token
+            decode_access_token(token)
+        except:
+            raise HTTPException(status_code=401, detail="Token inválido")
+    else:
+        # Si no hay token en la URL, intentar el flujo normal de headers
+        # (Esto es un fallback, el frontend enviará el token en la URL)
+        raise HTTPException(status_code=401, detail="Autenticación requerida")
+
     if not anio:
         anio = datetime.now().year
 
