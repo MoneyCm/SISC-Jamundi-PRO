@@ -2,192 +2,249 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Boletín de Seguridad - Jamundí</title>
+    <title>Boletín Oficial de Seguridad - Jamundí</title>
     <style>
         @page {
             size: A4;
-            margin: 2cm;
+            margin: 1.5cm;
             @bottom-right {
                 content: "Página " counter(page) " de " counter(pages);
-                font-size: 9pt;
-                color: #64748b;
+                font-size: 8pt;
+                color: #606175;
             }
         }
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
-            color: #1e293b;
-            line-height: 1.5;
+            color: #1A1A2E;
+            line-height: 1.4;
             margin: 0;
+            background-color: #ffffff;
+        }
+        :root {
+            --azul-jamundi: #281FD0;
+            --amarillo-jamundi: #FFE000;
+            --gris-texto: #606175;
+            --fondo-gris: #F4F4F8;
+        }
+        .header-cintillo {
+            height: 10px;
+            background-color: var(--amarillo-jamundi);
+            margin-bottom: 20px;
         }
         .header {
-            border-bottom: 2px solid #0f172a;
-            padding-bottom: 10px;
+            display: table;
+            width: 100%;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--azul-jamundi);
+            padding-bottom: 15px;
+        }
+        .header-logo {
+            display: table-cell;
+            width: 90px;
+            vertical-align: middle;
+        }
+        .header-info {
+            display: table-cell;
+            vertical-align: middle;
+            padding-left: 20px;
+        }
+        .header-meta {
+            display: table-cell;
+            text-align: right;
+            vertical-align: middle;
+            color: var(--gris-texto);
+            font-size: 9pt;
+        }
+        .header h1 {
+            font-size: 22pt;
+            font-weight: 900;
+            margin: 0;
+            color: #1A1A2E;
+            letter-spacing: -0.5px;
+        }
+        .header .subtitle {
+            font-size: 11pt;
+            font-weight: bold;
+            color: var(--azul-jamundi);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .corte-container {
+            background-color: var(--azul-jamundi);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 12px;
             margin-bottom: 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .header h1 {
-            font-size: 24pt;
-            margin: 0;
-            color: #0f172a;
+        .corte-label {
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            opacity: 0.9;
         }
-        .header .subtitle {
+        .corte-fecha {
             font-size: 12pt;
-            color: #64748b;
+            font-weight: 900;
+            color: var(--amarillo-jamundi);
         }
         .summary-grid {
-            display: flex;
-            gap: 20px;
+            display: table;
+            width: 100%;
+            border-spacing: 15px 0;
             margin-bottom: 30px;
         }
         .card {
-            flex: 1;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            background-color: #f8fafc;
+            display: table-cell;
+            padding: 20px;
+            border-radius: 16px;
+            background-color: var(--fondo-gris);
+            border: 1px solid #E2E8F0;
+            width: 33%;
         }
         .card .label {
-            font-size: 9pt;
+            font-size: 8pt;
             text-transform: uppercase;
-            font-weight: bold;
-            color: #64748b;
+            font-weight: 900;
+            color: var(--gris-texto);
+            margin-bottom: 8px;
         }
         .card .value {
-            font-size: 22pt;
-            font-weight: bold;
-            color: #0f172a;
-            margin-top: 5px;
+            font-size: 24pt;
+            font-weight: 900;
+            color: var(--azul-jamundi);
         }
         h2 {
-            font-size: 16pt;
-            border-left: 4px solid #2563eb;
-            padding-left: 10px;
-            margin: 30px 0 15px 0;
-            color: #1e293b;
+            font-size: 14pt;
+            font-weight: 900;
+            border-left: 6px solid var(--amarillo-jamundi);
+            padding-left: 12px;
+            margin: 35px 0 15px 0;
+            color: #1A1A2E;
+            text-transform: uppercase;
         }
         table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         th {
-            background-color: #f1f5f9;
+            background-color: var(--azul-jamundi);
+            color: white;
             text-align: left;
-            padding: 10px;
-            border-bottom: 1px solid #e2e8f0;
-            font-size: 10pt;
+            padding: 14px;
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
         }
         td {
-            padding: 10px;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 10pt;
+            padding: 12px 14px;
+            border-bottom: 1px solid #F1F5F9;
+            font-size: 9.5pt;
         }
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .tag {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 7.5pt;
+            font-weight: 900;
+            display: inline-block;
+        }
+        .tag-up { background-color: #FEE2E2; color: #B91C1C; }
+        .tag-down { background-color: #DCFCE7; color: #15803D; }
         .footer {
             margin-top: 50px;
             font-size: 8pt;
-            color: #94a3b8;
+            color: var(--gris-texto);
             text-align: center;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 20px;
+            border-top: 1px solid #E2E8F0;
+            padding-top: 25px;
         }
-        .tag {
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 8pt;
-            font-weight: bold;
-        }
-        .tag-high { background-color: #fee2e2; color: #991b1b; }
-        .tag-medium { background-color: #fef3c7; color: #92400e; }
     </style>
 </head>
 <body>
+    <div class="header-cintillo"></div>
     <div class="header">
-        <div>
+        <div class="header-logo">
+            <!-- Escudo incrustado permanentemente en Base64 -->
+            <img src="{{ logo_base64 }}" alt="Escudo Jamundí" width="80">
+        </div>
+        <div class="header-info">
             <h1>SISC Jamundí</h1>
-            <div class="subtitle">Boletín de Seguridad y Convivencia Ciudadana</div>
+            <div class="subtitle">Observatorio del Delito y la Convivencia</div>
         </div>
-        <div style="text-align: right;">
-            <div style="font-weight: bold;">Periodo: {{ periodo }}</div>
-            <div style="font-size: 10pt;">Generado: {{ fecha_generacion }}</div>
+        <div class="header-meta">
+            <div style="font-weight: 900; color: #1A1A2E;">BOLETÍN INSTITUCIONAL</div>
+            <div>Generado: {{ fecha_generacion }}</div>
         </div>
+    </div>
+
+    <!-- FECHA DE CORTE DESTACADA -->
+    <div class="corte-container">
+        <div class="corte-label">Cifras actualizadas con corte al:</div>
+        <div class="corte-fecha">{{ fecha_corte }}</div>
     </div>
 
     <div class="summary-grid">
         <div class="card">
-            <div class="label">Incidentes {{ periodo }}</div>
+            <div class="label">Incidentes Año Actual</div>
             <div class="value">{{ total_incidentes }}</div>
-            <div style="font-size: 9pt; color: {% if var_total_pct > 0 %}#b91c1c{% else %}#15803d{% endif %}; font-weight: bold;">
-                {{ "▲" if var_total_pct > 0 else "▼" }} {{ var_total_pct }}% YoY
+            <div style="font-size: 8.5pt; font-weight: 900; margin-top: 5px; color: {% if var_total_pct > 0 %}#B91C1C{% else %}#15803D{% endif %};">
+                {{ "▲" if var_total_pct > 0 else "▼" }} {{ var_total_pct }}% vs Año Anterior
             </div>
         </div>
         <div class="card">
-            <div class="label">Año Anterior</div>
-            <div class="value">{{ total_yoy }}</div>
+            <div class="label">Total Año Anterior</div>
+            <div class="value" style="color: var(--gris-texto);">{{ total_yoy }}</div>
+            <div style="font-size: 8pt; font-weight: bold; margin-top: 5px; color: var(--gris-texto);">Línea Base</div>
         </div>
         <div class="card">
-            <div class="label">Sectores con Reporte</div>
+            <div class="label">Georreferenciación</div>
             <div class="value">{{ total_barrios }}</div>
+            <div style="font-size: 8pt; font-weight: bold; margin-top: 5px; color: var(--gris-texto);">Zonas Críticas Identificadas</div>
         </div>
     </div>
 
-    <h2>Análisis por Tipo de Delito (Comparativa YoY)</h2>
+    <h2>Análisis Comparativo por Indicador</h2>
     <table>
         <thead>
             <tr>
-                <th>Categoría</th>
-                <th>Actual</th>
-                <th>Año Anterior</th>
-                <th>Variación %</th>
-                <th>% del Total</th>
+                <th>Indicador del Delito</th>
+                <th style="text-align: center;">{{ periodo }}</th>
+                <th style="text-align: center;">Año Ant.</th>
+                <th style="text-align: center;">Variación</th>
+                <th style="text-align: right;">% Part.</th>
             </tr>
         </thead>
         <tbody>
             {% for item in delitos %}
             <tr>
                 <td style="font-weight: bold;">{{ item.name }}</td>
-                <td>{{ item.value }}</td>
-                <td>{{ item.prev_value }}</td>
-                <td style="color: {% if item.var_pct > 0 %}#b91c1c{% else %}#15803d{% endif %}; font-weight: bold;">
-                    {{ "+" if item.var_pct > 0 else "" }}{{ item.var_pct }}%
+                <td style="text-align: center; font-weight: bold;">{{ item.value }}</td>
+                <td style="text-align: center; color: var(--gris-texto);">{{ item.prev_value }}</td>
+                <td style="text-align: center;">
+                    <span class="tag {% if item.var_pct > 0 %}tag-up{% else %}tag-down{% endif %}">
+                        {{ "+" if item.var_pct > 0 else "" }}{{ item.var_pct }}%
+                    </span>
                 </td>
-                <td>{{ item.percent }}%</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <div style="page-break-before: always;"></div>
-
-    <h2>Focalización Territorial: Top Barrios</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Barrio / Vereda</th>
-                <th>No. Incidentes</th>
-                <th>Nivel de Incidencia</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in barrios %}
-            <tr>
-                <td>{{ item.name }}</td>
-                <td>{{ item.delitos }}</td>
-                <td>
-                    {% if item.delitos > 5 %}
-                    <span class="tag tag-high">ALTO</span>
-                    {% else %}
-                    <span class="tag tag-medium">MEDIO</span>
-                    {% endif %}
-                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">{{ item.percent }}%</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
     <div class="footer">
-        Este es un documento oficial generado automáticamente por el Sistema de Información para la Seguridad y la Convivencia (SISC) de Jamundí. La información contenida tiene fines analíticos y estratégicos para la toma de decisiones institucionales.
+        <strong>ALCALDÍA DE JAMUNDÍ - VALLE DEL CAUCA</strong><br>
+        Secretaría de Seguridad y Convivencia Ciudadana<br>
+        <em>Este es un documento oficial de inteligencia criminal generado por el sistema SISC.<br>
+        Fuente de datos: Ministerio de Defensa Nacional / Policía Nacional de Colombia.</em>
     </div>
 </body>
 </html>
