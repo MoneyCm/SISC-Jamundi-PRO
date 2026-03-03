@@ -4,6 +4,11 @@ from db.models_auth import Permission
 from core.security import get_password_hash
 import sys
 import uuid
+import os
+from dotenv import load_dotenv
+
+# Forzar carga de variables de entorno locales
+load_dotenv()
 
 def init_db():
     print("🚀 Iniciando script de creación de sistema institucional de usuarios...")
@@ -40,7 +45,7 @@ def init_db():
         admin_data = {
             "username": "admin_sisc",
             "email": "admin@jamundi.gov.co",
-            "password": "admin_password", # Cambiar en primera sesión
+            "password": os.getenv("ADMIN_PASSWORD", "admin_password"), 
             "full_name": "Administrador de Sistema SISC",
             "role_codes": ["TI_ADMIN", "FUNC_ADMIN", "DATA_OWNER"],
             "data_level_max": 3
