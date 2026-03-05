@@ -173,8 +173,8 @@
     <div class="header-cintillo"></div>
     <div class="header">
         <div class="header-logo">
-            <!-- Escudo incrustado permanentemente en Base64 -->
-            <img src="{{ logo_base64 }}" alt="Escudo Jamundí" width="80">
+            <!-- URL oficial del escudo de Jamundí -->
+            <img src="https://jamundi.gov.co/assets/logo.png" alt="Escudo Jamundí" width="80" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Escudo_de_Jamund%C3%AD.svg/800px-Escudo_de_Jamund%C3%AD.svg.png'">
         </div>
         <div class="header-info">
             <h1>SISC Jamundí</h1>
@@ -186,10 +186,16 @@
         </div>
     </div>
 
-    <!-- FECHA DE CORTE DESTACADA -->
+    <!-- FECHA DE CORTE Y FUENTE DESTACADA -->
     <div class="corte-container">
-        <div class="corte-label">Cifras actualizadas con corte al:</div>
-        <div class="corte-fecha">{{ fecha_corte }}</div>
+        <div style="flex: 1;">
+            <div class="corte-label">Fuente de Información:</div>
+            <div class="corte-fecha" style="font-size: 10pt; color: white;">{{ fuente_datos }}</div>
+        </div>
+        <div style="text-align: right;">
+            <div class="corte-label">Corte de Datos:</div>
+            <div class="corte-fecha">{{ fecha_corte }}</div>
+        </div>
     </div>
 
     <div class="summary-grid">
