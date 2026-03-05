@@ -4,7 +4,7 @@ import MapComponent from '../components/Map/MapComponent';
 import DashboardFilters from '../components/DashboardFilters';
 import ComparisonWidget from '../components/ComparisonWidget';
 import IntelligenceBriefTicker from '../components/IntelligenceBriefTicker';
-import { Loader, Download, RefreshCcw } from 'lucide-react';
+import { Loader, Download, RefreshCcw, ShieldCheck, Activity, Users, Globe, FileText, ArrowUpRight } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
 const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
@@ -236,85 +236,215 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-700 pb-20">
-            {/* Barra de Filtros y Control - Alta Visibilidad */}
-            <div className="sticky top-0 z-30 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900 text-white p-4 md:px-8 rounded-b-2xl shadow-2xl -mx-4 md:-mx-8">
-                <div className="flex items-center gap-4">
-                    <div className="hidden md:block">
-                        <h2 className="text-xl font-black tracking-tight">Centro de Control SISC</h2>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest whitespace-nowrap">
-                                Cobertura: {dashboardData.coverage.start || '...'} / {dashboardData.coverage.end || '...'}
-                            </p>
+        <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+            {/* Barra de Filtros y Control - Centro de Mando */}
+            <div className="sticky top-0 z-30 flex flex-col md:flex-row justify-between items-center gap-4 bg-[#281FD0] text-white p-4 md:px-8 rounded-b-[2rem] shadow-2xl -mx-4 md:-mx-8 border-b border-white/10 backdrop-blur-md bg-opacity-95">
+                <div className="flex items-center gap-5">
+                    <div className="hidden md:flex items-center gap-3">
+                        <div className="bg-white p-1.5 rounded-xl shadow-inner">
+                            <img src="/assets/escudo.png" alt="Jamundí" className="w-8 h-8 object-contain" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black tracking-tighter leading-tight">CENTRO DE MANDO SISC</h2>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
+                                <p className="text-[10px] text-white/70 font-bold uppercase tracking-[0.15em] whitespace-nowrap">
+                                    Nivel de Datos {dataLevel} | Jamundí {new Date().getFullYear()}
+                                </p>
+                            </div>
                         </div>
                     </div>
-                    <div className="h-8 w-px bg-slate-800 hidden md:block"></div>
+                    <div className="h-10 w-px bg-white/20 hidden lg:block"></div>
                     <DashboardFilters onFilterChange={handleFilterChange} referenceDate={dashboardData.referenceDate} currentRange={dashboardData.currentRange} />
                 </div>
+
                 <div className="flex items-center gap-3">
+                    <div className="hidden xl:flex flex-col items-end mr-2 text-right">
+                        <span className="text-[9px] font-black text-white/50 uppercase tracking-widest">Sincronización Regional</span>
+                        <span className="text-[10px] font-bold text-emerald-300">ACTIVA: {dashboardData.coverage.end || '...'}</span>
+                    </div>
+                    <button
+                        onClick={handleDownloadPDF}
+                        className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2.5 rounded-xl text-xs font-black transition-all active:scale-95"
+                    >
+                        <RefreshCcw size={14} />
+                        BOLETÍN
+                    </button>
                     <button
                         onClick={handleExportCSV}
-                        className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl text-xs font-black transition-all shadow-lg active:scale-95"
+                        className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white px-5 py-2.5 rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-900/20 active:scale-95"
                     >
                         <Download size={14} />
-                        EXPORTAR DATOS
+                        EXPORTAR
                     </button>
+                </div>
+            </div>
+
+            {/* Banner de Bienvenida Estratégica */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-8 rounded-3xl border border-slate-700 shadow-xl">
+                <div className="absolute top-0 right-0 w-1/3 h-full opacity-10 pointer-events-none">
+                    <Activity size={300} className="text-primary translate-x-20 -translate-y-20 rotate-12" />
+                </div>
+                <div className="relative z-10 max-w-4xl">
+                    <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2">
+                        Bienvenido al <span className="text-primary">Observatorio del Delito</span>
+                    </h1>
+                    <p className="text-slate-400 font-medium text-sm md:text-base leading-relaxed mb-6">
+                        Usted se encuentra en el <span className="text-white font-bold">Sistema Institucional de Seguridad y Convivencia (SISC)</span> de Jamundí.
+                        Este entorno integra inteligencia de datos regionales y alertas estratégicas para la toma de decisiones basada en evidencia.
+                    </p>
+                    <div className="flex flex-wrap gap-4">
+                        <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+                            <ShieldCheck size={14} className="text-emerald-500" />
+                            SEGURIDAD CIUDADANA
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+                            <Activity size={14} className="text-primary" />
+                            INTELIGENCIA PREDICTIVA
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+                            <Users size={14} className="text-amber-500" />
+                            GESTIÓN DE CONVIVENCIA
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <IntelligenceBriefTicker />
 
             {loading && (
-                <div className="fixed top-6 right-6 z-[100] bg-slate-900 text-white px-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-black animate-pulse border border-slate-700">
-                    <RefreshCcw size={14} className="animate-spin text-primary" />
-                    ACTUALIZANDO...
+                <div className="fixed top-24 right-6 z-[100] bg-white text-slate-900 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-black border border-slate-200 animate-in slide-in-from-right-10">
+                    <RefreshCcw size={16} className="animate-spin text-primary" />
+                    ACTUALIZANDO INTELIGENCIA...
                 </div>
             )}
 
-            <EarlyWarningWidget alerts={alerts} />
-
-            {comparisonData && !comparisonData.isLegacy && (
-                <ComparisonWidget comparisonData={comparisonData} />
-            )}
-
-            <AIInsightWidget
-                insight={aiInsight}
-                loading={aiLoading}
-                provider={aiProvider}
-                onTechnicalReport={handleDownloadPDF}
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {dashboardData.kpiData.map((kpi, index) => (
-                    <KPICard key={index} data={kpi} />
-                ))}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                    <TrendChart data={dashboardData.crimeTrendData} year={dashboardData.referenceDate.getFullYear()} />
+            {/* SECCIÓN 1: INTELIGENCIA ESTRATÉGICA */}
+            <section className="space-y-6">
+                <div className="flex items-center gap-3 mb-2 px-1">
+                    <div className="w-1 h-6 bg-primary rounded-full"></div>
+                    <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">I. Inteligencia Estratégica</h2>
                 </div>
-                <div>
-                    <DistributionChart data={dashboardData.crimeDistributionData} />
-                </div>
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white p-1 rounded-2xl shadow-sm border border-slate-100 h-[450px] flex flex-col">
-                    <div className="p-5 border-b border-slate-50 flex justify-between items-center">
-                        <h3 className="font-black text-slate-800 tracking-tight">Georreferenciación Institucional</h3>
-                        <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded-md border border-primary/20">POLICIAL / EJÉRCITO</span>
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                    <div className="xl:col-span-4 flex flex-col gap-6">
+                        <EarlyWarningWidget alerts={alerts} />
+                        <div className="grid grid-cols-2 gap-4">
+                            {dashboardData.kpiData.slice(0, 2).map((kpi, index) => (
+                                <KPICard key={index} data={kpi} />
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            {dashboardData.kpiData.slice(2, 4).map((kpi, index) => (
+                                <KPICard key={index + 2} data={kpi} />
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex-1 relative z-0">
-                        <MapComponent incidents={mapData} />
+
+                    <div className="xl:col-span-8 space-y-6">
+                        <AIInsightWidget
+                            insight={aiInsight}
+                            loading={aiLoading}
+                            provider={aiProvider}
+                            onTechnicalReport={handleDownloadPDF}
+                        />
+                        {comparisonData && !comparisonData.isLegacy && (
+                            <ComparisonWidget comparisonData={comparisonData} />
+                        )}
                     </div>
                 </div>
-                <div className="lg:col-span-1 space-y-6">
-                    <RecentActivity data={dashboardData.recentActivity} />
-                    <CommunityInboxWidget items={inboxItems} loading={inboxLoading} />
+            </section>
+
+            {/* SECCIÓN 2: SITUACIÓN OPERACIONAL */}
+            <section className="space-y-6">
+                <div className="flex items-center gap-3 mb-2 px-1">
+                    <div className="w-1 h-6 bg-emerald-500 rounded-full"></div>
+                    <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">II. Situación Operacional</h2>
                 </div>
-            </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-6">
+                        <div className="bg-white p-1 rounded-2xl shadow-xl border border-slate-200 h-[550px] flex flex-col group transition-shadow hover:shadow-2xl">
+                            <div className="p-5 border-b border-slate-50 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+                                <div>
+                                    <h3 className="font-black text-slate-800 tracking-tight text-lg">Georreferenciación Estratégica</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Visualización de incidentes y activos institucionales</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">EJÉRCITO</span>
+                                    <span className="text-[10px] font-black text-primary bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10">POLICÍA</span>
+                                </div>
+                            </div>
+                            <div className="flex-1 relative z-0 overflow-hidden rounded-b-2xl">
+                                <MapComponent incidents={mapData} />
+                            </div>
+                        </div>
+                        <TrendChart data={dashboardData.crimeTrendData} year={dashboardData.referenceDate.getFullYear()} />
+                    </div>
+
+                    <div className="lg:col-span-1 space-y-6">
+                        <DistributionChart data={dashboardData.crimeDistributionData} />
+                        <RecentActivity data={dashboardData.recentActivity} />
+                    </div>
+                </div>
+            </section>
+
+            {/* SECCIÓN 3: GESTIÓN SOCIAL Y CONVIVENCIA */}
+            <section className="space-y-6">
+                <div className="flex items-center gap-3 mb-2 px-1">
+                    <div className="w-1 h-6 bg-amber-500 rounded-full"></div>
+                    <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">III. Gestión y Convivencia</h2>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                    <div className="xl:col-span-2">
+                        <CommunityInboxWidget items={inboxItems} loading={inboxLoading} />
+                    </div>
+                    <div className="bg-slate-900 rounded-[2rem] p-8 text-white flex flex-col justify-between shadow-2xl relative overflow-hidden group">
+                        {/* Background Decoration */}
+                        <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-primary opacity-20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700"></div>
+
+                        <div>
+                            <h3 className="text-2xl font-black tracking-tight mb-4">Módulos de Respuesta</h3>
+                            <p className="text-slate-400 text-sm font-medium mb-8 leading-relaxed">
+                                Acceda rápidamente a las herramientas de gestión externa y coordinación institucional.
+                            </p>
+
+                            <div className="space-y-3">
+                                <button className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn">
+                                    <div className="flex items-center gap-3">
+                                        <Globe className="text-primary" size={20} />
+                                        <span className="font-bold text-sm">Monitor Mindefensa</span>
+                                    </div>
+                                    <ArrowUpRight size={16} className="text-slate-500 group-hover/btn:text-white transition-colors" />
+                                </button>
+                                <button className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn">
+                                    <div className="flex items-center gap-3">
+                                        <ShieldCheck className="text-emerald-500" size={20} />
+                                        <span className="font-bold text-sm">Monitor Policial</span>
+                                    </div>
+                                    <ArrowUpRight size={16} className="text-slate-500 group-hover/btn:text-white transition-colors" />
+                                </button>
+                                <button className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn">
+                                    <div className="flex items-center gap-3">
+                                        <FileText className="text-amber-500" size={20} />
+                                        <span className="font-bold text-sm">Reportes Técnicos</span>
+                                    </div>
+                                    <ArrowUpRight size={16} className="text-slate-500 group-hover/btn:text-white transition-colors" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between">
+                            <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">SISC v2.5 Admin</span>
+                            <div className="flex gap-2">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </div>
     );
 };

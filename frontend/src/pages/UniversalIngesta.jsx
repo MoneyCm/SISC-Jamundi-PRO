@@ -14,7 +14,26 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
+const DATASETS_CONFIG = [
+    { code: 'HOMICIDIO_INTENCIONAL', label: 'Homicidio Intencional' },
+    { code: 'LESIONES_COMUNES', label: 'Lesiones Comunes' },
+    { code: 'VIOLENCIA_INTRAFAMILIAR', label: 'Violencia Intrafamiliar' },
+    { code: 'DELITOS_SEXUALES', label: 'Delitos Sexuales' },
+    { code: 'SECUESTRO', label: 'Secuestro' },
+    { code: 'EXTORSIÓN', label: 'Extorsión' },
+    { code: 'TERRORISMO', label: 'Terrorismo' },
+    { code: 'MASACRES', label: 'Masacres' },
+    { code: 'AFECTACIÓN_FUERZA_PUBLICA', label: 'Afectación Fuerza Pública' },
+    { code: 'HURTO_PERSONAS', label: 'Hurto a Personas' },
+    { code: 'HURTO_RESIDENCIAS', label: 'Hurto a Residencias' },
+    { code: 'HURTO_VEHÍCULOS', label: 'Hurto de Vehículos' },
+    { code: 'HURTO_COMERCIO', label: 'Hurto a Comercio' },
+    { code: 'INCAUTACIÓN_COCAINA', label: 'Incautación Cocaína' },
+    { code: 'INCAUTACIÓN_MARIHUANA', label: 'Incautación Marihuana' },
+];
+
 const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO", label = "Secuestro" }) => {
+    const [currentDataset, setCurrentDataset] = useState({ code: datasetCode, label: label });
     const [status, setStatus] = useState('idle'); // idle, uploading, rejected, success
     const [reportInfo, setReportInfo] = useState(null);
     const [error, setError] = useState(null);
@@ -23,11 +42,20 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
     const fileInputRef = useRef(null);
     const forceInputRef = useRef(null);
 
-    const safeDatasetCode = typeof datasetCode === 'string' ? datasetCode : (datasetCode?.code || "SECUESTRO");
+    const safeDatasetCode = currentDataset.code;
 
     useEffect(() => {
         checkAssetStatus();
     }, [safeDatasetCode]);
+
+    const handleDatasetChange = (e) => {
+        const selected = DATASETS_CONFIG.find(d => d.code === e.target.value);
+        if (selected) {
+            setCurrentDataset(selected);
+            setStatus('idle');
+            setReportInfo(null);
+        }
+    };
 
     const checkAssetStatus = async () => {
         try {
@@ -118,14 +146,32 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                     <ShieldCheck size={48} />
                 </div>
                 <h1 className="text-4xl font-black text-slate-800 tracking-tight">Gate de Ingesta Inteligente</h1>
-                <p className="text-slate-500 max-w-xl mx-auto font-medium">Validación automática de calidad para <strong>{label}</strong> antes de la persistencia definitiva.</p>
+                <p className="text-slate-500 max-w-xl mx-auto font-medium">Validación automática de calidad para <strong>{currentDataset.label}</strong> antes de la persistencia definitiva.</p>
+
+                {/* Selector de Delito */}
+                <div className="flex justify-center mt-6">
+                    <div className="relative w-full max-w-md">
+                        <select 
+                            value={currentDataset.code}
+                            onChange={handleDatasetChange}
+                            className="w-full bg-white border-2 border-slate-200 rounded-2xl px-6 py-4 font-black text-slate-700 appearance-none focus:border-indigo-500 outline-none transition-all shadow-lg text-sm uppercase tracking-widest cursor-pointer"
+                        >
+                            {DATASETS_CONFIG.map(d => (
+                                <option key={d.code} value={d.code}>{d.label}</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <ArrowRight size={20} className="rotate-90" />
+                        </div>
+                    </div>
+                </div>
 
                 {assetStatus?.status === 'UPDATED' && (
                     <div className="inline-flex items-center gap-3 px-6 py-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-700 animate-pulse mt-4">
                         <AlertTriangle size={20} className="shrink-0" />
                         <div className="text-left">
                             <p className="text-xs font-black uppercase tracking-widest">Fuente MinDefensa Actualizada</p>
-                            <p className="text-[10px] font-bold opacity-80">Se detectó una nueva versión en el portal oficial. Descárguela antes de continuar.</p>
+                            <p className="text-[10px] font-bold opacity-80">Se detectó una nueva versión de {currentDataset.label} en el portal oficial.</p>
                         </div>
                         <button
                             onClick={() => setActivePage('monitoring')}

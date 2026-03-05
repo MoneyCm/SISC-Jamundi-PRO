@@ -58,8 +58,8 @@ const IntelligenceBriefTicker = () => {
                     SISC Intel-Brief
                 </span>
             </div>
-            
-            <div className="flex-1 px-6 flex items-center justify-between animate-in slide-in-from-right duration-500 key={currentIndex}">
+
+            <div className="flex-1 px-6 flex items-center justify-between animate-in slide-in-from-right duration-500" key={currentIndex}>
                 <div className="flex items-center gap-4 truncate">
                     <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
@@ -70,7 +70,7 @@ const IntelligenceBriefTicker = () => {
                             {current.variacion_pct > 0 ? '+' : ''}{current.variacion_pct}%
                         </span>
                     </div>
-                    
+
                     <p className="text-xs font-bold text-slate-700 italic truncate max-w-2xl">
                         "{current.analisis_ia}"
                     </p>
@@ -83,7 +83,7 @@ const IntelligenceBriefTicker = () => {
                     </span>
                 </div>
             </div>
-            
+
             <div className="px-4 text-[9px] font-black text-slate-300">
                 {currentIndex + 1} / {briefs.length}
             </div>

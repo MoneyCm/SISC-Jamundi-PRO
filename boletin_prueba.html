@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Boletín de Seguridad - Jamundí</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-size: 9pt;
+                color: #64748b;
+            }
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #1e293b;
+            line-height: 1.5;
+            margin: 0;
+        }
+        .header {
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 24pt;
+            margin: 0;
+            color: #0f172a;
+        }
+        .header .subtitle {
+            font-size: 12pt;
+            color: #64748b;
+        }
+        .summary-grid {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            flex: 1;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+        }
+        .card .label {
+            font-size: 9pt;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: #64748b;
+        }
+        .card .value {
+            font-size: 22pt;
+            font-weight: bold;
+            color: #0f172a;
+            margin-top: 5px;
+        }
+        h2 {
+            font-size: 16pt;
+            border-left: 4px solid #2563eb;
+            padding-left: 10px;
+            margin: 30px 0 15px 0;
+            color: #1e293b;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th {
+            background-color: #f1f5f9;
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 10pt;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 10pt;
+        }
+        .footer {
+            margin-top: 50px;
+            font-size: 8pt;
+            color: #94a3b8;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 20px;
+        }
+        .tag {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+        .tag-high { background-color: #fee2e2; color: #991b1b; }
+        .tag-medium { background-color: #fef3c7; color: #92400e; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>SISC Jamundí</h1>
+            <div class="subtitle">Boletín de Seguridad y Convivencia Ciudadana</div>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-weight: bold;">Periodo: Prueba 2026</div>
+            <div style="font-size: 10pt;">Generado: 03/03/2026</div>
+        </div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="card">
+            <div class="label">Incidentes Prueba 2026</div>
+            <div class="value">691</div>
+            <div style="font-size: 9pt; color: #15803d; font-weight: bold;">
+                ▼ 0% YoY
+            </div>
+        </div>
+        <div class="card">
+            <div class="label">Año Anterior</div>
+            <div class="value">2435</div>
+        </div>
+        <div class="card">
+            <div class="label">Sectores con Reporte</div>
+            <div class="value">0</div>
+        </div>
+    </div>
+
+    <h2>Análisis por Tipo de Delito (Comparativa YoY)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Categoría</th>
+                <th>Actual</th>
+                <th>Año Anterior</th>
+                <th>Variación %</th>
+                <th>% del Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+            <tr>
+                <td style="font-weight: bold;">H.PERSONAS</td>
+                <td>225</td>
+                <td>244</td>
+                <td style="color: #15803d; font-weight: bold;">
+                    -7.8%
+                </td>
+                <td>32.6%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">LESIONES</td>
+                <td>98</td>
+                <td>131</td>
+                <td style="color: #15803d; font-weight: bold;">
+                    -25.2%
+                </td>
+                <td>14.2%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">H.MOTOS</td>
+                <td>98</td>
+                <td>87</td>
+                <td style="color: #b91c1c; font-weight: bold;">
+                    +12.6%
+                </td>
+                <td>14.2%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">HURTO_PERSONAS</td>
+                <td>80</td>
+                <td>1052</td>
+                <td style="color: #15803d; font-weight: bold;">
+                    -92.4%
+                </td>
+                <td>11.6%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">HOMICIDIO</td>
+                <td>66</td>
+                <td>145</td>
+                <td style="color: #15803d; font-weight: bold;">
+                    -54.5%
+                </td>
+                <td>9.6%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">LESIONES_PERSONALES</td>
+                <td>23</td>
+                <td>408</td>
+                <td style="color: #15803d; font-weight: bold;">
+                    -94.4%
+                </td>
+                <td>3.3%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">H.COMERCIO</td>
+                <td>22</td>
+                <td>36</td>
+                <td style="color: #15803d; font-weight: bold;">
+                    -38.9%
+                </td>
+                <td>3.2%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">H.AUTOMOTORES</td>
+                <td>22</td>
+                <td>9</td>
+                <td style="color: #b91c1c; font-weight: bold;">
+                    +144.4%
+                </td>
+                <td>3.2%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">HURTO_VEHICULOS</td>
+                <td>21</td>
+                <td>187</td>
+                <td style="color: #15803d; font-weight: bold;">
+                    -88.8%
+                </td>
+                <td>3.0%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">Delito General</td>
+                <td>19</td>
+                <td>0</td>
+                <td style="color: #b91c1c; font-weight: bold;">
+                    +1900.0%
+                </td>
+                <td>2.7%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">H.RESIDENCIAS</td>
+                <td>17</td>
+                <td>51</td>
+                <td style="color: #15803d; font-weight: bold;">
+                    -66.7%
+                </td>
+                <td>2.5%</td>
+            </tr>
+            
+        </tbody>
+    </table>
+
+    <div style="page-break-before: always;"></div>
+
+    <h2>Focalización Territorial: Top Barrios</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Barrio / Vereda</th>
+                <th>No. Incidentes</th>
+                <th>Nivel de Incidencia</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Este es un documento oficial generado automáticamente por el Sistema de Información para la Seguridad y la Convivencia (SISC) de Jamundí. La información contenida tiene fines analíticos y estratégicos para la toma de decisiones institucionales.
+    </div>
+</body>
+</html>

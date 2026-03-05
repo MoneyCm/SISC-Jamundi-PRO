@@ -24,7 +24,8 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'alerts', label: 'Alertas Tempranas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'rnmc', label: 'Medidas Policia', icon: FileText, category: 'ESTRATEGIA', show: isAnalyst },
 
-        { id: 'reports', label: 'Reportes PDF', icon: FileText, category: 'SALIDA', show: isDirective || isAnalyst },
+        { id: 'reports', label: 'Reportes', icon: FileText, category: 'SALIDA', show: isDirective || isAnalyst },
+
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },
     ];
 

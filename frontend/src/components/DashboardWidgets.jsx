@@ -1,6 +1,6 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain, Users } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain, Users, X, FileText } from 'lucide-react';
 
 const iconMap = {
     AlertTriangle: AlertTriangle,
@@ -8,28 +8,31 @@ const iconMap = {
     Briefcase: Briefcase,
     Home: Home,
     Users: Users,
+    Activity: Activity,
 };
 
 export const KPICard = ({ data }) => {
     const Icon = iconMap[data.icon] || AlertTriangle;
-    // En contexto de seguridad: "up" o "negative" es MALO (Rojo)
-    // "down" o "positive" es BUENO (Verde)
     const isNegative = data.trend === 'up' || data.trend === 'negative';
     const isNeutral = data.trend === 'neutral';
 
     return (
-        <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all duration-300 group">
-            <div className="flex justify-between items-start mb-3 md:mb-4">
-                <div className={`p-2 md:p-3 rounded-xl transition-colors ${isNegative ? 'bg-red-50 text-red-600 group-hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100'}`}>
-                    <Icon size={20} strokeWidth={2} className="md:w-6 md:h-6" />
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:border-primary/20 transition-all duration-500 group relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-10 -mt-10 group-hover:bg-primary/5 transition-colors duration-500" />
+
+            <div className="relative z-10">
+                <div className="flex justify-between items-start mb-5">
+                    <div className={`p-3 rounded-2xl transition-all duration-500 ${isNegative ? 'bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white' : 'bg-primary/5 text-primary group-hover:bg-primary group-hover:text-white'}`}>
+                        <Icon size={24} strokeWidth={2.5} />
+                    </div>
+                    <div className={`flex items-center space-x-1 text-[10px] font-black px-2.5 py-1 rounded-lg border ${isNegative ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                        <span>{data.change}</span>
+                        {isNeutral ? null : isNegative ? <ArrowUpRight size={12} strokeWidth={3} /> : <ArrowDownRight size={12} strokeWidth={3} />}
+                    </div>
                 </div>
-                <div className={`flex items-center space-x-1 text-[10px] md:text-sm font-bold px-2 py-1 rounded-full ${isNegative ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                    <span>{data.change}</span>
-                    {isNegative ? <ArrowUpRight size={12} className="md:w-3.5 md:h-3.5" /> : <ArrowDownRight size={12} className="md:w-3.5 md:h-3.5" />}
-                </div>
+                <h3 className="text-slate-400 text-[10px] font-black tracking-[0.15em] uppercase mb-1">{data.title}</h3>
+                <p className="text-3xl font-black text-slate-800 tracking-tighter">{data.value}</p>
             </div>
-            <h3 className="text-slate-500 text-[10px] md:text-sm font-medium tracking-wide uppercase">{data.title}</h3>
-            <p className="text-2xl md:text-3xl font-bold text-slate-800 mt-0.5 md:mt-1 tracking-tight">{data.value}</p>
         </div>
     );
 };
@@ -156,6 +159,7 @@ export const DistributionChart = ({ data }) => {
 };
 
 const getStatusColor = (status) => {
+    if (!status) return 'bg-slate-50 text-slate-600 border-slate-100';
     switch (status.toLowerCase()) {
         case 'atendido': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
         case 'en proceso': return 'bg-blue-50 text-blue-600 border-blue-100';
@@ -165,6 +169,7 @@ const getStatusColor = (status) => {
 };
 
 const getStatusIcon = (status) => {
+    if (!status) return <Activity size={14} />;
     switch (status.toLowerCase()) {
         case 'atendido': return <CheckCircle size={14} />;
         case 'en proceso': return <Clock size={14} />;
@@ -253,101 +258,119 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
     };
 
     return (
-        <div className={`bg-slate-900 rounded-xl shadow-xl border border-slate-800 relative overflow-hidden group transition-all duration-500 ${chatOpen ? 'h-[500px]' : 'p-6'}`}>
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
-                <Brain size={120} className="text-primary" />
+        <div className={`bg-slate-950 rounded-3xl shadow-2xl border border-slate-800 relative overflow-hidden group transition-all duration-700 ${chatOpen ? 'h-[550px]' : 'p-8'}`}>
+            {/* High-tech background effect */}
+            <div className="absolute top-0 right-0 w-full h-full opacity-5 pointer-events-none">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary blur-[100px] rounded-full"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500 blur-[100px] rounded-full"></div>
             </div>
 
             <div className="relative z-10 h-full flex flex-col">
-                <div className={`flex items-center justify-between mb-4 ${chatOpen ? 'p-6 pb-2' : ''}`}>
-                    <div className="flex items-center space-x-3">
-                        <div className="p-2 bg-primary/20 rounded-lg">
-                            <Brain className="text-primary w-5 h-5" />
+                <div className={`flex items-center justify-between mb-6 ${chatOpen ? 'p-8 pb-2' : ''}`}>
+                    <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-primary/20 rounded-2xl border border-primary/20 shadow-[0_0_15px_rgba(40,31,208,0.3)]">
+                            <Brain className="text-primary w-6 h-6" />
                         </div>
-                        <h3 className="text-lg font-bold text-white">Perspectiva del SISC</h3>
+                        <div>
+                            <h3 className="text-xl font-black text-white tracking-tight italic">Perspectiva Estratégica AI</h3>
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mt-1">SISC Cognition Engine</p>
+                        </div>
                     </div>
                     {chatOpen && (
                         <button
                             onClick={() => setChatOpen(false)}
-                            className="text-slate-400 hover:text-white transition-colors"
+                            className="bg-white/5 hover:bg-white/10 p-2 rounded-xl text-slate-400 hover:text-white transition-all"
                         >
-                            <Clock size={18} />
+                            <X size={20} />
                         </button>
                     )}
                 </div>
 
                 {!chatOpen ? (
                     <>
-                        {loading ? (
-                            <div className="flex items-center space-x-3 text-slate-400">
-                                <Activity className="animate-pulse w-4 h-4" />
-                                <p className="text-sm italic">El SISC está sintetizando patrones...</p>
-                            </div>
-                        ) : (
-                            <p className="text-slate-300 text-sm leading-relaxed italic">
-                                "{insight}"
-                            </p>
-                        )}
-                        <div className="mt-4 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2 py-1 bg-white/5 rounded">
-                                    {provider || 'Analista Virtual'}
-                                </span>
+                        <div className="bg-white/5 border border-white/5 rounded-2xl p-6 mb-6">
+                            {loading ? (
+                                <div className="flex flex-col gap-3">
+                                    <div className="h-4 w-3/4 bg-white/5 animate-pulse rounded"></div>
+                                    <div className="h-4 w-1/2 bg-white/5 animate-pulse rounded"></div>
+                                    <p className="text-[10px] font-bold text-primary animate-pulse uppercase tracking-widest mt-2">Sintetizando Patrones Regionales...</p>
+                                </div>
+                            ) : (
+                                <p className="text-slate-200 text-base leading-relaxed font-medium">
+                                    <span className="text-primary font-black text-2xl mr-2">“</span>
+                                    {insight}
+                                    <span className="text-primary font-black text-2xl ml-1">”</span>
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Motor de Análisis</span>
+                                    <span className="text-xs font-bold text-slate-300">{provider || 'SISC Intelligence'}</span>
+                                </div>
+                                <div className="h-8 w-px bg-white/10"></div>
                                 <button
                                     onClick={() => setChatOpen(true)}
-                                    className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-400/10 px-3 py-1.5 rounded-lg border border-emerald-400/20"
+                                    className="flex items-center gap-2 text-xs font-black text-emerald-400 hover:text-white transition-all bg-emerald-400/10 hover:bg-emerald-500 px-4 py-2.5 rounded-xl border border-emerald-400/20 shadow-lg shadow-emerald-900/10"
                                 >
-                                    <Activity size={12} />
-                                    Consultar al SISC
+                                    <Activity size={14} className="animate-pulse" />
+                                    CONSULTAR ANALISTA
                                 </button>
                             </div>
                             <button
                                 onClick={onTechnicalReport}
-                                className="text-xs text-primary font-bold hover:text-white transition-colors"
+                                className="flex items-center gap-2 text-xs text-white/40 font-bold hover:text-white transition-colors group"
                             >
-                                Ver reporte técnico
+                                <FileText size={14} className="group-hover:text-primary transition-colors" />
+                                Descargar Análisis Detallado
                             </button>
                         </div>
                     </>
                 ) : (
                     <>
-                        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
                             <div className="flex justify-start">
-                                <div className="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed bg-white/5 text-slate-300 border border-white/10 rounded-bl-none italic">
-                                    Hola analista. Estoy listo para profundizar en los datos que ves en el tablero. ¿Qué te gustaría consultar?
+                                <div className="max-w-[90%] p-4 rounded-3xl text-sm leading-relaxed bg-white/5 text-slate-300 border border-white/10 rounded-bl-none shadow-xl">
+                                    <p className="font-bold text-primary text-[10px] uppercase tracking-widest mb-1">IA Institucional</p>
+                                    Hola analista. He procesado las tendencias delictivas y medidas de convivencia del periodo actual. ¿En qué hallazgo específico desea profundizar?
                                 </div>
                             </div>
                             {messages.map(msg => (
                                 <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${msg.sender === 'user'
-                                        ? 'bg-primary text-white rounded-br-none'
+                                    <div className={`max-w-[90%] p-4 rounded-3xl text-sm leading-relaxed shadow-xl ${msg.sender === 'user'
+                                        ? 'bg-primary text-white rounded-br-none font-bold'
                                         : 'bg-white/10 text-slate-200 border border-white/10 rounded-bl-none'}`}>
                                         {msg.text}
                                     </div>
                                 </div>
                             ))}
                             {chatLoading && (
-                                <div className="text-[10px] text-primary animate-pulse font-bold uppercase tracking-widest">
-                                    SISC Procesando...
+                                <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full w-fit">
+                                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></div>
+                                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest ml-1">Procesando...</span>
                                 </div>
                             )}
                         </div>
-                        <form onSubmit={handleSend} className="p-4 bg-slate-800/50 border-t border-slate-800">
+                        <form onSubmit={handleSend} className="p-6 bg-slate-900/80 border-t border-white/5 backdrop-blur-sm">
                             <div className="relative">
                                 <input
                                     type="text"
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
-                                    placeholder="Pregunta sobre los datos del panel..."
-                                    className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary outline-none transition-all pr-10"
+                                    placeholder="Interactuar con la inteligencia del SISC..."
+                                    className="w-full bg-slate-950 border border-white/10 text-white rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-primary outline-none transition-all pr-12 placeholder:text-slate-600 shadow-inner"
                                     disabled={chatLoading}
                                 />
                                 <button
                                     type="submit"
                                     disabled={!input.trim() || chatLoading}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-primary hover:text-white disabled:text-slate-600 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-primary p-2 rounded-xl text-white hover:bg-primary-light disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-lg"
                                 >
-                                    <ArrowUpRight size={20} />
+                                    <ArrowUpRight size={18} strokeWidth={3} />
                                 </button>
                             </div>
                         </form>

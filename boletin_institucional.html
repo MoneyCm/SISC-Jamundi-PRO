@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Boletín Oficial de Seguridad - Jamundí</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-size: 8pt;
+                color: #606175;
+            }
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #1A1A2E;
+            line-height: 1.4;
+            margin: 0;
+            background-color: #ffffff;
+        }
+        :root {
+            --azul-jamundi: #281FD0;
+            --amarillo-jamundi: #FFE000;
+            --gris-texto: #606175;
+            --fondo-gris: #F4F4F8;
+        }
+        .header-cintillo {
+            height: 10px;
+            background-color: var(--amarillo-jamundi);
+            margin-bottom: 20px;
+        }
+        .header {
+            display: table;
+            width: 100%;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--azul-jamundi);
+            padding-bottom: 15px;
+        }
+        .header-logo {
+            display: table-cell;
+            width: 90px;
+            vertical-align: middle;
+        }
+        .header-info {
+            display: table-cell;
+            vertical-align: middle;
+            padding-left: 20px;
+        }
+        .header-meta {
+            display: table-cell;
+            text-align: right;
+            vertical-align: middle;
+            color: var(--gris-texto);
+            font-size: 9pt;
+        }
+        .header h1 {
+            font-size: 22pt;
+            font-weight: 900;
+            margin: 0;
+            color: #1A1A2E;
+            letter-spacing: -0.5px;
+        }
+        .header .subtitle {
+            font-size: 11pt;
+            font-weight: bold;
+            color: var(--azul-jamundi);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .corte-container {
+            background-color: var(--azul-jamundi);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .corte-label {
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+        .corte-fecha {
+            font-size: 12pt;
+            font-weight: 900;
+            color: var(--amarillo-jamundi);
+        }
+        .summary-grid {
+            display: table;
+            width: 100%;
+            border-spacing: 15px 0;
+            margin-bottom: 30px;
+        }
+        .card {
+            display: table-cell;
+            padding: 20px;
+            border-radius: 16px;
+            background-color: var(--fondo-gris);
+            border: 1px solid #E2E8F0;
+            width: 33%;
+        }
+        .card .label {
+            font-size: 8pt;
+            text-transform: uppercase;
+            font-weight: 900;
+            color: var(--gris-texto);
+            margin-bottom: 8px;
+        }
+        .card .value {
+            font-size: 24pt;
+            font-weight: 900;
+            color: var(--azul-jamundi);
+        }
+        h2 {
+            font-size: 14pt;
+            font-weight: 900;
+            border-left: 6px solid var(--amarillo-jamundi);
+            padding-left: 12px;
+            margin: 35px 0 15px 0;
+            color: #1A1A2E;
+            text-transform: uppercase;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        th {
+            background-color: var(--azul-jamundi);
+            color: white;
+            text-align: left;
+            padding: 14px;
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #F1F5F9;
+            font-size: 9.5pt;
+        }
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .tag {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 7.5pt;
+            font-weight: 900;
+            display: inline-block;
+        }
+        .tag-up { background-color: #FEE2E2; color: #B91C1C; }
+        .tag-down { background-color: #DCFCE7; color: #15803D; }
+        .footer {
+            margin-top: 50px;
+            font-size: 8pt;
+            color: var(--gris-texto);
+            text-align: center;
+            border-top: 1px solid #E2E8F0;
+            padding-top: 25px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-cintillo"></div>
+    <div class="header">
+        <div class="header-logo">
+            <!-- Logo oficial de la Alcaldia -->
+            <img src="https://jamundi.gov.co/assets/logo.png" alt="Escudo Jamundí" width="80">
+        </div>
+        <div class="header-info">
+            <h1>SISC Jamundí</h1>
+            <div class="subtitle">Observatorio del Delito y la Convivencia</div>
+        </div>
+        <div class="header-meta">
+            <div style="font-weight: 900; color: #1A1A2E;">BOLETÍN INSTITUCIONAL</div>
+            <div>Generado: 03/03/2026 14:46</div>
+        </div>
+    </div>
+
+    <!-- FECHA DE CORTE DESTACADA -->
+    <div class="corte-container">
+        <div class="corte-label">Cifras actualizadas con corte al:</div>
+        <div class="corte-fecha">21/02/2026</div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="card">
+            <div class="label">Incidentes Año Actual</div>
+            <div class="value">691</div>
+            <div style="font-size: 8.5pt; font-weight: 900; margin-top: 5px; color: #15803D;">
+                ▼ -71.6% vs Año Anterior
+            </div>
+        </div>
+        <div class="card">
+            <div class="label">Total Año Anterior</div>
+            <div class="value" style="color: var(--gris-texto);">2435</div>
+            <div style="font-size: 8pt; font-weight: bold; margin-top: 5px; color: var(--gris-texto);">Línea Base</div>
+        </div>
+        <div class="card">
+            <div class="label">Georreferenciación</div>
+            <div class="value">12</div>
+            <div style="font-size: 8pt; font-weight: bold; margin-top: 5px; color: var(--gris-texto);">Zonas Críticas Identificadas</div>
+        </div>
+    </div>
+
+    <h2>Análisis Comparativo por Indicador</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Indicador del Delito</th>
+                <th style="text-align: center;">2026</th>
+                <th style="text-align: center;">Año Ant.</th>
+                <th style="text-align: center;">Variación</th>
+                <th style="text-align: right;">% Part.</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+            <tr>
+                <td style="font-weight: bold;">H.PERSONAS</td>
+                <td style="text-align: center; font-weight: bold;">225</td>
+                <td style="text-align: center; color: var(--gris-texto);">244</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-down">
+                        -7.8%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">32.6%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">LESIONES</td>
+                <td style="text-align: center; font-weight: bold;">98</td>
+                <td style="text-align: center; color: var(--gris-texto);">131</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-down">
+                        -25.2%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">14.2%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">H.MOTOS</td>
+                <td style="text-align: center; font-weight: bold;">98</td>
+                <td style="text-align: center; color: var(--gris-texto);">87</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-up">
+                        +12.6%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">14.2%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">HURTO_PERSONAS</td>
+                <td style="text-align: center; font-weight: bold;">80</td>
+                <td style="text-align: center; color: var(--gris-texto);">1052</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-down">
+                        -92.4%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">11.6%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">HOMICIDIO</td>
+                <td style="text-align: center; font-weight: bold;">66</td>
+                <td style="text-align: center; color: var(--gris-texto);">145</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-down">
+                        -54.5%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">9.6%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">LESIONES_PERSONALES</td>
+                <td style="text-align: center; font-weight: bold;">23</td>
+                <td style="text-align: center; color: var(--gris-texto);">408</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-down">
+                        -94.4%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">3.3%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">H.COMERCIO</td>
+                <td style="text-align: center; font-weight: bold;">22</td>
+                <td style="text-align: center; color: var(--gris-texto);">36</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-down">
+                        -38.9%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">3.2%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">H.AUTOMOTORES</td>
+                <td style="text-align: center; font-weight: bold;">22</td>
+                <td style="text-align: center; color: var(--gris-texto);">9</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-up">
+                        +144.4%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">3.2%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">HURTO_VEHICULOS</td>
+                <td style="text-align: center; font-weight: bold;">21</td>
+                <td style="text-align: center; color: var(--gris-texto);">187</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-down">
+                        -88.8%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">3.0%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">Delito General</td>
+                <td style="text-align: center; font-weight: bold;">19</td>
+                <td style="text-align: center; color: var(--gris-texto);">0</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-up">
+                        +1900.0%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">2.7%</td>
+            </tr>
+            
+            <tr>
+                <td style="font-weight: bold;">H.RESIDENCIAS</td>
+                <td style="text-align: center; font-weight: bold;">17</td>
+                <td style="text-align: center; color: var(--gris-texto);">51</td>
+                <td style="text-align: center;">
+                    <span class="tag tag-down">
+                        -66.7%
+                    </span>
+                </td>
+                <td style="text-align: right; font-weight: bold; color: var(--azul-jamundi);">2.5%</td>
+            </tr>
+            
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <strong>ALCALDÍA DE JAMUNDÍ - VALLE DEL CAUCA</strong><br>
+        Secretaría de Seguridad y Convivencia Ciudadana<br>
+        <em>Este es un documento oficial de inteligencia criminal generado por el sistema SISC.<br>
+        Fuente de datos: Ministerio de Defensa Nacional / Policía Nacional de Colombia.</em>
+    </div>
+</body>
+</html>
