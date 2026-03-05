@@ -179,13 +179,22 @@ def get_resumen_estadistico(
     """
     Retorna un resumen de incidentes para los KPIs del dashboard.
     """
-    query = db.query(Event).order_by(Event.occurrence_date.desc())
+    query = db.query(
+        Event.id,
+        Event.occurrence_date,
+        Event.descripcion,
+        Event.barrio,
+        Event.estado,
+        EventType.category
+    ).join(EventType).order_by(Event.occurrence_date.desc())
+    
     if start_date:
         query = query.filter(Event.occurrence_date >= start_date)
     if end_date:
         query = query.filter(Event.occurrence_date <= end_date)
     
-    events = query.all()
+    # IMPORTANTE: Aplicar límite para evitar picos de memoria en Render
+    events = query.limit(50).all()
     
     # Transformar a formato esperado por el frontend
     incidents = []
@@ -193,7 +202,7 @@ def get_resumen_estadistico(
         incidents.append({
             "id": str(e.id),
             "fecha": str(e.occurrence_date),
-            "tipo": e.event_type.category,
+            "tipo": e.category,
             "barrio": e.barrio or "Sin especificar",
             "descripcion": e.descripcion or "",
             "estado": e.estado or "Abierto"
@@ -311,7 +320,8 @@ async def get_eventos_geojson(
         from sqlalchemy import or_
         query = query.filter(or_(*[EventType.category.ilike(f"%{cat}%") for cat in categories]))
         
-    result = query.all()
+    # IMPORTANTE: Aplicar límite y orden para evitar saturar la memoria
+    result = query.order_by(Event.occurrence_date.desc()).limit(2000).all()
     
     features = []
     import random

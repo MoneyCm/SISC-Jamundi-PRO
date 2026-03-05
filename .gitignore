@@ -1,6 +1,9 @@
+# Python Cache
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Environments
 .env
 .venv
 env/
@@ -8,8 +11,32 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Dependencies
 node_modules/
 dist/
+
+# Database & Dumps
+*.sql
+*.sqlite
+*.sqlite3
+
+# Reports & Binary Exports
+*.pdf
+*.csv
+backend/exports/reports/
+
+# Temp & Logs
+*.log
+*.tmp
+*.bak
+boletin_*.html
+
+# OS stuff
 .DS_Store
-.vscode/
 .idea/
+.vscode/
+
+# Static Assets
+!frontend/src/assets/
+!frontend/index.html
