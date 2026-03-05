@@ -24,7 +24,8 @@ async def list_users(
 async def create_user(
     user_in: UserCreate,
     request: Request,
-    db: Session = Depends(require_role(["TI_ADMIN"])),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["TI_ADMIN"])),
 ):
     from core.security import get_password_hash
     
@@ -53,7 +54,7 @@ async def create_user(
     db.commit()
     db.refresh(new_user)
     
-    await log_audit(db, "USER_CREATE", actor_id=str(db.query(User).filter(User.username == "admin").first().id if not current_user else current_user.id), 
+    await log_audit(db, "USER_CREATE", actor_id=str(current_user.id), 
                     target={"user_id": str(new_user.id)}, request=request)
     
     return new_user

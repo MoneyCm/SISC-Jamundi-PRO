@@ -25,8 +25,8 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'rnmc', label: 'Medidas Policia', icon: FileText, category: 'ESTRATEGIA', show: isAnalyst },
 
         { id: 'reports', label: 'Reportes', icon: FileText, category: 'SALIDA', show: isDirective || isAnalyst },
-
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },
+        { id: 'audit', label: 'Auditoría', icon: Activity, category: 'ADMINISTRACIÓN', show: isAdmin },
     ];
 
     const menuItems = isPublic ? [

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCcw, ExternalLink, AlertCircle, CheckCircle2, AlertTriangle, Clock, Database, Search, Info } from 'lucide-react';
+import { RefreshCcw, ExternalLink, AlertCircle, CheckCircle2, AlertTriangle, Clock, Database, Search, Info, ShieldCheck } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
 const PoliceMonitor = ({ onIngest }) => {
@@ -110,46 +110,53 @@ const PoliceMonitor = ({ onIngest }) => {
     const categories = Object.keys(groupedAssets).sort();
 
     return (
-        <div className="space-y-6 animate-fade-in pb-10">
-            {/* Header */}
-            <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-2xl relative overflow-hidden group">
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 bg-indigo-500 rounded-xl">
-                                <Database size={24} className="text-white" />
-                            </div>
-                            <h2 className="text-3xl font-black tracking-tight">Monitor de Activos Policía</h2>
+        <div className="p-6 space-y-8 bg-slate-50 min-h-screen">
+            <div className="bg-[#1A1A2E] text-white p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
+                <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-3 bg-indigo-500/20 rounded-2xl">
+                            <ShieldCheck className="text-indigo-400" size={32} />
                         </div>
-                        <p className="text-slate-400 text-sm font-medium max-w-xl">
-                            Seguimiento en tiempo real de los datasets oficiales de la Policía Nacional. El sistema detecta cambios en el origen para prevenir la ingesta de datos obsoletos.
-                        </p>
+                        <div>
+                            <h1 className="text-4xl font-black tracking-tighter uppercase">Monitor Policía Nacional</h1>
+                            <p className="text-white/60 font-medium text-sm mt-1">
+                                Seguimiento de activos locales (Boletín) y nacionales (SIEDCO).
+                            </p>
+                        </div>
                     </div>
-                    <button
-                        onClick={() => handleCheckUpdates()}
-                        disabled={checking}
-                        className={`flex items-center gap-3 px-6 py-4 bg-white text-slate-900 rounded-2xl font-black text-sm transition-all shadow-xl hover:-translate-y-1 active:scale-95 disabled:opacity-50 ${checking ? 'cursor-not-allowed' : ''}`}
-                    >
-                        {checking ? <RefreshCcw size={18} className="animate-spin text-indigo-600" /> : <RefreshCcw size={18} className="text-indigo-600" />}
-                        REVISAR TODAS LAS ACTUALIZACIONES
-                    </button>
                 </div>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 rounded-full -mr-32 -mt-32 blur-3xl" />
             </div>
 
-            {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Datasets</div>
-                    <div className="text-3xl font-black text-slate-800">{assets.length}</div>
+                {/* TARJETA MANUAL - BOLETÍN SEMANAL */}
+                <div className="bg-white p-6 rounded-2xl border-2 border-dashed border-indigo-200 shadow-sm hover:border-indigo-500 transition-all group flex flex-col justify-between">
+                    <div>
+                        <div className="flex justify-between items-start mb-2">
+                            <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                                <Database size={24} />
+                            </div>
+                            <span className="px-2 py-1 bg-amber-100 text-amber-700 text-[9px] font-black uppercase rounded-full tracking-widest">Requiere Acción Manual</span>
+                        </div>
+                        <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight group-hover:text-indigo-600 transition-colors mt-2">
+                            Base de Datos (Excel) Semanal
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-2 font-medium">Sube aquí la base de datos completa en formato Excel (con todas sus columnas) entregada localmente por la Estación de Policía Jamundí.</p>
+                    </div>
+                    <button
+                        onClick={() => onIngest('POLICIA_SEMANAL', 'Base de Datos Policía')}
+                        className="mt-6 w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 uppercase tracking-widest"
+                    >
+                        <CheckCircle2 size={16} /> SUBIR EXCEL (BD)
+                    </button>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pendientes de Ingesta</div>
-                    <div className={`text-3xl font-black ${updatedCount > 0 ? 'text-amber-500' : 'text-slate-400'}`}>{updatedCount}</div>
+
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Activos Nacionales Monitoreados</div>
+                    <div className="text-4xl font-black text-slate-800 tracking-tighter">{assets.length}</div>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Último Chequeo General</div>
-                    <div className="text-sm font-bold text-slate-600 truncate">
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Último Chequeo Automático</div>
+                    <div className="text-sm font-bold text-slate-600 truncate mt-1">
                         {assets.length > 0 && assets[0].last_checked_at ? new Date(assets[0].last_checked_at).toLocaleString() : 'Nunca'}
                     </div>
                 </div>

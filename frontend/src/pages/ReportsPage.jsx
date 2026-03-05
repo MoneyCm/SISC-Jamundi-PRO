@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
     Download, Calendar, Filter, FileText, Search, Clock,
-    ShieldCheck, AlertCircle, Eye, Copy, ExternalLink, RefreshCw, Database, Globe, Shield
+    ShieldCheck, AlertCircle, Eye, Copy, ExternalLink, RefreshCw, Database, Globe, Shield, BarChart3
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import ReportPreview from '../components/Reports/ReportPreview';
 
 const ReportsPage = () => {
     const [loading, setLoading] = useState(false);
@@ -21,13 +22,13 @@ const ReportsPage = () => {
                 baseUrl = 'http://localhost:8000/api';
             }
             const url = `${baseUrl}/reportes/generar-boletin?fuente=${fuente}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&token=${token}`;
-            
+
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
+
             if (!response.ok) throw new Error("No se pudo conectar con el servidor de reportes");
-            
+
             const blob = await response.blob();
             const downloadUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -134,22 +135,13 @@ const ReportsPage = () => {
                             {loading ? 'Procesando...' : 'Generar Boletín'}
                         </button>
                     </div>
-
-                    <div className="bg-white p-6 rounded-3xl border border-slate-200">
-                        <div className="flex items-center gap-3 text-slate-400 mb-4">
-                            <Clock size={18} />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Estado de los Datos</span>
-                        </div>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center text-xs">
-                                <span className="text-slate-500 font-bold">Mindefensa:</span>
-                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-md font-black text-[9px]">AL DÍA</span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs">
-                                <span className="text-slate-500 font-bold">Semanal:</span>
-                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-md font-black text-[9px]">PENDIENTE</span>
-                            </div>
-                        </div>
+                    {/* COMPONENTE DE VISTA PREVIA */}
+                    <div className="h-[500px]">
+                        <ReportPreview
+                            fuente={fuente}
+                            fechaInicio={fechaInicio}
+                            fechaFin={fechaFin}
+                        />
                     </div>
                 </div>
             </div>

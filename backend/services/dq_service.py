@@ -7,13 +7,10 @@ import json
 import unicodedata
 
 # 1. Configuración de Esquema Requerido
+# 1. Configuración de Esquema Requerido
 REQUIRED_COLUMNS = [
     "FECHA_HECHO",
-    "COD_DEPTO",
-    "DEPARTAMENTO",
-    "COD_MUNI",
-    "MUNICIPIO",
-    "CANTIDAD"
+    "MUNICIPIO"
 ]
 
 OPTIONAL_COLUMNS = ["DESCRIPCION CONDUCTA", "ZONA", "SEXO", "ARMAS MEDIOS"]
@@ -61,19 +58,33 @@ def run_dq(file_bytes: bytes, filename: str, source_name: str = None) -> Dict[st
 
     rows_count = len(df)
     df.columns = [str(c).strip().upper() for c in df.columns]
+    
+    # Mapeo Inteligente de Alias de Columnas
+    aliases_map = {
+        "FECHA": "FECHA_HECHO", "DATE": "FECHA_HECHO", "FECHA DEL HECHO": "FECHA_HECHO",
+        "BARRIO": "MUNICIPIO", "SECTOR": "MUNICIPIO", "CIUDAD": "MUNICIPIO", "BARRIOS_HECHO": "MUNICIPIO", "BARRIOS HECHO": "MUNICIPIO",
+        "DELITO": "DESCRIPCION CONDUCTA", "CONDUCTA": "DESCRIPCION CONDUCTA", "TIPO": "DESCRIPCION CONDUCTA",
+        "VICTIMAS": "CANTIDAD", "CANTIDAD_VICTIMAS": "CANTIDAD", "CASOS": "CANTIDAD", "TOTAL": "CANTIDAD"
+    }
+    
+    for col in list(df.columns):
+        if col in aliases_map and aliases_map[col] not in df.columns:
+            df.rename(columns={col: aliases_map[col]}, inplace=True)
+            
     cols_found = list(df.columns)
 
     if "CANTIDAD" not in cols_found:
-        for alias in CANTIDAD_ALIASES:
-            if alias in cols_found:
-                df = df.rename(columns={alias: "CANTIDAD"})
-                cols_found = list(df.columns)
-                break
+        df["CANTIDAD"] = 1
+        cols_found.append("CANTIDAD")
 
     if "DESCRIPCION CONDUCTA" not in cols_found:
         fallback = source_name.replace("_MINDEFENSA", "").replace("_", " ") if source_name else "CONDUCTA_NO_ESPECIFICADA"
         df["DESCRIPCION CONDUCTA"] = fallback
-        cols_found = list(df.columns)
+        cols_found.append("DESCRIPCION CONDUCTA")
+        
+    for opt_col in ["COD_DEPTO", "DEPARTAMENTO", "COD_MUNI"]:
+        if opt_col not in cols_found:
+            df[opt_col] = None
 
     missing_cols = [c for c in REQUIRED_COLUMNS if c not in cols_found]
     extra_cols = [c for c in cols_found if c not in REQUIRED_COLUMNS and c not in OPTIONAL_COLUMNS]

@@ -13,9 +13,14 @@ const AuditLog = () => {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             const data = await res.json();
-            setLogs(data);
+            if (Array.isArray(data)) {
+                setLogs(data);
+            } else {
+                setLogs([]);
+            }
         } catch (err) {
             console.error(err);
+            setLogs([]);
         } finally {
             setLoading(false);
         }
@@ -93,7 +98,7 @@ const AuditLog = () => {
                                         <div className="flex items-center gap-2">
                                             <User size={14} className="text-slate-300" />
                                             <code className="text-[10px] font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                                                {log.actor?.slice(0, 8)}...
+                                                {(log.actor || 'Sistema').slice(0, 8)}...
                                             </code>
                                         </div>
                                     </td>

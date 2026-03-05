@@ -271,7 +271,13 @@ async def upload_with_gate(
     5. Carga datos si pasa el gate.
     """
     dataset_code = dataset_code.upper()
-    source_name = f"{dataset_code}_MINDEFENSA"
+    if dataset_code == "POLICIA_SEMANAL":
+        source_name = "POLICIA_SEMANAL"
+    elif dataset_code.startswith("POLICIA_"):
+        source_name = "POLICIA_PORTAL" # Assuming any POLICIA_ goes to portal
+    else:
+        source_name = f"{dataset_code}_SYNC" if "MINDEFENSA" not in dataset_code else dataset_code
+    
     contents = await file.read()
     
     # 0. Verificar si el asset de MinDefensa en el catálogo está actualizado
@@ -333,13 +339,24 @@ async def upload_with_gate(
                     db.add(event_type)
                     db.flush()
 
+                # Intentar leer hora
+                hora_str = str(row_dict.get('HORA_HECHO') or row_dict.get('HORA24') or row_dict.get('HORA') or "00:00").split(' ')[0]
+                try:
+                    occ_time = datetime.strptime(hora_str, "%H:%M").time()
+                except:
+                    try:
+                        occ_time = pd.to_datetime(hora_str).time()
+                    except:
+                        occ_time = datetime.strptime("00:00", "%H:%M").time()
+
                 new_event = Event(
-                    external_id=str(uuid.uuid4()),
+                    external_id=str(row_dict.get('HECHOS_ID') or uuid.uuid4()),
                     event_type_id=event_type.id,
                     occurrence_date=occ_date,
-                    occurrence_time=datetime.strptime("00:00", "%H:%M").time(),
-                    barrio=str(row_dict.get('MUNICIPIO') or row_dict.get('BARRIO') or 'Jamundí'),
-                    descripcion=f"Ingesta DQ: {source_name}",
+                    occurrence_time=occ_time,
+                    barrio=str(row_dict.get('BARRIOS_HECHO') or row_dict.get('BARRIOS HECHO') or row_dict.get('MUNICIPIO') or row_dict.get('BARRIO') or 'Jamundí'),
+                    descripcion=str(row_dict.get('CLASE_SITIO') or row_dict.get('MODALIDAD') or row_dict.get('ARMAS_MEDIOS') or f"Ingesta DQ: {source_name}"),
+
                     # Trazabilidad
                     dq_report_id=db_report.id,
                     ingestion_id=ingestion_id,

@@ -15,32 +15,46 @@ class IntelligenceService:
         """
         from api.ia import call_gemini, call_mistral, AI_PROVIDER
         
-        delitos_objetivo = ['HOMICIDIO', 'HURTO_PERSONAS', 'EXTORSION', 'LESIONES_PERSONALES']
+        delitos_objetivo = {
+            'HOMICIDIO': ['HOMICIDIO', 'HOMICIDIO INTENCIONAL', 'HOMICIDIO DOLOSO'],
+            'HURTO_PERSONAS': ['HURTO_PERSONAS', 'HURTO A PERSONAS', 'HURTO_A_PERSONAS'],
+            'EXTORSION': ['EXTORSION', 'EXTORSIÓN'],
+            'LESIONES_PERSONALES': ['LESIONES_PERSONALES', 'LESIONES PERSONALES', 'LESIONES COMUNES']
+        }
         briefs = []
         
-        for delito in delitos_objetivo:
+        for display_name, aliases in delitos_objetivo.items():
             try:
-                # 1. Obtener fecha de corte (Filtro flexible por municipio)
+                # 1. Obtener años disponibles para este municipio
+                years_available = db.query(func.distinct(NationalCrimeStats.anio)).filter(
+                    NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%'),
+                    NationalCrimeStats.tipo_delito.in_(aliases)
+                ).order_by(NationalCrimeStats.anio.desc()).all()
+                
+                if not years_available: continue
+                years = [y[0] for y in years_available]
+                latest_year = years[0]
+                prev_year = years[1] if len(years) > 1 else latest_year - 1
+                
+                # Obtener fecha de corte
                 latest_date = db.query(func.max(NationalCrimeStats.fecha_hecho)).filter(
-                    NationalCrimeStats.tipo_delito == delito,
+                    NationalCrimeStats.tipo_delito.in_(aliases),
                     NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%')
                 ).scalar()
                 
-                if not latest_date: continue
-                
-                # 2. Calcular estadísticas (2024 vs 2025)
+                # 2. Calcular estadísticas (Comparar los dos últimos años con datos)
                 stats = db.query(
                     NationalCrimeStats.anio,
                     func.sum(NationalCrimeStats.cantidad).label("total")
                 ).filter(
-                    NationalCrimeStats.tipo_delito == delito,
+                    NationalCrimeStats.tipo_delito.in_(aliases),
                     NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%'),
-                    NationalCrimeStats.anio.in_([2024, 2025])
+                    NationalCrimeStats.anio.in_([latest_year, prev_year])
                 ).group_by(NationalCrimeStats.anio).all()
                 
                 stat_dict = {s.anio: int(s.total) for s in stats}
-                actual = stat_dict.get(2025, 0)
-                prev = stat_dict.get(2024, 0)
+                actual = stat_dict.get(latest_year, 0)
+                prev = stat_dict.get(prev_year, 0)
                 
                 # Variación
                 var_pct = round(((actual - prev) / prev * 100), 1) if prev > 0 else 0
@@ -49,9 +63,9 @@ class IntelligenceService:
                 # 3. Generar Frase IA
                 contexto = f"""
                 Como analista de seguridad del SISC Jamundí, resume este dato delictivo en UNA SOLA FRASE contundente de máximo 15 palabras.
-                DELITO: {delito}
-                AÑO 2024: {prev} casos
-                AÑO 2025: {actual} casos
+                DELITO: {display_name}
+                AÑO {prev_year}: {prev} casos
+                AÑO {latest_year}: {actual} casos
                 VARIACIÓN: {var_pct}% ({trend})
                 MUNICIPIO: Jamundí, Valle.
                 REGLA: No uses preámbulos, ve directo al análisis estratégico. Usa tono de inteligencia militar/civil.

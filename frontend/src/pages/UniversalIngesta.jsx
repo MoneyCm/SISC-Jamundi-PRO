@@ -30,6 +30,8 @@ const DATASETS_CONFIG = [
     { code: 'HURTO_COMERCIO', label: 'Hurto a Comercio' },
     { code: 'INCAUTACIÓN_COCAINA', label: 'Incautación Cocaína' },
     { code: 'INCAUTACIÓN_MARIHUANA', label: 'Incautación Marihuana' },
+    { code: 'POLICIA_SEMANAL', label: 'Base de Datos Policía' },
+    { code: 'POLICIA_PORTAL', label: 'SIEDCO (Público)' },
 ];
 
 const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO", label = "Secuestro" }) => {
@@ -151,7 +153,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                 {/* Selector de Delito */}
                 <div className="flex justify-center mt-6">
                     <div className="relative w-full max-w-md">
-                        <select 
+                        <select
                             value={currentDataset.code}
                             onChange={handleDatasetChange}
                             className="w-full bg-white border-2 border-slate-200 rounded-2xl px-6 py-4 font-black text-slate-700 appearance-none focus:border-indigo-500 outline-none transition-all shadow-lg text-sm uppercase tracking-widest cursor-pointer"
@@ -170,7 +172,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                     <div className="inline-flex items-center gap-3 px-6 py-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-700 animate-pulse mt-4">
                         <AlertTriangle size={20} className="shrink-0" />
                         <div className="text-left">
-                            <p className="text-xs font-black uppercase tracking-widest">Fuente MinDefensa Actualizada</p>
+                            <p className="text-xs font-black uppercase tracking-widest">Fuente Oficial Actualizada</p>
                             <p className="text-[10px] font-bold opacity-80">Se detectó una nueva versión de {currentDataset.label} en el portal oficial.</p>
                         </div>
                         <button
@@ -206,8 +208,8 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                     <div className="bg-slate-100 p-8 rounded-full mb-6 group-hover:bg-indigo-600 transition-all duration-500 group-hover:scale-110 shadow-inner">
                         <Upload className="h-12 w-12 text-slate-400 group-hover:text-white" />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-800 mb-2">Subir registros de {label}</h3>
-                    <p className="text-slate-400 font-bold uppercase tracking-tight text-sm">Formato oficial MinDefensa (Abierto/Cerrado)</p>
+                    <h3 className="text-2xl font-black text-slate-800 mb-2">Subir registros de {currentDataset.label}</h3>
+                    <p className="text-slate-400 font-bold uppercase tracking-tight text-sm">Formato oficial (Abierto/Cerrado)</p>
 
                     <div className="mt-8 flex gap-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                         <span className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-full border border-slate-100"><ShieldCheck size={14} className="text-emerald-500" /> Esquema</span>
@@ -251,7 +253,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                             {reportInfo.type === 'OUTDATED_SOURCE' ? (
                                 <div className="space-y-4">
                                     <div className="text-xs font-bold text-slate-700 flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100">
-                                        Origen: <span className="text-amber-600 font-black">MinDefensa {datasetCode}</span>
+                                        Origen: <span className="text-amber-600 font-black">{currentDataset.code.includes('POLICIA') ? 'Policía Nacional' : 'MinDefensa'} {currentDataset.label}</span>
                                     </div>
                                     <div className="text-xs font-bold text-slate-700 flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100">
                                         Último Cambio: <span className="text-slate-900 font-black">{new Date(reportInfo.last_change).toLocaleDateString()}</span>

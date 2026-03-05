@@ -16,30 +16,35 @@ def get_dashboard_kpis(
     start_date: Optional[date] = None, 
     end_date: Optional[date] = None, 
     categories: Optional[List[str]] = Query(None),
+    fuente: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     try:
-        # 1. Total Incidentes (con filtros de fecha y categoría)
+        source_map = {"MINDEFENSA": "MINDEFENSA%", "POLICIA_PORTAL": "POLICIA_PORTAL%", "POLICIA_SEMANAL": "POLICIA_SEMANAL%"}
+        prefix = source_map.get(fuente) if fuente else None
+
+        # 1. Total Incidentes
         total_q = db.query(func.count(Event.id))
         if start_date: total_q = total_q.filter(Event.occurrence_date >= start_date)
         if end_date: total_q = total_q.filter(Event.occurrence_date <= end_date)
-        if categories:
-            total_q = total_q.join(EventType).filter(EventType.category.in_(categories))
+        if categories: total_q = total_q.join(EventType).filter(EventType.category.in_(categories))
+        if prefix: total_q = total_q.filter(Event.source_name.like(prefix))
         total = total_q.scalar() or 0
         
-        # 2. Homicidios (para la tasa)
+        # 2. Homicidios
         hom_q = db.query(func.count(Event.id)).join(EventType).filter(EventType.category == "HOMICIDIO")
         if start_date: hom_q = hom_q.filter(Event.occurrence_date >= start_date)
         if end_date: hom_q = hom_q.filter(Event.occurrence_date <= end_date)
+        if prefix: hom_q = hom_q.filter(Event.source_name.like(prefix))
         homicidios = hom_q.scalar() or 0
         tasa = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
         
-        # 3. Zonas críticas (Barrios con > 10 incidentes)
-        # Usamos una subquery explícita para contar grupos
+        # 3. Zonas críticas
         subq = db.query(Event.barrio).filter(Event.barrio != 'Sin especificar')
         if start_date: subq = subq.filter(Event.occurrence_date >= start_date)
         if end_date: subq = subq.filter(Event.occurrence_date <= end_date)
         if categories: subq = subq.join(EventType).filter(EventType.category.in_(categories))
+        if prefix: subq = subq.filter(Event.source_name.like(prefix))
         
         subq_grouped = subq.group_by(Event.barrio).having(func.count(Event.id) > 10).subquery()
         zonas_criticas = db.query(func.count()).select_from(subq_grouped).scalar() or 0
@@ -141,22 +146,26 @@ def get_tendencia_delictiva(
 def get_distribucion_delitos(
     start_date: Optional[date] = None, 
     end_date: Optional[date] = None, 
+    fuente: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """
-    Retorna la distribución por tipo de delito con filtros térmporales.
-    """
-    query = db.query(
-        EventType.category,
-        func.count(Event.id).label('total')
-    ).join(Event)
+    source_map = {"MINDEFENSA": "MINDEFENSA%", "POLICIA_PORTAL": "POLICIA_PORTAL%", "POLICIA_SEMANAL": "POLICIA_SEMANAL%"}
+    prefix = source_map.get(fuente) if fuente else None
+
+    # Si hay fuente y es MINDEFENSA, es mejor agrupar por descripcion para mayor detalle como en el PDF
+    if prefix:
+        query = db.query(Event.descripcion.label('category'), func.count(Event.id).label('total'))
+        if start_date: query = query.filter(Event.occurrence_date >= start_date)
+        if end_date: query = query.filter(Event.occurrence_date <= end_date)
+        query = query.filter(Event.source_name.like(prefix))
+        results = query.group_by(Event.descripcion).order_by(text('total DESC')).all()
+    else:
+        query = db.query(EventType.category, func.count(Event.id).label('total')).join(Event)
+        if start_date: query = query.filter(Event.occurrence_date >= start_date)
+        if end_date: query = query.filter(Event.occurrence_date <= end_date)
+        results = query.group_by(EventType.category).order_by(text('total DESC')).all()
     
-    if start_date: query = query.filter(Event.occurrence_date >= start_date)
-    if end_date: query = query.filter(Event.occurrence_date <= end_date)
-    
-    results = query.group_by(EventType.category).order_by(text('total DESC')).all()
-    
-    return [{"name": r.category, "value": r.total} for r in results]
+    return [{"name": r.category or "Sin Definir", "value": r.total} for r in results]
 
 @router.get("/estadisticas/barrios")
 def get_top_barrios(db: Session = Depends(get_db)):
@@ -247,26 +256,34 @@ def get_comparativa_periodos(
     end1: date, 
     start2: date, 
     end2: date,
+    fuente: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
     Compara dos periodos de tiempo seleccionados.
     Útil para comparaciones Año tras Año (YoY).
     """
+    source_map = {"MINDEFENSA": "MINDEFENSA%", "POLICIA_PORTAL": "POLICIA_PORTAL%", "POLICIA_SEMANAL": "POLICIA_SEMANAL%"}
+    prefix = source_map.get(fuente) if fuente else None
+
     def get_stats(s, e):
         # Homicidios
-        homicidios = db.query(func.count(Event.id)).join(EventType).filter(
+        hom_q = db.query(func.count(Event.id)).join(EventType).filter(
             EventType.category == "HOMICIDIO",
             Event.occurrence_date >= s,
             Event.occurrence_date <= e
-        ).scalar() or 0
+        )
+        if prefix: hom_q = hom_q.filter(Event.source_name.like(prefix))
+        homicidios = hom_q.scalar() or 0
         
         # Otros delitos (Hurtos, Lesiones, etc)
-        otros = db.query(func.count(Event.id)).join(EventType).filter(
+        otr_q = db.query(func.count(Event.id)).join(EventType).filter(
             EventType.category != "HOMICIDIO",
             Event.occurrence_date >= s,
             Event.occurrence_date <= e
-        ).scalar() or 0
+        )
+        if prefix: otr_q = otr_q.filter(Event.source_name.like(prefix))
+        otros = otr_q.scalar() or 0
         
         return {"homicidios": homicidios, "otros": otros, "total": homicidios + otros}
 

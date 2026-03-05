@@ -38,6 +38,16 @@ async def lifespan(app: FastAPI):
             from create_roles_v2 import init_db
             init_db()
             logger.info("✅ [OK] Roles y usuarios inicializados.")
+
+            # AUTO-INGESTA: Cargar datos históricos desde los CSVs si faltan
+            try:
+                from ingest_high_impact_2025 import run_full_ingestion
+                logger.info("📊 [Iniciando] Ingesta automática de datos históricos...")
+                run_full_ingestion()
+                logger.info("✅ [OK] Ingesta completada.")
+            except Exception as e_ing:
+                logger.warning(f"⚠️ [AVISO] Fallo en la ingesta automática: {e_ing}")
+
         except Exception as e:
             logger.error(f"❌ [ERROR] Fallo en la inicialización de BD: {e}")
             logger.error(traceback.format_exc())

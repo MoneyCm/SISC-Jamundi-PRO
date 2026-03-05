@@ -196,7 +196,9 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
     const handleDownloadPDF = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/reportes/generar-boletin`, {
+            const { start, end } = dashboardData.currentRange || {};
+            const queryParams = start && end ? `?fecha_inicio=${start}&fecha_fin=${end}` : '';
+            const response = await fetch(`${API_BASE_URL}/reportes/generar-boletin${queryParams}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) throw new Error("Error de servidor");

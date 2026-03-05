@@ -32,9 +32,15 @@ const UsersManagement = () => {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             const data = await res.json();
-            setUsers(data);
+            if (Array.isArray(data)) {
+                setUsers(data);
+            } else {
+                console.warn('API /users/ no devolvió un array:', data);
+                setUsers([]);
+            }
         } catch (err) {
             console.error(err);
+            setUsers([]);
         } finally {
             setLoading(false);
         }
@@ -54,10 +60,21 @@ const UsersManagement = () => {
                 body: JSON.stringify(newUser)
             });
             if (res.ok) {
+                alert('Usuario creado con éxito');
                 setShowModal(false);
                 fetchUsers();
+                setNewUser({
+                    username: '', email: '', password: '', full_name: '',
+                    dependency: '', position: '', data_level_max: 1, role_codes: ['ANALYST']
+                });
+            } else {
+                const errorData = await res.json();
+                alert(`Error al crear usuario: ${errorData.detail || 'Error desconocido'}`);
             }
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error(err);
+            alert('Error crítico de conexión con el servidor');
+        }
     };
 
     const handleDisable = async (id) => {
@@ -98,12 +115,12 @@ const UsersManagement = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {users.map(u => (
+                        {Array.isArray(users) && users.length > 0 ? users.map(u => (
                             <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary font-bold">
-                                            {u.username[0].toUpperCase()}
+                                            {(u.username?.[0] || 'U').toUpperCase()}
                                         </div>
                                         <div>
                                             <p className="font-bold text-slate-800">{u.full_name}</p>
@@ -118,11 +135,11 @@ const UsersManagement = () => {
                                 <td className="px-6 py-4">
                                     <div className="flex flex-wrap gap-1.5">
                                         <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-tighter ${u.data_level_max === 3 ? 'bg-red-100 text-red-600' :
-                                                u.data_level_max === 2 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'
+                                            u.data_level_max === 2 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'
                                             }`}>N{u.data_level_max}</span>
-                                        {u.roles.map(r => (
+                                        {u.roles?.map(r => (
                                             <span key={r.code} className="bg-primary/5 text-primary border border-primary/10 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                                                {r.code}
+                                                {r.code || 'N/A'}
                                             </span>
                                         ))}
                                     </div>
@@ -149,7 +166,13 @@ const UsersManagement = () => {
                                     )}
                                 </td>
                             </tr>
-                        ))}
+                        )) : (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-20 text-center text-slate-400 italic">
+                                    No hay usuarios registrados o no tiene permisos suficientes.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
