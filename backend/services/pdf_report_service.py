@@ -6,7 +6,7 @@ try:
     from weasyprint import HTML, CSS
     WEASYPRINT_AVAILABLE = True
 except Exception as e:
-    print(f"⚠️ WeasyPrint no disponible: {e}")
+    print(f"[AVISO] WeasyPrint no disponible: {e}")
     WEASYPRINT_AVAILABLE = False
 from sqlalchemy.orm import Session
 from db.models_intelligence import ReportRun

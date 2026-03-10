@@ -231,13 +231,23 @@ class ReportAutomationService:
         for l, count in list(a["top_localidades"].items())[:5]:
             md += f"| {l} | {count} |\n"
 
-        # 5. Seccion de Alertas (Crítico para Inspección)
+        if "geocoding_stats" in a:
+            g = a["geocoding_stats"]
+            md += "\n#### 5. ANÁLISIS DE COBERTURA GEOGRÁFICA\n"
+            md += f"- **Expedientes Identificados**: {g['total']}\n"
+            md += f"- **Georreferenciación Exitosa**: {g['geocodificados']} ({g['porcentaje']}%)\n"
+            if g['porcentaje'] < 100:
+                md += f"- **Estado**: ⚠️ Se requiere revisión de catálogos para {g['total'] - g['geocodificados']} expedientes.\n"
+            else:
+                md += f"- **Estado**: ✅ Cobertura geográfica total para este periodo.\n"
+
+        # 6. Seccion de Alertas (Crítico para Inspección)
         if "alertas" in a:
             al = a["alertas"]
-            md += "\n#### 5. ALERTAS CRÍTICAS DE GESTIÓN\n"
+            md += "\n#### 6. ALERTAS CRÍTICAS DE GESTIÓN\n"
             
-            # Subseccion 5.1: Rezagos
-            md += "\n**5.1 Medidas EN PROCESO con > 30 días (Top 20)**\n"
+            # Subseccion 6.1: Rezagos
+            md += "\n**6.1 Medidas EN PROCESO con > 30 días (Top 20)**\n"
             if al.get("rezago_proceso"):
                 md += "| Expediente | Medida | Días | Fecha Actuación |\n| --- | --- | --- | --- |\n"
                 for item in al["rezago_proceso"]:
@@ -245,8 +255,8 @@ class ReportAutomationService:
             else:
                 md += "*No se detectaron rezagos críticos.*\n"
 
-            # Subseccion 5.2: Impagos Ratificados
-            md += "\n**5.2 Medidas RATIFICADAS Pendientes de Pago (Top 20)**\n"
+            # Subseccion 6.2: Impagos Ratificados
+            md += "\n**6.2 Medidas RATIFICADAS Pendientes de Pago (Top 20)**\n"
             if al.get("impagos_ratificados"):
                 md += "| Expediente | Medida | Valor Neto | Fecha Actuación |\n| --- | --- | --- | --- |\n"
                 for item in al["impagos_ratificados"]:

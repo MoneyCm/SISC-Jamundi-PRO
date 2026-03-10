@@ -9,6 +9,7 @@ import uvicorn
 import logging
 import traceback
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Cargar variables de entorno desde .env (Solo para local)
@@ -18,7 +19,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sisc_api")
 
-from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa, users, policia
+from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa, users, policia, inspecciones
 logger.info(f"DEBUG: Intelligence module from: {intelligence.__file__}")
 from db.models import create_tables
 from contextlib import asynccontextmanager
@@ -31,29 +32,29 @@ async def lifespan(app: FastAPI):
     
     def run_migrations_task():
         try:
-            logger.info("🛠️ [Iniciando] Verificando esquema de base de datos en segundo plano...")
+            logger.info("[Iniciando] Verificando esquema de base de datos en segundo plano...")
             create_tables()
-            logger.info("✅ [OK] Tablas verificadas.")
+            logger.info("[OK] Tablas verificadas.")
             
             from create_roles_v2 import init_db
             init_db()
-            logger.info("✅ [OK] Roles y usuarios inicializados.")
+            logger.info("[OK] Roles y usuarios inicializados.")
 
             # AUTO-INGESTA: Cargar datos históricos desde los CSVs si faltan
             try:
                 from ingest_high_impact_2025 import run_full_ingestion
-                logger.info("📊 [Iniciando] Ingesta automática de datos históricos...")
+                logger.info("[Iniciando] Ingesta automática de datos históricos...")
                 run_full_ingestion()
-                logger.info("✅ [OK] Ingesta completada.")
+                logger.info("[OK] Ingesta completada.")
             except Exception as e_ing:
-                logger.warning(f"⚠️ [AVISO] Fallo en la ingesta automática: {e_ing}")
+                logger.warning(f"[AVISO] Fallo en la ingesta automática: {e_ing}")
 
         except Exception as e:
-            logger.error(f"❌ [ERROR] Fallo en la inicialización de BD: {e}")
+            logger.error(f"[ERROR] Fallo en la inicialización de BD: {e}")
             logger.error(traceback.format_exc())
 
     # Lanzar en modo daemon para que no bloquee el apagado si algo sale mal
-    logger.info("🛰️ Lanzando tarea de inicialización en segundo plano...")
+    logger.info("Lanzando tarea de inicialización en segundo plano...")
     threading.Thread(target=run_migrations_task, daemon=True).start()
     
     yield
@@ -78,8 +79,18 @@ async def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, HTTPException):
         return await http_exception_handler(request, exc)
     
+    print(f"CRITICAL ERROR: {str(exc)}")
     logger.error(f"Error fatal: {str(exc)}")
-    logger.error(traceback.format_exc())
+    error_trace = traceback.format_exc()
+    logger.error(error_trace)
+    
+    # Escribir a un archivo para que yo pueda leerlo
+    with open("fatal_errors.log", "a", encoding="utf-8") as f:
+        f.write(f"\n--- {datetime.now()} ---\n")
+        f.write(f"URL: {request.url}\n")
+        f.write(error_trace)
+        f.write("\n" + "="*50 + "\n")
+
     return JSONResponse(
         status_code=500,
         content={"detail": "Error interno del servidor", "error": str(exc)},
@@ -110,6 +121,7 @@ app.include_router(participacion.router, prefix="/api/participacion", tags=["par
 app.include_router(intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
 app.include_router(dq.router, prefix="/api/dq", tags=["dq"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(inspecciones.router, prefix="/api/inspecciones", tags=["inspecciones"])
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

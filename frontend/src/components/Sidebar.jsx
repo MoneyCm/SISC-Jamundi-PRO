@@ -22,7 +22,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'map', label: 'Mapa Interactivo', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'intelligence', label: 'Análisis IA', icon: Zap, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'alerts', label: 'Alertas Tempranas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
-        { id: 'rnmc', label: 'Medidas Policia', icon: FileText, category: 'ESTRATEGIA', show: isAnalyst },
+        { id: 'inspecciones', label: 'Inspecciones MIP', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
 
         { id: 'reports', label: 'Reportes', icon: FileText, category: 'SALIDA', show: isDirective || isAnalyst },
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },

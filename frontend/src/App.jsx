@@ -24,6 +24,7 @@ import AlertsFeed from './pages/AlertsFeed';
 import UsersManagement from './pages/UsersManagement';
 import AccessRequests from './pages/AccessRequests';
 import AuditLog from './pages/AuditLog';
+import InspeccionesModule from './pages/InspeccionesModule';
 
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -169,6 +170,8 @@ const App = () => {
         return <RNMCModule externalFilters={rnmcFilters} clearExternalFilters={() => setRnmcFilters(null)} />;
       case 'dq':
         return <DataQuality initialReportId={selectedReportId} />;
+      case 'inspecciones':
+        return <InspeccionesModule />;
       case 'ingesta_universal':
         return <UniversalIngesta
           setActivePage={setActivePage}

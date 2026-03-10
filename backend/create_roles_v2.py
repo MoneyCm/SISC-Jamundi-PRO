@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def init_db():
-    print("🚀 Iniciando script de creación de sistema institucional de usuarios...")
+    print("[Iniciando] Script de creación de sistema institucional de usuarios...")
     db = SessionLocal()
     try:
         # 1. Crear Roles según especificación
@@ -32,13 +32,13 @@ def init_db():
         for r_data in roles_data:
             role = db.query(Role).filter(Role.code == r_data["code"]).first()
             if not role:
-                print(f"➕ Creando nuevo rol: {r_data['name']} ({r_data['code']})")
+                print(f"[NUEVO] Creando nuevo rol: {r_data['name']} ({r_data['code']})")
                 role = Role(code=r_data["code"], name=r_data["name"], description=r_data["description"])
                 db.add(role)
                 db.commit()
                 db.refresh(role)
             else:
-                print(f"ℹ️ Rol existente: {r_data['code']}")
+                print(f"[EXISTE] Rol existente: {r_data['code']}")
             role_map[r_data["code"]] = role
 
         # 2. Crear Administrador Inicial
@@ -59,7 +59,7 @@ def init_db():
         ).first()
         
         if not admin_user:
-            print(f"➕ Creando superusuario: {admin_data['username']}")
+            print(f"[NUEVO] Creando superusuario: {admin_data['username']}")
             hashed_pwd = get_password_hash(admin_data["password"])
             admin_user = User(
                 username=admin_data["username"],
@@ -72,10 +72,10 @@ def init_db():
             db.add(admin_user)
             db.flush()
         else:
-            print(f"ℹ️ Superusuario encontrado (ID: {admin_user.id}). Asegurando credenciales...")
+            print(f"[EXISTE] Superusuario encontrado (ID: {admin_user.id}). Asegurando credenciales...")
             # Forzar username a admin_sisc si era diferente (Migración)
             if admin_user.username != admin_data["username"]:
-                print(f"🔄 Migrando username: {admin_user.username} -> {admin_data['username']}")
+                print(f"[ACTUALIZAR] Migrando username: {admin_user.username} -> {admin_data['username']}")
                 admin_user.username = admin_data["username"]
             
             # Asegurar contraseña correcta (admin_password)
@@ -90,14 +90,14 @@ def init_db():
                 role = role_map.get(code)
                 if role:
                     admin_user.roles.append(role)
-                    print(f"➕ Rol {code} asignado a {admin_user.username}")
+                    print(f"[ASIGNADO] Rol {code} asignado a {admin_user.username}")
         
         db.commit()
 
-        print("\n✅ ¡Inicialización completada con éxito!")
+        print("\n[OK] ¡Inicialización completada con éxito!")
 
     except Exception as e:
-        print(f"❌ Error fatal durante la inicialización: {e}")
+        print(f"[ERROR] Error fatal durante la inicialización: {e}")
         db.rollback()
         sys.exit(1)
     finally:

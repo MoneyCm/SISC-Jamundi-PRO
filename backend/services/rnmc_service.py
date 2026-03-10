@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, and_, or_, desc
+from sqlalchemy import func, extract, and_, or_, desc, text
 from db.models_intelligence import RNMCMeasure
+from db.models_inspecciones import InspeccionMedida, InspeccionExpediente, InspeccionFinanza, InspeccionActuacion
 from datetime import datetime, timedelta
 import pandas as pd
 
@@ -35,45 +36,74 @@ class RNMCService:
 
     @staticmethod
     def _get_stats_for_range(db: Session, start_date: datetime, end_date: datetime):
-        base_query = db.query(RNMCMeasure).filter(
-            RNMCMeasure.fecha_actuacion >= start_date,
-            RNMCMeasure.fecha_actuacion < end_date
-        )
-        
-        total_records = base_query.count()
-        
-        top_medidas = db.query(
-            RNMCMeasure.medida, func.count(RNMCMeasure.id).label("total")
-        ).filter(
-            RNMCMeasure.fecha_actuacion >= start_date,
-            RNMCMeasure.fecha_actuacion < end_date
-        ).group_by(RNMCMeasure.medida).order_by(desc("total")).limit(5).all()
-        
-        top_estados = db.query(
-            RNMCMeasure.estado, func.count(RNMCMeasure.id).label("total")
-        ).filter(
-            RNMCMeasure.fecha_actuacion >= start_date,
-            RNMCMeasure.fecha_actuacion < end_date
-        ).group_by(RNMCMeasure.estado).order_by(desc("total")).all()
-        
-        pagos_count = db.query(RNMCMeasure).filter(
-            RNMCMeasure.fecha_actuacion >= start_date,
-            RNMCMeasure.fecha_actuacion < end_date,
-            RNMCMeasure.fecha_pago != None
+        # 1. Total de Actuaciones (Registros de actividad en el periodo)
+        total_records = db.query(InspeccionActuacion).filter(
+            InspeccionActuacion.fecha_actuacion >= start_date,
+            InspeccionActuacion.fecha_actuacion < end_date
         ).count()
         
-        recaudo_sum = db.query(func.sum(RNMCMeasure.valor_pagado)).filter(
-            RNMCMeasure.fecha_actuacion >= start_date,
-            RNMCMeasure.fecha_actuacion < end_date
+        # 2. Top Medidas (Basado en las actuaciones del periodo)
+        top_medidas = db.query(
+            InspeccionMedida.nombre_medida, func.count(InspeccionActuacion.id).label("total")
+        ).join(InspeccionActuacion).filter(
+            InspeccionActuacion.fecha_actuacion >= start_date,
+            InspeccionActuacion.fecha_actuacion < end_date
+        ).group_by(InspeccionMedida.nombre_medida).order_by(desc("total")).limit(5).all()
+        
+        # 3. Top Estados Actuales de las medidas tocadas en el periodo
+        top_estados = db.query(
+            InspeccionMedida.estado_actual, func.count(InspeccionMedida.id).label("total")
+        ).filter(
+            InspeccionMedida.id.in_(
+                db.query(InspeccionActuacion.medida_id).filter(
+                    InspeccionActuacion.fecha_actuacion >= start_date,
+                    InspeccionActuacion.fecha_actuacion < end_date
+                )
+            )
+        ).group_by(InspeccionMedida.estado_actual).order_by(desc("total")).all()
+        
+        # 4. Pagos y Recaudo
+        # Contamos medidas que tuvieron actuación en el periodo y tienen pago registrado
+        pagos_count = db.query(InspeccionMedida).join(InspeccionFinanza).filter(
+            InspeccionMedida.id.in_(
+                db.query(InspeccionActuacion.medida_id).filter(
+                    InspeccionActuacion.fecha_actuacion >= start_date,
+                    InspeccionActuacion.fecha_actuacion < end_date
+                )
+            ),
+            InspeccionFinanza.valor_pagado > 0
+        ).count()
+        
+        recaudo_sum = db.query(func.sum(InspeccionFinanza.valor_pagado)).filter(
+            InspeccionFinanza.medida_id.in_(
+                db.query(InspeccionActuacion.medida_id).filter(
+                    InspeccionActuacion.fecha_actuacion >= start_date,
+                    InspeccionActuacion.fecha_actuacion < end_date
+                )
+            )
         ).scalar() or 0.0
         
-        # Top 5 Localidades (Volumen)
+        # 5. Top 5 Localidades (Donde ocurrieron las actuaciones)
         top_localidades = db.query(
-            RNMCMeasure.localidad, func.count(RNMCMeasure.id).label("total")
-        ).filter(
-            RNMCMeasure.fecha_actuacion >= start_date,
-            RNMCMeasure.fecha_actuacion < end_date
-        ).group_by(RNMCMeasure.localidad).order_by(desc("total")).limit(5).all()
+            InspeccionExpediente.localidad, func.count(InspeccionActuacion.id).label("total")
+        ).join(InspeccionMedida, InspeccionExpediente.id == InspeccionMedida.expediente_id)\
+         .join(InspeccionActuacion, InspeccionMedida.id == InspeccionActuacion.medida_id)\
+         .filter(
+            InspeccionActuacion.fecha_actuacion >= start_date,
+            InspeccionActuacion.fecha_actuacion < end_date
+        ).group_by(InspeccionExpediente.localidad).order_by(desc("total")).limit(5).all()
+
+        # 6. Estadísticas de Geocode (NUEVO)
+        total_exp = db.query(InspeccionExpediente).filter(
+            InspeccionExpediente.created_at >= start_date,
+            InspeccionExpediente.created_at < end_date
+        ).count()
+        
+        geocoded_exp = db.query(func.count(InspeccionExpediente.id)).filter(
+            InspeccionExpediente.created_at >= start_date,
+            InspeccionExpediente.created_at < end_date,
+            text("geom_punto IS NOT NULL")
+        ).scalar()
 
         return {
             "total_registros": total_records,
@@ -82,6 +112,11 @@ class RNMCService:
             "pagos_conteo": pagos_count,
             "recaudo_total": float(recaudo_sum),
             "top_localidades": {l: count for l, count in top_localidades},
+            "geocoding_stats": {
+                "total": total_exp,
+                "geocodificados": geocoded_exp,
+                "porcentaje": round((geocoded_exp / total_exp * 100), 1) if total_exp > 0 else 0
+            },
             "periodo": {
                 "inicio": start_date.strftime("%Y-%m-%d"),
                 "fin": (end_date - timedelta(seconds=1)).strftime("%Y-%m-%d")
@@ -96,7 +131,7 @@ class RNMCService:
         if mode == "weekly":
             if not valor:
                 # Buscar última semana con datos
-                latest = db.query(func.max(RNMCMeasure.fecha_actuacion)).scalar()
+                latest = db.query(func.max(InspeccionActuacion.fecha_actuacion)).scalar()
                 if not latest: return None
                 anio = latest.year
                 valor = latest.isocalendar()[1]
@@ -136,7 +171,7 @@ class RNMCService:
             
         elif mode == "monthly":
             if not valor:
-                latest = db.query(func.max(RNMCMeasure.fecha_actuacion)).scalar()
+                latest = db.query(func.max(InspeccionActuacion.fecha_actuacion)).scalar()
                 if not latest: return None
                 anio = latest.year
                 valor = latest.month
@@ -197,25 +232,25 @@ class RNMCService:
         """
         from sqlalchemy import or_
         # 1. Rezago en Proceso
-        rezagos = db.query(RNMCMeasure).filter(
-            RNMCMeasure.estado == "EN PROCESO",
-            RNMCMeasure.dias >= 30
-        ).order_by(desc(RNMCMeasure.dias)).limit(20).all()
+        rezagos = db.query(InspeccionMedida).filter(
+            InspeccionMedida.estado_actual == "EN PROCESO",
+            InspeccionMedida.dias_duracion >= 30
+        ).order_by(desc(InspeccionMedida.dias_duracion)).limit(20).all()
 
         # 2. Ratificadas sin pago
-        impagables = db.query(RNMCMeasure).filter(
-            RNMCMeasure.estado == "RATIFICADA",
-            or_(RNMCMeasure.valor_pagado == 0, RNMCMeasure.valor_pagado == None)
-        ).order_by(desc(RNMCMeasure.valor_neto)).limit(20).all()
+        impagables = db.query(InspeccionMedida).join(InspeccionFinanza).filter(
+            InspeccionMedida.estado_actual == "RATIFICADA",
+            or_(InspeccionFinanza.valor_pagado == 0, InspeccionFinanza.valor_pagado == None)
+        ).order_by(desc(InspeccionFinanza.valor_neto)).limit(20).all()
 
         def mask(m):
-            exp = str(m.expediente)
+            exp = m.expediente.numero_expediente
             return {
                 "expediente": "***" + exp[-4:] if len(exp) > 4 else exp,
-                "medida": m.medida,
-                "dias": m.dias,
-                "valor_neto": m.valor_neto,
-                "fecha_actuacion": m.fecha_actuacion.strftime("%Y-%m-%d")
+                "medida": m.nombre_medida,
+                "dias": m.dias_duracion,
+                "valor_neto": float(m.finanza.valor_neto) if m.finanza else 0,
+                "fecha_actuacion": m.created_at.strftime("%Y-%m-%d")
             }
 
         return {

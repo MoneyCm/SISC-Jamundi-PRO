@@ -31,6 +31,7 @@ const getColor = (category) => {
     if (cat.includes('HURTO')) return '#1976d2'; // Azul Pro
     if (cat.includes('VIOLENCIA')) return '#fbc02d'; // Amarillo Oscuro
     if (cat.includes('LESIONES')) return '#388e3c'; // Verde Pro
+    if (cat.includes('INSPECCION')) return '#281FD0'; // Cobalto SISC
     return '#7b1fa2'; // Púrpura Pro
 };
 
@@ -52,6 +53,7 @@ const MapComponent = ({ incidents = [] }) => {
         { name: 'Hurto', color: '#1976d2' },
         { name: 'Violencia', color: '#fbc02d' },
         { name: 'Lesiones', color: '#388e3c' },
+        { name: 'Inspecciones', color: '#281FD0' },
         { name: 'Otros', color: '#7b1fa2' }
     ];
 

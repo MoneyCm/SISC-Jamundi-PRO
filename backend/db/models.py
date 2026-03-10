@@ -11,6 +11,7 @@ def create_tables():
         from db.models_mindefensa import MindefensaAsset
         from db.models_alerts import IntelligenceAlert
         from db.models_auth import User, Role, Permission, AuditLog, AccessRequest
+        from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion, InspeccionFinanza
         
         with engine.connect() as conn:
             try:
@@ -26,7 +27,7 @@ def create_tables():
                 if not check_users_new: legacy_detected = True # Si no tiene full_name, es estructura antigua
                 
                 if legacy_detected:
-                    print("🚨 ESTRUCTURA LEGACY CRÍTICA DETECTADA (Roles o Usuarios antiguos). Limpiando...")
+                    print("[ALERTA] ESTRUCTURA LEGACY CRÍTICA DETECTADA (Roles o Usuarios antiguos). Limpiando...")
                     # Forzar borrado de todo el subsistema de Auth para recrearlo limpio
                     tables_to_drop = [
                         "role_permissions", "user_roles", "access_requests", 
@@ -36,7 +37,7 @@ def create_tables():
                         conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE;"))
                     
                     conn.commit()
-                    print("✅ Tablas legacy eliminadas. El sistema las recreará con UUID.")
+                    print("[OK] Tablas legacy eliminadas. El sistema las recreará con UUID.")
                 else:
                     # Si ya es UUID, asegurar que tenga la columna 'code'
                     if check_roles:
@@ -48,15 +49,15 @@ def create_tables():
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"))
                 conn.commit()
             except Exception as e:
-                print(f"⚠️ Error durante la fase PRE-CREACIÓN: {e}")
+                print(f"[AVISO] Error durante la fase PRE-CREACIÓN: {e}")
                 # Si falla el commit anterior, intentamos seguir
                 try: conn.rollback()
                 except: pass
 
         # 2. Ahora sí, crear tablas según modelos actuales (SQLAlchemy)
-        print("🛠️ Ejecutando Base.metadata.create_all...")
+        print("[Iniciando] Ejecutando Base.metadata.create_all...")
         Base.metadata.create_all(bind=engine)
-        print("✅ Base.metadata.create_all finalizado.")
+        print("[OK] Base.metadata.create_all finalizado.")
 
         # 3. Ajustes post-creación (ALTER TABLE para columnas de negocio)
         with engine.connect() as conn:

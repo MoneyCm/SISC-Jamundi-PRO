@@ -8,7 +8,8 @@ const CATEGORIES = [
     'HURTO A PERSONAS',
     'HURTO A COMERCIO',
     'LESIONES PERSONALES',
-    'VIOLENCIA INTRAFAMILIAR'
+    'VIOLENCIA INTRAFAMILIAR',
+    'INSPECCIONES POLICÍA'
 ];
 
 const MapPage = () => {
@@ -31,10 +32,28 @@ const MapPage = () => {
             const token = localStorage.getItem('token');
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
             const response = await fetch(`${API_BASE_URL}/analitica/eventos/geojson?${params.toString()}`, { headers });
-            if (!response.ok) throw new Error('Error al cargar datos del mapa');
-
             const data = await response.json();
-            setIncidents(data.features || []);
+            let allFeatures = data.features || [];
+
+            // Si se selecciona inspecciones, cargar datos de la nueva API
+            if (selectedCategories.includes('INSPECCIONES POLICÍA')) {
+                const resIns = await fetch(`${API_BASE_URL}/inspecciones/geojson`, { headers });
+                if (resIns.ok) {
+                    const dataIns = await resIns.json();
+                    const insFeatures = (dataIns.features || []).map(f => ({
+                        ...f,
+                        properties: {
+                            ...f.properties,
+                            categoria: 'INSPECCION POLICÍA',
+                            descripcion: `Expediente: ${f.properties.expediente}`,
+                            fecha: 'Activo'
+                        }
+                    }));
+                    allFeatures = [...allFeatures, ...insFeatures];
+                }
+            }
+
+            setIncidents(allFeatures);
         } catch (err) {
             console.error(err);
             setError(err.message);

@@ -30,7 +30,7 @@ from services.ai_prioritizer import build_ai_rationale
 try:
     from weasyprint import HTML, CSS
 except Exception as e:
-    print(f"⚠️ WeasyPrint no disponible en inteligencia: {e}")
+    print(f"[AVISO] WeasyPrint no disponible en inteligencia: {e}")
 import logging
 import hashlib
 import json

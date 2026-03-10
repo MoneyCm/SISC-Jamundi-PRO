@@ -123,6 +123,38 @@ def generate_rnmc_alerts(db: Session):
         }
         alerts_to_upsert.append(alert_data)
 
+    # --- 3. Fallos de Geocodificación (NUEVO) ---
+    from db.models_inspecciones import InspeccionExpediente
+    from sqlalchemy import text
+    non_geocoded = db.query(InspeccionExpediente).filter(
+        text("geom_punto IS NULL"),
+        InspeccionExpediente.created_at <= now - timedelta(hours=48)
+    ).limit(50).all()
+
+    for item in non_geocoded:
+        alert_data = {
+            "source": "RNMC",
+            "alert_type": "RNMC_GEO_MISSING",
+            "severity": "LOW",
+            "title": f"MIP: Expediente sin GPS (>48h) — {item.numero_expediente}",
+            "body_md": f"El expediente **{item.numero_expediente}** en **{item.localidad}** no ha sido geocodificado automáticamente después de 48 horas. Verifique la ortografía de la localidad en el archivo fuente.",
+            "entity_ref": {"expediente_id": item.id, "numero": item.numero_expediente},
+            "metrics": {
+                "expediente": item.numero_expediente,
+                "localidad": item.localidad,
+                "created_at": item.created_at.strftime("%Y-%m-%d %H:%M")
+            },
+            "dedupe_key": f"RNMC_GEO_MISSING|{item.id}|{bucket}",
+            "status": "OPEN",
+            "updated_at": now,
+            "action_score": 30.0,
+            "priority_tier": "P3",
+            "recommended_action": "Revisar catálogo de geocodificación para la localidad '" + item.localidad + "'.",
+            "rationale_md": "Detección de inconsistencia geográfica persistente.",
+            "scored_at": now
+        }
+        alerts_to_upsert.append(alert_data)
+
     # --- UPSERT ---
     if alerts_to_upsert:
         for alert in alerts_to_upsert:
