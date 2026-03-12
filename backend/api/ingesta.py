@@ -6,7 +6,11 @@ import pandas as pd
 import io
 import uuid
 from typing import List, Dict, Optional, Any
+import logging
+import traceback
 from datetime import datetime
+
+logger = logging.getLogger("sisc_api")
 
 from api.auth import admin_only, analyst_or_admin
 
@@ -271,14 +275,34 @@ async def upload_with_gate(
     5. Carga datos si pasa el gate.
     """
     dataset_code = dataset_code.upper()
+    contents = await file.read()
+    
+    # NUEVO: Procesador especializado para Policía Jamundí
     if dataset_code == "POLICIA_SEMANAL":
-        source_name = "POLICIA_SEMANAL"
-    elif dataset_code.startswith("POLICIA_"):
-        source_name = "POLICIA_PORTAL" # Assuming any POLICIA_ goes to portal
+        from services.excel_policia_processor import PoliciaJamundiProcessor
+        # TODO: Obtener usuario real desde token
+        processor = PoliciaJamundiProcessor(db, user_id="ADMIN_SISC") 
+        try:
+            result = processor.process(contents, file.filename)
+            if result.get("status") == "skipped":
+                return result
+            return {
+                "status": "success",
+                "message": f"Base Policial procesada: {result['stats']['aprobadas']} aprobados, {result['stats']['rechazadas']} rechazados.",
+                "report_id": result["ingestion_id"],
+                "ingestion_id": result["ingestion_id"],
+                "stats": result["stats"]
+            }
+        except Exception as e:
+            logger.error(f"Fallo en procesador Policia: {e}")
+            logger.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Error en procesador Policia: {str(e)}")
+
+    # Resto de fuentes (MinDefensa / SIEDCO)
+    if dataset_code.startswith("POLICIA_"):
+        source_name = "POLICIA_PORTAL"
     else:
         source_name = f"{dataset_code}_SYNC" if "MINDEFENSA" not in dataset_code else dataset_code
-    
-    contents = await file.read()
     
     # 0. Verificar si el asset de MinDefensa en el catálogo está actualizado
     from db.models_mindefensa import MindefensaAsset
@@ -378,3 +402,17 @@ async def upload_with_gate(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error procesando ingesta: {str(e)}")
+
+@router.get("/runs/{run_id}", dependencies=[Depends(analyst_or_admin)])
+def get_ingestion_run(run_id: str, db: Session = Depends(get_db)):
+    from db.models_hechos_seguridad import IngestionRun
+    run = db.query(IngestionRun).filter(IngestionRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run no encontrado")
+    return run
+
+@router.get("/runs/{run_id}/issues", dependencies=[Depends(analyst_or_admin)])
+def get_ingestion_issues(run_id: str, db: Session = Depends(get_db)):
+    from db.models_hechos_seguridad import IngestionIssue
+    issues = db.query(IngestionIssue).filter(IngestionIssue.ingestion_id == run_id).all()
+    return issues

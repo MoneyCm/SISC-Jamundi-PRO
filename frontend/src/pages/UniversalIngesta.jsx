@@ -30,7 +30,7 @@ const DATASETS_CONFIG = [
     { code: 'HURTO_COMERCIO', label: 'Hurto a Comercio' },
     { code: 'INCAUTACIÓN_COCAINA', label: 'Incautación Cocaína' },
     { code: 'INCAUTACIÓN_MARIHUANA', label: 'Incautación Marihuana' },
-    { code: 'POLICIA_SEMANAL', label: 'Base de Datos Policía' },
+    { code: 'POLICIA_SEMANAL', label: 'Policía Jamundí - Base Semanal' },
     { code: 'POLICIA_PORTAL', label: 'SIEDCO (Público)' },
 ];
 
@@ -285,7 +285,10 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                             <>
                                 {reportInfo.report_id && (
                                     <button
-                                        onClick={() => { setReportId(reportInfo.report_id); setActivePage('dq'); }}
+                                        onClick={() => { 
+                                            setReportId(reportInfo.report_id); 
+                                            setActivePage(safeDatasetCode === 'POLICIA_SEMANAL' ? 'police_audit' : 'dq'); 
+                                        }}
                                         className="px-8 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-700 transition-all flex items-center gap-2 shadow-xl shadow-red-200 active:scale-95"
                                     >
                                         <FileSearch size={16} /> Auditoría
@@ -314,15 +317,47 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                         <p className="text-emerald-600 font-black uppercase tracking-[0.2em] text-xs leading-relaxed">{reportInfo.message}</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6 w-full max-w-sm">
-                        <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 flex flex-col items-center">
-                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">ID Proceso</div>
-                            <div className="text-[10px] font-mono font-bold text-slate-600 truncate w-full px-2 text-center">{reportInfo.ingestion_id?.slice(0, 13)}...</div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full">
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                                {reportInfo.stats ? 'Aprobados' : 'Registros'}
+                            </div>
+                            <div className="text-xl font-black text-emerald-600">
+                                {reportInfo.stats ? reportInfo.stats.aprobadas : (reportInfo.message.match(/\d+/) ? reportInfo.message.match(/\d+/)[0] : 'OK')}
+                            </div>
                         </div>
-                        <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 flex flex-col items-center">
-                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Registros</div>
-                            <div className="text-2xl font-black text-indigo-600 leading-none">
-                                {reportInfo.message.match(/\d+/) ? reportInfo.message.match(/\d+/)[0] : 'OK'}
+                        {reportInfo.stats && (
+                            <>
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Rechazados</div>
+                                    <div className="text-xl font-black text-red-600">
+                                        {reportInfo.stats.rechazadas}
+                                    </div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Duplicados</div>
+                                    <div className="text-xl font-black text-amber-600">
+                                        {reportInfo.stats.duplicadas}
+                                    </div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Fuera Jamundí</div>
+                                    <div className="text-xl font-black text-slate-600">
+                                        {reportInfo.stats.fuera_territorio}
+                                    </div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Ubicados</div>
+                                    <div className="text-xl font-black text-indigo-600">
+                                        {reportInfo.stats.georreferenciadas}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ID Proceso</div>
+                            <div className="text-[10px] font-mono font-bold text-slate-400 truncate w-full text-center">
+                                {reportInfo.ingestion_id?.slice(0, 8)}...
                             </div>
                         </div>
                     </div>

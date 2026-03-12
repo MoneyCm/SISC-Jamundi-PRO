@@ -25,6 +25,7 @@ import UsersManagement from './pages/UsersManagement';
 import AccessRequests from './pages/AccessRequests';
 import AuditLog from './pages/AuditLog';
 import InspeccionesModule from './pages/InspeccionesModule';
+import PoliceIngestionAudit from './pages/PoliceIngestionAudit';
 
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -172,6 +173,8 @@ const App = () => {
         return <DataQuality initialReportId={selectedReportId} />;
       case 'inspecciones':
         return <InspeccionesModule />;
+      case 'police_audit':
+        return <PoliceIngestionAudit runId={selectedReportId} onBack={() => setActivePage('ingesta_universal')} />;
       case 'ingesta_universal':
         return <UniversalIngesta
           setActivePage={setActivePage}

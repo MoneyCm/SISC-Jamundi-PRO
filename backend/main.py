@@ -42,12 +42,22 @@ async def lifespan(app: FastAPI):
 
             # AUTO-INGESTA: Cargar datos históricos desde los CSVs si faltan
             try:
-                from ingest_high_impact_2025 import run_full_ingestion
-                logger.info("[Iniciando] Ingesta automática de datos históricos...")
-                run_full_ingestion()
-                logger.info("[OK] Ingesta completada.")
+                from db.models_intelligence import NationalCrimeStats
+                from db.session import SessionLocal
+                db = SessionLocal()
+                # Solo ejecutar si no hay datos para evitar el escaneo lento en cada inicio
+                has_data = db.query(NationalCrimeStats).first() is not None
+                db.close()
+
+                if not has_data:
+                    from ingest_high_impact_2025 import run_full_ingestion
+                    logger.info("[Iniciando] Ingesta automática de datos históricos (Tabla vacía)...")
+                    run_full_ingestion()
+                    logger.info("[OK] Ingesta completada.")
+                else:
+                    logger.info("[INFO] Saltando ingesta automática: Los datos históricos ya existen.")
             except Exception as e_ing:
-                logger.warning(f"[AVISO] Fallo en la ingesta automática: {e_ing}")
+                logger.warning(f"[AVISO] Fallo en la comprobación/ingesta automática: {e_ing}")
 
         except Exception as e:
             logger.error(f"[ERROR] Fallo en la inicialización de BD: {e}")

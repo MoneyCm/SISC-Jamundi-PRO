@@ -7,6 +7,7 @@ import io
 import os
 from datetime import datetime, date
 import base64
+import re
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
@@ -41,12 +42,24 @@ async def generar_boletin_pdf(
     if not fecha_inicio: fecha_inicio = date(datetime.now().year, 1, 1)
     if not fecha_fin: fecha_fin = date.today()
     
-    source_map = {"MINDEFENSA": "MINDEFENSA%", "POLICIA_PORTAL": "POLICIA%", "POLICIA_SEMANAL": "SEMANAL%"}
+    # Calcular periodo año anterior
+    try:
+        fecha_inicio_prev = date(fecha_inicio.year - 1, fecha_inicio.month, fecha_inicio.day)
+        fecha_fin_prev = date(fecha_fin.year - 1, fecha_fin.month, fecha_fin.day)
+    except ValueError: # Manejo de años bisiestos (29 feb)
+        fecha_inicio_prev = date(fecha_inicio.year - 1, fecha_inicio.month, fecha_inicio.day - 1)
+        fecha_fin_prev = date(fecha_fin.year - 1, fecha_fin.month, fecha_fin.day - 1)
+
+    source_map = {
+        "MINDEFENSA": "MINDEFENSA%", 
+        "POLICIA_PORTAL": "POLICIA%", 
+        "POLICIA_SEMANAL": "POLICIA_SEMANAL%"
+    }
     prefix = source_map.get(fuente, "MINDEFENSA%")
     fuente_label = fuente.replace("_", " ")
 
-    # 3. Consulta
-    datos_raw = db.query(
+    # 3. Consulta Periodo Actual
+    datos_actual = db.query(
         Event.descripcion.label("delito"),
         func.count(Event.id).label("total")
     ).filter(
@@ -55,7 +68,17 @@ async def generar_boletin_pdf(
         Event.source_name.like(prefix)
     ).group_by(Event.descripcion).all()
 
-    # 4. Construcción del PDF
+    # 4. Consulta Periodo Anterior
+    datos_prev = db.query(
+        Event.descripcion.label("delito"),
+        func.count(Event.id).label("total")
+    ).filter(
+        Event.occurrence_date >= fecha_inicio_prev,
+        Event.occurrence_date <= fecha_fin_prev,
+        Event.source_name.like(prefix)
+    ).group_by(Event.descripcion).all()
+
+    # 5. Construcción del PDF
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.5*cm, leftMargin=1.5*cm, topMargin=1.2*cm, bottomMargin=1.5*cm)
     styles = getSampleStyleSheet()
@@ -70,28 +93,29 @@ async def generar_boletin_pdf(
     # --- ENCABEZADO ---
     logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates", "escudo_jamundi.png")
     
-    header_data = []
-    col_widths = [2*cm, 10*cm, 6*cm]
-    
     logo_img = Image(logo_path, width=1.6*cm, height=2.1*cm) if os.path.exists(logo_path) else Paragraph("", styles['Normal'])
     title_block = [Paragraph("SISC JAMUNDÍ", title_style), Paragraph("Observatorio del Delito", sub_style)]
     meta_block = [
-        Paragraph(f"<b>BOLETÍN OFICIAL</b>", ParagraphStyle('B', parent=meta_style, fontSize=9, textColor=colors.black)),
+        Paragraph(f"<b>BOLETÍN COMPARATIVO</b>", ParagraphStyle('B', parent=meta_style, fontSize=9, textColor=colors.black)),
         Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", meta_style),
         Paragraph(f"Fuente: {fuente_label}", meta_style)
     ]
     
-    header_table = Table([[logo_img, title_block, meta_block]], colWidths=col_widths)
+    header_table = Table([[logo_img, title_block, meta_block]], colWidths=[2*cm, 10*cm, 6*cm])
     header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     content.append(header_table)
     content.append(HRFlowable(width="100%", thickness=2, color=AMARILLO, spaceBefore=10, spaceAfter=20))
 
     # --- TARJETAS DE RESUMEN ---
-    total_casos = sum(d.total for d in datos_raw)
+    total_actual = sum(d.total for d in datos_actual)
+    total_prev = sum(d.total for d in datos_prev)
+    var_total = ((total_actual - total_prev) / total_prev * 100) if total_prev > 0 else 0
+    color_var = colors.red if var_total > 0 else colors.green if var_total < 0 else colors.grey
+
     summary_data = [
-        [Paragraph(f"<b>FECHA DE CORTE</b><br/><font size=14 color='#281FD0'>{fecha_fin}</font>", styles['Normal']),
-         Paragraph(f"<b>TOTAL INCIDENTES</b><br/><font size=14 color='#281FD0'>{total_casos}</font>", styles['Normal']),
-         Paragraph(f"<b>PERIODO</b><br/><font size=9>{fecha_inicio} al {fecha_fin}</font>", styles['Normal'])]
+        [Paragraph(f"<b>PERIODO ACTUAL</b><br/><font size=14 color='#281FD0'>{total_actual}</font><br/><font size=8>{fecha_inicio} al {fecha_fin}</font>", styles['Normal']),
+         Paragraph(f"<b>AÑO ANTERIOR</b><br/><font size=14 color='#64748b'>{total_prev}</font><br/><font size=8>{fecha_inicio_prev} al {fecha_fin_prev}</font>", styles['Normal']),
+         Paragraph(f"<b>VARIACIÓN</b><br/><font size=14 color='{color_var.hexval()}'>{'+' if var_total > 0 else ''}{round(var_total, 1)}%</font>", styles['Normal'])]
     ]
     st = Table(summary_data, colWidths=[6*cm, 6*cm, 6*cm])
     st.setStyle(TableStyle([
@@ -106,20 +130,53 @@ async def generar_boletin_pdf(
     content.append(st)
     content.append(Spacer(1, 30))
 
-    # --- TABLA DE DATOS ---
-    if not datos_raw:
-        content.append(Paragraph("<br/><br/><b>AVISO:</b> No se encontraron registros cargados para esta fuente.", styles['Normal']))
+    # --- TABLA DE DATOS COMPARATIVA ---
+    if not datos_actual and not datos_prev:
+        content.append(Paragraph("<br/><br/><b>AVISO:</b> No se encontraron registros cargados para esta fuente en los periodos seleccionados.", styles['Normal']))
     else:
-        content.append(Paragraph("ANÁLISIS POR INDICADOR DE CRIMINALIDAD", ParagraphStyle('H2', parent=styles['Heading2'], textColor=AZUL, borderLeftWidth=5, borderLeftColor=AMARILLO, leftIndent=10)))
+        content.append(Paragraph("ANÁLISIS COMPARATIVO INTERANUAL", ParagraphStyle('H2', parent=styles['Heading2'], textColor=AZUL, borderLeftWidth=5, borderLeftColor=AMARILLO, leftIndent=10)))
         content.append(Spacer(1, 10))
         
-        table_data = [[Paragraph("<b>TIPO DE DELITO</b>", styles['Normal']), Paragraph("<b>CANTIDAD</b>", styles['Normal']), Paragraph("<b>PARTICIPACIÓN</b>", styles['Normal'])]]
-        for d in sorted(datos_raw, key=lambda x: x.total, reverse=True):
-            label = d.delito.replace("Carga Directa: ", "").replace("Local Sync: ", "").replace("HURTO ", "HURTO A ")
-            pct = round((d.total / total_casos * 100), 1) if total_casos > 0 else 0
-            table_data.append([label, str(d.total), f"{pct}%"])
+        table_data = [[
+            Paragraph("<b>INDICADOR / DELITO</b>", styles['Normal']), 
+            Paragraph(f"<b>{fecha_fin.year}</b>", styles['Normal']), 
+            Paragraph(f"<b>{fecha_fin.year - 1}</b>", styles['Normal']), 
+            Paragraph("<b>VAR %</b>", styles['Normal'])
+        ]]
         
-        t = Table(table_data, colWidths=[10*cm, 4*cm, 4*cm])
+        # Agrupación y Cruce
+        agrupados_actual = {}
+        for d in datos_actual:
+            match = re.search(r'\[(.*?)\]', d.delito)
+            clean_label = match.group(1).upper() if match else d.delito.upper()
+            agrupados_actual[clean_label] = agrupados_actual.get(clean_label, 0) + d.total
+
+        agrupados_prev = {}
+        for d in datos_prev:
+            match = re.search(r'\[(.*?)\]', d.delito)
+            clean_label = match.group(1).upper() if match else d.delito.upper()
+            agrupados_prev[clean_label] = agrupados_prev.get(clean_label, 0) + d.total
+
+        # Unir todos los delitos que aparecen en alguno de los dos
+        todos_delitos = sorted(list(set(agrupados_actual.keys()) | set(agrupados_prev.keys())))
+            
+        for label in todos_delitos:
+            v_act = agrupados_actual.get(label, 0)
+            v_prev = agrupados_prev.get(label, 0)
+            variacion = ((v_act - v_prev) / v_prev * 100) if v_prev > 0 else (100 if v_act > 0 else 0)
+            
+            # Color por variacion
+            var_text = f"{'+' if variacion > 0 else ''}{round(variacion, 1)}%"
+            if variacion > 0:
+                p_var = Paragraph(f"<font color='red'>{var_text}</font>", styles['Normal'])
+            elif variacion < 0:
+                p_var = Paragraph(f"<font color='green'>{var_text}</font>", styles['Normal'])
+            else:
+                p_var = Paragraph(var_text, styles['Normal'])
+
+            table_data.append([label, str(v_act), str(v_prev), p_var])
+        
+        t = Table(table_data, colWidths=[9*cm, 3*cm, 3*cm, 3*cm])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), AZUL),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -146,5 +203,5 @@ async def generar_boletin_pdf(
     return Response(
         content=pdf_out,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=Reporte_SISC_{fuente}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename=Reporte_SISC_Comparativo_{fuente}.pdf"}
     )
