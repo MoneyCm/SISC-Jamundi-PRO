@@ -292,7 +292,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
                         Bienvenido al <span className="text-primary">Observatorio del Delito</span>
                     </h1>
                     <p className="text-slate-400 font-medium text-sm md:text-base leading-relaxed mb-6">
-                        Usted se encuentra en el <span className="text-white font-bold">Sistema Institucional de Seguridad y Convivencia (SISC)</span> de Jamundí.
+                        Usted se encuentra en el <span className="text-white font-bold">Sistema de Información de Seguridad y Convivencia (SISC)</span> de Jamundí.
                         Este entorno integra inteligencia de datos regionales y alertas estratégicas para la toma de decisiones basada en evidencia.
                     </p>
                     <div className="flex flex-wrap gap-4">
