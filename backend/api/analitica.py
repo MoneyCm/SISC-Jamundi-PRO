@@ -5,9 +5,9 @@ Fallback para geolocalización: tabla events (legacy).
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import bindparam, func, text
+from sqlalchemy import bindparam, func, or_, text
 from db.models import get_db, Event, EventType, User
-from db.models_hechos_seguridad import HechoSeguridad
+from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, SabanaSnapshotRow
 from services.hechos_metrics import (
     canonical_hecho_key,
     hechos_sin_id_expr,
@@ -43,7 +43,29 @@ CONDUCTA_KEYS = {
 }
 
 
+def _latest_snapshot_id(db: Session):
+    row = db.query(SabanaSnapshotRow.ingestion_id).join(
+        IngestionRun, IngestionRun.id == SabanaSnapshotRow.ingestion_id
+    ).filter(
+        IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+        IngestionRun.status == "COMPLETED",
+    ).order_by(IngestionRun.fecha_fin.desc(), IngestionRun.fecha_inicio.desc()).first()
+    return row[0] if row else None
+
+
 def _hechos_count(db: Session, conductas: list, start: date = None, end: date = None) -> int:
+    snapshot_id = _latest_snapshot_id(db)
+    if snapshot_id:
+        q = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
+            SabanaSnapshotRow.ingestion_id == snapshot_id,
+            SabanaSnapshotRow.conducta_estandar.in_(conductas),
+        )
+        if start:
+            q = q.filter(SabanaSnapshotRow.fecha_evento >= start)
+        if end:
+            q = q.filter(SabanaSnapshotRow.fecha_evento <= end)
+        return q.scalar() or 0
+
     q = db.query(hechos_unicos_expr()).filter(
         HechoSeguridad.conducta_estandar.in_(conductas)
     )
@@ -55,6 +77,17 @@ def _hechos_count(db: Session, conductas: list, start: date = None, end: date = 
 
 
 def _hechos_total(db: Session, start: date = None, end: date = None) -> int:
+    snapshot_id = _latest_snapshot_id(db)
+    if snapshot_id:
+        q = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
+            SabanaSnapshotRow.ingestion_id == snapshot_id
+        )
+        if start:
+            q = q.filter(SabanaSnapshotRow.fecha_evento >= start)
+        if end:
+            q = q.filter(SabanaSnapshotRow.fecha_evento <= end)
+        return q.scalar() or 0
+
     q = db.query(hechos_unicos_expr())
     if start:
         q = q.filter(HechoSeguridad.fecha_evento >= start)
@@ -63,6 +96,35 @@ def _hechos_total(db: Session, start: date = None, end: date = None) -> int:
     return q.scalar() or 0
 
 def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
+    snapshot_id = _latest_snapshot_id(db)
+    if snapshot_id:
+        sexo = func.upper(func.btrim(func.coalesce(SabanaSnapshotRow.sexo, "")))
+        q = db.query(
+            func.count(SabanaSnapshotRow.id).label("registros"),
+            func.count(SabanaSnapshotRow.id).filter(
+                or_(
+                    sexo.notin_(("", "NO REPORTA", "SIN INFORMACION", "N/A", "NA")),
+                    SabanaSnapshotRow.edad > 0,
+                )
+            ).label("victimas_identificables"),
+            func.count(SabanaSnapshotRow.id).filter(
+                or_(
+                    SabanaSnapshotRow.id_fuente.is_(None),
+                    func.btrim(SabanaSnapshotRow.id_fuente) == "",
+                )
+            ).label("registros_sin_id_fuente"),
+        ).filter(SabanaSnapshotRow.ingestion_id == snapshot_id)
+        if start:
+            q = q.filter(SabanaSnapshotRow.fecha_evento >= start)
+        if end:
+            q = q.filter(SabanaSnapshotRow.fecha_evento <= end)
+        row = q.one()
+        return {
+            "registros": row.registros or 0,
+            "victimas_identificables": row.victimas_identificables or 0,
+            "registros_sin_id_fuente": row.registros_sin_id_fuente or 0,
+        }
+
     q = db.query(
         registros_expr().label("registros"),
         victimas_identificables_expr().label("victimas_identificables"),
@@ -94,6 +156,7 @@ def get_dashboard_kpis(
 ):
     """KPIs del dashboard — fuente: hechos_seguridad (sabanas SIEDCO)."""
     try:
+        snapshot_id = _latest_snapshot_id(db)
         total = _hechos_total(db, start_date, end_date)
         volumen = _volumen_fuente(db, start_date, end_date)
 
@@ -129,7 +192,9 @@ def get_dashboard_kpis(
             "secuestro":         secuestro,
             "trafico":           trafico,
             "poblacion":         POBLACION_JAMUNDI,
-            "fuente":            "POLICIA_SEMANAL",
+            "fuente":            "SABANA_SNAPSHOT" if snapshot_id else "POLICIA_SEMANAL",
+            "base_conteo":       "ULTIMA_ENTREGA_SEMANAL" if snapshot_id else "CONSOLIDADO_LEGACY",
+            "snapshot_id":       str(snapshot_id) if snapshot_id else None,
         }
     except Exception as e:
         print(f"ALERTA: Error en KPI endpoint: {e}")
@@ -165,16 +230,24 @@ def get_tendencia_delictiva(
 
     homicidio_vals = tuple(CONDUCTA_KEYS['HOMICIDIO'])
 
+    snapshot_id = _latest_snapshot_id(db)
+    source_table = "sabana_snapshot_rows" if snapshot_id else "hechos_seguridad"
+    identity_expr = "hecho_key" if snapshot_id else "COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)"
+
     query_str = f"""
         SELECT
             TO_CHAR(date_trunc('{intervalo}', fecha_evento), 'Mon YYYY') as etiqueta,
-            COUNT(DISTINCT COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)) FILTER (WHERE conducta_estandar IN :hom_vals) as homicidios,
-            COUNT(DISTINCT COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)) FILTER (WHERE conducta_estandar NOT IN :hom_vals) as otros,
+            COUNT(DISTINCT {identity_expr}) FILTER (WHERE conducta_estandar IN :hom_vals) as homicidios,
+            COUNT(DISTINCT {identity_expr}) FILTER (WHERE conducta_estandar NOT IN :hom_vals) as otros,
             date_trunc('{intervalo}', fecha_evento) as full_date
-        FROM hechos_seguridad
+        FROM {source_table}
         WHERE 1=1
     """
     params = {"hom_vals": homicidio_vals}
+
+    if snapshot_id:
+        query_str += " AND ingestion_id = :snapshot_id"
+        params["snapshot_id"] = snapshot_id
 
     if start_date:
         query_str += " AND fecha_evento >= :start_date"
@@ -438,9 +511,28 @@ async def get_eventos_geojson(
 
 @router.get("/estadisticas/ultima-actualizacion")
 def get_ultima_fecha_datos(db: Session = Depends(get_db)):
-    """
-    Rango de datos disponible — usa hechos_seguridad como fuente.
-    """
+    """Rango y entrega SABANA usada por los indicadores publicos."""
+    snapshot_id = _latest_snapshot_id(db)
+    if snapshot_id:
+        stats = db.query(
+            func.min(SabanaSnapshotRow.fecha_evento).label("min_date"),
+            func.max(SabanaSnapshotRow.fecha_evento).label("max_date"),
+            func.count(func.distinct(SabanaSnapshotRow.hecho_key)).label("total"),
+            func.count(SabanaSnapshotRow.id).label("registros"),
+        ).filter(SabanaSnapshotRow.ingestion_id == snapshot_id).one()
+        run = db.query(IngestionRun).filter(IngestionRun.id == snapshot_id).first()
+        return {
+            "fecha_inicial": stats.min_date if stats.min_date else date.today(),
+            "ultima_fecha": stats.max_date if stats.max_date else date.today(),
+            "total_hechos": stats.total or 0,
+            "total_registros": stats.registros or 0,
+            "fuente": "SABANA_SIEDCO_PONAL",
+            "base_conteo": "ULTIMA_ENTREGA_SEMANAL",
+            "archivo": run.filename if run else None,
+            "fecha_carga": run.fecha_fin if run else None,
+            "snapshot_id": str(snapshot_id),
+        }
+
     stats = db.query(
         func.min(HechoSeguridad.fecha_evento).label("min_date"),
         func.max(HechoSeguridad.fecha_evento).label("max_date"),
@@ -450,12 +542,15 @@ def get_ultima_fecha_datos(db: Session = Depends(get_db)):
 
     return {
         "fecha_inicial": stats.min_date if stats.min_date else date.today(),
-        "ultima_fecha":  stats.max_date if stats.max_date else date.today(),
-        "total_hechos":  stats.total or 0,
+        "ultima_fecha": stats.max_date if stats.max_date else date.today(),
+        "total_hechos": stats.total or 0,
         "total_registros": stats.registros or 0,
-        "fuente":        "POLICIA_SEMANAL",
+        "fuente": "POLICIA_SEMANAL",
+        "base_conteo": "CONSOLIDADO_LEGACY",
+        "archivo": None,
+        "fecha_carga": None,
+        "snapshot_id": None,
     }
-
 
 @router.get("/estadisticas/por-semana")
 def get_por_semana(

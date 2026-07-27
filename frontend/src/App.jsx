@@ -125,7 +125,10 @@ const App = () => {
             onLoginClick={() => setAppMode('login')}
           />;
         case 'transparency':
-          return <PublicDashboard onLoginClick={() => setAppMode('login')} />;
+          return <PublicDashboard
+            onLoginClick={() => setAppMode('login')}
+            onBack={() => setPublicActivePage('hub')}
+          />;
         case 'transparency-info':
         case 'open-data':
         case 'technical-bulletins':

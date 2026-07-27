@@ -5,7 +5,9 @@ import { Loader, Lock, Globe, Home } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import AboutObservatorio from '../components/AboutObservatorio';
 
-const PublicDashboard = ({ onLoginClick }) => {
+const formatPublicDate = (value) => value ? new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`)) : 'Sin corte';
+
+const PublicDashboard = ({ onLoginClick, onBack }) => {
     const [dashboardData, setDashboardData] = useState({
         kpiData: [],
         crimeTrendData: [],
@@ -14,6 +16,7 @@ const PublicDashboard = ({ onLoginClick }) => {
     const [mapData, setMapData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [sourceMeta, setSourceMeta] = useState(null);
 
     useEffect(() => {
         const fetchPublicData = async () => {
@@ -38,11 +41,12 @@ const PublicDashboard = ({ onLoginClick }) => {
                 const periodQuery = `start_date=${currentYear}-01-01&end_date=${currentYear}-12-31`;
 
                 // Fetch basic stats (Public)
-                const [kpiRes, trendRes, distRes, mapRes] = await Promise.allSettled([
+                const [kpiRes, trendRes, distRes, mapRes, metaRes] = await Promise.allSettled([
                     fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/kpis?${periodQuery}`),
                     fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/tendencia?${periodQuery}`),
                     fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/distribucion?${periodQuery}`),
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/eventos/geojson?${periodQuery}`)
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/eventos/geojson?${periodQuery}`),
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/ultima-actualizacion`)
                 ]);
 
                 let kpis = { total_incidentes: 0, tasa_homicidios: 0 };
@@ -77,6 +81,15 @@ const PublicDashboard = ({ onLoginClick }) => {
                 const geoData = await processRes(mapRes, "Mapa/GeoJSON");
                 if (geoData) features = geoData.features || [];
 
+                const metadata = await processRes(metaRes, "Corte de datos");
+                if (metadata) {
+                    setSourceMeta({
+                        ...metadata,
+                        periodStart: `${currentYear}-01-01`,
+                        periodEnd: metadata.ultima_fecha,
+                    });
+                }
+
                 console.log("Datos cargados:", { kpis, trendData, distData, features });
                 if (errorDetails.length > 0) {
                     console.warn("Detalles de errores de carga:", errorDetails);
@@ -84,11 +97,11 @@ const PublicDashboard = ({ onLoginClick }) => {
 
                 setDashboardData({
                     kpiData: [
-                        { title: "Hechos únicos", value: (kpis?.total_hechos ?? kpis?.total_incidentes ?? 0).toString(), change: "Por HECHOS_ID", trend: "neutral", icon: "Activity" },
-                        { title: "Registros SABANA", value: (kpis?.total_registros ?? 0).toString(), change: "Filas válidas", trend: "neutral", icon: "Database" },
-                        { title: "Víctimas identificables", value: (kpis?.victimas_identificables ?? 0).toString(), change: "Dato demográfico", trend: "neutral", icon: "Users" },
-                        { title: "Tasa Homicidios", value: (kpis?.tasa_homicidios ?? 0).toString(), change: "Por 100k hab", trend: "neutral", icon: "Skull" },
-                        { title: "Población", value: (kpis?.poblacion ?? 0).toLocaleString('es-CO'), change: "Jamundí", trend: "neutral", icon: "Users" },
+                        { title: `Hechos únicos ${currentYear}`, value: (kpis?.total_hechos ?? kpis?.total_incidentes ?? 0).toString(), change: "Por HECHOS_ID", trend: "neutral", icon: "Activity" },
+                        { title: `Registros SABANA ${currentYear}`, value: (kpis?.total_registros ?? 0).toString(), change: "Filas válidas", trend: "neutral", icon: "Database" },
+                        { title: `Víctimas identificables ${currentYear}`, value: (kpis?.victimas_identificables ?? 0).toString(), change: "Dato demográfico", trend: "neutral", icon: "Users" },
+                        { title: `Tasa homicidios ${currentYear}`, value: (kpis?.tasa_homicidios ?? 0).toString(), change: "Por 100k hab", trend: "neutral", icon: "Skull" },
+                        { title: "Población de referencia", value: (kpis?.poblacion ?? 0).toLocaleString('es-CO'), change: "Jamundí", trend: "neutral", icon: "Users" },
                     ],
                     crimeTrendData: Array.isArray(trendData) && trendData.length > 0 ? trendData : [],
                     crimeDistributionData: Array.isArray(distData) && distData.length > 0 ? distData : []
@@ -143,7 +156,7 @@ const PublicDashboard = ({ onLoginClick }) => {
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
                         <button
-                            onClick={() => window.location.reload()}
+                            onClick={onBack}
                             className="flex items-center gap-2 text-white/70 hover:text-white mb-2 font-bold uppercase text-[10px] tracking-widest transition-colors bg-white/10 px-3 py-1 rounded-full border border-white/20"
                         >
                             <Home size={14} /> Volver al Inicio del Portal
@@ -170,6 +183,25 @@ const PublicDashboard = ({ onLoginClick }) => {
                 <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
                 <div className="absolute bottom-[-20%] left-[-5%] w-48 h-48 bg-black/10 rounded-full blur-2xl"></div>
             </div>
+
+            {sourceMeta && (
+                <div className={`border px-5 py-4 ${sourceMeta.base_conteo === 'ULTIMA_ENTREGA_SEMANAL' ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                    <div className="grid gap-3 text-sm md:grid-cols-3">
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-500">Periodo analizado</p>
+                            <p className="font-bold text-slate-800">{formatPublicDate(sourceMeta.periodStart)} a {formatPublicDate(sourceMeta.periodEnd)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-500">Fuente y corte</p>
+                            <p className="font-bold text-slate-800">SABANA SIEDCO/PONAL · {formatPublicDate(sourceMeta.ultima_fecha)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-500">Base del indicador</p>
+                            <p className="font-bold text-slate-800">{sourceMeta.base_conteo === 'ULTIMA_ENTREGA_SEMANAL' ? 'Última entrega semanal completa' : 'Consolidado anterior; pendiente nueva entrega'}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
