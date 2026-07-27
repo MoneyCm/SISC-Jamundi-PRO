@@ -44,6 +44,34 @@ class StagingPoliciaSemanal(Base):
     fecha_carga = Column(DateTime, default=datetime.datetime.utcnow)
     hash_archivo = Column(String(64))
 
+class SabanaSnapshotRow(Base):
+    """Fila normalizada perteneciente a una entrega semanal inmutable."""
+    __tablename__ = "sabana_snapshot_rows"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ingestion_id = Column(UUID(as_uuid=True), ForeignKey("ingestion_runs.id"), nullable=False, index=True)
+    fila_origen = Column(Integer)
+    record_key = Column(String(64), nullable=False)
+    hecho_key = Column(String(255), nullable=False, index=True)
+    id_fuente = Column(String(100), index=True)
+    anio = Column(Integer, nullable=False, index=True)
+    semana_num = Column(Integer, index=True)
+    fecha_evento = Column(Date, nullable=False, index=True)
+    conducta_original = Column(String(255))
+    conducta_estandar = Column(String(255), index=True)
+    categoria_delito = Column(String(100), index=True)
+    barrio_normalizado = Column(String(150), index=True)
+    arma_medio = Column(String(100))
+    dia_semana = Column(String(20))
+    sexo = Column(String(50))
+    edad = Column(Integer)
+    datos_normalizados = Column(JSONB)
+    fecha_carga = Column(DateTime, default=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("ingestion_id", "record_key", name="uq_sabana_snapshot_record"),
+        Index("idx_sabana_snapshot_period", "ingestion_id", "anio", "semana_num"),
+    )
+
 class CatalogoConductaFuente(Base):
     __tablename__ = "catalogo_conductas_fuente"
     id = Column(Integer, primary_key=True, index=True)

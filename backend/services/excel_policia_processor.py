@@ -11,10 +11,11 @@ import traceback
 from datetime import datetime, date, time
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sqlalchemy_text
-from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIssue, StagingPoliciaSemanal, CatalogoConductaFuente
+from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIssue, StagingPoliciaSemanal, SabanaSnapshotRow, CatalogoConductaFuente
 from db.models import EventType, Event
 from services.geocoding_service import GeocodingService
 from services.hechos_metrics import canonical_hecho_key
+from services.sabana_history import build_coverage, claim_snapshot_record, normalize_source_id, snapshot_hecho_key, stable_record_key
 
 logger = logging.getLogger("sisc_policia_processor")
 
@@ -105,20 +106,33 @@ class PoliciaJamundiProcessor:
         file_hash = hashlib.sha256(contents).hexdigest()
         
         # 1. Verificar si ya se proceso
-        existing_run = self.db.query(IngestionRun).filter(IngestionRun.hash_archivo == file_hash).first()
+        existing_run = self.db.query(IngestionRun).filter(
+            IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+            IngestionRun.hash_archivo == file_hash,
+        ).first()
+        backfill_existing = False
         if existing_run:
-            logger.info(f"Archivo ya procesado: {filename}")
-            return {"status": "skipped", "message": "Este archivo ya fue procesado anteriormente.", "ingestion_id": str(existing_run.id)}
-
-        # 2. Iniciar Run
-        run = IngestionRun(
-            fuente_codigo="POLICIA_SEMANAL",
-            hash_archivo=file_hash,
-            filename=filename,
-            usuario_carga=self.user_id,
-            status="IN_PROGRESS"
-        )
-        self.db.add(run)
+            has_snapshot = self.db.query(SabanaSnapshotRow.id).filter(
+                SabanaSnapshotRow.ingestion_id == existing_run.id
+            ).first() is not None
+            if has_snapshot:
+                logger.info(f"Archivo ya procesado: {filename}")
+                return {"status": "skipped", "message": "Este archivo ya fue procesado anteriormente.", "ingestion_id": str(existing_run.id)}
+            backfill_existing = True
+            run = existing_run
+            run.status = "IN_PROGRESS"
+            run.usuario_carga = self.user_id
+            logger.info(f"Completando foto historica para archivo existente: {filename}")
+        else:
+            # 2. Iniciar Run
+            run = IngestionRun(
+                fuente_codigo="POLICIA_SEMANAL",
+                hash_archivo=file_hash,
+                filename=filename,
+                usuario_carga=self.user_id,
+                status="IN_PROGRESS"
+            )
+            self.db.add(run)
         self.db.commit()
 
         try:
@@ -138,8 +152,12 @@ class PoliciaJamundiProcessor:
 
             stats = {
                 "aprobadas": 0, "con_observacion": 0, "rechazadas": 0,
-                "duplicadas": 0, "fuera_territorio": 0, "georreferenciadas": 0
+                "duplicadas": 0, "fuera_territorio": 0, "georreferenciadas": 0,
+                "nuevas_consolidadas": 0, "existentes_historico": 0,
+                "repetidas_en_archivo": 0, "filas_snapshot": 0,
             }
+            snapshot_keys = set()
+            snapshot_coverage = []
 
             for idx, row in df.iterrows():
                 if idx > 0 and idx % 50 == 0:
@@ -159,14 +177,15 @@ class PoliciaJamundiProcessor:
                             elif isinstance(v, np.ndarray): sanitized_payload[k_str] = v.tolist()
                             else: sanitized_payload[k_str] = str(v)
 
-                        stg = StagingPoliciaSemanal(
-                            ingestion_id=run.id,
-                            fila_origen=idx + 2,
-                            payload_json=sanitized_payload,
-                            columnas_normalizadas={k: str(row[v]) if pd.notna(row[v]) else None for k, v in mapping.items()},
-                            hash_archivo=file_hash
-                        )
-                        self.db.add(stg)
+                        if not backfill_existing:
+                            stg = StagingPoliciaSemanal(
+                                ingestion_id=run.id,
+                                fila_origen=idx + 2,
+                                payload_json=sanitized_payload,
+                                columnas_normalizadas={k: str(row[v]) if pd.notna(row[v]) else None for k, v in mapping.items()},
+                                hash_archivo=file_hash
+                            )
+                            self.db.add(stg)
 
                         # b. Mapeo y Normalización
                         data = {canonical: (row[col] if pd.notna(row[col]) else None) for canonical, col in mapping.items()}
@@ -216,7 +235,7 @@ class PoliciaJamundiProcessor:
                             occ_time = time(0,0)
 
                         processed_data = {
-                            "id_fuente": str(data.get("id_fuente", "")),
+                            "id_fuente": normalize_source_id(data.get("id_fuente")),
                             "conducta_estandar": conducta_est,
                             "fecha_evento": converted_fecha.date(),
                             "hora_evento": occ_time,
@@ -230,13 +249,54 @@ class PoliciaJamundiProcessor:
                         # h. Deduplicación por Fingerprint (Hecho + Víctima)
                         # Eliminamos la deduplicación estricta por id_fuente para aceptar múltiples víctimas
                         fp = self._generate_fingerprint(processed_data)
-                        exists_fp = self.db.query(HechoSeguridad).filter(
-                            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", 
-                            HechoSeguridad.fingerprint == fp
-                        ).first()
-                        
-                        if exists_fp:
+                        record_key = stable_record_key(sanitized_payload)
+                        if not claim_snapshot_record(snapshot_keys, record_key):
+                            stats["repetidas_en_archivo"] += 1
                             stats["duplicadas"] += 1
+                            continue
+
+                        semana_num = int(data["semana_num"]) if data.get("semana_num") and str(data["semana_num"]).isdigit() else None
+                        snapshot_row = SabanaSnapshotRow(
+                            ingestion_id=run.id,
+                            fila_origen=idx + 2,
+                            record_key=record_key,
+                            hecho_key=snapshot_hecho_key(processed_data["id_fuente"], fp),
+                            id_fuente=processed_data["id_fuente"] or None,
+                            anio=processed_data["fecha_evento"].year,
+                            semana_num=semana_num,
+                            fecha_evento=processed_data["fecha_evento"],
+                            conducta_original=str(conducta_raw),
+                            conducta_estandar=conducta_est,
+                            categoria_delito=cat_delito,
+                            barrio_normalizado=barrio_norm,
+                            arma_medio=processed_data["arma_medio"],
+                            dia_semana=str(data.get("dia_semana") or ""),
+                            sexo=processed_data["sexo"],
+                            edad=processed_data["edad"],
+                            datos_normalizados={
+                                "mes": processed_data["fecha_evento"].strftime("%b").lower(),
+                                "vereda": vereda_norm,
+                                "zona": str(data.get("zona") or ""),
+                                "modalidad": str(data.get("modalidad") or ""),
+                            },
+                        )
+                        self.db.add(snapshot_row)
+                        stats["aprobadas"] += 1
+                        stats["filas_snapshot"] += 1
+                        snapshot_coverage.append((processed_data["fecha_evento"], semana_num))
+
+                        exists_snapshot = self.db.query(SabanaSnapshotRow.id).filter(
+                            SabanaSnapshotRow.ingestion_id != run.id,
+                            SabanaSnapshotRow.record_key == record_key,
+                        ).first()
+                        legacy_exists = self.db.query(HechoSeguridad.id).filter(
+                            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+                            HechoSeguridad.fingerprint == fp,
+                        ).first()
+
+                        if backfill_existing or exists_snapshot or legacy_exists:
+                            stats["duplicadas"] += 1
+                            stats["existentes_historico"] += 1
                             continue
 
                         # i. Fact Insertion
@@ -249,7 +309,7 @@ class PoliciaJamundiProcessor:
                             categoria_delito=cat_delito,
                             fecha_evento=processed_data["fecha_evento"],
                             hora_evento=processed_data["hora_evento"],
-                            semana_num=int(data["semana_num"]) if data.get("semana_num") and str(data["semana_num"]).isdigit() else None,
+                            semana_num=semana_num,
                             dia_semana=data.get("dia_semana"),
                             sexo=processed_data["sexo"],
                             edad=processed_data["edad"],
@@ -266,11 +326,12 @@ class PoliciaJamundiProcessor:
                             vereda_normalizada=vereda_norm,
                             municipio="JAMUNDI",
                             estado_calidad="APROBADO",
-                            fingerprint=fp,
+                            fingerprint=record_key,
                             fecha_reporte_fuente=pd.to_datetime(data["fecha_reporte_fuente"]) if data.get("fecha_reporte_fuente") else None,
                             usuario_ingesta=self.user_id
                         )
                         self.db.add(hecho)
+                        stats["nuevas_consolidadas"] += 1
 
                         # j. Sync to Legacy Event
                         event_type = self.db.query(EventType).filter(EventType.category == cat_delito.upper()).first()
@@ -308,7 +369,6 @@ class PoliciaJamundiProcessor:
                                 sqlalchemy_text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
                                 {"lng": lng, "lat": lat, "id": new_event.id},
                             )
-                        stats["aprobadas"] += 1
                         if coords: stats["georreferenciadas"] += 1
 
                 except Exception as e:
@@ -328,7 +388,14 @@ class PoliciaJamundiProcessor:
             run.status = "COMPLETED"
             run.fecha_fin = datetime.utcnow()
             run.resumen = {
-                "top_conductas": df[mapping.get("conducta_original")].value_counts().head(5).to_dict() if "conducta_original" in mapping else {}
+                "top_conductas": df[mapping.get("conducta_original")].value_counts().head(5).to_dict() if "conducta_original" in mapping else {},
+                "snapshot": {
+                    "filas": stats["filas_snapshot"],
+                    "nuevas_consolidadas": stats["nuevas_consolidadas"],
+                    "existentes_historico": stats["existentes_historico"],
+                    "repetidas_en_archivo": stats["repetidas_en_archivo"],
+                    "coverage": build_coverage(snapshot_coverage),
+                },
             }
             
             self.db.commit()

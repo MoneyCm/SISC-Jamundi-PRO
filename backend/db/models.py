@@ -12,7 +12,7 @@ def create_tables():
         from db.models_alerts import IntelligenceAlert
         from db.models_auth import User, Role, Permission, AuditLog, AccessRequest
         from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion, InspeccionFinanza
-        from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIssue, StagingPoliciaSemanal, CatalogoConductaFuente
+        from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIssue, StagingPoliciaSemanal, SabanaSnapshotRow, CatalogoConductaFuente
         
         with engine.connect() as conn:
             try:

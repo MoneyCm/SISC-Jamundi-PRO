@@ -251,3 +251,10 @@ def analyst_or_admin(current_user: User = Depends(get_current_user)):
     if not any(r in role_codes for r in ("TI_ADMIN", "FUNC_ADMIN", "ANALYST")):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Analyst or admin only")
     return current_user
+
+def ingestion_operator(current_user: User = Depends(get_current_user)):
+    role_codes = [r.code for r in (current_user.roles or [])]
+    allowed = ("TI_ADMIN", "FUNC_ADMIN", "ANALYST", "SOURCE_UPLOADER", "STEWARD")
+    if not any(role in role_codes for role in allowed):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ingestion access required")
+    return current_user

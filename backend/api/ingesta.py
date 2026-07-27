@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
-from db.models import get_db, Event, EventType
+from db.models import get_db, Event, EventType, User
 import pandas as pd
 import io
 import uuid
@@ -12,7 +12,7 @@ from datetime import datetime
 
 logger = logging.getLogger("sisc_api")
 
-from api.auth import admin_only, analyst_or_admin
+from api.auth import admin_only, analyst_or_admin, ingestion_operator
 
 router = APIRouter()
 
@@ -259,12 +259,13 @@ def delete_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
 from services import dq_service
 from db import crud_dq
 
-@router.post("/gate/{dataset_code}", dependencies=[Depends(analyst_or_admin)])
+@router.post("/gate/{dataset_code}")
 async def upload_with_gate(
     dataset_code: str,
     file: UploadFile = File(...),
     force: bool = False,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(ingestion_operator),
 ):
     """
     Universal Ingestion Gate:
@@ -280,8 +281,7 @@ async def upload_with_gate(
     # NUEVO: Procesador especializado para Policía Jamundí
     if dataset_code == "POLICIA_SEMANAL":
         from services.excel_policia_processor import PoliciaJamundiProcessor
-        # TODO: Obtener usuario real desde token
-        processor = PoliciaJamundiProcessor(db, user_id="ADMIN_SISC") 
+        processor = PoliciaJamundiProcessor(db, user_id=current_user.username)
         try:
             result = processor.process(contents, file.filename)
             if result.get("status") == "skipped":
@@ -402,6 +402,105 @@ async def upload_with_gate(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error procesando ingesta: {str(e)}")
+
+@router.get("/policia/history")
+def list_sabana_history(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(ingestion_operator),
+):
+    from db.models_hechos_seguridad import IngestionRun
+
+    safe_limit = max(1, min(limit, 200))
+    runs = db.query(IngestionRun).filter(
+        IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+        IngestionRun.status == "COMPLETED",
+    ).order_by(IngestionRun.fecha_inicio.desc()).limit(safe_limit).all()
+    return {
+        "items": [
+            {
+                "id": str(run.id),
+                "filename": run.filename,
+                "hash_archivo": run.hash_archivo,
+                "fecha_inicio": run.fecha_inicio.isoformat() if run.fecha_inicio else None,
+                "fecha_fin": run.fecha_fin.isoformat() if run.fecha_fin else None,
+                "usuario_carga": run.usuario_carga,
+                "total_filas": run.total_filas,
+                "aprobadas": run.aprobadas,
+                "rechazadas": run.rechazadas,
+                "duplicadas": run.duplicadas,
+                "resumen": run.resumen or {},
+            }
+            for run in runs
+        ]
+    }
+
+
+@router.get("/policia/history/{run_id}/rows")
+def get_sabana_snapshot_rows(
+    run_id: str,
+    anio: Optional[int] = None,
+    semana_hasta: Optional[int] = None,
+    offset: int = 0,
+    limit: int = 5000,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(ingestion_operator),
+):
+    from db.models_hechos_seguridad import IngestionRun, SabanaSnapshotRow
+
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Entrega SABANA no encontrada")
+
+    run = db.query(IngestionRun).filter(
+        IngestionRun.id == run_uuid,
+        IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+        IngestionRun.status == "COMPLETED",
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Entrega SABANA no encontrada")
+
+    query = db.query(SabanaSnapshotRow).filter(SabanaSnapshotRow.ingestion_id == run.id)
+    if anio is not None:
+        query = query.filter(SabanaSnapshotRow.anio == anio)
+    if semana_hasta is not None:
+        query = query.filter(SabanaSnapshotRow.semana_num <= semana_hasta)
+
+    total = query.count()
+    safe_offset = max(0, offset)
+    safe_limit = max(1, min(limit, 10000))
+    rows = query.order_by(
+        SabanaSnapshotRow.fecha_evento,
+        SabanaSnapshotRow.record_key,
+    ).offset(safe_offset).limit(safe_limit).all()
+
+    return {
+        "ingestion_id": str(run.id),
+        "filename": run.filename,
+        "total": total,
+        "offset": safe_offset,
+        "limit": safe_limit,
+        "rows": [
+            {
+                "record_key": row.record_key,
+                "hecho_key": row.hecho_key,
+                "HECHOS_ID": row.id_fuente,
+                "AÑO": row.anio,
+                "MES": (row.datos_normalizados or {}).get("mes", ""),
+                "NoSEMANA": row.semana_num,
+                "FECHA_HECHO": row.fecha_evento.isoformat(),
+                "CONDUCTA": row.conducta_estandar,
+                "CONDUCTA_ORIGINAL": row.conducta_original,
+                "BARRIO": row.barrio_normalizado or "SIN DATO",
+                "ARMA": row.arma_medio or "SIN DATO",
+                "DIA": row.dia_semana or "SIN DATO",
+                "GENERO": row.sexo,
+                "EDAD": row.edad,
+            }
+            for row in rows
+        ],
+    }
 
 @router.get("/runs/{run_id}", dependencies=[Depends(analyst_or_admin)])
 def get_ingestion_run(run_id: str, db: Session = Depends(get_db)):

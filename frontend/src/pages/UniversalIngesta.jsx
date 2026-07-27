@@ -41,6 +41,8 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
     const [error, setError] = useState(null);
     const [assetStatus, setAssetStatus] = useState(null);
     const [forcing, setForcing] = useState(false);
+    const [sabanaHistory, setSabanaHistory] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
     const fileInputRef = useRef(null);
     const forceInputRef = useRef(null);
 
@@ -49,6 +51,28 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
     useEffect(() => {
         checkAssetStatus();
     }, [safeDatasetCode]);
+
+    useEffect(() => {
+        if (safeDatasetCode === 'POLICIA_SEMANAL') loadSabanaHistory();
+        else setSabanaHistory([]);
+    }, [safeDatasetCode]);
+
+    const loadSabanaHistory = async () => {
+        setHistoryLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/ingesta/policia/history`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('No fue posible consultar el historial SABANA');
+            const data = await response.json();
+            setSabanaHistory(data.items || []);
+        } catch (err) {
+            console.error('Error loading SABANA history:', err);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
 
     const handleDatasetChange = (e) => {
         const selected = DATASETS_CONFIG.find(d => d.code === e.target.value);
@@ -130,6 +154,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
             } else {
                 setStatus('success');
                 setReportInfo(data);
+                if (safeDatasetCode === 'POLICIA_SEMANAL') await loadSabanaHistory();
             }
         } catch (err) {
             setError(err.message);
@@ -335,7 +360,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
-                                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Duplicados</div>
+                                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Ya existentes</div>
                                     <div className="text-xl font-black text-amber-600">
                                         {reportInfo.stats.duplicadas}
                                     </div>
@@ -379,6 +404,63 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                 </div>
             )}
 
+            {safeDatasetCode === 'POLICIA_SEMANAL' && (
+                <section className="border-t border-slate-200 pt-8">
+                    <div className="flex items-end justify-between gap-4 mb-4">
+                        <div>
+                            <h2 className="text-xl font-black text-slate-800">Historial central de entregas SABANA</h2>
+                            <p className="text-sm text-slate-500">Cada archivo es una foto semanal inmutable; el consolidado solo suma novedades.</p>
+                        </div>
+                        <button
+                            onClick={loadSabanaHistory}
+                            disabled={historyLoading}
+                            title="Actualizar historial"
+                            className="p-2 text-slate-500 hover:text-indigo-600 disabled:opacity-50"
+                        >
+                            <RefreshCcw size={18} className={historyLoading ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto border border-slate-200 bg-white">
+                        <table className="w-full min-w-[760px] text-left text-sm">
+                            <thead className="bg-slate-800 text-white text-[10px] uppercase tracking-wider">
+                                <tr>
+                                    <th className="px-4 py-3">Entrega</th>
+                                    <th className="px-4 py-3">Cobertura</th>
+                                    <th className="px-4 py-3 text-right">Filas únicas</th>
+                                    <th className="px-4 py-3 text-right">Novedades</th>
+                                    <th className="px-4 py-3 text-right">Ya existentes</th>
+                                    <th className="px-4 py-3">Responsable</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {sabanaHistory.map((run) => {
+                                    const snapshot = run.resumen?.snapshot || {};
+                                    const coverage = snapshot.coverage || {};
+                                    return (
+                                        <tr key={run.id} className="text-slate-700">
+                                            <td className="px-4 py-3">
+                                                <div className="font-bold text-slate-900">{run.filename}</div>
+                                                <div className="text-xs text-slate-400">{run.fecha_fin ? new Date(run.fecha_fin).toLocaleString() : 'Sin fecha'}</div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div>{(coverage.years || []).join(' / ') || 'Sin identificar'}</div>
+                                                <div className="text-xs text-slate-400">{coverage.min_date || 'N/D'} a {coverage.max_date || 'N/D'}</div>
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-bold">{snapshot.filas ?? run.aprobadas ?? 0}</td>
+                                            <td className="px-4 py-3 text-right font-bold text-emerald-700">{snapshot.nuevas_consolidadas ?? 0}</td>
+                                            <td className="px-4 py-3 text-right font-bold text-amber-700">{snapshot.existentes_historico ?? run.duplicadas ?? 0}</td>
+                                            <td className="px-4 py-3">{run.usuario_carga || 'Sistema'}</td>
+                                        </tr>
+                                    );
+                                })}
+                                {!historyLoading && sabanaHistory.length === 0 && (
+                                    <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">La primera entrega registrada aparecerá aquí.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            )}
             {error && (
                 <div className="p-5 bg-red-50 text-red-700 rounded-2xl border border-red-200 flex items-center gap-4 animate-shake">
                     <XCircle size={24} className="shrink-0" />
