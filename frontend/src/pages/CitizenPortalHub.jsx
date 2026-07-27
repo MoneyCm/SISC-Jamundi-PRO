@@ -160,7 +160,7 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                         <ul className="space-y-4 text-sm text-white/40">
                             <li><button onClick={() => onNavigate('open-data')} className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Datos Abiertos</button></li>
                             <li><button onClick={() => onNavigate('technical-bulletins')} className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Boletines Técnicos</button></li>
-                            <li><button onClick={() => onNavigate('accountability')} className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Rendición de Cuentas</button></li>
+                            <li><a href="https://www.jamundi.gov.co/Paginas/Rendici%C3%B3n-de-cuentas.aspx" className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Rendición de Cuentas</a></li>
                         </ul>
                     </div>
                     <div>

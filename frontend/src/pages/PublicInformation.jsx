@@ -18,7 +18,7 @@ const SECTIONS = [
     { id: 'transparency-info', label: 'Transparencia', icon: ShieldCheck },
     { id: 'open-data', label: 'Datos abiertos', icon: Database },
     { id: 'technical-bulletins', label: 'Boletines técnicos', icon: FileText },
-    { id: 'accountability', label: 'Rendición de cuentas', icon: CheckCircle2 },
+    { id: 'accountability', label: 'Rendición de cuentas', icon: CheckCircle2, href: 'https://www.jamundi.gov.co/Paginas/Rendici%C3%B3n-de-cuentas.aspx' },
 ];
 
 const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
@@ -120,7 +120,15 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
 
             <nav className="bg-white border-b border-slate-200 print:hidden" aria-label="Información pública">
                 <div className="max-w-6xl mx-auto px-4 py-2 flex gap-1 overflow-x-auto">
-                    {SECTIONS.map((section) => (
+                    {SECTIONS.map((section) => section.href ? (
+                        <a
+                            key={section.id}
+                            href={section.href}
+                            className="flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 border-transparent text-slate-500 hover:text-slate-900"
+                        >
+                            <section.icon size={17} /> {section.label}
+                        </a>
+                    ) : (
                         <button
                             key={section.id}
                             onClick={() => setActiveSection(section.id)}
