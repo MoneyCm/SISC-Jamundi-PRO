@@ -153,14 +153,14 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                         </p>
                     </div>
                     <div>
-                        <h5 className="font-bold mb-6 flex items-center gap-2">
+                        <button onClick={() => onNavigate('transparency-info')} className="font-bold mb-6 flex items-center gap-2 hover:text-primary-300">
                             <Eye size={18} className="text-primary-400" />
                             Transparencia
-                        </h5>
+                        </button>
                         <ul className="space-y-4 text-sm text-white/40">
-                            <li><button className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Datos Abiertos</button></li>
-                            <li><button className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Boletines Técnicos</button></li>
-                            <li><button className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Rendición de Cuentas</button></li>
+                            <li><button onClick={() => onNavigate('open-data')} className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Datos Abiertos</button></li>
+                            <li><button onClick={() => onNavigate('technical-bulletins')} className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Boletines Técnicos</button></li>
+                            <li><button onClick={() => onNavigate('accountability')} className="hover:text-white transition-colors text-left uppercase text-xs font-black tracking-widest">Rendición de Cuentas</button></li>
                         </ul>
                     </div>
                     <div>

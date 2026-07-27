@@ -6,6 +6,7 @@ import MapPage from './pages/MapPage';
 import ReportsPage from './pages/ReportsPage';
 import DataPage from './pages/DataPage';
 import PublicDashboard from './pages/PublicDashboard';
+import PublicInformation from './pages/PublicInformation';
 import LoginPage from './pages/LoginPage';
 import PQRPage from './pages/PQRPage';
 import CitizenPortalHub from './pages/CitizenPortalHub';
@@ -125,6 +126,15 @@ const App = () => {
           />;
         case 'transparency':
           return <PublicDashboard onLoginClick={() => setAppMode('login')} />;
+        case 'transparency-info':
+        case 'open-data':
+        case 'technical-bulletins':
+        case 'accountability':
+          return <PublicInformation
+            initialSection={publicActivePage}
+            onBack={() => setPublicActivePage('hub')}
+            onNavigate={(page) => setPublicActivePage(page)}
+          />;
         case 'victim-support':
           return <VictimRoutes onBack={() => setPublicActivePage('hub')} />;
         case 'reporting':
