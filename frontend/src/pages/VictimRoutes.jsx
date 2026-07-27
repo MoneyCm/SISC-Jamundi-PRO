@@ -157,9 +157,13 @@ const VictimRoutes = ({ onBack }) => {
                                 <p className="text-sm text-white/60 italic mb-4">
                                     "Si estás en una situación de riesgo inminente, llama al 123 de inmediato."
                                 </p>
-                                <button className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2">
-                                    <Phone size={20} /> BOTÓN DE PÁNICO
-                                </button>
+                                <a
+                                    href="tel:123"
+                                    aria-label="Llamar a emergencias 123"
+                                    className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <Phone size={20} /> LLAMAR AL 123 AHORA
+                                </a>
                             </div>
                         </div>
 
