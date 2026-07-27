@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.models import get_db, Event, EventType
 from db.models_hechos_seguridad import HechoSeguridad
+from services.hechos_metrics import hechos_unicos_expr
 from sqlalchemy import func
 import os
 import httpx
@@ -97,7 +98,7 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     current_year = datetime.now().year
 
     # 1. Obtener conteos diarios de HOMICIDIOS de ambas fuentes para el año actual
-    hom_mod_daily = db.query(HechoSeguridad.fecha_evento, func.count(HechoSeguridad.id)).filter(
+    hom_mod_daily = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(
         func.extract('year', HechoSeguridad.fecha_evento) == current_year,
         HechoSeguridad.categoria_delito == "HOMICIDIO"
     ).group_by(HechoSeguridad.fecha_evento).all()
@@ -116,14 +117,14 @@ async def get_ai_insights(db: Session = Depends(get_db)):
 
     # 2. Conteo de Incidentes Totales (Aproximación por mayor fuente)
     total_legacy = db.query(Event).filter(func.extract('year', Event.occurrence_date) == current_year).count()
-    total_moderno = db.query(HechoSeguridad).filter(func.extract('year', HechoSeguridad.fecha_evento) == current_year).count()
-    total_real_2026 = max(total_legacy, total_moderno)
+    total_moderno = db.query(hechos_unicos_expr()).filter(func.extract('year', HechoSeguridad.fecha_evento) == current_year).scalar() or 0
+    total_real_2026 = total_moderno if total_moderno > 0 else total_legacy
 
     # 3. Barrios (Priorizar la base más poblada)
-    if total_moderno > total_legacy:
-        top_barrio_2026 = db.query(HechoSeguridad.barrio_normalizado, func.count(HechoSeguridad.id)).filter(
+    if total_moderno > 0:
+        top_barrio_2026 = db.query(HechoSeguridad.barrio_normalizado, hechos_unicos_expr()).filter(
             func.extract('year', HechoSeguridad.fecha_evento) == current_year
-        ).group_by(HechoSeguridad.barrio_normalizado).order_by(func.count(HechoSeguridad.id).desc()).first()
+        ).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).first()
     else:
         top_barrio_2026 = db.query(Event.barrio, func.count(Event.id)).filter(
             func.extract('year', Event.occurrence_date) == current_year
@@ -200,12 +201,12 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
 
     # 1. Total Incidentes (Legacy + Moderno)
     total_legacy = db.query(Event).count()
-    total_moderno = db.query(HechoSeguridad).count()
-    total_incidentes = total_legacy + total_moderno # Es una aproximación para el bot
+    total_moderno = db.query(hechos_unicos_expr()).scalar() or 0
+    total_incidentes = total_moderno if total_moderno > 0 else total_legacy
 
     # 2. Homicidios Totales (DEDUPLICACIÓN DIARIA)
     hom_legacy = db.query(Event.occurrence_date, func.count(Event.id)).join(EventType).filter(EventType.category == "HOMICIDIO").group_by(Event.occurrence_date).all()
-    hom_moderno = db.query(HechoSeguridad.fecha_evento, func.count(HechoSeguridad.id)).filter(HechoSeguridad.categoria_delito == "HOMICIDIO").group_by(HechoSeguridad.fecha_evento).all()
+    hom_moderno = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(HechoSeguridad.categoria_delito == "HOMICIDIO").group_by(HechoSeguridad.fecha_evento).all()
 
     daily_hom_total = {}
     for d, c in hom_legacy: daily_hom_total[d] = c
@@ -221,7 +222,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         # Para cada año, calculamos el total del mismo modo de de-duplicación diaria
         y_int = int(year)
         d_legacy = db.query(Event.occurrence_date, func.count(Event.id)).filter(func.extract('year', Event.occurrence_date) == y_int).group_by(Event.occurrence_date).all()
-        d_moderno = db.query(HechoSeguridad.fecha_evento, func.count(HechoSeguridad.id)).filter(func.extract('year', HechoSeguridad.fecha_evento) == y_int).group_by(HechoSeguridad.fecha_evento).all()
+        d_moderno = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(func.extract('year', HechoSeguridad.fecha_evento) == y_int).group_by(HechoSeguridad.fecha_evento).all()
 
         y_daily = {}
         for d, c in d_legacy: y_daily[d] = c
@@ -247,7 +248,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         for name, aliases in delitos_prioritarios.items():
             # Sumar de ambas tablas con de-duplicación diaria
             d_l = db.query(Event.occurrence_date, func.count(Event.id)).join(EventType).filter(func.extract('year', Event.occurrence_date) == year, EventType.category.in_(aliases)).group_by(Event.occurrence_date).all()
-            d_m = db.query(HechoSeguridad.fecha_evento, func.count(HechoSeguridad.id)).filter(func.extract('year', HechoSeguridad.fecha_evento) == year, HechoSeguridad.categoria_delito.in_(aliases)).group_by(HechoSeguridad.fecha_evento).all()
+            d_m = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(func.extract('year', HechoSeguridad.fecha_evento) == year, HechoSeguridad.categoria_delito.in_(aliases)).group_by(HechoSeguridad.fecha_evento).all()
 
             y_d = {}
             for d, c in d_l: y_d[d] = c

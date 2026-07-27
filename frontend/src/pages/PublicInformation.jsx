@@ -71,7 +71,9 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
     const indicatorRows = useMemo(() => {
         if (!data.kpis) return [];
         return [
-            ['Total de hechos', data.kpis.total_incidentes],
+            ['Hechos únicos', data.kpis.total_hechos ?? data.kpis.total_incidentes],
+            ['Registros de la SABANA', data.kpis.total_registros],
+            ['Víctimas identificables', data.kpis.victimas_identificables],
             ['Homicidios', data.kpis.homicidios],
             ['Hurto a personas', data.kpis.hurto_personas],
             ['Hurto de vehículos', data.kpis.hurto_vehiculos],

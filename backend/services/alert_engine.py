@@ -3,6 +3,7 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 from db.models import Event, EventType
 from db.models_hechos_seguridad import HechoSeguridad
+from services.hechos_metrics import hechos_unicos_expr
 import logging
 
 logger = logging.getLogger("alert_engine")
@@ -29,7 +30,7 @@ class AlertEngine:
         query_mod = db.query(
             HechoSeguridad.fecha_evento.label('date'),
             HechoSeguridad.categoria_delito.label('cat'),
-            func.count(HechoSeguridad.id).label('count')
+            hechos_unicos_expr().label('count')
         ).filter(HechoSeguridad.fecha_evento >= start_date, HechoSeguridad.fecha_evento <= end_date)
 
         if category:
@@ -37,7 +38,7 @@ class AlertEngine:
 
         mod_data = query_mod.group_by(HechoSeguridad.fecha_evento, HechoSeguridad.categoria_delito).all()
 
-        # 3. Merge Heuristic: Per Day/Category, take the Max (or prioritized source)
+        # 3. La SABANA es autoritativa cuando cubre el mismo día y categoría.
         merged = {}
         for d, c, count in leg_data:
             key = (d, c)
@@ -45,8 +46,8 @@ class AlertEngine:
 
         for d, c, count in mod_data:
             key = (d, c)
-            # Prioritize Modern or take Max to be safe with overlaps
-            merged[key] = max(merged.get(key, 0), count)
+            # Sustituye el conteo legacy para evitar conservar filas por víctima.
+            merged[key] = count
 
         # 4. Group by Category
         cat_totals = {}
@@ -124,10 +125,10 @@ class AlertEngine:
         # Solo para el año actual
         top_barrios = db.query(
             HechoSeguridad.barrio_normalizado,
-            func.count(HechoSeguridad.id).label('total')
+            hechos_unicos_expr().label('total')
         ).filter(
             HechoSeguridad.fecha_evento >= hace_30
-        ).group_by(HechoSeguridad.barrio_normalizado).order_by(func.count(HechoSeguridad.id).desc()).limit(3).all()
+        ).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).limit(3).all()
 
         for b_name, b_count in top_barrios:
             if b_name and b_count >= 10:

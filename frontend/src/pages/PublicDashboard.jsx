@@ -81,9 +81,11 @@ const PublicDashboard = ({ onLoginClick }) => {
 
                 setDashboardData({
                     kpiData: [
-                        { title: "Incidentes Reportados", value: (kpis?.total_incidentes ?? 0).toString(), change: "Últimos 6 meses", trend: "neutral", icon: "Activity" },
+                        { title: "Hechos únicos", value: (kpis?.total_hechos ?? kpis?.total_incidentes ?? 0).toString(), change: "Por HECHOS_ID", trend: "neutral", icon: "Activity" },
+                        { title: "Registros SABANA", value: (kpis?.total_registros ?? 0).toString(), change: "Filas válidas", trend: "neutral", icon: "Database" },
+                        { title: "Víctimas identificables", value: (kpis?.victimas_identificables ?? 0).toString(), change: "Dato demográfico", trend: "neutral", icon: "Users" },
                         { title: "Tasa Homicidios", value: (kpis?.tasa_homicidios ?? 0).toString(), change: "Por 100k hab", trend: "neutral", icon: "Skull" },
-                        { title: "Población", value: "150,000", change: "Jamundí", trend: "neutral", icon: "Users" },
+                        { title: "Población", value: (kpis?.poblacion ?? 0).toLocaleString('es-CO'), change: "Jamundí", trend: "neutral", icon: "Users" },
                     ],
                     crimeTrendData: Array.isArray(trendData) && trendData.length > 0 ? trendData : [],
                     crimeDistributionData: Array.isArray(distData) && distData.length > 0 ? distData : []
@@ -167,7 +169,7 @@ const PublicDashboard = ({ onLoginClick }) => {
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
                 {dashboardData.kpiData.map((kpi, index) => (
                     <KPICard key={index} data={kpi} />
                 ))}

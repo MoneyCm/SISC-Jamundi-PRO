@@ -1,6 +1,6 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain, Info, Users, X, FileText, UserMinus, Car, PhoneForwarded, ShieldCheck, Zap, ArrowRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain, Info, Users, X, FileText, UserMinus, Car, PhoneForwarded, ShieldCheck, Zap, ArrowRight, Database } from 'lucide-react';
 
 const iconMap = {
     AlertTriangle: AlertTriangle,
@@ -9,6 +9,7 @@ const iconMap = {
     Home: Home,
     Users: Users,
     Activity: Activity,
+    Database: Database,
     UserMinus: UserMinus,
     Car: Car,
     PhoneForwarded: PhoneForwarded,

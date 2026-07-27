@@ -14,6 +14,7 @@ from sqlalchemy import text as sqlalchemy_text
 from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIssue, StagingPoliciaSemanal, CatalogoConductaFuente
 from db.models import EventType, Event
 from services.geocoding_service import GeocodingService
+from services.hechos_metrics import canonical_hecho_key
 
 logger = logging.getLogger("sisc_policia_processor")
 
@@ -278,24 +279,35 @@ class PoliciaJamundiProcessor:
                             self.db.add(event_type)
                             self.db.flush()
 
-                        new_event = Event(
-                            external_id=str(uuid.uuid4()), # UUID único para cada víctima como evento individual
-                            event_type_id=event_type.id,
-                            occurrence_date=processed_data["fecha_evento"],
-                            occurrence_time=processed_data["hora_evento"],
-                            barrio=barrio_norm or vereda_norm or "JAMUNDI",
-                            descripcion=f"[{conducta_est}] {data.get('modalidad', '')} - {data.get('arma_medio', '')} (Víctima: {processed_data['sexo']}, {processed_data['edad']} años)",
-                            source_name="POLICIA_SEMANAL",
-                            ingestion_id=run.id
+                        hecho_key = canonical_hecho_key(
+                            processed_data["id_fuente"], fp, hecho.id
                         )
-                        self.db.add(new_event)
-                        self.db.flush()
-
-                        self.db.execute(
-                            sqlalchemy_text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
-                            {"lng": lng, "lat": lat, "id": new_event.id}
+                        legacy_external_id = (
+                            "POLICIA_SEMANAL:"
+                            + hashlib.sha256(hecho_key.encode()).hexdigest()
                         )
+                        existing_event = self.db.query(Event).filter(
+                            Event.source_name == "POLICIA_SEMANAL",
+                            Event.external_id == legacy_external_id,
+                        ).first()
 
+                        if not existing_event:
+                            new_event = Event(
+                                external_id=legacy_external_id,
+                                event_type_id=event_type.id,
+                                occurrence_date=processed_data["fecha_evento"],
+                                occurrence_time=processed_data["hora_evento"],
+                                barrio=barrio_norm or vereda_norm or "JAMUNDI",
+                                descripcion=f"[{conducta_est}] {data.get('modalidad', '')} - {data.get('arma_medio', '')}",
+                                source_name="POLICIA_SEMANAL",
+                                ingestion_id=run.id,
+                            )
+                            self.db.add(new_event)
+                            self.db.flush()
+                            self.db.execute(
+                                sqlalchemy_text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
+                                {"lng": lng, "lat": lat, "id": new_event.id},
+                            )
                         stats["aprobadas"] += 1
                         if coords: stats["georreferenciadas"] += 1
 

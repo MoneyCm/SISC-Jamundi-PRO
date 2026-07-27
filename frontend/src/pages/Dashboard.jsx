@@ -119,7 +119,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
 
             setDashboardData({
                 kpiData: [
-                    { title: `Homicidios`, value: (kpisCurrent?.homicidios ?? 0).toString(), change: "Corte MinDefensa", trend: "neutral", icon: "Skull" },
+                    { title: `Homicidios (hechos)`, value: (kpisCurrent?.homicidios ?? 0).toString(), change: "SABANA SIEDCO", trend: "neutral", icon: "Skull" },
                     { title: "Hurto Personas", value: (kpisCurrent?.hurto_personas ?? 0).toString(), change: "Denuncias", trend: "neutral", icon: "UserMinus" },
                     { title: "Hurto Vehículos", value: (kpisCurrent?.hurto_vehiculos ?? 0).toString(), change: "Autos/Motos", trend: "neutral", icon: "Car" },
                     { title: "Extorsión", value: (kpisCurrent?.extorsion ?? 0).toString(), change: "Reportes", trend: "neutral", icon: "PhoneForwarded" },

@@ -16,6 +16,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from services.alert_engine import AlertEngine
 from api.ia import call_gemini, call_mistral, AI_PROVIDER
 from db.models_hechos_seguridad import HechoSeguridad
+from services.hechos_metrics import hechos_unicos_expr
 from db.models import EventType
 
 router = APIRouter()
@@ -70,7 +71,7 @@ async def generar_boletin_pdf(
         # 3. Consulta Periodo Actual
         datos_actual = db.query(
             HechoSeguridad.conducta_estandar.label("delito"),
-            func.count(HechoSeguridad.id).label("total")
+            hechos_unicos_expr().label("total")
         ).filter(
             HechoSeguridad.fecha_evento >= fecha_inicio,
             HechoSeguridad.fecha_evento <= fecha_fin,
@@ -80,7 +81,7 @@ async def generar_boletin_pdf(
         # 4. Consulta Periodo Anterior
         datos_prev = db.query(
             HechoSeguridad.conducta_estandar.label("delito"),
-            func.count(HechoSeguridad.id).label("total")
+            hechos_unicos_expr().label("total")
         ).filter(
             HechoSeguridad.fecha_evento >= fecha_inicio_prev,
             HechoSeguridad.fecha_evento <= fecha_fin_prev,
@@ -246,7 +247,11 @@ async def generar_boletin_pdf(
     doc.build(content)
     pdf_out = buffer.getvalue()
     buffer.close()
-
+    return Response(
+        content=pdf_out,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=Boletin_SISC.pdf"},
+    )
 @router.get("/generar-boletin-ejecutivo")
 async def generar_boletin_ejecutivo(
     token: str = Query(None),
@@ -336,7 +341,7 @@ async def generar_boletin_ejecutivo(
 
     # Hotspots Territoriales
     content.append(Paragraph("MAPA DE CALOR: ZONAS DE ATENCIÓN", ParagraphStyle('H', parent=styles['Heading2'], fontSize=12)))
-    top_barrios = db.query(HechoSeguridad.barrio_normalizado, func.count(HechoSeguridad.id)).filter(HechoSeguridad.fecha_evento >= inicio_act).group_by(HechoSeguridad.barrio_normalizado).order_by(func.count(HechoSeguridad.id).desc()).limit(5).all()
+    top_barrios = db.query(HechoSeguridad.barrio_normalizado, hechos_unicos_expr()).filter(HechoSeguridad.fecha_evento >= inicio_act).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).limit(5).all()
 
     b_data = [["BARRIO / ZONA", "INCIDENTES"]]
     for b_name, b_count in top_barrios:

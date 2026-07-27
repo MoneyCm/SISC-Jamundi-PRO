@@ -143,8 +143,10 @@ const StatsModule = ({ userRoles = [] }) => {
     // ── Vista: Resumen General ──────────────────────────────────────────────
     const ViewResumen = () => (
         <div className="space-y-6 animate-fade-in">
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-                <KpiCard label="Total Hechos"       value2026={kpis2026?.total_incidentes} value2025={kpis2025?.total_incidentes} />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KpiCard label="Hechos únicos"      value2026={kpis2026?.total_hechos} value2025={kpis2025?.total_hechos} />
+                <KpiCard label="Registros SABANA"   value2026={kpis2026?.total_registros} value2025={kpis2025?.total_registros} color="#475569" />
+                <KpiCard label="Víctimas identificables" value2026={kpis2026?.victimas_identificables} value2025={kpis2025?.victimas_identificables} color="#0f766e" />
                 <KpiCard label="Homicidios"         value2026={kpis2026?.homicidios}       value2025={kpis2025?.homicidios}       color="#ef4444" />
                 <KpiCard label="Hurto Personas"     value2026={kpis2026?.hurto_personas}   value2025={kpis2025?.hurto_personas}   color="#f97316" />
                 <KpiCard label="Hurto Vehículos"    value2026={kpis2026?.hurto_vehiculos}  value2025={kpis2025?.hurto_vehiculos}  color="#8b5cf6" />

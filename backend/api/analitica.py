@@ -8,6 +8,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import bindparam, func, text
 from db.models import get_db, Event, EventType, User
 from db.models_hechos_seguridad import HechoSeguridad
+from services.hechos_metrics import (
+    canonical_hecho_key,
+    hechos_sin_id_expr,
+    hechos_unicos_expr,
+    registros_expr,
+    victimas_identificables_expr,
+)
 from datetime import date
 from typing import Optional, List
 
@@ -37,7 +44,7 @@ CONDUCTA_KEYS = {
 
 
 def _hechos_count(db: Session, conductas: list, start: date = None, end: date = None) -> int:
-    q = db.query(func.count(HechoSeguridad.id)).filter(
+    q = db.query(hechos_unicos_expr()).filter(
         HechoSeguridad.conducta_estandar.in_(conductas)
     )
     if start:
@@ -48,12 +55,29 @@ def _hechos_count(db: Session, conductas: list, start: date = None, end: date = 
 
 
 def _hechos_total(db: Session, start: date = None, end: date = None) -> int:
-    q = db.query(func.count(HechoSeguridad.id))
+    q = db.query(hechos_unicos_expr())
     if start:
         q = q.filter(HechoSeguridad.fecha_evento >= start)
     if end:
         q = q.filter(HechoSeguridad.fecha_evento <= end)
     return q.scalar() or 0
+
+def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
+    q = db.query(
+        registros_expr().label("registros"),
+        victimas_identificables_expr().label("victimas_identificables"),
+        hechos_sin_id_expr().label("registros_sin_id_fuente"),
+    )
+    if start:
+        q = q.filter(HechoSeguridad.fecha_evento >= start)
+    if end:
+        q = q.filter(HechoSeguridad.fecha_evento <= end)
+    row = q.one()
+    return {
+        "registros": row.registros or 0,
+        "victimas_identificables": row.victimas_identificables or 0,
+        "registros_sin_id_fuente": row.registros_sin_id_fuente or 0,
+    }
 
 
 # ─────────────────────────────────────────────
@@ -71,6 +95,7 @@ def get_dashboard_kpis(
     """KPIs del dashboard — fuente: hechos_seguridad (sabanas SIEDCO)."""
     try:
         total = _hechos_total(db, start_date, end_date)
+        volumen = _volumen_fuente(db, start_date, end_date)
 
         homicidios    = _hechos_count(db, CONDUCTA_KEYS['HOMICIDIO'],        start_date, end_date)
         hurto_pers    = _hechos_count(db, CONDUCTA_KEYS['HURTO_PERSONAS'],   start_date, end_date)
@@ -88,6 +113,10 @@ def get_dashboard_kpis(
         return {
             "total_incidentes":  total,
             "total_general":     total,
+            "total_hechos":      total,
+            "total_registros":   volumen["registros"],
+            "victimas_identificables": volumen["victimas_identificables"],
+            "registros_sin_id_fuente": volumen["registros_sin_id_fuente"],
             "homicidios":        homicidios,
             "tasa_homicidios":   tasa_homicidios,
             "hurto_personas":    hurto_pers,
@@ -139,8 +168,8 @@ def get_tendencia_delictiva(
     query_str = f"""
         SELECT
             TO_CHAR(date_trunc('{intervalo}', fecha_evento), 'Mon YYYY') as etiqueta,
-            COUNT(*) FILTER (WHERE conducta_estandar IN :hom_vals) as homicidios,
-            COUNT(*) FILTER (WHERE conducta_estandar NOT IN :hom_vals) as otros,
+            COUNT(DISTINCT COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)) FILTER (WHERE conducta_estandar IN :hom_vals) as homicidios,
+            COUNT(DISTINCT COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)) FILTER (WHERE conducta_estandar NOT IN :hom_vals) as otros,
             date_trunc('{intervalo}', fecha_evento) as full_date
         FROM hechos_seguridad
         WHERE 1=1
@@ -214,7 +243,7 @@ def get_top_barrios(
     """Top 10 barrios con más delitos."""
     q = db.query(
         HechoSeguridad.barrio_normalizado.label('barrio'),
-        func.count(HechoSeguridad.id).label('total')
+        hechos_unicos_expr().label('total')
     ).filter(
         HechoSeguridad.barrio_normalizado != '',
         HechoSeguridad.barrio_normalizado.isnot(None)
@@ -243,10 +272,15 @@ def get_resumen_estadistico(
     if end_date:
         q = q.filter(HechoSeguridad.fecha_evento <= end_date)
 
-    hechos = q.limit(50).all()
+    hechos = q.limit(200).all()
 
     result = []
+    seen_hechos = set()
     for h in hechos:
+        key = canonical_hecho_key(h.id_fuente, h.fingerprint, h.id)
+        if key in seen_hechos:
+            continue
+        seen_hechos.add(key)
         tipo = h.conducta_estandar or h.conducta_original or "Sin clasificar"
         # Normalizar el tipo para que el frontend lo muestre bien
         tipo_map = {
@@ -274,6 +308,8 @@ def get_resumen_estadistico(
             "descripcion": " - ".join(desc_parts),
             "estado":      "Abierto",
         })
+        if len(result) == 50:
+            break
 
     return result
 
@@ -408,13 +444,15 @@ def get_ultima_fecha_datos(db: Session = Depends(get_db)):
     stats = db.query(
         func.min(HechoSeguridad.fecha_evento).label("min_date"),
         func.max(HechoSeguridad.fecha_evento).label("max_date"),
-        func.count(HechoSeguridad.id).label("total")
+        hechos_unicos_expr().label("total"),
+        registros_expr().label("registros")
     ).first()
 
     return {
         "fecha_inicial": stats.min_date if stats.min_date else date.today(),
         "ultima_fecha":  stats.max_date if stats.max_date else date.today(),
         "total_hechos":  stats.total or 0,
+        "total_registros": stats.registros or 0,
         "fuente":        "POLICIA_SEMANAL",
     }
 
@@ -428,8 +466,8 @@ def get_por_semana(
     q = db.query(
         HechoSeguridad.semana_num.label('semana'),
         func.extract('year', HechoSeguridad.fecha_evento).label('anio'),
-        func.count(HechoSeguridad.id).label('total'),
-        func.count(HechoSeguridad.id).filter(
+        hechos_unicos_expr().label('total'),
+        hechos_unicos_expr().filter(
             HechoSeguridad.conducta_estandar.in_(CONDUCTA_KEYS['HOMICIDIO'])
         ).label('homicidios')
     ).filter(HechoSeguridad.semana_num.isnot(None))
@@ -457,7 +495,7 @@ def get_por_zona(
     """Distribución de hechos por zona (urbana/rural/corregimiento)."""
     q = db.query(
         HechoSeguridad.zona.label('zona'),
-        func.count(HechoSeguridad.id).label('total')
+        hechos_unicos_expr().label('total')
     ).filter(HechoSeguridad.zona != '', HechoSeguridad.zona.isnot(None))
 
     if start_date:
