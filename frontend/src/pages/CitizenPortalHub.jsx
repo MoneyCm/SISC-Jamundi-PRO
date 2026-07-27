@@ -9,7 +9,9 @@ import {
     Lock,
     HeartPulse,
     Eye,
-    MessageCircle
+    MessageCircle,
+    BellRing,
+    PhoneCall
 } from 'lucide-react';
 
 const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
@@ -17,7 +19,7 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
         {
             id: 'reporting',
             title: 'Reporte Seguro',
-            description: 'Canal encriptado para reportar delitos y comportamientos contrarios a la convivencia de forma anónima.',
+            description: 'Canal institucional para reportar delitos y riesgos de forma anónima o con datos de contacto.',
             icon: ShieldAlert,
             color: 'bg-red-500',
             bg: 'bg-red-50',
@@ -37,7 +39,7 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
         {
             id: 'transparency',
             title: 'Transparencia de Datos',
-            description: 'Visualiza el comportamiento delictivo en Jamundí mediante mapas y estadísticas en tiempo real.',
+            description: 'Consulta el comportamiento delictivo con fuentes, periodos y fechas de corte visibles.',
             icon: BarChart3,
             color: 'bg-primary-600',
             bg: 'bg-primary-50',
@@ -60,25 +62,35 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
         <div className="min-h-screen bg-slate-50 flex flex-col">
             {/* Hero Section */}
             <div className="bg-gradient-to-br from-[#281FD0] via-[#384CF5] to-indigo-800 text-white py-16 md:py-24 px-6 relative overflow-hidden">
+                {/* Orla Institucional Superior */}
+                <div className="absolute top-0 left-0 orla-hidirica"></div>
+
                 <div className="max-w-6xl mx-auto relative z-10 text-center">
                     <button
                         onClick={() => onNavigate('pqr')}
                         className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 mb-8 animate-fade-in hover:bg-white/20 transition-colors cursor-pointer"
                     >
                         <Globe size={16} className="text-white/80" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-white/90">Abrir Ventanilla Única (PQR)</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white/90">Abrir Ventanilla Única (PQR)</span>
                     </button>
-                    <h1 className="text-4xl md:text-6xl font-black mb-6 tracking-tighter leading-none">
-                        SISC <span className="text-white/80">Ciudadano</span>
+                    <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter leading-none font-titles">
+                        SISC <span className="text-white uppercase">JAMUNDÍ</span>
                     </h1>
-                    <p className="text-lg md:text-xl text-white/80 max-w-3xl mx-auto font-medium mb-10">
-                        Fortalecemos la seguridad y convivencia ciudadana en Jamundí con un enfoque estratégico para proteger la vida, la integridad y el patrimonio de sus habitantes.
+                    <p className="text-xl md:text-2xl text-white/80 max-w-3xl mx-auto font-medium mb-10 leading-relaxed">
+                        Sistema de Información para la Seguridad y Convivencia de la <span className="text-white font-bold uppercase">ALCALDÍA DE JAMUNDÍ</span>.
                     </p>
 
                     <div className="flex flex-wrap justify-center gap-4">
+                        <a
+                            href="tel:123"
+                            className="flex items-center gap-2 bg-red-600 text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider shadow-xl hover:bg-red-700 transition-colors"
+                        >
+                            <PhoneCall size={18} />
+                            Emergencias 123
+                        </a>
                         <button
                             onClick={onLoginClick}
-                            className="flex items-center gap-2 bg-white text-primary px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider shadow-xl hover:bg-slate-50 transition-all hover:scale-105"
+                            className="flex items-center gap-2 bg-white text-primary px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider shadow-xl shadow-primary/20 hover:opacity-90 transition-all hover:scale-105 cursor-pointer"
                         >
                             <Lock size={18} />
                             Ingreso Institucional
@@ -87,9 +99,8 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                 </div>
 
                 {/* Decorative Elements */}
-                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                    <div className="absolute top-[10%] left-[5%] w-64 h-64 bg-white rounded-full blur-3xl" />
-                    <div className="absolute bottom-[10%] right-[10%] w-96 h-96 bg-primary-400 rounded-full blur-3xl" />
+                <div className="absolute top-0 right-0 w-1/4 h-full opacity-[0.03] pointer-events-none">
+                    <img src="/assets/escudo.png" alt="" className="w-full h-full object-contain translate-x-10 translate-y-10" />
                 </div>
             </div>
 
@@ -110,9 +121,9 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                                     {service.tag}
                                 </span>
                             </div>
-                            <h3 className="text-2xl font-bold text-slate-800 mb-3">{service.title}</h3>
-                            <p className="text-slate-500 leading-relaxed mb-8 flex-1">{service.description}</p>
-                            <div className={`inline-flex items-center gap-2 font-bold text-sm uppercase tracking-wider ${service.textColor}`}>
+                            <h3 className="text-2xl font-black text-slate-800 mb-3 font-titles">{service.title}</h3>
+                            <p className="text-slate-500 leading-relaxed mb-8 flex-1 font-medium">{service.description}</p>
+                            <div className={`inline-flex items-center gap-2 font-black text-xs uppercase tracking-wider ${service.textColor}`}>
                                 Acceder al Servicio
                                 <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
                             </div>
@@ -132,13 +143,13 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                                 <img src="/assets/escudo.png" alt="Escudo Jamundí" className="h-10 w-auto" />
                             </div>
                             <div>
-                                <h4 className="font-black tracking-tighter text-xl">SISC <span className="text-white/50">Jamundí</span></h4>
-                                <p className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Alcaldía de Jamundí</p>
+                                <h4 className="font-black tracking-tighter text-2xl font-titles">SISC</h4>
+                                <p className="text-[10px] uppercase font-bold text-white/40 tracking-widest leading-none">ALCALDÍA DE JAMUNDÍ</p>
                             </div>
                         </div>
-                        <p className="text-sm text-white/50 leading-relaxed">
+                        <p className="text-sm text-white/50 leading-relaxed font-medium">
                             Plataforma oficial del Sistema de Información para la Seguridad y Convivencia.
-                            Operado por la Oficina del Observatorio del Delito.
+                            Operado por la Oficina del Observatorio del Delito de la <span className="text-white font-bold uppercase">ALCALDÍA DE JAMUNDÍ</span>.
                         </p>
                     </div>
                     <div>

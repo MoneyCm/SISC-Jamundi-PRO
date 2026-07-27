@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from db.models import get_db, Proposal, SafetyFront, SecureReport
+from db.models import get_db, Proposal, SafetyFront, SecureReport, User
+from api.auth import require_role
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, date, time
@@ -16,6 +17,18 @@ class ProposalCreate(BaseModel):
     category: str
     barrio: str
     author_name: Optional[str] = None
+
+class ProposalPublicResponse(BaseModel):
+    id: uuid.UUID
+    title: str
+    description: str
+    category: str
+    barrio: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class ProposalResponse(BaseModel):
     id: uuid.UUID
@@ -44,12 +57,16 @@ def create_proposal(proposal: ProposalCreate, db: Session = Depends(get_db)):
     db.refresh(db_proposal)
     return db_proposal
 
-@router.get("/propuestas", response_model=List[ProposalResponse])
-def get_proposals(status: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(Proposal)
-    if status:
-        query = query.filter(Proposal.status == status)
-    return query.order_by(Proposal.created_at.desc()).all()
+@router.get("/propuestas", response_model=List[ProposalPublicResponse])
+def get_proposals(db: Session = Depends(get_db)):
+    estados_publicos = ("APROBADA", "EN_CURSO", "COMPLETADA")
+    return (
+        db.query(Proposal)
+        .filter(Proposal.status.in_(estados_publicos))
+        .order_by(Proposal.created_at.desc())
+        .limit(100)
+        .all()
+    )
 
 # --- Safety Fronts (Frentes de Seguridad) ---
 
@@ -58,6 +75,16 @@ class SafetyFrontCreate(BaseModel):
     barrio: str
     leader_name: str
     contact_phone: str
+
+class SafetyFrontPublicResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    barrio: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class SafetyFrontResponse(BaseModel):
     id: uuid.UUID
@@ -84,12 +111,15 @@ def create_safety_front(front: SafetyFrontCreate, db: Session = Depends(get_db))
     db.refresh(db_front)
     return db_front
 
-@router.get("/frentes", response_model=List[SafetyFrontResponse])
-def get_safety_fronts(status: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(SafetyFront)
-    if status:
-        query = query.filter(SafetyFront.status == status)
-    return query.order_by(SafetyFront.created_at.desc()).all()
+@router.get("/frentes", response_model=List[SafetyFrontPublicResponse])
+def get_safety_fronts(db: Session = Depends(get_db)):
+    return (
+        db.query(SafetyFront)
+        .filter(SafetyFront.status == "ACTIVO")
+        .order_by(SafetyFront.created_at.desc())
+        .limit(100)
+        .all()
+    )
 
 # --- Secure Reports (Reporte Seguro) ---
 
@@ -143,7 +173,10 @@ def create_secure_report(report: SecureReportCreate, db: Session = Depends(get_d
 
 
 @router.get("/admin/bandeja", response_model=dict)
-def get_admin_inbox(db: Session = Depends(get_db)):
+def get_admin_inbox(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["TI_ADMIN", "FUNC_ADMIN", "ANALYST"])),
+):
     """
     Agregador para la bandeja de entrada del administrador.
     Combina propuestas, frentes de seguridad y reportes seguros.

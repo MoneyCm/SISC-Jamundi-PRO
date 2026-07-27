@@ -34,7 +34,10 @@ const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [appMode, setAppMode] = useState('loading'); // Nuevo estado inicial
   const [activePage, setActivePage] = useState('dashboard');
-  const [publicActivePage, setPublicActivePage] = useState('hub');
+  const [publicActivePage, setPublicActivePage] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('page') || 'hub';
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReportId, setSelectedReportId] = useState(null);
   const [selectedDataset, setSelectedDataset] = useState({ code: 'SECUESTRO', label: 'Secuestro' });
@@ -187,8 +190,15 @@ const App = () => {
     }
   };
 
-  // Para que el Chatbot se vea en TODAS las páginas públicas, 
-  // incluída la Hub, usamos la Layout común.
+  if (isPublic) {
+    return (
+      <div className="min-h-screen animate-fade-in">
+        {renderContent()}
+        <SiscAIChatbot />
+      </div>
+    );
+  }
+
   return (
     <Layout
       activePage={activePage}
@@ -201,7 +211,6 @@ const App = () => {
       <div className="animate-fade-in h-full">
         {renderContent()}
       </div>
-      {isPublic && <SiscAIChatbot />}
     </Layout>
   );
 };

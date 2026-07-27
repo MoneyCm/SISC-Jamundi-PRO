@@ -16,6 +16,12 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
+const getLocalDate = () => {
+    const now = new Date();
+    const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+    return localTime.toISOString().split('T')[0];
+};
+
 const StepIndicator = ({ currentStep }) => (
     <div className="flex items-center justify-center space-x-4 mb-10">
         {[1, 2, 3].map((step) => (
@@ -36,10 +42,11 @@ const SecureReporting = ({ onBack }) => {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [reportId, setReportId] = useState("");
     const [formData, setFormData] = useState({
         tipo: 'HURTO A PERSONAS',
         subtipo: '',
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: getLocalDate(),
         hora: '12:00',
         barrio: '',
         descripcion: '',
@@ -78,6 +85,8 @@ const SecureReporting = ({ onBack }) => {
                 throw new Error(errorData.detail || "Error al enviar el reporte");
             }
 
+            const result = await response.json();
+            setReportId(result.id);
             setSubmitted(true);
         } catch (err) {
             console.error("Error submitting report:", err);
@@ -99,7 +108,7 @@ const SecureReporting = ({ onBack }) => {
                         Tu información ha sido recibida con éxito por el SISC Jamundí. Nuestro equipo técnico analizará estos datos para fortalecer la seguridad de tu sector.
                     </p>
                     <div className="bg-slate-50 p-4 rounded-xl mb-8 text-xs font-mono text-slate-600 border border-slate-100">
-                        ID DE RADICADO: {Math.random().toString(36).substring(2, 10).toUpperCase()}
+                        RADICADO SISC: <span className="break-all">{reportId}</span>
                     </div>
                     <button
                         onClick={onBack}
@@ -346,7 +355,7 @@ const SecureReporting = ({ onBack }) => {
                     {/* Bottom safety notice */}
                     <div className="bg-slate-900 py-3 px-8 text-center">
                         <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.4em]">
-                            Conexión Encriptada • Servidores Seguros Jamundí
+                            Tratamiento reservado • SISC Jamundí
                         </p>
                     </div>
                 </div>

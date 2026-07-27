@@ -150,7 +150,7 @@ const PublicDashboard = ({ onLoginClick }) => {
                         <h1 className="text-3xl md:text-4xl font-extrabold mb-2">SISC Jamundí</h1>
                         <p className="text-white/90 text-sm md:text-lg max-w-2xl font-medium">
                             Sistema de Información para la Seguridad y la Convivencia.
-                            Visualiza y analiza los datos en tiempo real para una ciudadanía activa.
+                            Consulta datos consolidados para comprender la seguridad del municipio.
                         </p>
                     </div>
                     <button
