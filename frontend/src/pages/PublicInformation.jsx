@@ -44,9 +44,11 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
         setLoading(true);
         setError('');
         try {
+            const currentYear = new Date().getFullYear();
+            const periodQuery = `start_date=${currentYear}-01-01&end_date=${currentYear}-12-31`;
             const [kpiResponse, distributionResponse, metadataResponse] = await Promise.all([
-                fetch(`${API_BASE_URL}/analitica/estadisticas/kpis`),
-                fetch(`${API_BASE_URL}/analitica/estadisticas/distribucion`),
+                fetch(`${API_BASE_URL}/analitica/estadisticas/kpis?${periodQuery}`),
+                fetch(`${API_BASE_URL}/analitica/estadisticas/distribucion?${periodQuery}`),
                 fetch(`${API_BASE_URL}/analitica/estadisticas/ultima-actualizacion`),
             ]);
             if (![kpiResponse, distributionResponse, metadataResponse].every((response) => response.ok)) {

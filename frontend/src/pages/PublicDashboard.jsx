@@ -34,12 +34,15 @@ const PublicDashboard = ({ onLoginClick }) => {
                     }
                 };
 
+                const currentYear = new Date().getFullYear();
+                const periodQuery = `start_date=${currentYear}-01-01&end_date=${currentYear}-12-31`;
+
                 // Fetch basic stats (Public)
                 const [kpiRes, trendRes, distRes, mapRes] = await Promise.allSettled([
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/kpis`),
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/tendencia`),
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/distribucion`),
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/eventos/geojson`)
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/kpis?${periodQuery}`),
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/tendencia?${periodQuery}`),
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/distribucion?${periodQuery}`),
+                    fetchWithTimeout(`${API_BASE_URL}/analitica/eventos/geojson?${periodQuery}`)
                 ]);
 
                 let kpis = { total_incidentes: 0, tasa_homicidios: 0 };
