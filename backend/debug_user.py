@@ -1,3 +1,4 @@
+import os
 from db.models import SessionLocal, User, Role
 db = SessionLocal()
 def check_user(username):
@@ -8,8 +9,9 @@ def check_user(username):
         print(f"Is active: {user.is_active}")
         print(f"Roles: {[r.code for r in user.roles]}")
         from core.security import verify_password
-        print(f"Password 'admin_password' check: {verify_password('admin_password', user.password_hash)}")
-        print(f"Password 'admin123' check: {verify_password('admin123', user.password_hash)}")
+        test_password = os.getenv("SISC_TEST_PASSWORD")
+        if test_password:
+            print(f"Configured password check: {verify_password(test_password, user.password_hash)}")
     else:
         print(f"User '{username}' not found")
 

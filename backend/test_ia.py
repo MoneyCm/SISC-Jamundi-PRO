@@ -1,8 +1,9 @@
 import os
+import os
 import httpx
 import asyncio
 
-MISTRAL_API_KEY = "7eRzpzBYX6cRvCkOPOtSawdObTj8RGuy"
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 MISTRAL_MODEL = "open-mistral-7b"
 
 async def call_mistral(contexto):

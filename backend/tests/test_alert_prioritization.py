@@ -48,27 +48,24 @@ def _build_metrics_for_target_score(target_score: float) -> dict:
 
     fixed = W_STATE * state_score + W_ZONE * zone_score
 
-    # Tomamos edad máxima para forzar una solución válida.
-    age_score = 1.0
-    max_dias = config["MAX_DIAS"]
-
-    # target = 100 * (W_AGE*age_score + W_VALUE*value_score + fixed)
     target_frac = target_score / 100.0
-    value_score = (target_frac - fixed - W_AGE * age_score) / W_VALUE
 
-    # Clamp explícito a [0,1] por si el target exige algo fuera de rango.
-    if value_score < 0:
-        value_score = 0
-    if value_score > 1:
-        value_score = 1
+    # Calculate dias as an integer first
+    dias_float = config["MAX_DIAS"] * (target_frac - fixed) / W_AGE
+    dias = int(max(0.0, min(config["MAX_DIAS"], dias_float)))
 
-    dias = max_dias  # produce age_score≈1
+    actual_age_score = dias / config["MAX_DIAS"]
+    value_score = (target_frac - fixed - W_AGE * actual_age_score) / W_VALUE
+
+    # Clamp value_score
+    value_score = max(0.0, min(1.0, value_score))
+
     valor_neto = value_score * config["MAX_VALOR"]
 
     return {
         "dias": dias,
         "valor_neto": valor_neto,
-        "estado": "EN PROCESO",
+        "estado": "OTRO",
         "localidad": "JAMUNDI URBANO",
     }
 

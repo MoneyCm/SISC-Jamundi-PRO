@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.models import get_db, Event, EventType
+from db.models_hechos_seguridad import HechoSeguridad
 from sqlalchemy import func
 import os
 import httpx
-from typing import Optional
+from datetime import datetime, date, timedelta
 from api.auth import analyst_or_admin, institutional_access
 
 router = APIRouter()
@@ -80,7 +81,7 @@ async def get_ai_insights(db: Session = Depends(get_db)):
             "status": "success",
             "provider": AI_PROVIDER
         }
-    
+
     # Cache Check
     import time
     ahora = time.time()
@@ -92,18 +93,51 @@ async def get_ai_insights(db: Session = Depends(get_db)):
             "cached": True
         }
 
-    homicidios = db.query(Event).join(EventType).filter(EventType.category == "HOMICIDIO").count()
-    top_barrio = db.query(Event.barrio, func.count(Event.id)).group_by(Event.barrio).order_by(func.count(Event.id).desc()).first()
-    
+    # Estadísticas para el INSIGHT (Año Actual 2026) - AGREGACIÓN DEDUPLICADA
+    current_year = datetime.now().year
+
+    # 1. Obtener conteos diarios de HOMICIDIOS de ambas fuentes para el año actual
+    hom_mod_daily = db.query(HechoSeguridad.fecha_evento, func.count(HechoSeguridad.id)).filter(
+        func.extract('year', HechoSeguridad.fecha_evento) == current_year,
+        HechoSeguridad.categoria_delito == "HOMICIDIO"
+    ).group_by(HechoSeguridad.fecha_evento).all()
+
+    hom_leg_daily = db.query(Event.occurrence_date, func.count(Event.id)).join(EventType).filter(
+        func.extract('year', Event.occurrence_date) == current_year,
+        EventType.category == "HOMICIDIO"
+    ).group_by(Event.occurrence_date).all()
+
+    # Unificar por fecha (DEDUPLICACIÓN POR DÍA)
+    daily_hom = {}
+    for d, c in hom_leg_daily: daily_hom[d] = c
+    # Priorizar fuente Policial (Sobrescribe si hay dato el mismo día)
+    for d, c in hom_mod_daily: daily_hom[d] = c
+    homicidios_2026 = sum(daily_hom.values())
+
+    # 2. Conteo de Incidentes Totales (Aproximación por mayor fuente)
+    total_legacy = db.query(Event).filter(func.extract('year', Event.occurrence_date) == current_year).count()
+    total_moderno = db.query(HechoSeguridad).filter(func.extract('year', HechoSeguridad.fecha_evento) == current_year).count()
+    total_real_2026 = max(total_legacy, total_moderno)
+
+    # 3. Barrios (Priorizar la base más poblada)
+    if total_moderno > total_legacy:
+        top_barrio_2026 = db.query(HechoSeguridad.barrio_normalizado, func.count(HechoSeguridad.id)).filter(
+            func.extract('year', HechoSeguridad.fecha_evento) == current_year
+        ).group_by(HechoSeguridad.barrio_normalizado).order_by(func.count(HechoSeguridad.id).desc()).first()
+    else:
+        top_barrio_2026 = db.query(Event.barrio, func.count(Event.id)).filter(
+            func.extract('year', Event.occurrence_date) == current_year
+        ).group_by(Event.barrio).order_by(func.count(Event.id).desc()).first()
+
     contexto = f"""
-    Eres el analista experto del Sistema de Información para la Seguridad y Convivencia (SISC) de Jamundí. 
-    Analiza estos datos actuales y da un resumen ejecutivo de un párrafo corto:
-    - Total de incidentes registrados: {total}
-    - Homicidios: {homicidios}
-    - Barrio con mayor incidencia: {top_barrio[0] if top_barrio else 'N/A'} ({top_barrio[1] if top_barrio else 0} casos).
-    IMPORTANTE: Responde en español, tono profesional. Máximo 60 palabras. 
-    USA SIEMPRE el nombre 'SISC Jamundí' y NUNCA uses 'Observatorio del Delito'.
-    NO uses asteriscos ni formato Markdown, solo texto plano.
+    Eres el analista experto del Sistema de Información para la Seguridad y Convivencia (SISC) de Jamundí.
+    Analiza estos datos del AÑO ACTUAL {current_year} (Cifras Consolidadas y Sin Duplicados):
+    - Incidentes registrados en {current_year}: {total_real_2026}
+    - Homicidios totales unificados (Policía + MinDefensa): {homicidios_2026}
+    - Zona con mayor criticidad este año: {top_barrio_2026[0] if top_barrio_2026 else 'N/A'} ({top_barrio_2026[1] if top_barrio_2026 else 0} casos).
+
+    IMPORTANTE: Has detectado un traslape de fuentes y has priorizado la información de la Policía por su actualización.
+    Responde en español, tono institucional firme. Máximo 60 palabras.
     """
 
     try:
@@ -111,13 +145,13 @@ async def get_ai_insights(db: Session = Depends(get_db)):
             insight_text = await call_mistral(contexto)
         else:
             insight_text = await call_gemini(contexto)
-        
+
         # Update Cache
         ia_cache["insight"] = insight_text
         ia_cache["timestamp"] = ahora
         ia_cache["last_total"] = total
         ia_cache["provider"] = AI_PROVIDER
-        
+
         return {
             "insight": insight_text,
             "status": "success",
@@ -132,50 +166,28 @@ async def get_ai_insights(db: Session = Depends(get_db)):
             "detail": str(e)
         }
 
+from services.alert_engine import AlertEngine
+
 @router.get("/alertas", dependencies=[Depends(institutional_access)])
 async def get_ai_alerts(db: Session = Depends(get_db)):
     """
-    Sistema de Alertas Tempranas: Detecta incrementos anómalos en delitos.
+    Sistema de Alertas Tempranas (SAT): Detecta incrementos anómalos en delitos
+    para la Secretaría de Seguridad de Jamundí.
     """
-    # 1. Definir periodos (Últimos 7 días vs 7 días anteriores)
-    from datetime import timedelta, datetime
-    hoy = datetime.now().date()
-    hace_7 = hoy - timedelta(days=7)
-    hace_14 = hoy - timedelta(days=14)
+    try:
+        # Usar el nuevo motor de alertas deductivo y unificado
+        alertas = AlertEngine.calculate_alerts(db)
 
-    # 2. Conteo periodo actual
-    actual_stats = db.query(
-        EventType.category,
-        func.count(Event.id).label('total')
-    ).join(Event).filter(Event.occurrence_date >= hace_7).group_by(EventType.category).all()
-
-    # 3. Conteo periodo anterior
-    anterior_stats = db.query(
-        EventType.category,
-        func.count(Event.id).label('total')
-    ).join(Event).filter(Event.occurrence_date >= hace_14, Event.occurrence_date < hace_7).group_by(EventType.category).all()
-
-    anterior_dict = {s.category: s.total for s in anterior_stats}
-    
-    alertas = []
-    for s in actual_stats:
-        prev = anterior_dict.get(s.category, 0)
-        incremento = ((s.total - prev) / prev * 100) if prev > 0 else 100 if s.total > 0 else 0
-        
-        if incremento >= 20: # Umbral del 20%
-            alertas.append({
-                "categoria": s.category,
-                "nivel": "CRÍTICO" if incremento > 50 else "ADVERTENCIA",
-                "mensaje": f"Incremento del {round(incremento)}% en {s.category} detectado en la última semana.",
-                "actual": s.total,
-                "anterior": prev
-            })
-
-    return {
-        "alertas": alertas,
-        "count": len(alertas),
-        "timestamp": datetime.now().isoformat()
-    }
+        return {
+            "alertas": alertas,
+            "count": len(alertas),
+            "timestamp": datetime.now().isoformat(),
+            "status": "active",
+            "jurisdiccion": "Jamundi, Valle"
+        }
+    except Exception as e:
+        print(f"Error en SAT: {e}")
+        raise HTTPException(status_code=500, detail="Error al generar alertas del sistema.")
 @router.post("/chat_ciudadano")
 async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     """
@@ -186,33 +198,72 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     if not user_message:
         return {"response": "Hola, ¿en qué puedo ayudarte?"}
 
-    # 1. Total Incidentes
-    total_incidentes = db.query(Event).count()
+    # 1. Total Incidentes (Legacy + Moderno)
+    total_legacy = db.query(Event).count()
+    total_moderno = db.query(HechoSeguridad).count()
+    total_incidentes = total_legacy + total_moderno # Es una aproximación para el bot
 
-    # 2. Homicidios Totales
-    homicidios = db.query(Event).join(EventType).filter(func.upper(EventType.category) == "HOMICIDIO").count()
+    # 2. Homicidios Totales (DEDUPLICACIÓN DIARIA)
+    hom_legacy = db.query(Event.occurrence_date, func.count(Event.id)).join(EventType).filter(EventType.category == "HOMICIDIO").group_by(Event.occurrence_date).all()
+    hom_moderno = db.query(HechoSeguridad.fecha_evento, func.count(HechoSeguridad.id)).filter(HechoSeguridad.categoria_delito == "HOMICIDIO").group_by(HechoSeguridad.fecha_evento).all()
 
-    # 3. Resumen por Año (Total)
-    anuales = db.query(
-        func.extract('year', Event.occurrence_date).label('year'),
-        func.count(Event.id)
-    ).group_by('year').order_by('year').all()
-    stats_anuales = ", ".join([f"{int(y)}: {c} casos" for y, c in anuales])
+    daily_hom_total = {}
+    for d, c in hom_legacy: daily_hom_total[d] = c
+    for d, c in hom_moderno: daily_hom_total[d] = c
+    homicidios = sum(daily_hom_total.values())
 
-    # 4. Distribución por Categoría (para responder sobre cualquier delito)
-    distribucion = db.query(
-        EventType.category,
-        func.count(Event.id)
-    ).join(Event).group_by(EventType.category).all()
-    stats_categorias = ", ".join([f"{cat}: {count}" for cat, count in distribucion])
+    # 3. Resumen por Año (Unificado con Deduplicación)
+    anual_dict = {}
+    # Simplificación: tomar el máximo entre tablas para cada año si no queremos hacer el loop diario aquí también
+    # Pero para ser precisos, usamos la lógica de años existentes
+    all_years = db.query(func.extract('year', Event.occurrence_date)).distinct().all()
+    for (year,) in all_years:
+        # Para cada año, calculamos el total del mismo modo de de-duplicación diaria
+        y_int = int(year)
+        d_legacy = db.query(Event.occurrence_date, func.count(Event.id)).filter(func.extract('year', Event.occurrence_date) == y_int).group_by(Event.occurrence_date).all()
+        d_moderno = db.query(HechoSeguridad.fecha_evento, func.count(HechoSeguridad.id)).filter(func.extract('year', HechoSeguridad.fecha_evento) == y_int).group_by(HechoSeguridad.fecha_evento).all()
+
+        y_daily = {}
+        for d, c in d_legacy: y_daily[d] = c
+        for d, c in d_moderno: y_daily[d] = c
+        anual_dict[y_int] = sum(y_daily.values())
+
+    stats_anuales = ", ".join([f"{y}: {c} casos" for y, c in sorted(anual_dict.items())])
+
+    # 4. Detalle por Año y Delitos Clave (DEDUPLICADO POR DÍA)
+    current_year = datetime.now().year
+    years_to_track = [current_year, current_year - 1, current_year - 2]
+
+    delitos_prioritarios = {
+        'HOMICIDIO': ['HOMICIDIO', 'HOMICIDIO INTENCIONAL', 'Homicidio'],
+        'HURTO': ['HURTO_PERSONAS', 'HURTO A PERSONAS', 'Hurto a personas', 'HURTO'],
+        'VIF': ['VIOLENCIA INTRAFAMILIAR', 'VIF', 'Violencia intrafamiliar'],
+        'LESIONES': ['LESIONES PERSONALES', 'LESIONES COMUNES', 'Lesiones', 'LESIONES']
+    }
+
+    stats_detalladas = []
+    for year in years_to_track:
+        year_data = []
+        for name, aliases in delitos_prioritarios.items():
+            # Sumar de ambas tablas con de-duplicación diaria
+            d_l = db.query(Event.occurrence_date, func.count(Event.id)).join(EventType).filter(func.extract('year', Event.occurrence_date) == year, EventType.category.in_(aliases)).group_by(Event.occurrence_date).all()
+            d_m = db.query(HechoSeguridad.fecha_evento, func.count(HechoSeguridad.id)).filter(func.extract('year', HechoSeguridad.fecha_evento) == year, HechoSeguridad.categoria_delito.in_(aliases)).group_by(HechoSeguridad.fecha_evento).all()
+
+            y_d = {}
+            for d, c in d_l: y_d[d] = c
+            for d, c in d_m: y_d[d] = c
+            count = sum(y_d.values())
+            year_data.append(f"{name}: {count}")
+        stats_detalladas.append(f"AÑO {year} [{', '.join(year_data)}]")
+    stats_contexto_detallado = " | ".join(stats_detalladas)
 
     # 5. Detalle mensual de HOMICIDIOS (para el contexto)
     meses_hom = db.query(
         func.extract('year', Event.occurrence_date).label('year'),
         func.extract('month', Event.occurrence_date).label('month'),
         func.count(Event.id)
-    ).join(EventType).filter(func.upper(EventType.category) == "HOMICIDIO").group_by('year', 'month').order_by('year', 'month').all()
-    
+    ).join(EventType).filter(EventType.category.in_(delitos_prioritarios['HOMICIDIO'])).group_by('year', 'month').order_by('year', 'month').all()
+
     nombres_meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     stats_mensuales = ", ".join([f"{nombres_meses[int(m)]} {int(y)}: {c} casos" for y, m, c in meses_hom])
 
@@ -223,10 +274,10 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     DATOS ACTUALES DEL SISTEMA (USA ESTO PARA RESPONDER):
     - Total histórico de incidentes en plataforma: {total_incidentes}
     - Total de homicidios registrados: {homicidios}
-    - Resumen anual de incidentes: {stats_anuales}
+    - Casos totales por año: {stats_anuales}
+    - DETALLE POR CATEGORÍA Y AÑO: {stats_contexto_detallado}
     - Detalle mensual de homicidios: {stats_mensuales}
-    - Distribución por categorías: {stats_categorias}
-    - Población de Jamundí: 150,000 habitantes.
+    - Población de Jamundí: 180,942 habitantes (Proyección 2026).
 
     REGLAS DE RESPUESTA:
     1. Sé amable, empático y profesional.
@@ -235,7 +286,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     4. IMPORTANTE: Si el ciudadano pregunta por un mes o año que NO aparece en la lista anterior, responde que en ese periodo específico se registraron 0 casos en el sistema. NO digas que no tienes la información; usa el 0 como referente.
     5. NO inventes cifras que no estén en la lista ni menciones nombres de víctimas.
     6. Tus respuestas deben ser breves (máximo 120 palabras).
-    
+
     El ciudadano te pregunta: "{user_message}"
     """
 
@@ -244,7 +295,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
             response_text = await call_mistral(contexto)
         else:
             response_text = await call_gemini(contexto)
-        
+
         return {"response": response_text}
     except Exception as e:
         print(f"Error en Chat Ciudadano ({AI_PROVIDER}): {e}")

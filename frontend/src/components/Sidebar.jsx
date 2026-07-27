@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2 } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -20,6 +20,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'dq', label: 'Calidad (DQ)', icon: ShieldCheck, category: 'OPERACIONES', show: isSteward },
         { id: 'ingesta_universal', label: 'Ingesta Universal', icon: LayoutDashboard, category: 'OPERACIONES', show: isUploader || isSteward },
 
+        { id: 'stats', label: 'Estadísticas', icon: BarChart2, category: 'ESTRATEGIA', show: true },
         { id: 'map', label: 'Mapa Interactivo', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'intelligence', label: 'Análisis IA', icon: Zap, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'alerts', label: 'Alertas Tempranas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
@@ -54,13 +55,13 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
 
                 <div className="flex flex-col items-center space-y-4">
                     <div className="bg-white p-1 rounded-2xl shadow-xl flex items-center justify-center transform group-hover:scale-105 transition-transform">
-                        <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-[116px] h-[116px] object-contain" />
+                        <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-[100px] h-[100px] object-contain" />
                     </div>
                     <div className="text-center px-2">
-                        <h1 className="text-6xl font-black tracking-tighter text-white leading-none">SISC</h1>
-                        <p className="text-[11px] text-white/60 font-bold uppercase tracking-widest mt-2">Sistema de Información para la</p>
-                        <p className="text-[16px] text-white font-black uppercase tracking-tight leading-tight">Seguridad y Convivencia</p>
-                        <p className="text-[14px] text-white/50 font-black uppercase tracking-[0.3em] mt-4 border-t border-white/10 pt-2">Jamundí</p>
+                        <h1 className="text-6xl font-black tracking-tighter text-white leading-none font-titles uppercase">SISC</h1>
+                        <p className="text-[12px] text-white/70 font-bold uppercase tracking-widest mt-2 font-titles">ALCALDÍA DE</p>
+                        <p className="text-[20px] text-white font-black uppercase tracking-tight leading-tight font-titles">JAMUNDÍ</p>
+                        <p className="text-[10px] text-white/50 font-black uppercase tracking-[0.2em] mt-4 border-t border-white/10 pt-2">SEGURIDAD Y CONVIVENCIA</p>
                     </div>
                 </div>
             </div>

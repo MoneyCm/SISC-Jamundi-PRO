@@ -14,15 +14,15 @@ from core.security import get_password_hash
 
 def seed_production(db_url):
     print(f"Iniciando siembra en: {db_url.split('@')[-1]} (ocultando credenciales)")
-    
+
     # Fix for SQLAlchemy
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
-        
+
     engine = create_engine(db_url)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = SessionLocal()
-    
+
     try:
         # Create tables
         Base.metadata.create_all(bind=engine)
@@ -33,30 +33,33 @@ def seed_production(db_url):
             {"name": "Admin SISC", "description": "Administrador total del sistema"},
             {"name": "Analista Observatorio", "description": "Usuario técnico para análisis y boletines"}
         ]
-        
+
         for r_data in roles_data:
             role = db.query(Role).filter(Role.name == r_data["name"]).first()
             if not role:
                 db.add(Role(name=r_data["name"], description=r_data["description"]))
-        
+
         db.commit()
         admin_role = db.query(Role).filter(Role.name == "Admin SISC").first()
 
-        # 2. Admin User
+        # 2. Admin User: la contraseña debe venir del entorno
+        admin_password = os.getenv("SISC_ADMIN_PASSWORD")
         admin_user = db.query(User).filter(User.username == "admin").first()
-        if not admin_user:
+        if not admin_user and admin_password:
             db.add(User(
                 username="admin",
                 email="admin@jamundi.gov.co",
-                password_hash=get_password_hash("admin123"), # Cambiar después
+                password_hash=get_password_hash(admin_password),
                 role_id=admin_role.id,
                 is_active=True
             ))
-            print("Usuario 'admin' (pass: admin123) creado.")
+            print("Usuario administrador creado.")
+        elif not admin_user:
+            print("SISC_ADMIN_PASSWORD no configurada; no se crea usuario administrador.")
 
         db.commit()
         print("¡Base de datos inicializada con éxito!")
-        
+
     except Exception as e:
         print(f"Error: {e}")
         db.rollback()

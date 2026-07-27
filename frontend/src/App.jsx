@@ -16,6 +16,7 @@ import IntelligenceModule from './pages/IntelligenceModule';
 import DataQuality from './pages/DataQuality';
 import SiscAIChatbot from './components/SiscAIChatbot';
 import UniversalIngesta from './pages/UniversalIngesta';
+import StatsModule from './pages/StatsModule';
 import MindefensaMonitor from './pages/MindefensaMonitor';
 import PoliceMonitor from './pages/PoliceMonitor';
 import RegionalContext from './pages/RegionalContext';
@@ -146,7 +147,7 @@ const App = () => {
 
     switch (activePage) {
       case 'dashboard':
-        return <Dashboard userRoles={userRoles} dataLevel={dataLevel} />;
+        return <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;
       case 'users':
         return <UsersManagement />;
       case 'access_requests':
@@ -168,6 +169,8 @@ const App = () => {
         return <IntelligenceModule />;
       case 'regional_context':
         return <RegionalContext />;
+      case 'stats':
+        return <StatsModule userRoles={userRoles} dataLevel={dataLevel} />;
       case 'alerts':
         return <AlertsFeed onPageChange={setActivePage} setExternalFilters={setRnmcFilters} />;
       case 'rnmc':

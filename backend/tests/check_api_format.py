@@ -2,7 +2,7 @@
 import requests
 import os
 
-db_url = "postgresql://neondb_owner:npg_ZzBiN3DU6dgc@ep-holy-lake-aiso6dd5-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+db_url = os.getenv("DATABASE_URL")
 API_URL = "http://localhost:8000/api/auth/login"
 
 def check_api():
@@ -11,10 +11,10 @@ def check_api():
     if res.status_code != 200:
         print(f"Login failed: {res.text}")
         return
-    
+
     token = res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
-    
+
     # 2. Check expedientes
     res = requests.get("http://localhost:8000/api/inspecciones/expedientes", headers=headers)
     print(f"Expedientes status: {res.status_code}")

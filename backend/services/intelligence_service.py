@@ -14,15 +14,19 @@ class IntelligenceService:
         Genera un resumen ágil de delitos de alto impacto con fecha de corte y análisis IA.
         """
         from api.ia import call_gemini, call_mistral, AI_PROVIDER
-        
+
         delitos_objetivo = {
-            'HOMICIDIO': ['HOMICIDIO', 'HOMICIDIO INTENCIONAL', 'HOMICIDIO DOLOSO'],
-            'HURTO_PERSONAS': ['HURTO_PERSONAS', 'HURTO A PERSONAS', 'HURTO_A_PERSONAS'],
-            'EXTORSION': ['EXTORSION', 'EXTORSIÓN'],
-            'LESIONES_PERSONALES': ['LESIONES_PERSONALES', 'LESIONES PERSONALES', 'LESIONES COMUNES']
+            'HOMICIDIO': ['HOMICIDIO', 'HOMICIDIO INTENCIONAL', 'HOMICIDIO DOLOSO', 'Homicidio'],
+            'HURTO_PERSONAS': ['HURTO_PERSONAS', 'HURTO A PERSONAS', 'HURTO_A_PERSONAS', 'Hurto a personas'],
+            'HURTO_VEHICULOS': ['HURTO DE VEHÍCULOS', 'HURTO_VEHICULOS', 'HURTO A AUTOMOTORES', 'HURTO A MOTOCICLETAS', 'Hurto a automotores', 'Hurto a motocicletas'],
+            'EXTORSION': ['EXTORSION', 'EXTORSIÓN', 'Extorsión'],
+            'VIOLENCIA_INTRAFAMILIAR': ['VIOLENCIA INTRAFAMILIAR', 'VIOLENCIA_INTRAFAMILIAR', 'VIF', 'Violencia intrafamiliar'],
+            'LESIONES_PERSONALES': ['LESIONES PERSONALES', 'LESIONES COMUNES', 'Lesiones personales'],
+            'SECUESTRO': ['SECUESTRO', 'SECUESTRO EXTORSIVO', 'Secuestro'],
+            'MICROTRAFICO': ['INCAUTACIÓN DE COCAINA', 'INCAUTACIÓN DE MARIHUANA', 'TRAFICO DE ESTUPEFACIENTES', 'TRÁFICO DE ESTUPEFACIENTES']
         }
         briefs = []
-        
+
         for display_name, aliases in delitos_objetivo.items():
             try:
                 # 1. Obtener años disponibles para este municipio
@@ -30,18 +34,18 @@ class IntelligenceService:
                     NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%'),
                     NationalCrimeStats.tipo_delito.in_(aliases)
                 ).order_by(NationalCrimeStats.anio.desc()).all()
-                
+
                 if not years_available: continue
                 years = [y[0] for y in years_available]
                 latest_year = years[0]
                 prev_year = years[1] if len(years) > 1 else latest_year - 1
-                
+
                 # Obtener fecha de corte
                 latest_date = db.query(func.max(NationalCrimeStats.fecha_hecho)).filter(
                     NationalCrimeStats.tipo_delito.in_(aliases),
                     NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%')
                 ).scalar()
-                
+
                 # 2. Calcular estadísticas (Comparar los dos últimos años con datos)
                 stats = db.query(
                     NationalCrimeStats.anio,
@@ -51,15 +55,15 @@ class IntelligenceService:
                     NationalCrimeStats.municipio_normalizado.ilike('%JAMUNDI%'),
                     NationalCrimeStats.anio.in_([latest_year, prev_year])
                 ).group_by(NationalCrimeStats.anio).all()
-                
+
                 stat_dict = {s.anio: int(s.total) for s in stats}
                 actual = stat_dict.get(latest_year, 0)
                 prev = stat_dict.get(prev_year, 0)
-                
+
                 # Variación
                 var_pct = round(((actual - prev) / prev * 100), 1) if prev > 0 else 0
                 trend = "UP" if actual > prev else "DOWN" if actual < prev else "STABLE"
-                
+
                 # 3. Generar Frase IA
                 contexto = f"""
                 Como analista de seguridad del SISC Jamundí, resume este dato delictivo en UNA SOLA FRASE contundente de máximo 15 palabras.
@@ -70,7 +74,7 @@ class IntelligenceService:
                 MUNICIPIO: Jamundí, Valle.
                 REGLA: No uses preámbulos, ve directo al análisis estratégico. Usa tono de inteligencia militar/civil.
                 """
-                
+
                 ai_insight = "Análisis no disponible"
                 try:
                     if AI_PROVIDER == "MISTRAL":
@@ -79,10 +83,10 @@ class IntelligenceService:
                         ai_insight = await call_gemini(contexto)
                     ai_insight = ai_insight.strip().replace('"', '')
                 except Exception as e:
-                    logger.error(f"Error IA en brief {delito}: {e}")
+                    logger.error(f"Error IA en brief {display_name}: {e}")
 
                 briefs.append({
-                    "delito": delito,
+                    "delito": display_name,
                     "actual": actual,
                     "prev": prev,
                     "variacion_pct": var_pct,
@@ -90,10 +94,10 @@ class IntelligenceService:
                     "fecha_corte": latest_date.strftime("%Y-%m-%d"),
                     "analisis_ia": ai_insight
                 })
-                
+
             except Exception as e:
-                logger.error(f"Error procesando brief para {delito}: {e}")
-                
+                logger.error(f"Error procesando brief para {display_name}: {e}")
+
         return briefs
 
     @staticmethod
@@ -103,7 +107,7 @@ class IntelligenceService:
             filters.append(NationalCrimeStats.semana == semana)
         if mes:
             filters.append(NationalCrimeStats.mes == mes)
-            
+
         data = db.query(
             NationalCrimeStats.tipo_delito,
             NationalCrimeStats.barrio,
@@ -111,7 +115,7 @@ class IntelligenceService:
         ).filter(and_(*filters)).group_by(
             NationalCrimeStats.tipo_delito, NationalCrimeStats.barrio
         ).all()
-        
+
         return data
 
     @staticmethod
@@ -129,11 +133,11 @@ class IntelligenceService:
             value = {"anio": latest.anio, "semana": latest.semana, "mes": latest.mes}
 
         anio = value['anio']
-        
+
         if type == "weekly":
             semana = value['semana']
             actual_data = IntelligenceService.get_stats_by_period(db, source_id, anio, semana=semana)
-            
+
             # WoW
             from sqlalchemy import or_
             prev_week = db.query(NationalCrimeStats.anio, NationalCrimeStats.semana).filter(
@@ -143,21 +147,21 @@ class IntelligenceService:
                     and_(NationalCrimeStats.anio == anio, NationalCrimeStats.semana < semana)
                 )
             ).order_by(NationalCrimeStats.anio.desc(), NationalCrimeStats.semana.desc()).first()
-            
+
             wow_data = IntelligenceService.get_stats_by_period(db, source_id, prev_week.anio, semana=prev_week.semana) if prev_week else []
             yoy_data = IntelligenceService.get_stats_by_period(db, source_id, anio - 1, semana=semana)
-            
+
             return {
                 "actual": {"anio": anio, "semana": semana, "data": actual_data},
                 "prev": {"anio": int(prev_week.anio) if prev_week else None, "semana": int(prev_week.semana) if prev_week else None, "data": wow_data},
                 "yoy": {"anio": anio - 1, "semana": semana, "data": yoy_data},
                 "mode": "weekly"
             }
-            
+
         elif type == "monthly":
             mes = value['mes']
             actual_data = IntelligenceService.get_stats_by_period(db, source_id, anio, mes=mes)
-            
+
             # MoM
             from sqlalchemy import or_
             prev_month = db.query(NationalCrimeStats.anio, NationalCrimeStats.mes).filter(
@@ -167,10 +171,10 @@ class IntelligenceService:
                     and_(NationalCrimeStats.anio == anio, NationalCrimeStats.mes < mes)
                 )
             ).order_by(NationalCrimeStats.anio.desc(), NationalCrimeStats.mes.desc()).first()
-            
+
             mom_data = IntelligenceService.get_stats_by_period(db, source_id, prev_month.anio, mes=prev_month.mes) if prev_month else []
             yoy_data = IntelligenceService.get_stats_by_period(db, source_id, anio - 1, mes=mes)
-            
+
             return {
                 "actual": {"anio": anio, "mes": mes, "data": actual_data},
                 "prev": {"anio": int(prev_month.anio) if prev_month else None, "mes": int(prev_month.mes) if prev_month else None, "data": mom_data},
@@ -198,30 +202,30 @@ class IntelligenceService:
         if not anio:
             latest = db.query(func.max(NationalCrimeStats.anio)).filter(NationalCrimeStats.source_id == source_id).scalar()
             anio = latest or datetime.now().year
-            
+
         latest_date = db.query(func.max(NationalCrimeStats.fecha_hecho)).filter(
             NationalCrimeStats.source_id == source_id, NationalCrimeStats.anio == anio
         ).scalar()
-        
+
         if not latest_date: return None
-        
+
         # Normalizar a datetime si es date
         if isinstance(latest_date, type(datetime.now().date())):
             latest_date = datetime.combine(latest_date, datetime.min.time())
-            
+
         day = latest_date.day
         month = latest_date.month
-        
+
         # Rango Actual
         start_actual = datetime(anio, 1, 1)
         end_actual = latest_date
         data_actual = IntelligenceService.get_stats_by_range(db, source_id, start_actual, end_actual)
-        
+
         # Rango Anterior
         start_prev = datetime(anio - 1, 1, 1)
         end_prev = datetime(anio - 1, month, day)
         data_prev = IntelligenceService.get_stats_by_range(db, source_id, start_prev, end_prev)
-        
+
         def summarize_ytd(data_list):
             df = pd.DataFrame(data_list, columns=["conducta", "barrio", "total"])
             if df.empty: return 0, {}, {}
@@ -233,7 +237,7 @@ class IntelligenceService:
 
         total_a, c_a, b_a = summarize_ytd(data_actual)
         total_p, c_p, b_p = summarize_ytd(data_prev)
-        
+
         # Alerta de Cobertura
         def check_coverage_ytd(start, end):
             days_with_data = db.query(func.count(func.distinct(NationalCrimeStats.fecha_hecho))).filter(
@@ -246,7 +250,7 @@ class IntelligenceService:
 
         cov_a = check_coverage_ytd(start_actual, end_actual)
         cov_p = check_coverage_ytd(start_prev, end_prev)
-        
+
         alerta = None
         if cov_a < 80 or cov_p < 80:
             alerta = f"ALERTA_COBERTURA: Datos parciales détectados (Actual: {cov_a:.1f}%, Anterior: {cov_p:.1f}%)"
@@ -286,7 +290,7 @@ class IntelligenceService:
         all_years = db.query(func.distinct(NationalCrimeStats.anio)).filter(
             NationalCrimeStats.source_id == source_id
         ).all()
-        
+
         results = {}
         for (y,) in all_years:
             start = datetime.strptime(f"{y}-{start_mm_dd}", "%Y-%m-%d")
@@ -297,13 +301,13 @@ class IntelligenceService:
                 NationalCrimeStats.fecha_hecho <= end
             ).scalar() or 0
             results[int(y)] = int(total)
-            
+
         return results
 
     @staticmethod
     def format_comparison_report(result):
         if not result: return "No hay datos para comparar."
-        
+
         def summarize(data_list):
             df = pd.DataFrame(data_list, columns=["conducta", "barrio", "total"])
             if df.empty: return 0, {}, {}
@@ -315,7 +319,7 @@ class IntelligenceService:
         t_actual, c_actual, b_actual = summarize(result["actual"]["data"])
         t_prev, c_prev, b_prev = summarize(result["prev"]["data"])
         t_yoy, c_yoy, b_yoy = summarize(result["yoy"]["data"])
-        
+
         # Nota de cobertura
         cobertura = "completa"
         if t_prev == 0 or t_yoy == 0:

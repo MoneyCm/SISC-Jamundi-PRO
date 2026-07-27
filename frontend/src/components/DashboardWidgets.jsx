@@ -1,6 +1,6 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain, Users, X, FileText } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain, Info, Users, X, FileText, UserMinus, Car, PhoneForwarded, ShieldCheck, Zap, ArrowRight } from 'lucide-react';
 
 const iconMap = {
     AlertTriangle: AlertTriangle,
@@ -9,6 +9,9 @@ const iconMap = {
     Home: Home,
     Users: Users,
     Activity: Activity,
+    UserMinus: UserMinus,
+    Car: Car,
+    PhoneForwarded: PhoneForwarded,
 };
 
 export const KPICard = ({ data }) => {
@@ -57,22 +60,19 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export const TrendChart = ({ data, year }) => {
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 h-96 flex flex-col">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-96 flex flex-col transition-all hover:shadow-lg">
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 font-titles uppercase tracking-tight">
                     <Activity size={20} className="text-primary" />
                     Tendencia Delictiva
                 </h3>
-                <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{year || new Date().getFullYear()}</span>
+                <span className="text-[10px] font-black text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1 rounded-full uppercase tracking-widest">{year || new Date().getFullYear()}</span>
             </div>
             <div className="flex-1 w-full min-h-[300px]">
                 {(!data || data.length === 0) ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
-                        <div className="p-4 bg-slate-50 rounded-full mb-3">
-                            <Activity size={32} className="text-slate-300" />
-                        </div>
-                        <p className="text-sm font-medium">No hay datos de tendencia disponibles</p>
-                        <p className="text-xs mt-1">Sube datos para visualizar el comportamiento.</p>
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 italic">
+                        <Activity size={32} className="text-slate-200 mb-3" />
+                        <p className="text-xs font-bold uppercase tracking-widest">Sin datos de tendencia</p>
                     </div>
                 ) : (
                     <ResponsiveContainer width="100%" height="100%" debounce={100}>
@@ -87,8 +87,8 @@ export const TrendChart = ({ data, year }) => {
                                     <stop offset="95%" stopColor="#FFB600" stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="colorHomicidios" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                                    <stop offset="5%" stopColor="#3A3A44" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#3A3A44" stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="colorLesiones" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#FFE000" stopOpacity={0.3} />
@@ -96,10 +96,10 @@ export const TrendChart = ({ data, year }) => {
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
                             <Tooltip content={<CustomTooltip />} />
-                            <Area type="monotone" dataKey="homicidios" stroke="#F97316" strokeWidth={3} fillOpacity={1} fill="url(#colorHomicidios)" name="Homicidios" activeDot={{ r: 6, strokeWidth: 0 }} />
+                            <Area type="monotone" dataKey="homicidios" stroke="#3A3A44" strokeWidth={3} fillOpacity={1} fill="url(#colorHomicidios)" name="Homicidios" activeDot={{ r: 6, strokeWidth: 0 }} />
                             <Area type="monotone" dataKey="hurtos" stroke="#281FD0" strokeWidth={3} fillOpacity={1} fill="url(#colorHurtos)" name="Hurtos" activeDot={{ r: 6, strokeWidth: 0 }} />
                             <Area type="monotone" dataKey="vif" stroke="#FFB600" strokeWidth={3} fillOpacity={1} fill="url(#colorVif)" name="Violencia Intrafamiliar" activeDot={{ r: 6, strokeWidth: 0 }} />
                             <Area type="monotone" dataKey="lesiones" stroke="#FFE000" strokeWidth={3} fillOpacity={1} fill="url(#colorLesiones)" name="Lesiones Personales" activeDot={{ r: 6, strokeWidth: 0 }} />
@@ -258,28 +258,22 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
     };
 
     return (
-        <div className={`bg-slate-950 rounded-3xl shadow-2xl border border-slate-800 relative overflow-hidden group transition-all duration-700 ${chatOpen ? 'h-[550px]' : 'p-8'}`}>
-            {/* High-tech background effect */}
-            <div className="absolute top-0 right-0 w-full h-full opacity-5 pointer-events-none">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary blur-[100px] rounded-full"></div>
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500 blur-[100px] rounded-full"></div>
-            </div>
-
+        <div className={`bg-white rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden transition-all duration-700 ${chatOpen ? 'h-[550px]' : 'p-8'}`}>
             <div className="relative z-10 h-full flex flex-col">
                 <div className={`flex items-center justify-between mb-6 ${chatOpen ? 'p-8 pb-2' : ''}`}>
                     <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-primary/20 rounded-2xl border border-primary/20 shadow-[0_0_15px_rgba(40,31,208,0.3)]">
+                        <div className="p-3 bg-primary/10 rounded-2xl border border-primary/10">
                             <Brain className="text-primary w-6 h-6" />
                         </div>
                         <div>
-                            <h3 className="text-xl font-black text-white tracking-tight italic">Perspectiva Estratégica AI</h3>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mt-1">SISC Cognition Engine</p>
+                            <h3 className="text-xl font-black text-slate-800 tracking-tight font-titles uppercase">Análisis Estratégico IA</h3>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">SISC Cognition Engine</p>
                         </div>
                     </div>
                     {chatOpen && (
                         <button
                             onClick={() => setChatOpen(false)}
-                            className="bg-white/5 hover:bg-white/10 p-2 rounded-xl text-slate-400 hover:text-white transition-all"
+                            className="bg-slate-100 hover:bg-slate-200 p-2 rounded-xl text-slate-500 transition-all"
                         >
                             <X size={20} />
                         </button>
@@ -288,15 +282,15 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
 
                 {!chatOpen ? (
                     <>
-                        <div className="bg-white/5 border border-white/5 rounded-2xl p-6 mb-6">
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mb-6">
                             {loading ? (
                                 <div className="flex flex-col gap-3">
-                                    <div className="h-4 w-3/4 bg-white/5 animate-pulse rounded"></div>
-                                    <div className="h-4 w-1/2 bg-white/5 animate-pulse rounded"></div>
+                                    <div className="h-4 w-3/4 bg-slate-200 animate-pulse rounded"></div>
+                                    <div className="h-4 w-1/2 bg-slate-200 animate-pulse rounded"></div>
                                     <p className="text-[10px] font-bold text-primary animate-pulse uppercase tracking-widest mt-2">Sintetizando Patrones Regionales...</p>
                                 </div>
                             ) : (
-                                <p className="text-slate-200 text-base leading-relaxed font-medium">
+                                <p className="text-slate-700 text-base leading-relaxed font-bold italic">
                                     <span className="text-primary font-black text-2xl mr-2">“</span>
                                     {insight}
                                     <span className="text-primary font-black text-2xl ml-1">”</span>
@@ -307,13 +301,13 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className="flex flex-col">
-                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Motor de Análisis</span>
-                                    <span className="text-xs font-bold text-slate-300">{provider || 'SISC Intelligence'}</span>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Motor de Análisis</span>
+                                    <span className="text-xs font-bold text-slate-600">{provider || 'SISC Intelligence'}</span>
                                 </div>
-                                <div className="h-8 w-px bg-white/10"></div>
+                                <div className="h-8 w-px bg-slate-200"></div>
                                 <button
                                     onClick={() => setChatOpen(true)}
-                                    className="flex items-center gap-2 text-xs font-black text-emerald-400 hover:text-white transition-all bg-emerald-400/10 hover:bg-emerald-500 px-4 py-2.5 rounded-xl border border-emerald-400/20 shadow-lg shadow-emerald-900/10"
+                                    className="flex items-center gap-2 text-xs font-black text-white hover:opacity-90 transition-all bg-primary px-4 py-2.5 rounded-xl shadow-md"
                                 >
                                     <Activity size={14} className="animate-pulse" />
                                     CONSULTAR ANALISTA
@@ -321,54 +315,54 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
                             </div>
                             <button
                                 onClick={onTechnicalReport}
-                                className="flex items-center gap-2 text-xs text-white/40 font-bold hover:text-white transition-colors group"
+                                className="flex items-center gap-2 text-xs text-slate-400 font-bold hover:text-primary transition-colors group"
                             >
-                                <FileText size={14} className="group-hover:text-primary transition-colors" />
+                                <FileText size={14} />
                                 Descargar Análisis Detallado
                             </button>
                         </div>
                     </>
                 ) : (
                     <>
-                        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
+                        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-200">
                             <div className="flex justify-start">
-                                <div className="max-w-[90%] p-4 rounded-3xl text-sm leading-relaxed bg-white/5 text-slate-300 border border-white/10 rounded-bl-none shadow-xl">
+                                <div className="max-w-[90%] p-4 rounded-3xl text-sm leading-relaxed bg-slate-100 text-slate-700 border border-slate-200 rounded-bl-none">
                                     <p className="font-bold text-primary text-[10px] uppercase tracking-widest mb-1">IA Institucional</p>
                                     Hola analista. He procesado las tendencias delictivas y medidas de convivencia del periodo actual. ¿En qué hallazgo específico desea profundizar?
                                 </div>
                             </div>
                             {messages.map(msg => (
                                 <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[90%] p-4 rounded-3xl text-sm leading-relaxed shadow-xl ${msg.sender === 'user'
+                                    <div className={`max-w-[90%] p-4 rounded-3xl text-sm leading-relaxed shadow-sm ${msg.sender === 'user'
                                         ? 'bg-primary text-white rounded-br-none font-bold'
-                                        : 'bg-white/10 text-slate-200 border border-white/10 rounded-bl-none'}`}>
+                                        : 'bg-white text-slate-700 border border-slate-200 rounded-bl-none'}`}>
                                         {msg.text}
                                     </div>
                                 </div>
                             ))}
                             {chatLoading && (
-                                <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full w-fit">
+                                <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-full w-fit">
                                     <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></div>
                                     <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.2s]"></div>
                                     <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.4s]"></div>
-                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest ml-1">Procesando...</span>
+                                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest ml-1">Procesando...</span>
                                 </div>
                             )}
                         </div>
-                        <form onSubmit={handleSend} className="p-6 bg-slate-900/80 border-t border-white/5 backdrop-blur-sm">
+                        <form onSubmit={handleSend} className="p-6 bg-slate-50 border-t border-slate-200">
                             <div className="relative">
                                 <input
                                     type="text"
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     placeholder="Interactuar con la inteligencia del SISC..."
-                                    className="w-full bg-slate-950 border border-white/10 text-white rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-primary outline-none transition-all pr-12 placeholder:text-slate-600 shadow-inner"
+                                    className="w-full bg-white border border-slate-200 text-slate-800 rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-primary outline-none transition-all pr-12 placeholder:text-slate-400 shadow-sm"
                                     disabled={chatLoading}
                                 />
                                 <button
                                     type="submit"
                                     disabled={!input.trim() || chatLoading}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-primary p-2 rounded-xl text-white hover:bg-primary-light disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-lg"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-primary p-2 rounded-xl text-white hover:opacity-90 disabled:bg-slate-300 transition-all"
                                 >
                                     <ArrowUpRight size={18} strokeWidth={3} />
                                 </button>
@@ -382,27 +376,97 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
 };
 
 export const EarlyWarningWidget = ({ alerts = [] }) => {
-    if (alerts.length === 0) return null;
+    if (alerts.length === 0) return (
+        <div className="bg-emerald-50/30 border border-emerald-100 p-6 rounded-[2rem] flex flex-col items-center justify-center text-center">
+            <ShieldCheck className="text-emerald-500 mb-2 opacity-40" size={32} />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Sistema de Alertas Tempranas</p>
+            <p className="text-xs text-emerald-800 font-bold mt-1">Situación Territorial Estable - Sin anomalías detectadas</p>
+        </div>
+    );
+
+    const getTierConfig = (nivel) => {
+        switch (nivel) {
+            case 'P1': return {
+                bg: 'bg-red-50', border: 'border-red-500/30', text: 'text-red-700',
+                label: 'bg-red-600 text-white', icon: <Skull size={18} />, pulse: true
+            };
+            case 'P2': return {
+                bg: 'bg-amber-50', border: 'border-amber-500/30', text: 'text-amber-800',
+                label: 'bg-amber-500 text-white', icon: <AlertTriangle size={18} />, pulse: false
+            };
+            case 'P3': return {
+                bg: 'bg-blue-50', border: 'border-blue-500/30', text: 'text-blue-800',
+                label: 'bg-blue-500 text-white', icon: <Activity size={18} />, pulse: false
+            };
+            default: return {
+                bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700',
+                label: 'bg-slate-500 text-white', icon: <Info size={18} />, pulse: false
+            };
+        }
+    };
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="text-red-500 animate-bounce" size={20} />
-                <h3 className="text-lg font-bold text-slate-800">Alertas Tempranas Detectadas</h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {alerts.map((alert, idx) => (
-                    <div key={idx} className={`p-4 rounded-xl border-l-4 shadow-sm flex items-start gap-4 ${alert.nivel === 'CRÍTICO' ? 'bg-red-50 border-red-500' : 'bg-orange-50 border-orange-500'}`}>
-                        <div className={`p-2 rounded-lg ${alert.nivel === 'CRÍTICO' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
-                            <Activity size={20} />
-                        </div>
-                        <div>
-                            <p className={`text-xs font-bold uppercase tracking-wider ${alert.nivel === 'CRÍTICO' ? 'text-red-600' : 'text-orange-600'}`}>{alert.nivel}</p>
-                            <p className="text-sm text-slate-800 font-medium mt-1">{alert.mensaje}</p>
-                            <p className="text-[10px] text-slate-500 mt-2">Tendencia: {alert.anterior} → {alert.actual} casos</p>
-                        </div>
+        <div className="space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                    <div className="bg-red-600 p-2 rounded-xl shadow-lg shadow-red-200 animate-pulse">
+                        <Zap size={20} className="text-white fill-white" />
                     </div>
-                ))}
+                    <div>
+                        <h3 className="text-lg font-black text-slate-900 tracking-tight leading-none uppercase italic">S.A.T.</h3>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Secretaría de Seguridad - Jamundí</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">En Tiempo Real</span>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {alerts.map((alert, idx) => {
+                    const config = getTierConfig(alert.nivel);
+                    return (
+                        <div key={idx} className={`relative overflow-hidden group p-5 rounded-[2rem] border ${config.border} ${config.bg} transition-all hover:scale-[1.02] hover:shadow-xl`}>
+                            {config.pulse && <div className="absolute top-0 right-0 w-24 h-24 bg-red-400/10 rounded-full -mr-12 -mt-12 animate-ping"></div>}
+
+                            <div className="flex items-start gap-4">
+                                <div className={`p-3 rounded-2xl ${config.label} shadow-lg transition-transform group-hover:rotate-12`}>
+                                    {config.icon}
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${config.label}`}>
+                                            Prioridad {alert.nivel}
+                                        </span>
+                                        {alert.variacion !== 'N/A' && (
+                                            <span className="text-[10px] font-black text-red-600 flex items-center gap-0.5">
+                                                <ArrowUpRight size={12} strokeWidth={3} /> {alert.variacion}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h4 className={`text-sm font-black ${config.text} uppercase tracking-tight`}>{alert.titulo}</h4>
+                                    <p className="text-xs text-slate-600 font-medium mt-1 leading-relaxed">{alert.mensaje}</p>
+
+                                    <div className="mt-4 flex items-center gap-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Actual</span>
+                                            <span className={`text-sm font-black ${config.text}`}>{alert.valor_actual}</span>
+                                        </div>
+                                        <div className="w-px h-6 bg-slate-200"></div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Histórico</span>
+                                            <span className="text-sm font-black text-slate-400">{alert.valor_previo}</span>
+                                        </div>
+                                        <button className="ml-auto bg-white/50 backdrop-blur-sm p-2 rounded-xl border border-white opacity-0 group-hover:opacity-100 transition-all hover:bg-white hover:shadow-md">
+                                            <ArrowRight size={14} className={config.text} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

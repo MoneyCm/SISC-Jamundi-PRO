@@ -6,7 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from db.models import SessionLocal, Event, EventType, Role, User
+from db.models import SessionLocal, Event, EventType
+from db.models_auth import User, Role, UserRole
 from core.security import get_password_hash
 from datetime import date, time
 import uuid
@@ -16,37 +17,49 @@ def seed():
     try:
         # 1. Asegurarse de que existan los roles
         roles_data = [
-            {"name": "Administrador (Observatorio)", "description": "Control total del sistema e ingesta de datos"},
-            {"name": "Analista Institucional", "description": "Acceso a consulta de datos y reportes avanzados"},
-            {"name": "Ciudadano (Modo Abierto)", "description": "Acceso público limitado para transparencia ciudadana"}
+            {"name": "Administrador (Observatorio)", "code": "TI_ADMIN", "description": "Control total del sistema e ingesta de datos"},
+            {"name": "Analista Institucional", "code": "ANALYST", "description": "Acceso a consulta de datos y reportes avanzados"},
+            {"name": "Ciudadano (Modo Abierto)", "code": "PUBLIC", "description": "Acceso público limitado para transparencia ciudadana"}
         ]
-        
-        for r_data in roles_data:
-            role = db.query(Role).filter(Role.name == r_data["name"]).first()
-            if not role:
-                role = Role(name=r_data["name"], description=r_data["description"])
-                db.add(role)
-        
-        db.commit()
-        admin_role = db.query(Role).filter(Role.name == "Administrador (Observatorio)").first()
 
-        # 2. Crear o actualizar usuario admin por defecto
+        for r_data in roles_data:
+            role = db.query(Role).filter(Role.code == r_data["code"]).first()
+            if not role:
+                role = Role(name=r_data["name"], code=r_data["code"], description=r_data["description"])
+                db.add(role)
+
+        db.commit()
+        admin_role = db.query(Role).filter(Role.code == "TI_ADMIN").first()
+
+        # 2. Crear o actualizar usuario admin solo con credencial externa
+        admin_password = os.getenv("SISC_ADMIN_PASSWORD")
         admin_user = db.query(User).filter(User.username == "admin").first()
-        if not admin_user:
+        if not admin_user and admin_password:
             admin_user = User(
                 username="admin",
                 email="admin@jamundi.gov.co",
-                password_hash=get_password_hash("admin123"),
-                role_id=admin_role.id,
+                password_hash=get_password_hash(admin_password),
+                full_name="Administrador SISC",
+                data_level_max=3,
                 is_active=True
             )
             db.add(admin_user)
-            print("Usuario administrador creado.")
+            db.flush()
+            db.add(UserRole(user_id=admin_user.id, role_id=admin_role.id))
+            print("Usuario administrador creado y rol asignado.")
+        elif admin_user:
+            if admin_password:
+                admin_user.password_hash = get_password_hash(admin_password)
+            admin_user.data_level_max = 3
+            exists = db.query(UserRole).filter(
+                UserRole.user_id == admin_user.id,
+                UserRole.role_id == admin_role.id
+            ).first()
+            if not exists:
+                db.add(UserRole(user_id=admin_user.id, role_id=admin_role.id))
+            print("Usuario administrador actualizado.")
         else:
-            admin_user.password_hash = get_password_hash("admin123")
-            admin_user.role_id = admin_role.id
-            print("Usuario administrador actualizado con nuevo hash.")
-
+            print("SISC_ADMIN_PASSWORD no configurada; no se crea usuario administrador.")
         # 3. Asegurarse de que existan los tipos de eventos básicos
         homicidio = db.query(EventType).filter(EventType.category == "HOMICIDIO").first()
         if not homicidio:
@@ -54,7 +67,7 @@ def seed():
             db.add(homicidio)
             db.commit()
             db.refresh(homicidio)
-        
+
         # 4. Insertar algunos eventos de prueba para el año 2024
         # (Solo si no hay eventos previos para no duplicar en cada corrida)
         if db.query(Event).count() == 0:
@@ -63,7 +76,7 @@ def seed():
                 {"date": date(2024, 2, 20), "time": time(14, 00), "ext_id": "POL-002", "geom": "POINT(-76.545 3.255)"},
                 {"date": date(2024, 3, 5), "time": time(3, 15), "ext_id": "POL-003", "geom": "POINT(-76.525 3.270)"}
             ]
-            
+
             for ep in eventos_prueba:
                 ev = Event(
                     occurrence_date=ep["date"],
@@ -77,10 +90,10 @@ def seed():
                     func.text("UPDATE events SET location_geom = ST_GeomFromText(:wkt, 4326) WHERE id = :id"),
                     {"wkt": ep["geom"], "id": ev.id}
                 )
-        
+
         db.commit()
         print("¡Semilla de datos (roles, usuarios, eventos) completada con éxito!")
-        
+
     except Exception as e:
         print(f"Error insertando datos: {e}")
         db.rollback()

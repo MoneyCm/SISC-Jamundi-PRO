@@ -40,3 +40,9 @@ boletin_*.html
 # Static Assets
 !frontend/src/assets/
 !frontend/index.html
+# Local operational and sensitive artifacts
+backup.dump
+backend/SABANAS_*.xlsx
+backend/static/uploads/
+backend/.pytest_cache/
+tmp/

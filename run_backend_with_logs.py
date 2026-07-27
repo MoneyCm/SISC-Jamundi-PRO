@@ -4,7 +4,7 @@ import os
 import sys
 
 # DATABASE_URL from .env or provided
-db_url = "postgresql://neondb_owner:npg_ZzBiN3DU6dgc@ep-holy-lake-aiso6dd5-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+db_url = os.getenv("DATABASE_URL")
 os.environ["DATABASE_URL"] = db_url
 os.environ["PYTHONIOENCODING"] = "utf-8"
 

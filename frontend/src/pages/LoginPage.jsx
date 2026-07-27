@@ -75,11 +75,12 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
                 <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
                     <div className="p-8 md:p-10">
                         <div className="flex flex-col items-center mb-10">
-                            <div className="bg-primary/10 p-4 rounded-2xl mb-4 text-primary">
-                                <Lock size={32} />
+                            <div className="bg-primary/5 p-5 rounded-2xl mb-6 flex items-center justify-center">
+                                <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-16 h-16 object-contain" />
                             </div>
-                            <h2 className="text-3xl font-black text-neutral">Acceso SISC</h2>
-                            <p className="text-slate-500 text-sm font-medium mt-1">Personal Institucional de Jamundí</p>
+                            <h2 className="text-4xl font-black text-slate-800 font-titles uppercase tracking-tighter">SISC</h2>
+                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-2">ALCALDÍA DE JAMUNDÍ</p>
+                            <p className="text-slate-500 text-sm font-medium mt-4">Acceso exclusivo personal institucional</p>
                         </div>
 
                         {error && (
@@ -91,7 +92,7 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
 
                         <form onSubmit={handleSubmit} className="space-y-5">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Usuario</label>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Usuario Institucional</label>
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
                                         <User size={18} />
@@ -100,7 +101,7 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
                                         type="text"
                                         required
                                         className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-sm font-medium"
-                                        placeholder="Tu usuario institucional"
+                                        placeholder="usuario@jamundi.gov.co"
                                         value={formData.username}
                                         onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                                     />
@@ -108,7 +109,7 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Contraseña</label>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Contraseña</label>
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
                                         <Lock size={18} />
@@ -134,23 +135,24 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className={`w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-primary/20 transition-all active:scale-95 ${loading ? 'opacity-70' : 'hover:bg-primary/90 hover:-translate-y-0.5'}`}
+                                className={`w-full bg-primary text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 shadow-lg shadow-primary/20 transition-all active:scale-95 ${loading ? 'opacity-70' : 'hover:opacity-90'}`}
                             >
                                 {loading ? (
                                     <>
                                         <Loader className="animate-spin" size={20} />
-                                        Validando...
+                                        AUTENTICANDO...
                                     </>
                                 ) : (
-                                    'Iniciar Sesión'
+                                    'INGRESAR AL SISTEMA'
                                 )}
                             </button>
                         </form>
                     </div>
 
                     <div className="bg-slate-50 p-6 border-t border-slate-100">
-                        <p className="text-center text-[10px] text-slate-400 uppercase font-black tracking-widest leading-relaxed">
-                            Sistema de Información para la Seguridad y Convivencia<br />Jamundí - Oficina del Observatorio
+                        <p className="text-center text-[9px] text-slate-400 uppercase font-black tracking-widest leading-relaxed">
+                            SISC | SISTEMA DE INFORMACIÓN PARA LA SEGURIDAD Y CONVIVENCIA<br />
+                            ALCALDÍA DE JAMUNDÍ - VALLE DEL CAUCA
                         </p>
                     </div>
                 </div>

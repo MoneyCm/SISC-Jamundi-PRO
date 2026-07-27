@@ -7,7 +7,7 @@ def force_delete(target_username):
         with engine.connect() as connection:
             # Opción 1: SQLite/Postgres standard
             result = connection.execute(
-                text("DELETE FROM users WHERE username = :u"), 
+                text("DELETE FROM users WHERE username = :u"),
                 {"u": target_username}
             )
             connection.commit()
@@ -18,7 +18,7 @@ def force_delete(target_username):
 if __name__ == "__main__":
     force_delete("admi")
     # Para 'admin', solo borrar si NO es el admin_sisc (que es el real)
-    # Pero el usuario dijo 'admin' y 'admin123', asi que asumo que es basura.
+    # El usuario objetivo fue identificado explicitamente para esta utilidad administrativa.
     # El admin real es 'admin_sisc'.
     # Si existe un usuario 'admin' a secas, debe ser borrado.
     force_delete("admin")

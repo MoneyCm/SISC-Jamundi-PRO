@@ -53,9 +53,26 @@ const DashboardFilters = ({ onFilterChange, referenceDate, currentRange }) => {
         }
     ];
 
+    const [showCustom, setShowCustom] = useState(false);
+    const [tempCustom, setTempCustom] = useState({
+        start: currentRange?.start || '',
+        end: currentRange?.end || ''
+    });
+
     const handlePresetSelect = (preset) => {
         setSelectedPreset(preset.name);
         onFilterChange(preset.getValue());
+        setIsOpen(false);
+        setShowCustom(false);
+    };
+
+    const handleApplyCustom = () => {
+        if (!tempCustom.start || !tempCustom.end) return;
+        setSelectedPreset('Rango Personalizado');
+        onFilterChange({
+            start: tempCustom.start,
+            end: tempCustom.end
+        });
         setIsOpen(false);
     };
 
@@ -63,41 +80,94 @@ const DashboardFilters = ({ onFilterChange, referenceDate, currentRange }) => {
         <div className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                className="flex items-center gap-4 bg-white/5 hover:bg-white/10 border border-white/10 px-5 py-2.5 rounded-2xl text-sm font-semibold text-white transition-all shadow-inner backdrop-blur-sm group active:scale-95"
             >
-                <Calendar size={16} className="text-primary" />
-                <div className="flex flex-col items-start leading-none">
-                    <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">{selectedPreset}</span>
-                    <span className="text-primary font-black tracking-tight">{rangeLabel}</span>
+                <div className="bg-primary/20 p-1.5 rounded-lg group-hover:bg-primary/30 transition-colors">
+                    <Calendar size={16} className="text-primary" />
                 </div>
-                <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <div className="flex flex-col items-start leading-tight">
+                    <span className="text-[9px] text-white/40 uppercase font-black tracking-[0.2em]">{selectedPreset}</span>
+                    <span className="text-white font-black tracking-tight text-sm">{rangeLabel}</span>
+                </div>
+                <div className="h-6 w-px bg-white/10 ml-2 mr-1"></div>
+                <ChevronDown size={16} className={`text-white/30 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="p-2">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 py-2">Seleccionar Periodo</p>
-                        {presets.map((preset) => (
+                <>
+                    <div className="fixed inset-0 z-40 transition-opacity" onClick={() => setIsOpen(false)}></div>
+                    <div className="absolute top-full right-0 mt-4 w-72 bg-slate-900/95 border border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 backdrop-blur-2xl">
+                        <div className="p-3">
+                            <div className="flex items-center gap-2 px-3 py-3 mb-1 border-b border-white/5">
+                                <Filter size={12} className="text-primary" />
+                                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Seleccionar Inteligencia</p>
+                            </div>
+                            <div className="space-y-1">
+                                {presets.map((preset) => (
+                                    <button
+                                        key={preset.name}
+                                        onClick={() => handlePresetSelect(preset)}
+                                        className={`w-full text-left px-4 py-3 text-sm rounded-2xl transition-all flex items-center justify-between group ${selectedPreset === preset.name && !showCustom
+                                            ? 'bg-primary text-white font-bold shadow-lg shadow-primary/20'
+                                            : 'text-white/60 hover:bg-white/5 hover:text-white'
+                                            }`}
+                                    >
+                                        <span className="tracking-tight">{preset.name}</span>
+                                        {selectedPreset === preset.name && !showCustom ? (
+                                            <div className="w-2 h-2 rounded-full bg-white shadow-[0_0_8px_white]" />
+                                        ) : (
+                                            <div className="w-1.5 h-1.5 rounded-full bg-white/10 group-hover:bg-white/30 transition-colors" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="bg-white/[0.02] p-4 border-t border-white/5 flex flex-col gap-3">
                             <button
-                                key={preset.name}
-                                onClick={() => handlePresetSelect(preset)}
-                                className={`w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors flex items-center justify-between group ${selectedPreset === preset.name
-                                    ? 'bg-primary/10 text-primary font-bold'
-                                    : 'text-slate-600 hover:bg-slate-50'
-                                    }`}
+                                onClick={() => setShowCustom(!showCustom)}
+                                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black transition-all uppercase tracking-widest border ${showCustom
+                                    ? 'bg-white/10 border-white/20 text-white'
+                                    : 'bg-white/5 border-white/5 text-white/50 hover:text-white'}`}
                             >
-                                {preset.name}
-                                {selectedPreset === preset.name && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                                <Calendar size={14} />
+                                Rango Personalizado
                             </button>
-                        ))}
+
+                            {showCustom && (
+                                <div className="space-y-3 pt-1 animate-in slide-in-from-top-2 duration-300">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-[9px] font-bold text-white/30 uppercase tracking-widest pl-1">Inicio</label>
+                                            <input
+                                                type="date"
+                                                value={tempCustom.start}
+                                                onChange={(e) => setTempCustom({...tempCustom, start: e.target.value})}
+                                                className="bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary transition-colors"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-[9px] font-bold text-white/30 uppercase tracking-widest pl-1">Fin</label>
+                                            <input
+                                                type="date"
+                                                value={tempCustom.end}
+                                                onChange={(e) => setTempCustom({...tempCustom, end: e.target.value})}
+                                                className="bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleApplyCustom}
+                                        disabled={!tempCustom.start || !tempCustom.end}
+                                        className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black py-3 rounded-xl transition-all shadow-lg shadow-primary/20 uppercase tracking-widest"
+                                    >
+                                        Aplicar Filtro
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <div className="bg-slate-50 p-3 border-t border-slate-100">
-                        <button className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-tight">
-                            <Filter size={12} />
-                            Rango Personalizado
-                        </button>
-                    </div>
-                </div>
+                </>
             )}
         </div>
     );

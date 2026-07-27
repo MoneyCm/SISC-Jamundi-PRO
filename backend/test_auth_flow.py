@@ -1,3 +1,4 @@
+import os
 import requests
 import sys
 
@@ -5,13 +6,13 @@ BASE_URL = "http://localhost:8000"
 
 def test_auth():
     print("--- Probando Flujo de Autenticación SISC Jamundí ---")
-    
+
     # 1. Intentar login con credenciales correctas
     login_data = {
         "username": "admin",
-        "password": "admin123"
+        "password": os.getenv("SISC_TEST_PASSWORD", "")
     }
-    
+
     print(f"\n1. Intentando login con {login_data['username']}...")
     try:
         response = requests.post(f"{BASE_URL}/auth/login", data=login_data)

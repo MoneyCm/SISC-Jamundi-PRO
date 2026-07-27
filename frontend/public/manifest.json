@@ -1,0 +1,19 @@
+{
+  "name": "SISC Jamundí",
+  "short_name": "SISC",
+  "description": "Sistema de Información para la Seguridad Ciudadana - Alcaldía de Jamundí",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#281FD0",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["security", "government", "social"]
+}

@@ -11,7 +11,7 @@ CREATE TABLE roles (
 );
 
 -- Los roles se insertarán vía create_roles_v2.py, pero dejamos unos básicos por respaldo
-INSERT INTO roles (id, code, name, description) VALUES 
+INSERT INTO roles (id, code, name, description) VALUES
 (uuid_generate_v4(), 'TI_ADMIN', 'Administrador TI', 'Control total técnico y seguridad'),
 (uuid_generate_v4(), 'ANALYST', 'Analista', 'Acceso a datos institucionales');
 
@@ -34,13 +34,7 @@ CREATE TABLE user_roles (
     PRIMARY KEY (user_id, role_id)
 );
 
--- Usuario admin por defecto (password: admin123)
--- Nota: En producción esto se maneja por variables de entorno
-INSERT INTO users (id, username, email, password_hash, full_name, data_level_max) 
-VALUES ('00000000-0000-0000-0000-000000000000', 'admin_sisc', 'admin@jamundi.gov.co', '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6L6s57RwRXWux.72', 'Admin SISC', 3);
-
-INSERT INTO user_roles (user_id, role_id)
-SELECT '00000000-0000-0000-0000-000000000000', id FROM roles WHERE code = 'TI_ADMIN';
+-- Los usuarios administradores se crean mediante un proceso seguro de aprovisionamiento.
 
 -- 2. Fuentes y Convenios
 CREATE TABLE sources (
@@ -52,7 +46,7 @@ CREATE TABLE sources (
     is_active BOOLEAN DEFAULT TRUE
 );
 
-INSERT INTO sources (name, acronym, description) VALUES 
+INSERT INTO sources (name, acronym, description) VALUES
 ('Policía Nacional - SIEDCO', 'SIEDCO', 'Sistema Estadístico Delictivo'),
 ('Fiscalía General - SPOA', 'SPOA', 'Sistema de Información de la Fiscalía'),
 ('Instituto Medicina Legal', 'INMLCF', 'Datos de necropsias y lesiones'),
@@ -75,7 +69,7 @@ CREATE TABLE event_types (
     is_delicto BOOLEAN DEFAULT TRUE
 );
 
-INSERT INTO event_types (category, subcategory) VALUES 
+INSERT INTO event_types (category, subcategory) VALUES
 ('HOMICIDIO', 'DOLOSO'),
 ('HOMICIDIO', 'CULPOSO (ACCIDENTE TRANSITO)'),
 ('HURTO', 'A PERSONAS'),

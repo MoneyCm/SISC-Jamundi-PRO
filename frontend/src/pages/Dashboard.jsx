@@ -4,10 +4,10 @@ import MapComponent from '../components/Map/MapComponent';
 import DashboardFilters from '../components/DashboardFilters';
 import ComparisonWidget from '../components/ComparisonWidget';
 import IntelligenceBriefTicker from '../components/IntelligenceBriefTicker';
-import { Loader, Download, RefreshCcw, ShieldCheck, Activity, Users, Globe, FileText, ArrowUpRight } from 'lucide-react';
+import { Loader, Download, RefreshCcw, ShieldCheck, Activity, Users, Globe, FileText, ArrowUpRight, Skull, UserMinus, Car, PhoneForwarded, Home, Brain, Zap } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
-const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
+const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const isCitizen = userRoles.length === 0;
     const isInstitutional = dataLevel >= 2;
 
@@ -119,10 +119,12 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
 
             setDashboardData({
                 kpiData: [
-                    { title: `Incidentes`, value: (kpisCurrent?.total_incidentes ?? 0).toString(), change: incidentChange.text, trend: incidentChange.trend, icon: "AlertTriangle" },
-                    { title: "Tasa Homicidios", value: (kpisCurrent?.tasa_homicidios ?? 0).toString(), change: "x 100k hab", trend: "neutral", icon: "Skull" },
-                    { title: "Zonas Críticas", value: (kpisCurrent?.zonas_criticas ?? 0).toString(), change: "Concentración", trend: "neutral", icon: "Activity" },
-                    { title: "Población", value: (kpisCurrent?.poblacion ?? 180942).toLocaleString(), change: "Jamundí", trend: "neutral", icon: "Users" },
+                    { title: `Homicidios`, value: (kpisCurrent?.homicidios ?? 0).toString(), change: "Corte MinDefensa", trend: "neutral", icon: "Skull" },
+                    { title: "Hurto Personas", value: (kpisCurrent?.hurto_personas ?? 0).toString(), change: "Denuncias", trend: "neutral", icon: "UserMinus" },
+                    { title: "Hurto Vehículos", value: (kpisCurrent?.hurto_vehiculos ?? 0).toString(), change: "Autos/Motos", trend: "neutral", icon: "Car" },
+                    { title: "Extorsión", value: (kpisCurrent?.extorsion ?? 0).toString(), change: "Reportes", trend: "neutral", icon: "PhoneForwarded" },
+                    { title: "VIF", value: (kpisCurrent?.vif ?? 0).toString(), change: "V. Intrafamiliar", trend: "neutral", icon: "Home" },
+                    { title: "Lesiones", value: (kpisCurrent?.lesiones ?? 0).toString(), change: "Convivencia", trend: "neutral", icon: "Activity" },
                 ],
                 crimeTrendData: Array.isArray(trendData) ? trendData : [],
                 crimeDistributionData: Array.isArray(distData) ? distData : [],
@@ -215,6 +217,26 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
         }
     };
 
+    const handleDownloadExecutivePDF = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/reportes/generar-boletin-ejecutivo?token=${token || ''}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error("Error de servidor");
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Boletin_Ejecutivo_IA_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch (err) {
+            alert("Error al generar Boletín IA");
+        }
+    };
+
     const handleExportCSV = () => {
         if (!dashboardData.recentActivity.length) return;
         const headers = ["ID", "Tipo", "Barrio", "Fecha", "Estado"];
@@ -239,42 +261,49 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-700 pb-20">
-            {/* Barra de Filtros y Control - Centro de Mando */}
-            <div className="sticky top-0 z-30 flex flex-col md:flex-row justify-between items-center gap-4 bg-[#281FD0] text-white p-4 md:px-8 rounded-b-[2rem] shadow-2xl -mx-4 md:-mx-8 border-b border-white/10 backdrop-blur-md bg-opacity-95">
-                <div className="flex items-center gap-5">
-                    <div className="hidden md:flex items-center gap-3">
-                        <div className="bg-white p-1.5 rounded-xl shadow-inner">
-                            <img src="/assets/escudo.png" alt="Jamundí" className="w-8 h-8 object-contain" />
+            {/* Orla Institucional Superior */}
+            <div className="orla-hidirica mb-2"></div>
+
+            {/* Barra de Filtros y Control - Centro de Mando Institucional */}
+            <div className="sticky top-0 z-40 flex flex-col md:flex-row justify-between items-center gap-4 bg-white text-slate-800 p-5 md:px-10 rounded-2xl shadow-xl -mx-4 md:-mx-10 border border-slate-200">
+                <div className="flex items-center gap-6">
+                    <div className="hidden md:flex items-center gap-4">
+                        <div className="relative bg-white p-1 rounded-lg border border-slate-100 shadow-sm flex items-center justify-center">
+                            <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-10 h-10 object-contain" />
                         </div>
-                        <div>
-                            <h2 className="text-xl font-black tracking-tighter leading-tight">CENTRO DE MANDO SISC</h2>
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-                                <p className="text-[10px] text-white/70 font-bold uppercase tracking-[0.15em] whitespace-nowrap">
-                                    Nivel de Datos {dataLevel} | Jamundí {new Date().getFullYear()}
-                                </p>
+                        <div className="space-y-0.5">
+                            <h2 className="text-xl font-black tracking-tight leading-none text-primary font-titles">
+                                CENTRO DE MANDO <span className="text-slate-900">SISC</span>
+                            </h2>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                    ALCALDÍA DE JAMUNDÍ
+                                </span>
                             </div>
                         </div>
                     </div>
-                    <div className="h-10 w-px bg-white/20 hidden lg:block"></div>
+                    <div className="h-10 w-px bg-slate-200 hidden lg:block"></div>
                     <DashboardFilters onFilterChange={handleFilterChange} referenceDate={dashboardData.referenceDate} currentRange={dashboardData.currentRange} />
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="hidden xl:flex flex-col items-end mr-2 text-right">
-                        <span className="text-[9px] font-black text-white/50 uppercase tracking-widest">Sincronización Regional</span>
-                        <span className="text-[10px] font-bold text-emerald-300">ACTIVA: {dashboardData.coverage.end || '...'}</span>
-                    </div>
+                    <button
+                        onClick={handleDownloadExecutivePDF}
+                        className="flex items-center gap-2 bg-primary hover:bg-primary-secondary text-white px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 group relative overflow-hidden"
+                    >
+                        <Brain size={14} />
+                        BOLETÍN IA
+                    </button>
                     <button
                         onClick={handleDownloadPDF}
-                        className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2.5 rounded-xl text-xs font-black transition-all active:scale-95"
+                        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2.5 rounded-xl text-xs font-black transition-all active:scale-95"
                     >
                         <RefreshCcw size={14} />
-                        BOLETÍN
+                        DETALLADO
                     </button>
                     <button
                         onClick={handleExportCSV}
-                        className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white px-5 py-2.5 rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-900/20 active:scale-95"
+                        className="flex items-center gap-2 bg-accent-gold hover:opacity-90 text-white px-5 py-2.5 rounded-xl text-xs font-black transition-all shadow-md active:scale-95"
                     >
                         <Download size={14} />
                         EXPORTAR
@@ -282,31 +311,31 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
                 </div>
             </div>
 
-            {/* Banner de Bienvenida Estratégica */}
-            <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-8 rounded-3xl border border-slate-700 shadow-xl">
-                <div className="absolute top-0 right-0 w-1/3 h-full opacity-10 pointer-events-none">
-                    <Activity size={300} className="text-primary translate-x-20 -translate-y-20 rotate-12" />
+            {/* Banner de Bienvenida Institucional */}
+            <div className="relative overflow-hidden bg-white p-10 rounded-3xl border border-slate-100 shadow-xl">
+                <div className="absolute top-0 right-0 w-1/4 h-full opacity-[0.03] pointer-events-none">
+                    <img src="/assets/escudo.png" alt="" className="w-full h-full object-contain translate-x-10 translate-y-10" />
                 </div>
                 <div className="relative z-10 max-w-4xl">
-                    <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2">
-                        Bienvenido al <span className="text-primary">Observatorio del Delito</span>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/5 rounded-full border border-primary/10 mb-4">
+                        <ShieldCheck size={14} className="text-primary" />
+                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">Portal Oficial de Seguridad</span>
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter mb-4 font-titles">
+                        Observatorio del Delito <span className="text-primary italic">SISC JAMUNDÍ</span>
                     </h1>
-                    <p className="text-slate-400 font-medium text-sm md:text-base leading-relaxed mb-6">
-                        Usted se encuentra en el <span className="text-white font-bold">Sistema de Información de Seguridad y Convivencia (SISC)</span> de Jamundí.
-                        Este entorno integra inteligencia de datos regionales y alertas estratégicas para la toma de decisiones basada en evidencia.
+                    <p className="text-slate-500 font-medium text-lg leading-relaxed mb-8">
+                        Sistema integral de monitoreo y análisis para la <span className="text-slate-900 font-bold uppercase">Alcaldía de Jamundí</span>.
+                        Toma de decisiones estratégica basada en evidencia científica y datos regionales.
                     </p>
-                    <div className="flex flex-wrap gap-4">
-                        <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/5 px-4 py-2 rounded-lg border border-white/10">
-                            <ShieldCheck size={14} className="text-emerald-500" />
-                            SEGURIDAD CIUDADANA
+                    <div className="flex flex-wrap gap-3">
+                        <div className="bg-slate-50 text-slate-600 px-5 py-2 rounded-xl border border-slate-100 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                            <Activity size={16} className="text-primary" />
+                            Inteligencia Predictiva
                         </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/5 px-4 py-2 rounded-lg border border-white/10">
-                            <Activity size={14} className="text-primary" />
-                            INTELIGENCIA PREDICTIVA
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/5 px-4 py-2 rounded-lg border border-white/10">
-                            <Users size={14} className="text-amber-500" />
-                            GESTIÓN DE CONVIVENCIA
+                        <div className="bg-slate-50 text-slate-600 px-5 py-2 rounded-xl border border-slate-100 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                            <Users size={16} className="text-accent-gold" />
+                            Gestión Institucional
                         </div>
                     </div>
                 </div>
@@ -339,6 +368,11 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
                         <div className="grid grid-cols-2 gap-4">
                             {dashboardData.kpiData.slice(2, 4).map((kpi, index) => (
                                 <KPICard key={index + 2} data={kpi} />
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            {dashboardData.kpiData.slice(4, 6).map((kpi, index) => (
+                                <KPICard key={index + 4} data={kpi} />
                             ))}
                         </div>
                     </div>
@@ -413,21 +447,30 @@ const Dashboard = ({ userRoles = [], dataLevel = 1 }) => {
                             </p>
 
                             <div className="space-y-3">
-                                <button className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn">
+                                <button
+                                    onClick={() => onNavigate?.('monitoring')}
+                                    className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn"
+                                >
                                     <div className="flex items-center gap-3">
                                         <Globe className="text-primary" size={20} />
                                         <span className="font-bold text-sm">Monitor Mindefensa</span>
                                     </div>
                                     <ArrowUpRight size={16} className="text-slate-500 group-hover/btn:text-white transition-colors" />
                                 </button>
-                                <button className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn">
+                                <button
+                                    onClick={() => onNavigate?.('police_monitor')}
+                                    className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn"
+                                >
                                     <div className="flex items-center gap-3">
                                         <ShieldCheck className="text-emerald-500" size={20} />
                                         <span className="font-bold text-sm">Monitor Policial</span>
                                     </div>
                                     <ArrowUpRight size={16} className="text-slate-500 group-hover/btn:text-white transition-colors" />
                                 </button>
-                                <button className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn">
+                                <button
+                                    onClick={() => onNavigate?.('reports')}
+                                    className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn"
+                                >
                                     <div className="flex items-center gap-3">
                                         <FileText className="text-amber-500" size={20} />
                                         <span className="font-bold text-sm">Reportes Técnicos</span>
