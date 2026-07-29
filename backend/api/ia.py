@@ -5,6 +5,7 @@ from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, SabanaSnaps
 from services.hechos_metrics import hechos_unicos_expr
 from sqlalchemy import func
 import os
+import re
 import httpx
 from datetime import datetime, date, timedelta
 from api.auth import analyst_or_admin, institutional_access
@@ -29,6 +30,84 @@ ia_cache = {
     "last_total": 0,
     "provider": None
 }
+
+
+MONTH_NAMES = {
+    1: "enero",
+    2: "febrero",
+    3: "marzo",
+    4: "abril",
+    5: "mayo",
+    6: "junio",
+    7: "julio",
+    8: "agosto",
+    9: "septiembre",
+    10: "octubre",
+    11: "noviembre",
+    12: "diciembre",
+}
+
+MONTH_LOOKUP = {name: number for number, name in MONTH_NAMES.items()}
+MONTH_LOOKUP.update({"setiembre": 9})
+
+
+def _extract_requested_periods(message: str, default_year: int):
+    normalized = (message or "").lower()
+    year_match = re.search(r"\b(20\d{2})\b", normalized)
+    requested_year = int(year_match.group(1)) if year_match else default_year
+    months = []
+    for name, number in MONTH_LOOKUP.items():
+        if re.search(rf"\b{name}\b", normalized) and number not in months:
+            months.append(number)
+    return requested_year, months
+
+
+def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fecha_corte_date, fecha_corte: str, fuente_corte: str):
+    if not fecha_corte_date:
+        return None
+
+    requested_year, months = _extract_requested_periods(user_message, fecha_corte_date.year)
+    if not months:
+        return None
+
+    unavailable = []
+    available_lines = []
+    for month in months:
+        month_label = f"{MONTH_NAMES[month].capitalize()} {requested_year}"
+        if month == 12:
+            requested_period_end = date(requested_year, 12, 31)
+        else:
+            requested_period_end = date(requested_year, month + 1, 1) - timedelta(days=1)
+
+        if requested_period_end > fecha_corte_date:
+            unavailable.append(month_label)
+            continue
+
+        info = monthly_summary.get((requested_year, month))
+        if not info:
+            available_lines.append(f"- **{month_label}:** no hay dato mensual desagregado suficiente en el contexto del asistente.")
+            continue
+
+        principales = sorted(info["conductas"].items(), key=lambda item: item[1], reverse=True)[:4]
+        detalle = ", ".join([f"{name}: {count}" for name, count in principales])
+        available_lines.append(f"- **{month_label}:** {info['total']} casos consolidados. Principales conductas: {detalle}.")
+
+    intro = f"Con corte al **{fecha_corte}** ({fuente_corte}), el SISC registra esta informacion para los meses consultados:"
+    parts = [intro]
+    if available_lines:
+        parts.append("\n".join(available_lines))
+    if unavailable:
+        parts.append(f"Aun no hay datos cargados para: **{', '.join(unavailable)}**. No se reportan como 0 casos.")
+    parts.append("Para emergencias, llama al **123**.")
+    return "\n\n".join(parts)
+
+
+def _format_cutoff_answer(user_message: str, fecha_corte: str, fuente_corte: str):
+    normalized = (user_message or "").lower()
+    if not any(term in normalized for term in ["corte", "actualizado", "actualizacion", "hasta cuando", "hasta que fecha"]):
+        return None
+    return f"El SISC tiene datos cargados para consulta ciudadana hasta el **{fecha_corte}**. Fuente usada: **{fuente_corte}**. Para emergencias, llama al **123**."
+
 
 async def call_gemini(contexto):
     url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
@@ -321,6 +400,14 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         detalle = ", ".join([f"{name}: {count}" for name, count in principales])
         stats_mensuales.append(f"{nombres_meses[month]} {year}: total {info['total']} casos ({detalle})")
     stats_mensuales = " | ".join(stats_mensuales) if stats_mensuales else "No hay resumen mensual consolidado disponible"
+
+    direct_cutoff_response = _format_cutoff_answer(user_message, fecha_corte, fuente_corte)
+    if direct_cutoff_response:
+        return {"response": direct_cutoff_response}
+
+    direct_monthly_response = _format_monthly_direct_answer(user_message, monthly_summary, fecha_corte_date, fecha_corte, fuente_corte)
+    if direct_monthly_response:
+        return {"response": direct_monthly_response}
 
     contexto = f"""
     Eres el Asistente Virtual del SISC Jamundí (Sistema de Información para la Seguridad y Convivencia).
