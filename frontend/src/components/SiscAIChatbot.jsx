@@ -2,6 +2,59 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Bot, Minimize2, Maximize2 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
+const normalizeAssistantText = (value) => {
+    return String(value || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/\s+-\s+/g, '\n- ')
+        .trim();
+};
+
+const renderInlineMarkdown = (value, keyPrefix) => {
+    return String(value || '').split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+            return <strong key={`${keyPrefix}-strong-${index}`} className="font-black text-slate-900">{part.slice(2, -2)}</strong>;
+        }
+        return <React.Fragment key={`${keyPrefix}-text-${index}`}>{part}</React.Fragment>;
+    });
+};
+
+const AssistantMessage = ({ text }) => {
+    const lines = normalizeAssistantText(text).split('\n').map(line => line.trim()).filter(Boolean);
+    const blocks = [];
+    let bullets = [];
+
+    const flushBullets = () => {
+        if (!bullets.length) return;
+        const bulletBlock = bullets;
+        blocks.push(
+            <ul key={`list-${blocks.length}`} className="list-disc space-y-1 pl-5">
+                {bulletBlock.map((line, index) => (
+                    <li key={`bullet-${blocks.length}-${index}`}>{renderInlineMarkdown(line.replace(/^-\s*/, ''), `bullet-${blocks.length}-${index}`)}</li>
+                ))}
+            </ul>
+        );
+        bullets = [];
+    };
+
+    lines.forEach((line) => {
+        if (line.startsWith('- ')) {
+            bullets.push(line);
+            return;
+        }
+        flushBullets();
+        blocks.push(
+            <p key={`paragraph-${blocks.length}`}>
+                {renderInlineMarkdown(line, `paragraph-${blocks.length}`)}
+            </p>
+        );
+    });
+
+    flushBullets();
+
+    return <div className="space-y-2">{blocks}</div>;
+};
+
 const SiscAIChatbot = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -115,7 +168,7 @@ const SiscAIChatbot = () => {
                                 <div className={`max-w-[85%] p-3 text-sm leading-relaxed shadow-sm ${msg.sender === 'user'
                                     ? 'bg-[#281FD0] text-white rounded-2xl rounded-br-none'
                                     : 'bg-white text-slate-700 border border-slate-100 rounded-2xl rounded-bl-none'}`}>
-                                    {msg.text}
+                                    {msg.sender === 'ai' ? <AssistantMessage text={msg.text} /> : msg.text}
                                 </div>
                             </div>
                         ))}
