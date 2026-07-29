@@ -53,6 +53,53 @@ def _latest_snapshot_id(db: Session):
     return row[0] if row else None
 
 
+
+def _latest_public_source(db: Session):
+    snapshot_id = _latest_snapshot_id(db)
+    if snapshot_id:
+        run = db.query(IngestionRun).filter(IngestionRun.id == snapshot_id).first()
+        return {
+            "snapshot_id": snapshot_id,
+            "run": run,
+            "source_table": "sabana_snapshot_rows",
+            "identity_expr": "hecho_key",
+            "date_col": "fecha_evento",
+            "conducta_col": "conducta_estandar",
+            "location_expr": "COALESCE(NULLIF(BTRIM(barrio_normalizado), ''), NULLIF(BTRIM(datos_normalizados->>'vereda'), ''), 'SIN DATO')",
+            "zone_expr": "COALESCE(NULLIF(BTRIM(datos_normalizados->>'zona'), ''), 'SIN DATO')",
+            "snapshot_filter": " AND ingestion_id = :snapshot_id",
+        }
+    return {
+        "snapshot_id": None,
+        "run": None,
+        "source_table": "hechos_seguridad",
+        "identity_expr": "COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)",
+        "date_col": "fecha_evento",
+        "conducta_col": "conducta_estandar",
+        "location_expr": "COALESCE(NULLIF(BTRIM(barrio_normalizado), ''), NULLIF(BTRIM(vereda_normalizada), ''), NULLIF(BTRIM(corregimiento), ''), 'SIN DATO')",
+        "zone_expr": "COALESCE(NULLIF(BTRIM(zona), ''), CASE WHEN NULLIF(BTRIM(vereda_normalizada), '') IS NOT NULL OR NULLIF(BTRIM(corregimiento), '') IS NOT NULL THEN 'RURAL' ELSE 'URBANA' END)",
+        "snapshot_filter": "",
+    }
+
+
+def _public_count(db: Session, source: dict, start: date, end: date) -> int:
+    params = {"start": start, "end": end}
+    if source["snapshot_id"]:
+        params["snapshot_id"] = source["snapshot_id"]
+    row = db.execute(text(f"""
+        SELECT COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+    """), params).first()
+    return row.total or 0
+
+
+def _pct_change(current: int, previous: int) -> Optional[float]:
+    if previous == 0:
+        return None if current == 0 else 100.0
+    return round(((current - previous) / previous) * 100, 1)
+
 def _hechos_count(db: Session, conductas: list, start: date = None, end: date = None) -> int:
     snapshot_id = _latest_snapshot_id(db)
     if snapshot_id:
@@ -145,6 +192,194 @@ def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
 # ─────────────────────────────────────────────
 # ENDPOINTS
 # ─────────────────────────────────────────────
+
+
+@router.get("/public/dashboard")
+def get_public_dashboard(
+    year: Optional[int] = None,
+    min_location_count: int = Query(3, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    """Dashboard ciudadano: solo datos agregados, anonimizados y trazables."""
+    source = _latest_public_source(db)
+    params = {}
+    if source["snapshot_id"]:
+        params["snapshot_id"] = source["snapshot_id"]
+
+    latest_row = db.execute(text(f"""
+        SELECT MIN({source['date_col']}) AS min_date, MAX({source['date_col']}) AS max_date
+        FROM {source['source_table']}
+        WHERE 1=1 {source['snapshot_filter']}
+    """), params).first()
+
+    max_date = latest_row.max_date if latest_row and latest_row.max_date else date.today()
+    min_date = latest_row.min_date if latest_row and latest_row.min_date else date(max_date.year, 1, 1)
+    target_year = year or max_date.year
+    period_start = date(target_year, 1, 1)
+    period_end = min(max_date, date(target_year, 12, 31)) if target_year == max_date.year else date(target_year, 12, 31)
+    previous_start = date(target_year - 1, 1, 1)
+    try:
+        previous_end = date(target_year - 1, period_end.month, period_end.day)
+    except ValueError:
+        previous_end = date(target_year - 1, period_end.month, period_end.day - 1)
+
+    base_params = {"start": period_start, "end": period_end}
+    if source["snapshot_id"]:
+        base_params["snapshot_id"] = source["snapshot_id"]
+
+    total_actual = _public_count(db, source, period_start, period_end)
+    total_prev = _public_count(db, source, previous_start, previous_end)
+
+    volume_row = db.execute(text(f"""
+        SELECT COUNT(*) AS registros
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+    """), base_params).first()
+
+    hom_vals = tuple(CONDUCTA_KEYS['HOMICIDIO'])
+    hom_stmt = text(f"""
+        SELECT COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        AND {source['conducta_col']} IN :hom_vals
+        {source['snapshot_filter']}
+    """).bindparams(bindparam("hom_vals", expanding=True))
+    homicidios = db.execute(hom_stmt, {**base_params, "hom_vals": hom_vals}).first().total or 0
+    tasa_homicidios = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
+
+    monthly = db.execute(text(f"""
+        SELECT TO_CHAR(date_trunc('month', {source['date_col']}), 'YYYY-MM') AS bucket,
+               COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        GROUP BY 1, date_trunc('month', {source['date_col']})
+        ORDER BY date_trunc('month', {source['date_col']})
+    """), base_params).fetchall()
+
+    weekly = db.execute(text(f"""
+        SELECT EXTRACT(WEEK FROM {source['date_col']})::int AS semana,
+               COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        GROUP BY 1
+        ORDER BY 1
+    """), base_params).fetchall()
+
+    conductas = db.execute(text(f"""
+        SELECT COALESCE(NULLIF(BTRIM({source['conducta_col']}), ''), 'SIN CLASIFICAR') AS name,
+               COUNT(DISTINCT {source['identity_expr']}) AS value
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        GROUP BY 1
+        ORDER BY value DESC, name ASC
+        LIMIT 12
+    """), base_params).fetchall()
+
+    zones = db.execute(text(f"""
+        SELECT UPPER({source['zone_expr']}) AS zona,
+               COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        GROUP BY 1
+        ORDER BY total DESC
+    """), base_params).fetchall()
+
+    raw_locations = db.execute(text(f"""
+        SELECT UPPER({source['location_expr']}) AS name,
+               COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        GROUP BY 1
+        ORDER BY total DESC, name ASC
+        LIMIT 60
+    """), base_params).fetchall()
+
+    from services.geocoding_service import GeocodingService
+    suppressed_locations = 0
+    territories = []
+    map_points = []
+    for row in raw_locations:
+        if not row.name or row.name == "SIN DATO":
+            continue
+        if row.total < min_location_count:
+            suppressed_locations += row.total
+            continue
+        item = {"name": row.name, "total": row.total}
+        territories.append(item)
+        coords = GeocodingService.get_coords_for_localidad(row.name)
+        if coords:
+            lat, lng = coords
+            map_points.append({
+                "name": row.name,
+                "total": row.total,
+                "lat": lat,
+                "lng": lng,
+                "radius": min(42, 12 + row.total * 2),
+            })
+
+    run = source["run"]
+    report_start = period_start.isoformat()
+    report_end = period_end.isoformat()
+    bulletin_url = f"/api/reportes/generar-boletin?fuente=POLICIA_SEMANAL&fecha_inicio={report_start}&fecha_fin={report_end}"
+
+    return {
+        "metadata": {
+            "source": "SABANA SIEDCO/PONAL - Policia Nacional",
+            "basis": "ULTIMA_ENTREGA_SEMANAL" if source["snapshot_id"] else "CONSOLIDADO_HISTORICO",
+            "period_start": report_start,
+            "period_end": report_end,
+            "latest_event_date": max_date.isoformat(),
+            "first_available_date": min_date.isoformat(),
+            "year": target_year,
+            "population": POBLACION_JAMUNDI,
+            "privacy": "Publicacion agregada. No incluye nombres, identificadores, telefonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
+            "methodology": "La sabana oficial se valida, se deduplica por hecho, se consolida en una foto semanal inmutable y se publica con agregacion estadistica. Las ubicaciones del mapa son centroides aproximados por barrio, vereda o corregimiento y se suprimen territorios con conteos bajos.",
+            "last_ingestion": {
+                "id": str(run.id) if run else None,
+                "filename": run.filename if run else None,
+                "loaded_at": run.fecha_fin.isoformat() if run and run.fecha_fin else None,
+                "loaded_by": run.usuario_carga if run else None,
+                "rows": run.total_filas if run else None,
+                "approved": run.aprobadas if run else None,
+                "rejected": run.rechazadas if run else None,
+                "duplicates": run.duplicadas if run else None,
+            },
+            "downloads": [
+                {"label": "Boletin tecnico PDF", "url": bulletin_url, "type": "pdf"},
+            ],
+        },
+        "kpis": {
+            "total_hechos": total_actual,
+            "total_registros": volume_row.registros or 0,
+            "homicidios": homicidios,
+            "tasa_homicidios": tasa_homicidios,
+            "previous_total": total_prev,
+            "variation_pct": _pct_change(total_actual, total_prev),
+        },
+        "interannual": {
+            "current": {"year": target_year, "total": total_actual, "start": report_start, "end": report_end},
+            "previous": {"year": target_year - 1, "total": total_prev, "start": previous_start.isoformat(), "end": previous_end.isoformat()},
+            "variation_pct": _pct_change(total_actual, total_prev),
+        },
+        "monthly_trend": [{"name": row.bucket, "total": row.total} for row in monthly],
+        "weekly_trend": [{"name": f"S{row.semana:02d}", "semana": row.semana, "total": row.total} for row in weekly],
+        "conductas": [{"name": row.name, "value": row.value} for row in conductas],
+        "zones": [{"name": row.zona or "SIN DATO", "value": row.total} for row in zones],
+        "territories": territories[:20],
+        "map": {
+            "type": "centroid_aggregates",
+            "min_location_count": min_location_count,
+            "suppressed_count": suppressed_locations,
+            "points": map_points,
+        },
+    }
+
 
 @router.get("/estadisticas/kpis")
 def get_dashboard_kpis(

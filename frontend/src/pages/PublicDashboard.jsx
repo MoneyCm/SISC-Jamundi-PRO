@@ -1,247 +1,339 @@
-import React, { useState, useEffect } from 'react';
-import { KPICard, TrendChart, DistributionChart } from '../components/DashboardWidgets';
-import MapComponent from '../components/Map/MapComponent';
-import { Loader, Lock, Globe, Home } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+    ArrowDownRight,
+    ArrowLeft,
+    ArrowUpRight,
+    BarChart3,
+    CalendarClock,
+    Database,
+    Download,
+    FileText,
+    Globe,
+    Home,
+    Info,
+    Layers,
+    Loader,
+    Lock,
+    MapPinned,
+    RefreshCcw,
+    ShieldCheck,
+    TrendingUp
+} from 'lucide-react';
+import {
+    Area,
+    AreaChart,
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis
+} from 'recharts';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import { API_BASE_URL } from '../utils/apiConfig';
-import AboutObservatorio from '../components/AboutObservatorio';
 
-const formatPublicDate = (value) => value ? new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`)) : 'Sin corte';
+const COLORS = ['#281FD0', '#384CF5', '#FFB600', '#3A3A44', '#0f766e', '#b91c1c', '#7c3aed', '#475569'];
+const numberFmt = new Intl.NumberFormat('es-CO');
+const pctFmt = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+
+const formatDate = (value) => {
+    if (!value) return 'Sin corte';
+    return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+};
+
+const formatDateTime = (value) => {
+    if (!value) return 'Sin registro';
+    return new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+};
+
+const buildDownloadUrl = (url) => {
+    if (!url) return '#';
+    if (url.startsWith('http')) return url;
+    if (API_BASE_URL.startsWith('http') && url.startsWith('/api')) {
+        return `${API_BASE_URL.replace(/\/api\/?$/, '')}${url}`;
+    }
+    return url;
+};
+
+const variationLabel = (value) => {
+    if (value === null || value === undefined) return 'Sin base previa';
+    return `${value > 0 ? '+' : ''}${pctFmt.format(value)}%`;
+};
+
+const KpiTile = ({ icon: Icon, label, value, helper, tone = 'blue' }) => {
+    const toneClasses = {
+        blue: 'bg-[#281FD0]/10 text-[#281FD0]',
+        amber: 'bg-amber-100 text-amber-700',
+        slate: 'bg-slate-100 text-slate-700',
+        red: 'bg-red-100 text-red-700',
+    };
+    return (
+        <div className="bg-white border border-slate-200 p-5 min-h-[148px] flex flex-col justify-between">
+            <div className="flex items-start justify-between gap-3">
+                <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 leading-snug">{label}</p>
+                <span className={`p-2.5 ${toneClasses[tone] || toneClasses.blue}`}><Icon size={20} /></span>
+            </div>
+            <div>
+                <p className="text-3xl font-black text-slate-900 tracking-tight">{value}</p>
+                <p className="text-xs font-semibold text-slate-500 mt-1">{helper}</p>
+            </div>
+        </div>
+    );
+};
+
+const ChartShell = ({ title, subtitle, children }) => (
+    <section className="bg-white border border-slate-200 p-5 min-h-[360px] flex flex-col">
+        <div className="mb-4">
+            <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">{title}</h2>
+            {subtitle && <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>}
+        </div>
+        <div className="flex-1 min-h-[260px]">{children}</div>
+    </section>
+);
+
+const EmptyState = ({ label = 'Sin datos disponibles' }) => (
+    <div className="h-full min-h-[220px] flex items-center justify-center text-center text-slate-400">
+        <div>
+            <Database size={30} className="mx-auto mb-2 text-slate-300" />
+            <p className="text-xs font-black uppercase tracking-widest">{label}</p>
+        </div>
+    </div>
+);
+
+const CustomTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="bg-white border border-slate-200 shadow-lg p-3 text-sm">
+            <p className="font-black text-slate-900 mb-2">{label}</p>
+            {payload.map((entry) => (
+                <p key={entry.dataKey || entry.name} className="font-semibold text-slate-600">
+                    {entry.name}: <span className="text-slate-900">{numberFmt.format(entry.value || 0)}</span>
+                </p>
+            ))}
+        </div>
+    );
+};
+
+const AggregatedMap = ({ points = [], suppressed = 0, minCount = 3 }) => {
+    const maxTotal = Math.max(1, ...points.map((point) => point.total || 0));
+    return (
+        <div className="h-[470px] border border-slate-200 bg-white">
+            <div className="h-full relative">
+                <MapContainer center={[3.2606, -76.5364]} zoom={12} zoomControl={false} preferCanvas style={{ height: '100%', width: '100%' }}>
+                    <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+                    {points.map((point) => {
+                        const radius = 8 + ((point.total || 0) / maxTotal) * 26;
+                        return (
+                            <CircleMarker
+                                key={point.name}
+                                center={[point.lat, point.lng]}
+                                radius={radius}
+                                pathOptions={{ color: '#281FD0', fillColor: '#FFB600', fillOpacity: 0.45, weight: 2 }}
+                            >
+                                <Popup>
+                                    <div className="text-sm">
+                                        <p className="font-black text-slate-900">{point.name}</p>
+                                        <p className="text-slate-600">{numberFmt.format(point.total)} hechos agregados</p>
+                                        <p className="text-[11px] text-slate-500 mt-2">Centroide territorial aproximado.</p>
+                                    </div>
+                                </Popup>
+                            </CircleMarker>
+                        );
+                    })}
+                </MapContainer>
+                <div className="absolute left-4 bottom-4 z-[1000] bg-white/95 border border-slate-200 p-3 max-w-xs shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mapa agregado</p>
+                    <p className="text-xs text-slate-700 mt-1">Centroides por barrio, vereda o corregimiento. Se ocultan territorios con menos de {minCount} hechos.</p>
+                    {suppressed > 0 && <p className="text-xs font-bold text-amber-700 mt-2">{numberFmt.format(suppressed)} hechos en territorios de baja frecuencia fueron suprimidos.</p>}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const PublicDashboard = ({ onLoginClick, onBack }) => {
-    const [dashboardData, setDashboardData] = useState({
-        kpiData: [],
-        crimeTrendData: [],
-        crimeDistributionData: []
-    });
-    const [mapData, setMapData] = useState([]);
+    const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [sourceMeta, setSourceMeta] = useState(null);
+    const [error, setError] = useState('');
 
-    useEffect(() => {
-        const fetchPublicData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
+    const loadDashboard = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const response = await fetch(`${API_BASE_URL}/analitica/public/dashboard`, { headers: { Accept: 'application/json' } });
+            if (!response.ok) throw new Error(`Servicio no disponible (${response.status})`);
+            setData(await response.json());
+        } catch (requestError) {
+            setData(null);
+            setError(requestError.message || 'No fue posible cargar el tablero ciudadano.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-                const fetchWithTimeout = async (url, timeout = 10000) => {
-                    const controller = new AbortController();
-                    const id = setTimeout(() => controller.abort(), timeout);
-                    try {
-                        const response = await fetch(url, { signal: controller.signal });
-                        clearTimeout(id);
-                        return response;
-                    } catch (e) {
-                        clearTimeout(id);
-                        throw e;
-                    }
-                };
+    useEffect(() => { loadDashboard(); }, []);
 
-                const currentYear = new Date().getFullYear();
-                const periodQuery = `start_date=${currentYear}-01-01&end_date=${currentYear}-12-31`;
+    const csvRows = useMemo(() => {
+        if (!data) return [];
+        return [
+            ['Indicador', 'Valor'],
+            ['Hechos unicos', data.kpis.total_hechos],
+            ['Registros validados', data.kpis.total_registros],
+            ['Homicidios', data.kpis.homicidios],
+            ['Tasa de homicidios por 100.000 habitantes', data.kpis.tasa_homicidios],
+            ['Variacion interanual total', variationLabel(data.kpis.variation_pct)],
+        ];
+    }, [data]);
 
-                // Fetch basic stats (Public)
-                const [kpiRes, trendRes, distRes, mapRes, metaRes] = await Promise.allSettled([
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/kpis?${periodQuery}`),
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/tendencia?${periodQuery}`),
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/distribucion?${periodQuery}`),
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/eventos/geojson?${periodQuery}`),
-                    fetchWithTimeout(`${API_BASE_URL}/analitica/estadisticas/ultima-actualizacion`)
-                ]);
-
-                let kpis = { total_incidentes: 0, tasa_homicidios: 0 };
-                let trendData = [];
-                let distData = [];
-                let features = [];
-                let failedCount = 0;
-                let errorDetails = [];
-
-                const processRes = async (res, name) => {
-                    if (res.status === 'fulfilled' && res.value.ok) {
-                        return await res.value.json();
-                    } else {
-                        failedCount++;
-                        const details = res.status === 'fulfilled'
-                            ? `${name}: Error ${res.value.status} (${res.value.statusText})`
-                            : `${name}: Conexión fallida (${res.reason})`;
-                        errorDetails.push(details);
-                        return null;
-                    }
-                };
-
-                const kpiData = await processRes(kpiRes, "KPIs");
-                if (kpiData) kpis = kpiData;
-
-                const trendD = await processRes(trendRes, "Tendencia");
-                if (trendD) trendData = trendD;
-
-                const distD = await processRes(distRes, "Distribución");
-                if (distD) distData = distD;
-
-                const geoData = await processRes(mapRes, "Mapa/GeoJSON");
-                if (geoData) features = geoData.features || [];
-
-                const metadata = await processRes(metaRes, "Corte de datos");
-                if (metadata) {
-                    setSourceMeta({
-                        ...metadata,
-                        periodStart: `${currentYear}-01-01`,
-                        periodEnd: metadata.ultima_fecha,
-                    });
-                }
-
-                console.log("Datos cargados:", { kpis, trendData, distData, features });
-                if (errorDetails.length > 0) {
-                    console.warn("Detalles de errores de carga:", errorDetails);
-                }
-
-                setDashboardData({
-                    kpiData: [
-                        { title: `Hechos únicos ${currentYear}`, value: (kpis?.total_hechos ?? kpis?.total_incidentes ?? 0).toString(), change: "Por HECHOS_ID", trend: "neutral", icon: "Activity" },
-                        { title: `Registros SABANA ${currentYear}`, value: (kpis?.total_registros ?? 0).toString(), change: "Filas válidas", trend: "neutral", icon: "Database" },
-                        { title: `Víctimas identificables ${currentYear}`, value: (kpis?.victimas_identificables ?? 0).toString(), change: "Dato demográfico", trend: "neutral", icon: "Users" },
-                        { title: `Tasa homicidios ${currentYear}`, value: (kpis?.tasa_homicidios ?? 0).toString(), change: "Por 100k hab", trend: "neutral", icon: "Skull" },
-                        { title: "Población de referencia", value: (kpis?.poblacion ?? 0).toLocaleString('es-CO'), change: "Jamundí", trend: "neutral", icon: "Users" },
-                    ],
-                    crimeTrendData: Array.isArray(trendData) && trendData.length > 0 ? trendData : [],
-                    crimeDistributionData: Array.isArray(distData) && distData.length > 0 ? distData : []
-                });
-                setMapData(features);
-
-                if (failedCount >= 3) {
-                    throw new Error(`Múltiples servicios fallaron: ${errorDetails.join(' | ')}`);
-                }
-
-            } catch (err) {
-                console.error("Error en Dashboard Público:", err);
-                setError(`Problema de conexión: ${err.message || "El servidor no responde"}. Revisa tu internet o el estado del backend.`);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchPublicData();
-    }, []);
+    const downloadCsv = () => {
+        const body = csvRows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(';')).join('\n');
+        const blob = new Blob([`\uFEFF${body}`], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `sisc_dashboard_ciudadano_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh]">
-                <Loader className="w-12 h-12 text-primary animate-spin mb-4" />
-                <p className="text-slate-500 font-medium text-center">
-                    Accediendo al Portal Ciudadano SISC...<br />
-                    <span className="text-xs italic opacity-70">Conectando con: {API_BASE_URL}</span>
-                </p>
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
+                <div className="text-center">
+                    <Loader className="w-10 h-10 text-[#281FD0] animate-spin mx-auto mb-4" />
+                    <p className="text-sm font-black uppercase tracking-widest text-slate-500">Cargando tablero ciudadano</p>
+                </div>
             </div>
         );
     }
 
-    return (
-        <div className="space-y-8 animate-fade-in max-w-7xl mx-auto px-4 py-6">
-            {error && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl flex justify-between items-center">
-                    <div>
-                        <p className="text-red-700 font-bold">Problema de conexión con la base de datos</p>
-                        <p className="text-red-600 text-sm">{error}</p>
-                    </div>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors"
-                    >
-                        Reintentar
-                    </button>
-                </div>
-            )}
-            {/* Header Ciudadano */}
-            <div className="bg-gradient-to-r from-primary to-primary-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div>
-                        <button
-                            onClick={onBack}
-                            className="flex items-center gap-2 text-white/70 hover:text-white mb-2 font-bold uppercase text-[10px] tracking-widest transition-colors bg-white/10 px-3 py-1 rounded-full border border-white/20"
-                        >
-                            <Home size={14} /> Volver al Inicio del Portal
+    if (!data) {
+        return (
+            <div className="min-h-screen bg-slate-50 text-slate-900">
+                <header className="bg-white border-b border-slate-200">
+                    <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-[#281FD0] mb-3">
+                                <ArrowLeft size={16} /> Portal ciudadano
+                            </button>
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-[#281FD0] text-white"><Globe size={22} /></div>
+                                <div>
+                                    <h1 className="text-2xl md:text-3xl font-black tracking-tight">Dashboard ciudadano SISC Jamundi</h1>
+                                    <p className="text-sm text-slate-600 mt-1">Informacion agregada y anonimizada sobre seguridad y convivencia.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={loadDashboard} className="inline-flex items-center gap-2 border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest hover:border-[#281FD0] hover:text-[#281FD0]">
+                            <RefreshCcw size={16} /> Reintentar
                         </button>
-                        <div className="flex items-center gap-2 mb-2">
-                            <Globe size={20} className="text-white/80" />
-                            <span className="text-xs font-bold uppercase tracking-wider text-white/80">Portal de Transparencia</span>
-                        </div>
-                        <h1 className="text-3xl md:text-4xl font-extrabold mb-2">SISC Jamundí</h1>
-                        <p className="text-white/90 text-sm md:text-lg max-w-2xl font-medium">
-                            Sistema de Información para la Seguridad y la Convivencia.
-                            Consulta datos consolidados para comprender la seguridad del municipio.
-                        </p>
                     </div>
-                    <button
-                        onClick={onLoginClick}
-                        className="flex items-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white border border-white/30 px-6 py-3 rounded-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg"
-                    >
-                        <Lock size={18} />
-                        Acceso Institucional
-                    </button>
-                </div>
-                {/* Decorative blobs */}
-                <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-[-20%] left-[-5%] w-48 h-48 bg-black/10 rounded-full blur-2xl"></div>
-            </div>
-
-            {sourceMeta && (
-                <div className={`border px-5 py-4 ${sourceMeta.base_conteo === 'ULTIMA_ENTREGA_SEMANAL' ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-                    <div className="grid gap-3 text-sm md:grid-cols-3">
-                        <div>
-                            <p className="text-xs font-black uppercase text-slate-500">Periodo analizado</p>
-                            <p className="font-bold text-slate-800">{formatPublicDate(sourceMeta.periodStart)} a {formatPublicDate(sourceMeta.periodEnd)}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-black uppercase text-slate-500">Fuente y corte</p>
-                            <p className="font-bold text-slate-800">SABANA SIEDCO/PONAL · {formatPublicDate(sourceMeta.ultima_fecha)}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-black uppercase text-slate-500">Base del indicador</p>
-                            <p className="font-bold text-slate-800">{sourceMeta.base_conteo === 'ULTIMA_ENTREGA_SEMANAL' ? 'Última entrega semanal completa' : 'Consolidado anterior; pendiente nueva entrega'}</p>
-                        </div>
+                </header>
+                <main className="max-w-3xl mx-auto px-4 py-12">
+                    <div className="border-l-4 border-red-600 bg-red-50 p-5 text-red-800">
+                        <h2 className="font-black text-lg">No fue posible cargar los datos publicos</h2>
+                        <p className="text-sm font-semibold mt-2">{error || 'El servicio de datos no respondio.'}</p>
                     </div>
-                </div>
-            )}
-
-            {/* KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
-                {dashboardData.kpiData.map((kpi, index) => (
-                    <KPICard key={index} data={kpi} />
-                ))}
+                </main>
             </div>
+        );
+    }
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <TrendChart data={dashboardData.crimeTrendData} title="Tendencia Histórica (Ciudadana)" />
-                <DistributionChart data={dashboardData.crimeDistributionData} title="Distribución por Modalidad" />
-            </div>
+    const meta = data.metadata || {};
+    const variation = data.kpis?.variation_pct;
+    const variationIsUp = variation > 0;
+    const bulletin = meta.downloads?.[0];
 
-            {/* Map Section */}
-            <div className="bg-white p-2 rounded-2xl shadow-lg border border-slate-100 flex flex-col h-[500px]">
-                <div className="p-5 border-b border-slate-50 flex justify-between items-center">
+    return (
+        <div className="min-h-screen bg-slate-50 text-slate-900">
+            <header className="bg-white border-b border-slate-200">
+                <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                        <h3 className="font-bold text-slate-800 text-lg">Mapa de Incidencia</h3>
-                        <p className="text-xs text-slate-500">Ubicación aproximada de eventos registrados</p>
+                        <button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-[#281FD0] mb-3">
+                            <ArrowLeft size={16} /> Portal ciudadano
+                        </button>
+                        <div className="flex items-center gap-3">
+                            <div className="p-3 bg-[#281FD0] text-white"><Globe size={22} /></div>
+                            <div>
+                                <h1 className="text-2xl md:text-3xl font-black tracking-tight">Dashboard ciudadano SISC Jamundi</h1>
+                                <p className="text-sm text-slate-600 mt-1">Informacion agregada y anonimizada sobre seguridad y convivencia.</p>
+                            </div>
+                        </div>
                     </div>
-                    <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">Modo Abierto Activo</span>
+                    <div className="flex flex-wrap gap-2">
+                        <button onClick={loadDashboard} className="inline-flex items-center gap-2 border border-slate-300 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest hover:border-[#281FD0] hover:text-[#281FD0]">
+                            <RefreshCcw size={16} /> Actualizar
+                        </button>
+                        <button onClick={downloadCsv} disabled={!csvRows.length} className="inline-flex items-center gap-2 border border-[#281FD0] text-[#281FD0] px-4 py-3 text-xs font-black uppercase tracking-widest disabled:opacity-40">
+                            <Download size={16} /> CSV
+                        </button>
+                        {bulletin && (
+                            <a href={buildDownloadUrl(bulletin.url)} className="inline-flex items-center gap-2 bg-[#281FD0] text-white px-4 py-3 text-xs font-black uppercase tracking-widest">
+                                <FileText size={16} /> Boletin PDF
+                            </a>
+                        )}
+                        <button onClick={onLoginClick} className="inline-flex items-center gap-2 bg-slate-900 text-white px-4 py-3 text-xs font-black uppercase tracking-widest">
+                            <Lock size={16} /> Institucional
+                        </button>
+                    </div>
                 </div>
-                <div className="flex-1 relative z-0 overflow-hidden rounded-b-xl">
-                    <MapComponent incidents={mapData} isPublic={true} />
-                </div>
-            </div>
+            </header>
 
-            {/* Nueva Sección: Sobre el Observatorio */}
-            <AboutObservatorio />
+            <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-6">
+                <section className="grid gap-px bg-slate-200 border border-slate-200 md:grid-cols-4">
+                    <div className="bg-white p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Periodo publicado</p><p className="font-black text-slate-900 mt-1">{formatDate(meta.period_start)} a {formatDate(meta.period_end)}</p></div>
+                    <div className="bg-white p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fecha de corte</p><p className="font-black text-slate-900 mt-1">{formatDate(meta.latest_event_date)}</p></div>
+                    <div className="bg-white p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fuente</p><p className="font-black text-slate-900 mt-1">{meta.source || 'SABANA oficial'}</p></div>
+                    <div className="bg-white p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ultima carga</p><p className="font-black text-slate-900 mt-1">{formatDateTime(meta.last_ingestion?.loaded_at)}</p></div>
+                </section>
 
-            <footer className="text-center py-10">
-                <p className="text-slate-400 text-sm">© 2026 Alcaldía de Jamundí - Oficina del Observatorio</p>
-                <p className="text-slate-500 text-[10px] mt-1 uppercase font-bold tracking-widest">SISC Jamundí - Datos Abiertos para la Seguridad</p>
-                <div className="mt-4 flex justify-center gap-4 text-xs font-semibold text-slate-500 uppercase tracking-tighter">
-                    <span>Estrategia de Seguridad</span>
-                    <span>•</span>
-                    <span>Convivencia Ciudadana</span>
-                </div>
-            </footer>
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    <KpiTile icon={BarChart3} label="Hechos unicos" value={numberFmt.format(data.kpis?.total_hechos || 0)} helper="Conteo deduplicado por hecho" />
+                    <KpiTile icon={Database} label="Registros validados" value={numberFmt.format(data.kpis?.total_registros || 0)} helper="Filas validas de la sabana" tone="slate" />
+                    <KpiTile icon={TrendingUp} label="Comparacion interanual" value={variationLabel(variation)} helper={`${data.interannual?.current?.year || ''} frente a ${data.interannual?.previous?.year || ''}`} tone={variationIsUp ? 'red' : 'blue'} />
+                    <KpiTile icon={ShieldCheck} label="Homicidios" value={numberFmt.format(data.kpis?.homicidios || 0)} helper={`${data.kpis?.tasa_homicidios || 0} por 100.000 hab.`} tone="red" />
+                    <KpiTile icon={Layers} label="Territorios visibles" value={numberFmt.format(data.territories?.length || 0)} helper={`Minimo ${data.map?.min_location_count || 3} hechos para publicar`} tone="amber" />
+                </section>
+
+                <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+                    <ChartShell title="Tendencia mensual" subtitle="Hechos unicos por mes dentro del periodo publicado">
+                        {data.monthly_trend?.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={data.monthly_trend} margin={{ top: 10, right: 20, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><YAxis tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Area type="monotone" dataKey="total" name="Hechos" stroke="#281FD0" fill="#281FD0" fillOpacity={0.16} strokeWidth={3} /></AreaChart></ResponsiveContainer> : <EmptyState />}
+                    </ChartShell>
+                    <ChartShell title="Comparacion interanual" subtitle="Mismo rango calendario frente al ano anterior">
+                        <ResponsiveContainer width="100%" height="100%"><BarChart data={[data.interannual.previous, data.interannual.current]} margin={{ top: 10, right: 20, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="year" tick={{ fontSize: 12, fill: '#64748b', fontWeight: 800 }} tickLine={false} axisLine={false} /><YAxis tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Bar dataKey="total" name="Hechos" fill="#281FD0" /></BarChart></ResponsiveContainer>
+                        <div className={`mt-3 inline-flex items-center gap-2 text-sm font-black ${variationIsUp ? 'text-red-700' : 'text-emerald-700'}`}>{variationIsUp ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}Variacion: {variationLabel(variation)}</div>
+                    </ChartShell>
+                </section>
+
+                <section className="grid gap-6 lg:grid-cols-3">
+                    <ChartShell title="Conductas" subtitle="Principales conductas agregadas">
+                        {data.conductas?.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data.conductas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={92} innerRadius={54} paddingAngle={2}>{data.conductas.map((entry, index) => <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart></ResponsiveContainer> : <EmptyState />}
+                    </ChartShell>
+                    <ChartShell title="Zona urbana/rural" subtitle="Distribucion declarada en la fuente">
+                        {data.zones?.length ? <div className="space-y-3">{data.zones.map((zone, index) => { const max = Math.max(...data.zones.map((item) => item.value || 0), 1); return <div key={zone.name}><div className="flex justify-between text-xs font-black uppercase text-slate-600 mb-1"><span>{zone.name}</span><span>{numberFmt.format(zone.value)}</span></div><div className="h-3 bg-slate-100"><div className="h-3" style={{ width: `${(zone.value / max) * 100}%`, backgroundColor: COLORS[index % COLORS.length] }} /></div></div>; })}</div> : <EmptyState />}
+                    </ChartShell>
+                    <ChartShell title="Tendencia semanal" subtitle="Lectura operativa por semana del ano">
+                        {data.weekly_trend?.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.weekly_trend} margin={{ top: 10, right: 10, left: -24, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} interval="preserveStartEnd" /><YAxis tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Bar dataKey="total" name="Hechos" fill="#FFB600" /></BarChart></ResponsiveContainer> : <EmptyState />}
+                    </ChartShell>
+                </section>
+
+                <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+                    <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-4"><MapPinned size={20} className="text-[#281FD0]" /><h2 className="text-base font-black uppercase tracking-tight">Barrios y corregimientos</h2></div><div className="divide-y divide-slate-100 border-y border-slate-100">{(data.territories || []).slice(0, 12).map((territory, index) => <div key={territory.name} className="py-3 flex items-center justify-between gap-4"><div className="flex items-center gap-3 min-w-0"><span className="w-7 h-7 bg-slate-100 text-slate-700 text-xs font-black flex items-center justify-center shrink-0">{index + 1}</span><span className="font-bold text-slate-800 truncate">{territory.name}</span></div><span className="font-black text-slate-900">{numberFmt.format(territory.total)}</span></div>)}</div></div>
+                    <AggregatedMap points={data.map?.points || []} suppressed={data.map?.suppressed_count || 0} minCount={data.map?.min_location_count || 3} />
+                </section>
+
+                <section className="grid gap-6 lg:grid-cols-2">
+                    <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><Info size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">Metodologia</h2></div><p className="text-sm leading-6 text-slate-700 font-medium">{meta.methodology}</p><p className="text-sm leading-6 text-slate-700 font-medium mt-3">{meta.privacy}</p></div>
+                    <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><CalendarClock size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">Trazabilidad de carga</h2></div><dl className="grid grid-cols-2 gap-px bg-slate-200 border border-slate-200 text-sm"><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Archivo</dt><dd className="font-bold break-words">{meta.last_ingestion?.filename || 'No disponible'}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Aprobadas</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.approved || 0)}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Rechazadas</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.rejected || 0)}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Duplicadas</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.duplicates || 0)}</dd></div></dl></div>
+                </section>
+            </main>
+
+            <footer className="border-t border-slate-200 bg-white px-4 py-8 text-center"><button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-[#281FD0]"><Home size={15} /> Volver al inicio del portal</button><p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-4">SISC Jamundi - Publicacion ciudadana agregada</p></footer>
         </div>
     );
 };
