@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.models import get_db, Event, EventType
-from db.models_hechos_seguridad import HechoSeguridad
+from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, SabanaSnapshotRow
 from services.hechos_metrics import hechos_unicos_expr
 from sqlalchemy import func
 import os
@@ -268,11 +268,24 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     nombres_meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     stats_mensuales = ", ".join([f"{nombres_meses[int(m)]} {int(y)}: {c} casos" for y, m, c in meses_hom])
 
-    # Fecha real de cobertura publica: prioriza la sabana consolidada, no tablas internas legacy.
-    max_modern_date = db.query(func.max(HechoSeguridad.fecha_evento)).scalar()
+    # Fecha real de cobertura publica: usa el mismo snapshot publicado en el dashboard ciudadano.
+    latest_snapshot = db.query(SabanaSnapshotRow.ingestion_id).join(
+        IngestionRun, IngestionRun.id == SabanaSnapshotRow.ingestion_id
+    ).filter(
+        IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+        IngestionRun.status == "COMPLETED",
+    ).order_by(IngestionRun.fecha_fin.desc(), IngestionRun.fecha_inicio.desc()).first()
+
+    snapshot_id = latest_snapshot[0] if latest_snapshot else None
+    max_public_date = None
+    if snapshot_id:
+        max_public_date = db.query(func.max(SabanaSnapshotRow.fecha_evento)).filter(
+            SabanaSnapshotRow.ingestion_id == snapshot_id
+        ).scalar()
+
     max_legacy_date = db.query(func.max(Event.occurrence_date)).scalar()
-    fecha_corte = (max_modern_date or max_legacy_date).isoformat() if (max_modern_date or max_legacy_date) else "sin datos cargados"
-    fuente_corte = "sabana consolidada publica" if max_modern_date else "tabla interna historica"
+    fecha_corte = (max_public_date or max_legacy_date).isoformat() if (max_public_date or max_legacy_date) else "sin datos cargados"
+    fuente_corte = "sabana publica consolidada" if max_public_date else "tabla interna historica"
 
     contexto = f"""
     Eres el Asistente Virtual del SISC Jamundí (Sistema de Información para la Seguridad y Convivencia).
