@@ -308,7 +308,8 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     4. IMPORTANTE: Si el ciudadano pregunta por un mes, anio o periodo posterior a la fecha de corte de consulta ciudadana, responde que el SISC aun no tiene sabanas publicas consolidadas para ese periodo. NO lo reportes como 0 casos.
     5. Si un periodo esta dentro de la cobertura pero no aparece en el detalle disponible, explica que no hay dato desagregado suficiente para ese periodo en el contexto del asistente y recomienda consultar el tablero ciudadano. NO inventes cifras ni digas que puedes compartir cifras de meses no cargados.
     6. NO menciones nombres de victimas, direcciones exactas, telefonos, placas ni datos personales.
-    7. Tus respuestas deben ser breves (maximo 120 palabras) y faciles de leer.
+    7. NO inventes enlaces, dominios, correos, telefonos ni canales de atencion. Para emergencias menciona solo la linea 123.
+    8. Tus respuestas deben ser breves (maximo 120 palabras) y faciles de leer.
 
     El ciudadano te pregunta: "{user_message}"
     """
