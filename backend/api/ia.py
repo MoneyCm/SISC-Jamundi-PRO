@@ -258,17 +258,9 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         stats_detalladas.append(f"AÑO {year} [{', '.join(year_data)}]")
     stats_contexto_detallado = " | ".join(stats_detalladas)
 
-    # 5. Detalle mensual de HOMICIDIOS (para el contexto)
-    meses_hom = db.query(
-        func.extract('year', Event.occurrence_date).label('year'),
-        func.extract('month', Event.occurrence_date).label('month'),
-        func.count(Event.id)
-    ).join(EventType).filter(EventType.category.in_(delitos_prioritarios['HOMICIDIO'])).group_by('year', 'month').order_by('year', 'month').all()
-
     nombres_meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-    stats_mensuales = ", ".join([f"{nombres_meses[int(m)]} {int(y)}: {c} casos" for y, m, c in meses_hom])
 
-    # Fecha real de cobertura publica: usa el mismo snapshot publicado en el dashboard ciudadano.
+    # Fecha real de cobertura para el chat: usa la fuente cargada mas reciente y evita declarar periodos como cero si no estan cargados.
     latest_snapshot = db.query(SabanaSnapshotRow.ingestion_id).join(
         IngestionRun, IngestionRun.id == SabanaSnapshotRow.ingestion_id
     ).filter(
@@ -277,15 +269,58 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     ).order_by(IngestionRun.fecha_fin.desc(), IngestionRun.fecha_inicio.desc()).first()
 
     snapshot_id = latest_snapshot[0] if latest_snapshot else None
-    max_public_date = None
+    max_snapshot_date = None
     if snapshot_id:
-        max_public_date = db.query(func.max(SabanaSnapshotRow.fecha_evento)).filter(
+        max_snapshot_date = db.query(func.max(SabanaSnapshotRow.fecha_evento)).filter(
             SabanaSnapshotRow.ingestion_id == snapshot_id
         ).scalar()
 
+    max_modern_date = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+    ).scalar()
     max_legacy_date = db.query(func.max(Event.occurrence_date)).scalar()
-    fecha_corte = (max_public_date or max_legacy_date).isoformat() if (max_public_date or max_legacy_date) else "sin datos cargados"
-    fuente_corte = "sabana publica consolidada" if max_public_date else "tabla interna historica"
+
+    use_modern_source = bool(max_modern_date and (not max_snapshot_date or max_modern_date > max_snapshot_date))
+    fecha_corte_date = max_modern_date if use_modern_source else (max_snapshot_date or max_legacy_date)
+    fecha_corte = fecha_corte_date.isoformat() if fecha_corte_date else "sin datos cargados"
+    fuente_corte = "hechos de sabana cargada" if use_modern_source else ("sabana publica consolidada" if max_snapshot_date else "tabla interna historica")
+
+    monthly_rows = []
+    if fecha_corte_date and use_modern_source:
+        monthly_rows = db.query(
+            func.extract('year', HechoSeguridad.fecha_evento).label('year'),
+            func.extract('month', HechoSeguridad.fecha_evento).label('month'),
+            HechoSeguridad.categoria_delito.label('conducta'),
+            hechos_unicos_expr().label('total'),
+        ).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+            func.extract('year', HechoSeguridad.fecha_evento) == fecha_corte_date.year,
+        ).group_by('year', 'month', HechoSeguridad.categoria_delito).order_by('year', 'month').all()
+    elif fecha_corte_date and snapshot_id:
+        monthly_rows = db.query(
+            func.extract('year', SabanaSnapshotRow.fecha_evento).label('year'),
+            func.extract('month', SabanaSnapshotRow.fecha_evento).label('month'),
+            SabanaSnapshotRow.categoria_delito.label('conducta'),
+            func.count(func.distinct(SabanaSnapshotRow.hecho_key)).label('total'),
+        ).filter(
+            SabanaSnapshotRow.ingestion_id == snapshot_id,
+            func.extract('year', SabanaSnapshotRow.fecha_evento) == fecha_corte_date.year,
+        ).group_by('year', 'month', SabanaSnapshotRow.categoria_delito).order_by('year', 'month').all()
+
+    monthly_summary = {}
+    for year, month, conducta, total in monthly_rows:
+        key = (int(year), int(month))
+        monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
+        monthly_summary[key]["total"] += int(total or 0)
+        label = conducta or "SIN CLASIFICAR"
+        monthly_summary[key]["conductas"][label] = monthly_summary[key]["conductas"].get(label, 0) + int(total or 0)
+
+    stats_mensuales = []
+    for (year, month), info in sorted(monthly_summary.items()):
+        principales = sorted(info["conductas"].items(), key=lambda item: item[1], reverse=True)[:4]
+        detalle = ", ".join([f"{name}: {count}" for name, count in principales])
+        stats_mensuales.append(f"{nombres_meses[month]} {year}: total {info['total']} casos ({detalle})")
+    stats_mensuales = " | ".join(stats_mensuales) if stats_mensuales else "No hay resumen mensual consolidado disponible"
 
     contexto = f"""
     Eres el Asistente Virtual del SISC Jamundí (Sistema de Información para la Seguridad y Convivencia).
@@ -296,7 +331,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     - Total de homicidios registrados: {homicidios}
     - Casos totales por año: {stats_anuales}
     - DETALLE POR CATEGORÍA Y AÑO: {stats_contexto_detallado}
-    - Detalle mensual de homicidios: {stats_mensuales}
+    - Resumen mensual consolidado de la fuente mas reciente: {stats_mensuales}
     - Fecha de corte de los datos cargados para consulta ciudadana: {fecha_corte}
     - Fuente usada para la fecha de corte: {fuente_corte}
     - Poblacion de Jamundi: 180,942 habitantes (Proyeccion 2026).
@@ -305,8 +340,8 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     1. Se amable, empatico y profesional.
     2. SIEMPRE indica llamar al 123 ante emergencias.
     3. PUEDES compartir solo las cifras estadisticas mencionadas arriba.
-    4. IMPORTANTE: Si el ciudadano pregunta por un mes, anio o periodo posterior a la fecha de corte de consulta ciudadana, responde que el SISC aun no tiene sabanas publicas consolidadas para ese periodo. NO lo reportes como 0 casos.
-    5. Si un periodo esta dentro de la cobertura pero no aparece en el detalle disponible, explica que no hay dato desagregado suficiente para ese periodo en el contexto del asistente y recomienda consultar el tablero ciudadano. NO inventes cifras ni digas que puedes compartir cifras de meses no cargados.
+    4. IMPORTANTE: Si el ciudadano pregunta por un mes, anio o periodo posterior a la fecha de corte de consulta ciudadana, responde que el SISC aun no tiene datos cargados para ese periodo. NO lo reportes como 0 casos.
+    5. Si un periodo esta dentro de la cobertura y aparece en el resumen mensual consolidado, responde con esos totales y conductas principales. Si esta dentro de la cobertura pero no aparece en el resumen, explica que no hay dato desagregado suficiente en el contexto del asistente. NO inventes cifras.
     6. NO menciones nombres de victimas, direcciones exactas, telefonos, placas ni datos personales.
     7. NO inventes enlaces, dominios, correos, telefonos ni canales de atencion. Para emergencias menciona solo la linea 123.
     8. Tus respuestas deben ser breves (maximo 120 palabras) y faciles de leer.
