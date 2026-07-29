@@ -208,10 +208,12 @@ const App = () => {
 
   if (isPublic) {
     return (
-      <div className="min-h-screen animate-fade-in">
-        {renderContent()}
+      <>
+        <div className="min-h-screen animate-fade-in">
+          {renderContent()}
+        </div>
         <SiscAIChatbot />
-      </div>
+      </>
     );
   }
 
