@@ -268,11 +268,11 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     nombres_meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     stats_mensuales = ", ".join([f"{nombres_meses[int(m)]} {int(y)}: {c} casos" for y, m, c in meses_hom])
 
-    # Fecha real de cobertura. Si un periodo no esta cargado, no debe reportarse como cero casos.
-    max_legacy_date = db.query(func.max(Event.occurrence_date)).scalar()
+    # Fecha real de cobertura publica: prioriza la sabana consolidada, no tablas internas legacy.
     max_modern_date = db.query(func.max(HechoSeguridad.fecha_evento)).scalar()
-    available_cutoff_dates = [d for d in [max_legacy_date, max_modern_date] if d]
-    fecha_corte = max(available_cutoff_dates).isoformat() if available_cutoff_dates else "sin datos cargados"
+    max_legacy_date = db.query(func.max(Event.occurrence_date)).scalar()
+    fecha_corte = (max_modern_date or max_legacy_date).isoformat() if (max_modern_date or max_legacy_date) else "sin datos cargados"
+    fuente_corte = "sabana consolidada publica" if max_modern_date else "tabla interna historica"
 
     contexto = f"""
     Eres el Asistente Virtual del SISC Jamundí (Sistema de Información para la Seguridad y Convivencia).
@@ -284,15 +284,16 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     - Casos totales por año: {stats_anuales}
     - DETALLE POR CATEGORÍA Y AÑO: {stats_contexto_detallado}
     - Detalle mensual de homicidios: {stats_mensuales}
-    - Fecha de corte de los datos cargados: {fecha_corte}
+    - Fecha de corte de los datos cargados para consulta ciudadana: {fecha_corte}
+    - Fuente usada para la fecha de corte: {fuente_corte}
     - Poblacion de Jamundi: 180,942 habitantes (Proyeccion 2026).
 
     REGLAS DE RESPUESTA:
     1. Se amable, empatico y profesional.
     2. SIEMPRE indica llamar al 123 ante emergencias.
     3. PUEDES compartir solo las cifras estadisticas mencionadas arriba.
-    4. IMPORTANTE: Si el ciudadano pregunta por un mes, anio o periodo posterior a la fecha de corte, responde que el SISC aun no tiene sabanas cargadas para ese periodo. NO lo reportes como 0 casos.
-    5. Si un periodo esta dentro de la cobertura pero no aparece en el detalle disponible, explica que no hay dato desagregado suficiente para ese periodo en el contexto del asistente y recomienda consultar el tablero ciudadano. NO inventes cifras.
+    4. IMPORTANTE: Si el ciudadano pregunta por un mes, anio o periodo posterior a la fecha de corte de consulta ciudadana, responde que el SISC aun no tiene sabanas publicas consolidadas para ese periodo. NO lo reportes como 0 casos.
+    5. Si un periodo esta dentro de la cobertura pero no aparece en el detalle disponible, explica que no hay dato desagregado suficiente para ese periodo en el contexto del asistente y recomienda consultar el tablero ciudadano. NO inventes cifras ni digas que puedes compartir cifras de meses no cargados.
     6. NO menciones nombres de victimas, direcciones exactas, telefonos, placas ni datos personales.
     7. Tus respuestas deben ser breves (maximo 120 palabras) y faciles de leer.
 
