@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, Minimize2, Maximize2 } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, Minimize2, Maximize2, Sparkles, ShieldCheck } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
 const normalizeAssistantText = (value) => {
@@ -60,7 +60,7 @@ const SiscAIChatbot = () => {
     const [isMinimized, setIsMinimized] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState([
-        { id: 1, text: 'Hola. Soy el asistente virtual del SISC Jamundi. Puedo orientarte sobre seguridad, convivencia, rutas de atencion y uso del portal ciudadano.', sender: 'ai' }
+        { id: 1, text: 'Hola. Soy el asistente ciudadano del SISC Jamundi. Puedo ayudarte a entender cifras publicas, rutas de atencion, convivencia y uso del portal. En emergencias llama al 123.', sender: 'ai' }
     ]);
     const [loading, setLoading] = useState(false);
     const scrollRef = useRef(null);
@@ -109,22 +109,31 @@ const SiscAIChatbot = () => {
     if (!isOpen) {
         return (
             <div className="fixed right-4 bottom-28 md:right-6 z-[60] print:hidden">
-                <div className="relative flex items-center gap-3">
-                    <div className="hidden sm:block bg-white border border-slate-200 px-4 py-3 shadow-xl max-w-[230px]">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">Asistente SISC</p>
-                        <p className="text-xs font-bold text-slate-700 mt-0.5">Orientacion rapida para ciudadanos</p>
+                <div className="relative flex items-end gap-3">
+                    <div className="hidden sm:block max-w-[260px] overflow-hidden border border-[#281FD0]/15 bg-white shadow-2xl ring-1 ring-white/80">
+                        <div className="h-1.5 bg-[#FFB600]" />
+                        <div className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                                <span className="grid h-7 w-7 place-items-center rounded-full bg-[#281FD0]/10 text-[#281FD0]">
+                                    <Sparkles size={15} />
+                                </span>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">Asistente ciudadano</p>
+                            </div>
+                            <p className="mt-2 text-sm font-black leading-snug text-slate-900">Preguntale al SISC</p>
+                            <p className="mt-1 text-xs font-semibold leading-snug text-slate-600">Cifras publicas, rutas de atencion y orientacion rapida.</p>
+                        </div>
                     </div>
                     <button
                         type="button"
                         onClick={() => setIsOpen(true)}
                         aria-label="Abrir asistente SISC"
-                        className="relative bg-[#281FD0] hover:bg-[#1f18a8] text-white p-4 md:p-5 rounded-full shadow-2xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-[#281FD0]/25"
+                        className="group relative grid h-16 w-16 place-items-center rounded-full bg-[#281FD0] text-white shadow-2xl shadow-[#281FD0]/35 transition-all hover:-translate-y-1 hover:bg-[#1f18a8] active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-[#FFB600]/40 md:h-[72px] md:w-[72px]"
                     >
-                        <MessageCircle size={28} />
-                        <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFB600] opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-4 w-4 bg-[#FFB600]"></span>
+                        <span className="absolute inset-0 rounded-full border-4 border-[#FFB600]/80 opacity-80 animate-ping"></span>
+                        <span className="absolute -top-1.5 -right-1.5 grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-[#FFB600] text-[#281FD0] shadow-lg">
+                            <Sparkles size={14} />
                         </span>
+                        <MessageCircle size={30} className="relative transition-transform group-hover:scale-110" />
                     </button>
                 </div>
             </div>
@@ -132,17 +141,22 @@ const SiscAIChatbot = () => {
     }
 
     return (
-        <div className={`fixed right-4 bottom-24 md:right-6 z-[60] bg-white shadow-2xl overflow-hidden flex flex-col transition-all duration-300 border border-slate-200 print:hidden ${isMinimized ? 'h-16 w-[min(360px,calc(100vw-2rem))]' : 'h-[min(620px,calc(100vh-7rem))] w-[min(420px,calc(100vw-2rem))]'}`}>
-            <div className="bg-[#281FD0] px-4 py-3 text-white flex items-center justify-between shrink-0">
+        <div className={`fixed right-4 bottom-24 md:right-6 z-[60] bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col transition-all duration-300 border border-slate-200 ring-1 ring-white/80 print:hidden ${isMinimized ? 'h-16 w-[min(360px,calc(100vw-2rem))]' : 'h-[min(650px,calc(100vh-7rem))] w-[min(440px,calc(100vw-2rem))]'}`}>
+            <div className="bg-[#281FD0] text-white shrink-0">
+                <div className="h-1.5 bg-[#FFB600]" />
+                <div className="px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
-                    <div className="bg-white/20 p-2 rounded-xl shrink-0">
-                        <Bot size={20} />
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/20 shrink-0">
+                        <Bot size={22} />
                     </div>
                     <div className="min-w-0">
-                        <h4 className="font-black text-sm truncate">Asistente SISC Jamundi</h4>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
+                            <h4 className="font-black text-sm truncate">Asistente SISC Jamundi</h4>
+                            <ShieldCheck size={15} className="shrink-0 text-[#FFB600]" />
+                        </div>
+                        <div className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-                            <span className="text-[10px] text-white/70 font-bold uppercase tracking-widest">En linea</span>
+                            <span className="text-[10px] text-white/75 font-bold uppercase tracking-widest">Ciudadano / en linea</span>
                         </div>
                     </div>
                 </div>
@@ -154,12 +168,13 @@ const SiscAIChatbot = () => {
                         <X size={18} />
                     </button>
                 </div>
+                </div>
             </div>
 
             {!isMinimized && (
                 <>
-                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-                        <p className="text-xs font-semibold text-slate-600">Este canal es informativo. No reemplaza la linea de emergencias 123.</p>
+                    <div className="px-4 py-3 bg-[#FFF8DF] border-b border-[#FFB600]/35">
+                        <p className="text-xs font-bold text-slate-800">Canal informativo ciudadano. Para emergencias llama al <span className="text-[#281FD0] font-black">123</span>.</p>
                     </div>
 
                     <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/70">
@@ -180,6 +195,18 @@ const SiscAIChatbot = () => {
                     </div>
 
                     <form onSubmit={handleSend} className="p-4 border-t border-slate-100 bg-white">
+                        <div className="mb-3 flex flex-wrap gap-2">
+                            {['Corte de datos', 'Homicidios 2026', 'Rutas de atencion'].map((quick) => (
+                                <button
+                                    key={quick}
+                                    type="button"
+                                    onClick={() => setInput(quick)}
+                                    className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-black text-slate-600 transition-colors hover:border-[#281FD0]/40 hover:bg-[#281FD0]/5 hover:text-[#281FD0]"
+                                >
+                                    {quick}
+                                </button>
+                            ))}
+                        </div>
                         <div className="relative">
                             <input
                                 type="text"
