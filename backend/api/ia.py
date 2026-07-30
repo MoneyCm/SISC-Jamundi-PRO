@@ -309,6 +309,36 @@ def _format_annual_records_answer(user_message: str, min_date, max_date, fuente_
     return "\n".join(lines)
 
 
+
+def _wants_data_summary_answer(message: str):
+    normalized = (message or "").lower()
+    return any(term in normalized for term in [
+        "resume que informacion", "resumen de informacion", "que informacion tienes",
+        "que datos tienes", "informacion tienes", "datos tienes", "que tiene el sisc",
+    ])
+
+
+def _format_data_summary_answer(user_message: str, min_date, max_date, fuente_corte: str, annual_summary: dict, total_hechos: int, total_registros: int):
+    if not _wants_data_summary_answer(user_message):
+        return None
+    if not min_date or not max_date:
+        return "Aun no hay datos cargados para consulta ciudadana. Para emergencias, llama al **123**."
+
+    years = sorted(annual_summary)
+    annual_lines = "\n".join(f"- **{year}:** {annual_summary[year]} hechos." for year in years) if years else "- No hay resumen anual disponible."
+    year_text = f"{years[0]} a {years[-1]}" if years else "sin anios consolidados"
+
+    return (
+        f"Tengo informacion ciudadana agregada del SISC Jamundi con corte al **{max_date.isoformat()}**.\n\n"
+        f"- **Rango disponible:** {min_date.isoformat()} a {max_date.isoformat()} ({year_text}).\n"
+        f"- **Base publicada:** {total_hechos} hechos consolidados y {total_registros} registros de sabanas.\n"
+        f"- **Fuente:** {fuente_corte}.\n"
+        f"- **Puedo consultar:** totales por anio, meses, conductas, barrios/corregimientos y zona urbana/rural.\n"
+        f"- **Privacidad:** solo informacion agregada; no nombres, direcciones exactas, telefonos, placas ni datos personales.\n\n"
+        f"Resumen por anio:\n{annual_lines}\n\n"
+        "Para emergencias, llama al **123**."
+    )
+
 async def call_gemini(contexto):
     url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": contexto}]}]}
@@ -481,6 +511,10 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
 
     # 1. Base maestra consolidada para consulta ciudadana
     total_incidentes = db.query(hechos_unicos_expr()).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+    ).scalar() or 0
+
+    total_registros = db.query(func.count(HechoSeguridad.id)).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
     ).scalar() or 0
 
@@ -704,6 +738,10 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     direct_annual_records_response = _format_annual_records_answer(user_message, min_modern_date, fecha_corte_date, fuente_corte, anual_dict)
     if direct_annual_records_response:
         return {"response": direct_annual_records_response}
+
+    direct_data_summary_response = _format_data_summary_answer(user_message, min_modern_date, fecha_corte_date, fuente_corte, anual_dict, total_incidentes, total_registros)
+    if direct_data_summary_response:
+        return {"response": direct_data_summary_response}
 
     direct_cutoff_response = _format_cutoff_answer(user_message, fecha_corte, fuente_corte)
     if direct_cutoff_response:
