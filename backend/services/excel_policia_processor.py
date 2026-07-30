@@ -89,13 +89,12 @@ class PoliciaJamundiProcessor:
         return text and text.upper() not in {"NAN", "NONE", "NULL", "NO REPORTA", "SIN INFORMACION", "SIN INFORMACI??N"}
 
     def _find_master_hecho(self, processed_data, fingerprint):
-        source_id = processed_data.get("id_fuente")
-        q = self.db.query(HechoSeguridad).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL")
-        if source_id:
-            found = q.filter(HechoSeguridad.id_fuente == source_id).first()
-            if found:
-                return found
-        return q.filter(HechoSeguridad.fingerprint == fingerprint).first()
+        # La base policial puede traer varias victimas/registros con el mismo HECHOS_ID.
+        # Por eso la identidad maestra debe ser a nivel registro/victima, no solo por id_fuente.
+        return self.db.query(HechoSeguridad).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+            HechoSeguridad.fingerprint == fingerprint,
+        ).first()
 
     def _run_cutoff(self, ingestion_id):
         if not ingestion_id:

@@ -160,9 +160,11 @@ def _format_year_monthly_breakdown_answer(user_message: str, conversation_text: 
                 continue
             months_with_data.append(month)
             if conducta_key:
-                count = int(info["conductas"].get(conducta_key, 0))
+                count = int(info["conductas"].get(f"{conducta_key}_REGISTROS", info["conductas"].get(conducta_key, 0)))
+                unique_count = int(info["conductas"].get(conducta_key, 0))
                 annual_total += count
-                lines.append(f"- **{MONTH_NAMES[month].capitalize()}:** {count} {conducta_label}.")
+                extra = f" ({unique_count} hechos unicos)" if conducta_key == "HOMICIDIO" and unique_count and unique_count != count else ""
+                lines.append(f"- **{MONTH_NAMES[month].capitalize()}:** {count} {conducta_label}{extra}.")
             else:
                 annual_total += int(info["total"] or 0)
                 lines.append(f"- **{MONTH_NAMES[month].capitalize()}:** {int(info['total'] or 0)} casos.")
@@ -206,8 +208,10 @@ def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fech
                 continue
 
             if conducta_key:
-                count = int(info["conductas"].get(conducta_key, 0))
-                available_lines.append(f"- **{month_label}:** {count} {conducta_label} registrados.")
+                count = int(info["conductas"].get(f"{conducta_key}_REGISTROS", info["conductas"].get(conducta_key, 0)))
+                unique_count = int(info["conductas"].get(conducta_key, 0))
+                extra = f" ({unique_count} hechos unicos)" if conducta_key == "HOMICIDIO" and unique_count and unique_count != count else ""
+                available_lines.append(f"- **{month_label}:** {count} {conducta_label} registrados{extra}.")
                 continue
 
             principales = sorted(info["conductas"].items(), key=lambda item: item[1], reverse=True)[:4]
@@ -629,6 +633,24 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
             key = (int(year), int(month))
             monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
             monthly_summary[key]["conductas"]["HOMICIDIO"] = int(total or 0)
+
+        homicide_snapshot_rows = db.query(
+            func.extract('year', SabanaSnapshotRow.fecha_evento).label('year'),
+            func.extract('month', SabanaSnapshotRow.fecha_evento).label('month'),
+            func.count(func.distinct(SabanaSnapshotRow.record_key)).label('total'),
+        ).join(
+            IngestionRun, IngestionRun.id == SabanaSnapshotRow.ingestion_id
+        ).filter(
+            IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+            IngestionRun.status == "COMPLETED",
+            SabanaSnapshotRow.categoria_delito == "HOMICIDIO",
+            func.extract('year', SabanaSnapshotRow.fecha_evento).in_(years_for_monthly_context),
+        ).group_by('year', 'month').order_by('year', 'month').all()
+
+        for year, month, total in homicide_snapshot_rows:
+            key = (int(year), int(month))
+            monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
+            monthly_summary[key]["conductas"]["HOMICIDIO_REGISTROS"] = int(total or 0)
 
     stats_mensuales = []
     for (year, month), info in sorted(monthly_summary.items()):
