@@ -219,6 +219,69 @@ def _format_cutoff_answer(user_message: str, fecha_corte: str, fuente_corte: str
     return f"El SISC tiene datos cargados para consulta ciudadana hasta el **{fecha_corte}**. Fuente usada: **{fuente_corte}**. Para emergencias, llama al **123**."
 
 
+def _wants_available_dates_answer(message: str):
+    normalized = (message or "").lower()
+    return any(term in normalized for term in [
+        "que fechas", "qu? fechas", "de que fechas", "de qu? fechas",
+        "desde cuando", "desde cu?ndo", "rango", "periodo disponible",
+        "periodos disponibles", "fechas disponibles", "informacion de que", "informaci?n de qu?"
+    ])
+
+
+def _wants_annual_records_answer(message: str):
+    normalized = (message or "").lower()
+    return (
+        any(term in normalized for term in ["por a?o", "por anio", "por ano", "por a?", "anuales", "cada a?o", "cada anio", "cada ano"])
+        and any(term in normalized for term in ["registro", "registros", "delito", "delitos", "casos", "hechos"])
+    )
+
+
+def _format_available_dates_answer(user_message: str, min_date, max_date, fuente_corte: str, annual_summary: dict):
+    if not _wants_available_dates_answer(user_message):
+        return None
+    if not min_date or not max_date:
+        return "Aun no hay datos cargados para consulta ciudadana. Para emergencias, llama al **123**."
+
+    years = sorted(annual_summary)
+    if years:
+        year_text = ", ".join(str(year) for year in years)
+        annual_text = "\n".join(f"- **{year}:** {annual_summary[year]} hechos." for year in years)
+    else:
+        year_text = "sin resumen anual disponible"
+        annual_text = "- No hay resumen anual disponible."
+
+    return (
+        f"El SISC tiene informacion para consulta ciudadana desde el **{min_date.isoformat()}** "
+        f"hasta el **{max_date.isoformat()}**. Fuente: **{fuente_corte}**.\n\n"
+        f"Anios disponibles en la base maestra: **{year_text}**.\n\n"
+        f"{annual_text}\n\n"
+        "No tengo soporte para afirmar cobertura desde 2000. Para emergencias, llama al **123**."
+    )
+
+
+def _format_annual_records_answer(user_message: str, min_date, max_date, fuente_corte: str, annual_summary: dict):
+    if not _wants_annual_records_answer(user_message):
+        return None
+    if not annual_summary:
+        return "Aun no hay resumen anual consolidado disponible. Para emergencias, llama al **123**."
+
+    lines = [
+        f"Con corte al **{max_date.isoformat()}** ({fuente_corte}), la base maestra registra:",
+        "",
+    ]
+    for year in sorted(annual_summary):
+        suffix = ""
+        if max_date and year == max_date.year:
+            suffix = f" (hasta {max_date.isoformat()})"
+        lines.append(f"- **{year}:** {annual_summary[year]} hechos{suffix}.")
+    lines.extend([
+        "",
+        f"Rango publicado: **{min_date.isoformat()}** a **{max_date.isoformat()}**.",
+        "Para emergencias, llama al **123**.",
+    ])
+    return "\n".join(lines)
+
+
 async def call_gemini(contexto):
     url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": contexto}]}]}
@@ -389,41 +452,34 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     if not user_message:
         return {"response": "Hola, ¿en qué puedo ayudarte?"}
 
-    # 1. Total Incidentes (Legacy + Moderno)
-    total_legacy = db.query(Event).count()
-    total_moderno = db.query(hechos_unicos_expr()).scalar() or 0
-    total_incidentes = total_moderno if total_moderno > 0 else total_legacy
+    # 1. Base maestra consolidada para consulta ciudadana
+    total_incidentes = db.query(hechos_unicos_expr()).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+    ).scalar() or 0
 
-    # 2. Homicidios Totales (DEDUPLICACIÓN DIARIA)
-    hom_legacy = db.query(Event.occurrence_date, func.count(Event.id)).join(EventType).filter(EventType.category == "HOMICIDIO").group_by(Event.occurrence_date).all()
-    hom_moderno = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(HechoSeguridad.categoria_delito == "HOMICIDIO").group_by(HechoSeguridad.fecha_evento).all()
+    homicidios = db.query(hechos_unicos_expr()).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+        HechoSeguridad.categoria_delito == "HOMICIDIO",
+    ).scalar() or 0
 
-    daily_hom_total = {}
-    for d, c in hom_legacy: daily_hom_total[d] = c
-    for d, c in hom_moderno: daily_hom_total[d] = c
-    homicidios = sum(daily_hom_total.values())
+    min_modern_date = db.query(func.min(HechoSeguridad.fecha_evento)).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+    ).scalar()
+    max_modern_date = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+    ).scalar()
 
-    # 3. Resumen por Año (Unificado con Deduplicación)
-    anual_dict = {}
-    # Simplificación: tomar el máximo entre tablas para cada año si no queremos hacer el loop diario aquí también
-    # Pero para ser precisos, usamos la lógica de años existentes
-    all_years = db.query(func.extract('year', Event.occurrence_date)).distinct().all()
-    for (year,) in all_years:
-        # Para cada año, calculamos el total del mismo modo de de-duplicación diaria
-        y_int = int(year)
-        d_legacy = db.query(Event.occurrence_date, func.count(Event.id)).filter(func.extract('year', Event.occurrence_date) == y_int).group_by(Event.occurrence_date).all()
-        d_moderno = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(func.extract('year', HechoSeguridad.fecha_evento) == y_int).group_by(HechoSeguridad.fecha_evento).all()
+    annual_rows = db.query(
+        func.extract('year', HechoSeguridad.fecha_evento).label('year'),
+        hechos_unicos_expr().label('total'),
+    ).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+    ).group_by('year').order_by('year').all()
+    anual_dict = {int(year): int(total or 0) for year, total in annual_rows}
+    stats_anuales = ", ".join([f"{y}: {c} casos" for y, c in sorted(anual_dict.items())]) or "No hay resumen anual consolidado disponible"
 
-        y_daily = {}
-        for d, c in d_legacy: y_daily[d] = c
-        for d, c in d_moderno: y_daily[d] = c
-        anual_dict[y_int] = sum(y_daily.values())
-
-    stats_anuales = ", ".join([f"{y}: {c} casos" for y, c in sorted(anual_dict.items())])
-
-    # 4. Detalle por Año y Delitos Clave (DEDUPLICADO POR DÍA)
     current_year = datetime.now().year
-    years_to_track = [current_year, current_year - 1, current_year - 2]
+    years_to_track = sorted(anual_dict.keys(), reverse=True)[:3] or [current_year]
 
     delitos_prioritarios = {
         'HOMICIDIO': ['HOMICIDIO', 'HOMICIDIO INTENCIONAL', 'Homicidio'],
@@ -436,23 +492,20 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     for year in years_to_track:
         year_data = []
         for name, aliases in delitos_prioritarios.items():
-            # Sumar de ambas tablas con de-duplicación diaria
-            d_l = db.query(Event.occurrence_date, func.count(Event.id)).join(EventType).filter(func.extract('year', Event.occurrence_date) == year, EventType.category.in_(aliases)).group_by(Event.occurrence_date).all()
-            d_m = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(func.extract('year', HechoSeguridad.fecha_evento) == year, HechoSeguridad.categoria_delito.in_(aliases)).group_by(HechoSeguridad.fecha_evento).all()
-
-            y_d = {}
-            for d, c in d_l: y_d[d] = c
-            for d, c in d_m: y_d[d] = c
-            count = sum(y_d.values())
+            count = db.query(hechos_unicos_expr()).filter(
+                HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+                func.extract('year', HechoSeguridad.fecha_evento) == year,
+                HechoSeguridad.categoria_delito.in_(aliases),
+            ).scalar() or 0
             year_data.append(f"{name}: {count}")
-        stats_detalladas.append(f"AÑO {year} [{', '.join(year_data)}]")
+        stats_detalladas.append(f"ANIO {year} [{', '.join(year_data)}]")
     stats_contexto_detallado = " | ".join(stats_detalladas)
 
     nombres_meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
     # Fecha real de cobertura para el chat: usa la fuente cargada mas reciente y evita declarar periodos como cero si no estan cargados.
     snapshot_id = None
-    max_modern_date = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
+    max_modern_date = max_modern_date or db.query(func.max(HechoSeguridad.fecha_evento)).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
     ).scalar()
     max_legacy_date = db.query(func.max(Event.occurrence_date)).scalar()
@@ -527,24 +580,23 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
         monthly_summary[key]["total"] = int(total or 0)
 
-    # Respaldo historico: completa meses/conductas que no existan en la sabana moderna.
-    legacy_monthly_rows = db.query(
-        func.extract('year', Event.occurrence_date).label('year'),
-        func.extract('month', Event.occurrence_date).label('month'),
-        EventType.category.label('conducta'),
-        func.count(Event.id).label('total'),
-    ).join(EventType).filter(
-        func.extract('year', Event.occurrence_date).in_(years_for_monthly_context),
-    ).group_by('year', 'month', EventType.category).order_by('year', 'month').all()
+    # No se usa respaldo historico cuando existe base maestra; evita publicar periodos no soportados.
+    if not use_modern_source:
+        legacy_monthly_rows = db.query(
+            func.extract('year', Event.occurrence_date).label('year'),
+            func.extract('month', Event.occurrence_date).label('month'),
+            EventType.category.label('conducta'),
+            func.count(Event.id).label('total'),
+        ).join(EventType).filter(
+            func.extract('year', Event.occurrence_date).in_(years_for_monthly_context),
+        ).group_by('year', 'month', EventType.category).order_by('year', 'month').all()
 
-    for year, month, conducta, total in legacy_monthly_rows:
-        key = (int(year), int(month))
-        if key in monthly_summary and monthly_summary[key].get("total", 0) > 0:
-            continue
-        label = conducta or "SIN CLASIFICAR"
-        monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
-        monthly_summary[key]["conductas"][label] = monthly_summary[key]["conductas"].get(label, 0) + int(total or 0)
-        monthly_summary[key]["total"] += int(total or 0)
+        for year, month, conducta, total in legacy_monthly_rows:
+            key = (int(year), int(month))
+            label = conducta or "SIN CLASIFICAR"
+            monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
+            monthly_summary[key]["conductas"][label] = monthly_summary[key]["conductas"].get(label, 0) + int(total or 0)
+            monthly_summary[key]["total"] += int(total or 0)
 
     stats_mensuales = []
     for (year, month), info in sorted(monthly_summary.items()):
@@ -552,6 +604,14 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         detalle = ", ".join([f"{name}: {count}" for name, count in principales])
         stats_mensuales.append(f"{nombres_meses[month]} {year}: total {info['total']} casos ({detalle})")
     stats_mensuales = " | ".join(stats_mensuales) if stats_mensuales else "No hay resumen mensual consolidado disponible"
+
+    direct_available_dates_response = _format_available_dates_answer(user_message, min_modern_date, fecha_corte_date, fuente_corte, anual_dict)
+    if direct_available_dates_response:
+        return {"response": direct_available_dates_response}
+
+    direct_annual_records_response = _format_annual_records_answer(user_message, min_modern_date, fecha_corte_date, fuente_corte, anual_dict)
+    if direct_annual_records_response:
+        return {"response": direct_annual_records_response}
 
     direct_cutoff_response = _format_cutoff_answer(user_message, fecha_corte, fuente_corte)
     if direct_cutoff_response:
