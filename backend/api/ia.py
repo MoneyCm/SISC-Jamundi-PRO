@@ -550,10 +550,10 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     requested_years_for_context, requested_months_for_context = _extract_requested_periods(user_message, fecha_corte_date.year if fecha_corte_date else datetime.now().year)
     wants_monthly_breakdown = _wants_monthly_breakdown(user_message)
     has_explicit_year = bool(re.search(r"\b20\d{2}\b", user_message or ""))
-    if wants_monthly_breakdown and _wants_recent_years(user_message) and not has_explicit_year:
-        available_years = sorted(anual_dict.keys(), reverse=True)
-        requested_years_for_context = sorted(available_years[:3]) if available_years else requested_years_for_context
-    elif requested_months_for_context and not has_explicit_year and _wants_recent_years(conversation_text):
+    if requested_months_for_context and not has_explicit_year:
+        available_years = sorted(anual_dict.keys())
+        requested_years_for_context = available_years if available_years else requested_years_for_context
+    elif wants_monthly_breakdown and _wants_recent_years(user_message) and not has_explicit_year:
         available_years = sorted(anual_dict.keys(), reverse=True)
         requested_years_for_context = sorted(available_years[:3]) if available_years else requested_years_for_context
     elif wants_monthly_breakdown and not has_explicit_year and not requested_months_for_context:
