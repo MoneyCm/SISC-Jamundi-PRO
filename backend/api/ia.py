@@ -88,10 +88,7 @@ def _wants_monthly_breakdown(message: str):
 
 def _wants_recent_years(message: str):
     normalized = (message or "").lower()
-    return any(term in normalized for term in [
-        "ultimos anos", "ultimos a?os", "ultimos a?os", "ultimos anios",
-        "ultimos a?os", "ultimos", "a?os recientes", "anios recientes", "anos recientes"
-    ])
+    return "ultimo" in normalized or "ultim" in normalized or "reciente" in normalized
 
 
 def _requested_period_is_after_cutoff(year: int, month: int, cutoff):
