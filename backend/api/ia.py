@@ -195,7 +195,7 @@ def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fech
         return None
 
     has_explicit_year = bool(re.search(r"\b20\d{2}\b", user_message or ""))
-    if not has_explicit_year and _wants_recent_years(conversation_text):
+    if not has_explicit_year:
         years_for_months = sorted({year for year, month in monthly_summary.keys() if month in months})
         if years_for_months:
             requested_years = years_for_months
