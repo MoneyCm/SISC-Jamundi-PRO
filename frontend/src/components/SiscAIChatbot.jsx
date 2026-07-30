@@ -60,7 +60,7 @@ const SiscAIChatbot = () => {
     const [isMinimized, setIsMinimized] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState([
-        { id: 1, text: 'Hola. Soy el asistente ciudadano del SISC Jamundi. Puedo ayudarte a entender cifras publicas, rutas de atencion, convivencia y uso del portal. En emergencias llama al 123.', sender: 'ai' }
+        { id: 1, text: 'Hola. Soy el asistente ciudadano del SISC Jamundi. Puedo ayudarte a entender cifras publicas, fecha de corte, tendencias, territorios visibles y rutas de atencion. En emergencias llama al 123.', sender: 'ai' }
     ]);
     const [loading, setLoading] = useState(false);
     const scrollRef = useRef(null);
@@ -111,9 +111,9 @@ const SiscAIChatbot = () => {
 
     if (!isOpen) {
         return (
-            <div className="fixed right-4 bottom-20 md:bottom-12 md:right-8 z-[60] print:hidden">
+            <div className="fixed right-4 bottom-4 md:bottom-4 md:right-6 z-[60] print:hidden">
                 <div className="relative flex items-end gap-3">
-                    <div className="hidden sm:block max-w-[420px] overflow-hidden border border-[#281FD0]/15 bg-white shadow-2xl ring-1 ring-white/80">
+                    <div className="hidden 2xl:block max-w-[420px] overflow-hidden rounded-md border border-[#281FD0]/15 bg-white shadow-2xl ring-1 ring-white/80">
                         <div className="h-2 bg-[#FFB600]" />
                         <div className="px-6 py-5">
                             <div className="flex items-center gap-2">
@@ -122,21 +122,22 @@ const SiscAIChatbot = () => {
                                 </span>
                                 <p className="text-xs font-black uppercase tracking-widest text-[#281FD0]">Asistente ciudadano</p>
                             </div>
-                            <p className="mt-3 text-2xl font-black leading-tight text-slate-900">Preguntale al SISC</p>
-                            <p className="mt-2 text-sm font-semibold leading-snug text-slate-600">Cifras publicas, rutas de atencion y orientacion rapida.</p>
+                            <p className="mt-3 text-2xl font-black leading-tight text-slate-900">Consulte al SISC</p>
+                            <p className="mt-2 text-sm font-semibold leading-snug text-slate-600">Corte, cifras, tendencias y orientacion ciudadana.</p>
+                            <div className="mt-4 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500"><span className="rounded-full bg-slate-100 px-3 py-1">Datos publicos</span><span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">Linea 123</span></div>
                         </div>
                     </div>
                     <button
                         type="button"
                         onClick={() => setIsOpen(true)}
                         aria-label="Abrir asistente SISC"
-                        className="group relative grid h-24 w-24 place-items-center rounded-full bg-[#281FD0] text-white shadow-2xl shadow-[#281FD0]/35 transition-all hover:-translate-y-1 hover:bg-[#1f18a8] active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-[#FFB600]/40 md:h-36 md:w-36"
+                        className="group relative grid h-24 w-24 place-items-center rounded-full bg-[#281FD0] text-white shadow-2xl shadow-[#281FD0]/35 transition-all hover:-translate-y-1 hover:bg-[#1f18a8] active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-[#FFB600]/40 md:h-20 md:w-20"
                     >
                         <span className="absolute inset-0 rounded-full border-8 border-[#FFB600]/80 opacity-80 animate-ping"></span>
-                        <span className="absolute -top-2 -right-2 grid h-10 w-10 place-items-center md:h-12 md:w-12 rounded-full border-2 border-white bg-[#FFB600] text-[#281FD0] shadow-lg">
+                        <span className="absolute -top-2 -right-2 grid h-10 w-10 place-items-center md:h-9 md:w-9 rounded-full border-2 border-white bg-[#FFB600] text-[#281FD0] shadow-lg">
                             <Sparkles size={20} />
                         </span>
-                        <MessageCircle size={46} className="relative transition-transform group-hover:scale-110" />
+                        <MessageCircle size={30} className="relative transition-transform group-hover:scale-110" />
                     </button>
                 </div>
             </div>
@@ -144,7 +145,7 @@ const SiscAIChatbot = () => {
     }
 
     return (
-        <div className={`fixed right-4 bottom-24 md:right-6 z-[60] bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col transition-all duration-300 border border-slate-200 ring-1 ring-white/80 print:hidden ${isMinimized ? 'h-20 w-[min(560px,calc(100vw-2rem))]' : 'h-[min(760px,calc(100vh-4rem))] w-[min(760px,calc(100vw-2rem))]'}`}>
+        <div className={`fixed right-4 bottom-24 md:right-6 z-[60] bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col transition-all duration-300 border border-slate-200 rounded-md ring-1 ring-white/80 print:hidden ${isMinimized ? 'h-20 w-[min(560px,calc(100vw-2rem))]' : 'h-[min(760px,calc(100vh-4rem))] w-[min(760px,calc(100vw-2rem))]'}`}>
             <div className="bg-[#281FD0] text-white shrink-0">
                 <div className="h-2 bg-[#FFB600]" />
                 <div className="px-6 py-5 flex items-center justify-between">
@@ -199,7 +200,7 @@ const SiscAIChatbot = () => {
 
                     <form onSubmit={handleSend} className="p-6 border-t border-slate-100 bg-white">
                         <div className="mb-3 flex flex-wrap gap-2">
-                            {['Corte de datos', 'Homicidios 2026', 'Rutas de atencion'].map((quick) => (
+                            {['Resume que informacion tienes', 'Homicidios en julio', 'Barrios con mas casos', 'Rutas de atencion'].map((quick) => (
                                 <button
                                     key={quick}
                                     type="button"

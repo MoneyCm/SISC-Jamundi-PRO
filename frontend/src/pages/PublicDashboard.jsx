@@ -5,6 +5,7 @@ import {
     ArrowUpRight,
     BarChart3,
     CalendarClock,
+    CheckCircle2,
     Database,
     Download,
     FileText,
@@ -17,7 +18,8 @@ import {
     MapPinned,
     RefreshCcw,
     ShieldCheck,
-    TrendingUp
+    TrendingUp,
+    Users
 } from 'lucide-react';
 import {
     Area,
@@ -67,30 +69,34 @@ const variationLabel = (value) => {
 
 const KpiTile = ({ icon: Icon, label, value, helper, tone = 'blue' }) => {
     const toneClasses = {
-        blue: 'bg-[#281FD0]/10 text-[#281FD0]',
-        amber: 'bg-amber-100 text-amber-700',
-        slate: 'bg-slate-100 text-slate-700',
-        red: 'bg-red-100 text-red-700',
+        blue: 'bg-[#281FD0]/10 text-[#281FD0] ring-[#281FD0]/10',
+        amber: 'bg-amber-100 text-amber-700 ring-amber-200/70',
+        slate: 'bg-slate-100 text-slate-700 ring-slate-200',
+        red: 'bg-red-100 text-red-700 ring-red-200/70',
+        green: 'bg-emerald-100 text-emerald-700 ring-emerald-200/70',
     };
     return (
-        <div className="bg-white border border-slate-200 p-5 min-h-[148px] flex flex-col justify-between">
+        <div className="bg-white border border-slate-200 rounded-md p-5 min-h-[158px] flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between gap-3">
                 <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 leading-snug">{label}</p>
-                <span className={`p-2.5 ${toneClasses[tone] || toneClasses.blue}`}><Icon size={20} /></span>
+                <span className={`p-2.5 rounded-md ring-1 ${toneClasses[tone] || toneClasses.blue}`}><Icon size={20} /></span>
             </div>
             <div>
-                <p className="text-3xl font-black text-slate-900 tracking-tight">{value}</p>
-                <p className="text-xs font-semibold text-slate-500 mt-1">{helper}</p>
+                <p className="text-4xl font-black text-slate-950 tracking-tight leading-none">{value}</p>
+                <p className="text-xs font-semibold text-slate-500 mt-2 leading-snug">{helper}</p>
             </div>
         </div>
     );
 };
 
-const ChartShell = ({ title, subtitle, children }) => (
-    <section className="bg-white border border-slate-200 p-5 min-h-[360px] flex flex-col">
-        <div className="mb-4">
-            <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">{title}</h2>
-            {subtitle && <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>}
+const ChartShell = ({ title, subtitle, children, action }) => (
+    <section className="bg-white border border-slate-200 rounded-md p-5 min-h-[360px] flex flex-col shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+                <h2 className="text-base font-black text-slate-950 uppercase tracking-tight">{title}</h2>
+                {subtitle && <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>}
+            </div>
+            {action}
         </div>
         <div className="flex-1 min-h-[260px]">{children}</div>
     </section>
@@ -122,7 +128,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 const AggregatedMap = ({ points = [], suppressed = 0, minCount = 3 }) => {
     const maxTotal = Math.max(1, ...points.map((point) => point.total || 0));
     return (
-        <div className="h-[470px] border border-slate-200 bg-white">
+        <div className="h-[500px] border border-slate-200 rounded-md bg-white overflow-hidden shadow-sm">
             <div className="h-full relative">
                 <MapContainer center={[3.2606, -76.5364]} zoom={12} zoomControl={false} preferCanvas style={{ height: '100%', width: '100%' }}>
                     <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
@@ -146,7 +152,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, minCount = 3 }) => {
                         );
                     })}
                 </MapContainer>
-                <div className="absolute left-4 bottom-4 z-[1000] bg-white/95 border border-slate-200 p-3 max-w-xs shadow-sm">
+                <div className="absolute left-4 bottom-4 z-[1000] bg-white/95 border border-slate-200 rounded-md p-3 max-w-xs shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mapa agregado</p>
                     <p className="text-xs text-slate-700 mt-1">Centroides por barrio, vereda o corregimiento. Se ocultan territorios con menos de {minCount} hechos.</p>
                     {suppressed > 0 && <p className="text-xs font-bold text-amber-700 mt-2">{numberFmt.format(suppressed)} hechos en territorios de baja frecuencia fueron suprimidos.</p>}
@@ -216,7 +222,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
         return (
             <div className="min-h-screen bg-slate-50 text-slate-900">
                 <header className="bg-white border-b border-slate-200">
-                    <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="max-w-[1500px] mx-auto px-4 md:px-6 py-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
                             <button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-[#281FD0] mb-3">
                                 <ArrowLeft size={16} /> Portal ciudadano
@@ -248,11 +254,17 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
     const variation = data.kpis?.variation_pct;
     const variationIsUp = variation > 0;
     const bulletin = meta.downloads?.[0];
+    const topConductas = (data.conductas || []).slice(0, 6);
+    const topTerritory = data.territories?.[0];
+    const mainZone = data.zones?.[0];
+    const currentYear = data.interannual?.current?.year || meta.year || '';
+    const previousYear = data.interannual?.previous?.year || (currentYear ? currentYear - 1 : '');
+    const periodText = `${formatDate(meta.period_start)} a ${formatDate(meta.period_end)}`;
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
             <header className="bg-white border-b border-slate-200">
-                <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="max-w-[1500px] mx-auto px-4 md:px-6 py-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-[#281FD0] mb-3">
                             <ArrowLeft size={16} /> Portal ciudadano
@@ -284,12 +296,38 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-6">
-                <section className="grid gap-px bg-slate-200 border border-slate-200 md:grid-cols-4">
-                    <div className="bg-white p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Periodo publicado</p><p className="font-black text-slate-900 mt-1">{formatDate(meta.period_start)} a {formatDate(meta.period_end)}</p></div>
-                    <div className="bg-white p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fecha de corte</p><p className="font-black text-slate-900 mt-1">{formatDate(meta.latest_event_date)}</p></div>
-                    <div className="bg-white p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fuente</p><p className="font-black text-slate-900 mt-1">{meta.source || 'SABANA oficial'}</p></div>
-                    <div className="bg-white p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ultima carga</p><p className="font-black text-slate-900 mt-1">{formatDateTime(meta.last_ingestion?.loaded_at)}</p></div>
+            <main className="max-w-[1500px] mx-auto px-4 md:px-6 py-6 space-y-6">
+                <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
+                    <div className="bg-white border border-slate-200 rounded-md shadow-sm overflow-hidden">
+                        <div className="h-2 bg-[#FFB600]" />
+                        <div className="p-6 md:p-7">
+                            <div className="flex flex-wrap items-center gap-2 mb-5">
+                                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700"><CheckCircle2 size={14} /> Publico y anonimizado</span>
+                                <span className="inline-flex items-center gap-2 rounded-full bg-[#281FD0]/10 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-[#281FD0]"><CalendarClock size={14} /> Corte {formatDate(meta.latest_event_date)}</span>
+                            </div>
+                            <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-950 leading-tight">Panorama ciudadano de seguridad</h2>
+                            <p className="mt-3 max-w-3xl text-base md:text-lg font-semibold leading-7 text-slate-600">Consulta datos agregados del SISC para entender tendencias, conductas, zonas y territorios con informacion publica. No se publican registros individuales ni direcciones exactas.</p>
+                            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Periodo</p><p className="mt-1 font-black text-slate-950">{periodText}</p></div>
+                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fuente</p><p className="mt-1 font-black text-slate-950">SABANA SIEDCO/PONAL</p></div>
+                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ultima carga</p><p className="mt-1 font-black text-slate-950">{formatDateTime(meta.last_ingestion?.loaded_at)}</p></div>
+                            </div>
+                        </div>
+                    </div>
+                    <aside className="bg-slate-950 text-white rounded-md p-6 shadow-sm flex flex-col justify-between gap-5">
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-widest text-[#FFB600]">Lectura rapida</p>
+                            <div className="mt-5 space-y-4">
+                                <div className="flex items-start gap-3"><TrendingUp className="mt-0.5 text-[#FFB600]" size={20} /><p className="text-sm font-semibold leading-6"><span className="font-black">{variationLabel(variation)}</span> frente a {previousYear} en el mismo rango calendario.</p></div>
+                                <div className="flex items-start gap-3"><MapPinned className="mt-0.5 text-[#FFB600]" size={20} /><p className="text-sm font-semibold leading-6">Territorio con mayor registro visible: <span className="font-black">{topTerritory?.name || 'sin dato'}</span>{topTerritory ? ` (${numberFmt.format(topTerritory.total)} hechos)` : ''}.</p></div>
+                                <div className="flex items-start gap-3"><Users className="mt-0.5 text-[#FFB600]" size={20} /><p className="text-sm font-semibold leading-6">Zona principal reportada: <span className="font-black">{mainZone?.name || 'sin dato'}</span>{mainZone ? ` (${numberFmt.format(mainZone.value)})` : ''}.</p></div>
+                            </div>
+                        </div>
+                        <div className="rounded-md bg-white/10 p-4 ring-1 ring-white/10">
+                            <p className="text-[11px] font-black uppercase tracking-widest text-white/60">Proteccion de datos</p>
+                            <p className="mt-2 text-sm font-semibold leading-6 text-white/90">El mapa usa centroides y suprime territorios de baja frecuencia para reducir riesgo de identificacion.</p>
+                        </div>
+                    </aside>
                 </section>
 
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -311,8 +349,33 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-3">
-                    <ChartShell title="Conductas" subtitle="Principales conductas agregadas">
-                        {data.conductas?.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data.conductas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={92} innerRadius={54} paddingAngle={2}>{data.conductas.map((entry, index) => <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart></ResponsiveContainer> : <EmptyState />}
+                    <ChartShell title="Conductas" subtitle="Principales conductas agregadas" action={<span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">Top {topConductas.length}</span>}>
+                        {data.conductas?.length ? (
+                            <div className="grid h-full gap-4 md:grid-cols-[0.9fr_1.1fr]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={topConductas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={88} innerRadius={52} paddingAngle={2}>
+                                            {topConductas.map((entry, index) => <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />)}
+                                        </Pie>
+                                        <Tooltip content={<CustomTooltip />} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="space-y-3 self-center">
+                                    {topConductas.map((item, index) => {
+                                        const max = Math.max(...topConductas.map((entry) => entry.value || 0), 1);
+                                        return (
+                                            <div key={item.name}>
+                                                <div className="mb-1 flex items-center justify-between gap-3 text-xs font-black uppercase text-slate-600">
+                                                    <span className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} /> <span className="truncate">{item.name}</span></span>
+                                                    <span>{numberFmt.format(item.value)}</span>
+                                                </div>
+                                                <div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full" style={{ width: `${(item.value / max) * 100}%`, backgroundColor: COLORS[index % COLORS.length] }} /></div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : <EmptyState />}
                     </ChartShell>
                     <ChartShell title="Zona urbana/rural" subtitle="Distribucion declarada en la fuente">
                         {data.zones?.length ? <div className="space-y-3">{data.zones.map((zone, index) => { const max = Math.max(...data.zones.map((item) => item.value || 0), 1); return <div key={zone.name}><div className="flex justify-between text-xs font-black uppercase text-slate-600 mb-1"><span>{zone.name}</span><span>{numberFmt.format(zone.value)}</span></div><div className="h-3 bg-slate-100"><div className="h-3" style={{ width: `${(zone.value / max) * 100}%`, backgroundColor: COLORS[index % COLORS.length] }} /></div></div>; })}</div> : <EmptyState />}
