@@ -423,6 +423,24 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         label = conducta or "SIN CLASIFICAR"
         monthly_summary[key]["conductas"][label] = monthly_summary[key]["conductas"].get(label, 0) + int(total or 0)
 
+    # Respaldo historico: completa meses/conductas que no existan en la sabana moderna.
+    legacy_monthly_rows = db.query(
+        func.extract('year', Event.occurrence_date).label('year'),
+        func.extract('month', Event.occurrence_date).label('month'),
+        EventType.category.label('conducta'),
+        func.count(Event.id).label('total'),
+    ).join(EventType).filter(
+        func.extract('year', Event.occurrence_date).in_(years_for_monthly_context),
+    ).group_by('year', 'month', EventType.category).order_by('year', 'month').all()
+
+    for year, month, conducta, total in legacy_monthly_rows:
+        key = (int(year), int(month))
+        label = conducta or "SIN CLASIFICAR"
+        monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
+        if label not in monthly_summary[key]["conductas"]:
+            monthly_summary[key]["conductas"][label] = int(total or 0)
+            monthly_summary[key]["total"] += int(total or 0)
+
     stats_mensuales = []
     for (year, month), info in sorted(monthly_summary.items()):
         principales = sorted(info["conductas"].items(), key=lambda item: item[1], reverse=True)[:4]
