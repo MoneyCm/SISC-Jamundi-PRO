@@ -55,30 +55,20 @@ def _latest_snapshot_id(db: Session):
 
 
 def _latest_public_source(db: Session):
-    snapshot_id = _latest_snapshot_id(db)
-    if snapshot_id:
-        run = db.query(IngestionRun).filter(IngestionRun.id == snapshot_id).first()
-        return {
-            "snapshot_id": snapshot_id,
-            "run": run,
-            "source_table": "sabana_snapshot_rows",
-            "identity_expr": "hecho_key",
-            "date_col": "fecha_evento",
-            "conducta_col": "conducta_estandar",
-            "location_expr": "COALESCE(NULLIF(BTRIM(barrio_normalizado), ''), NULLIF(BTRIM(datos_normalizados->>'vereda'), ''), 'SIN DATO')",
-            "zone_expr": "COALESCE(NULLIF(BTRIM(datos_normalizados->>'zona'), ''), 'SIN DATO')",
-            "snapshot_filter": " AND ingestion_id = :snapshot_id",
-        }
+    run = db.query(IngestionRun).filter(
+        IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+        IngestionRun.status == "COMPLETED",
+    ).order_by(IngestionRun.fecha_fin.desc(), IngestionRun.fecha_inicio.desc()).first()
     return {
         "snapshot_id": None,
-        "run": None,
+        "run": run,
         "source_table": "hechos_seguridad",
         "identity_expr": "COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)",
         "date_col": "fecha_evento",
         "conducta_col": "conducta_estandar",
         "location_expr": "COALESCE(NULLIF(BTRIM(barrio_normalizado), ''), NULLIF(BTRIM(vereda_normalizada), ''), NULLIF(BTRIM(corregimiento), ''), 'SIN DATO')",
         "zone_expr": "COALESCE(NULLIF(BTRIM(zona), ''), CASE WHEN NULLIF(BTRIM(vereda_normalizada), '') IS NOT NULL OR NULLIF(BTRIM(corregimiento), '') IS NOT NULL THEN 'RURAL' ELSE 'URBANA' END)",
-        "snapshot_filter": "",
+        "snapshot_filter": " AND fuente_codigo = 'POLICIA_SEMANAL'",
     }
 
 
@@ -101,20 +91,9 @@ def _pct_change(current: int, previous: int) -> Optional[float]:
     return round(((current - previous) / previous) * 100, 1)
 
 def _hechos_count(db: Session, conductas: list, start: date = None, end: date = None) -> int:
-    snapshot_id = _latest_snapshot_id(db)
-    if snapshot_id:
-        q = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
-            SabanaSnapshotRow.ingestion_id == snapshot_id,
-            SabanaSnapshotRow.conducta_estandar.in_(conductas),
-        )
-        if start:
-            q = q.filter(SabanaSnapshotRow.fecha_evento >= start)
-        if end:
-            q = q.filter(SabanaSnapshotRow.fecha_evento <= end)
-        return q.scalar() or 0
-
     q = db.query(hechos_unicos_expr()).filter(
-        HechoSeguridad.conducta_estandar.in_(conductas)
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+        HechoSeguridad.conducta_estandar.in_(conductas),
     )
     if start:
         q = q.filter(HechoSeguridad.fecha_evento >= start)
@@ -122,20 +101,8 @@ def _hechos_count(db: Session, conductas: list, start: date = None, end: date = 
         q = q.filter(HechoSeguridad.fecha_evento <= end)
     return q.scalar() or 0
 
-
 def _hechos_total(db: Session, start: date = None, end: date = None) -> int:
-    snapshot_id = _latest_snapshot_id(db)
-    if snapshot_id:
-        q = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
-            SabanaSnapshotRow.ingestion_id == snapshot_id
-        )
-        if start:
-            q = q.filter(SabanaSnapshotRow.fecha_evento >= start)
-        if end:
-            q = q.filter(SabanaSnapshotRow.fecha_evento <= end)
-        return q.scalar() or 0
-
-    q = db.query(hechos_unicos_expr())
+    q = db.query(hechos_unicos_expr()).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL")
     if start:
         q = q.filter(HechoSeguridad.fecha_evento >= start)
     if end:
@@ -143,40 +110,11 @@ def _hechos_total(db: Session, start: date = None, end: date = None) -> int:
     return q.scalar() or 0
 
 def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
-    snapshot_id = _latest_snapshot_id(db)
-    if snapshot_id:
-        sexo = func.upper(func.btrim(func.coalesce(SabanaSnapshotRow.sexo, "")))
-        q = db.query(
-            func.count(SabanaSnapshotRow.id).label("registros"),
-            func.count(SabanaSnapshotRow.id).filter(
-                or_(
-                    sexo.notin_(("", "NO REPORTA", "SIN INFORMACION", "N/A", "NA")),
-                    SabanaSnapshotRow.edad > 0,
-                )
-            ).label("victimas_identificables"),
-            func.count(SabanaSnapshotRow.id).filter(
-                or_(
-                    SabanaSnapshotRow.id_fuente.is_(None),
-                    func.btrim(SabanaSnapshotRow.id_fuente) == "",
-                )
-            ).label("registros_sin_id_fuente"),
-        ).filter(SabanaSnapshotRow.ingestion_id == snapshot_id)
-        if start:
-            q = q.filter(SabanaSnapshotRow.fecha_evento >= start)
-        if end:
-            q = q.filter(SabanaSnapshotRow.fecha_evento <= end)
-        row = q.one()
-        return {
-            "registros": row.registros or 0,
-            "victimas_identificables": row.victimas_identificables or 0,
-            "registros_sin_id_fuente": row.registros_sin_id_fuente or 0,
-        }
-
     q = db.query(
         registros_expr().label("registros"),
         victimas_identificables_expr().label("victimas_identificables"),
         hechos_sin_id_expr().label("registros_sin_id_fuente"),
-    )
+    ).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL")
     if start:
         q = q.filter(HechoSeguridad.fecha_evento >= start)
     if end:
@@ -187,6 +125,7 @@ def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
         "victimas_identificables": row.victimas_identificables or 0,
         "registros_sin_id_fuente": row.registros_sin_id_fuente or 0,
     }
+
 
 
 # ─────────────────────────────────────────────
@@ -331,7 +270,7 @@ def get_public_dashboard(
     return {
         "metadata": {
             "source": "SABANA SIEDCO/PONAL - Policia Nacional",
-            "basis": "ULTIMA_ENTREGA_SEMANAL" if source["snapshot_id"] else "CONSOLIDADO_HISTORICO",
+            "basis": "BASE_MAESTRA_CONSOLIDADA",
             "period_start": report_start,
             "period_end": report_end,
             "latest_event_date": max_date.isoformat(),
@@ -339,7 +278,7 @@ def get_public_dashboard(
             "year": target_year,
             "population": POBLACION_JAMUNDI,
             "privacy": "Publicacion agregada. No incluye nombres, identificadores, telefonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
-            "methodology": "La sabana oficial se valida, se deduplica por hecho, se consolida en una foto semanal inmutable y se publica con agregacion estadistica. Las ubicaciones del mapa son centroides aproximados por barrio, vereda o corregimiento y se suprimen territorios con conteos bajos.",
+            "methodology": "Cada sabana oficial se valida y se conserva como evidencia. La publicacion ciudadana usa una base maestra consolidada: las entregas mas recientes actualizan hechos ya existentes y las entregas historicas completan hechos distintos. Las ubicaciones del mapa son centroides aproximados por barrio, vereda o corregimiento y se suprimen territorios con conteos bajos.",
             "last_ingestion": {
                 "id": str(run.id) if run else None,
                 "filename": run.filename if run else None,
@@ -465,9 +404,9 @@ def get_tendencia_delictiva(
 
     homicidio_vals = tuple(CONDUCTA_KEYS['HOMICIDIO'])
 
-    snapshot_id = _latest_snapshot_id(db)
-    source_table = "sabana_snapshot_rows" if snapshot_id else "hechos_seguridad"
-    identity_expr = "hecho_key" if snapshot_id else "COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)"
+    snapshot_id = None
+    source_table = "hechos_seguridad"
+    identity_expr = "COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)"
 
     query_str = f"""
         SELECT
@@ -477,6 +416,7 @@ def get_tendencia_delictiva(
             date_trunc('{intervalo}', fecha_evento) as full_date
         FROM {source_table}
         WHERE 1=1
+        AND fuente_codigo = 'POLICIA_SEMANAL'
     """
     params = {"hom_vals": homicidio_vals}
 
@@ -746,45 +686,30 @@ async def get_eventos_geojson(
 
 @router.get("/estadisticas/ultima-actualizacion")
 def get_ultima_fecha_datos(db: Session = Depends(get_db)):
-    """Rango y entrega SABANA usada por los indicadores publicos."""
-    snapshot_id = _latest_snapshot_id(db)
-    if snapshot_id:
-        stats = db.query(
-            func.min(SabanaSnapshotRow.fecha_evento).label("min_date"),
-            func.max(SabanaSnapshotRow.fecha_evento).label("max_date"),
-            func.count(func.distinct(SabanaSnapshotRow.hecho_key)).label("total"),
-            func.count(SabanaSnapshotRow.id).label("registros"),
-        ).filter(SabanaSnapshotRow.ingestion_id == snapshot_id).one()
-        run = db.query(IngestionRun).filter(IngestionRun.id == snapshot_id).first()
-        return {
-            "fecha_inicial": stats.min_date if stats.min_date else date.today(),
-            "ultima_fecha": stats.max_date if stats.max_date else date.today(),
-            "total_hechos": stats.total or 0,
-            "total_registros": stats.registros or 0,
-            "fuente": "SABANA_SIEDCO_PONAL",
-            "base_conteo": "ULTIMA_ENTREGA_SEMANAL",
-            "archivo": run.filename if run else None,
-            "fecha_carga": run.fecha_fin if run else None,
-            "snapshot_id": str(snapshot_id),
-        }
-
+    """Rango publicado por la base maestra consolidada."""
     stats = db.query(
         func.min(HechoSeguridad.fecha_evento).label("min_date"),
         func.max(HechoSeguridad.fecha_evento).label("max_date"),
         hechos_unicos_expr().label("total"),
         registros_expr().label("registros")
-    ).first()
+    ).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL").first()
+
+    run = db.query(IngestionRun).filter(
+        IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+        IngestionRun.status == "COMPLETED",
+    ).order_by(IngestionRun.fecha_fin.desc(), IngestionRun.fecha_inicio.desc()).first()
 
     return {
         "fecha_inicial": stats.min_date if stats.min_date else date.today(),
         "ultima_fecha": stats.max_date if stats.max_date else date.today(),
         "total_hechos": stats.total or 0,
         "total_registros": stats.registros or 0,
-        "fuente": "POLICIA_SEMANAL",
-        "base_conteo": "CONSOLIDADO_LEGACY",
-        "archivo": None,
-        "fecha_carga": None,
+        "fuente": "SABANA_SIEDCO_PONAL",
+        "base_conteo": "BASE_MAESTRA_CONSOLIDADA",
+        "archivo": run.filename if run else None,
+        "fecha_carga": run.fecha_fin if run else None,
         "snapshot_id": None,
+        "master": True,
     }
 
 @router.get("/estadisticas/por-semana")

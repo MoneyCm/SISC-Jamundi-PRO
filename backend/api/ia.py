@@ -451,29 +451,16 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     nombres_meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
     # Fecha real de cobertura para el chat: usa la fuente cargada mas reciente y evita declarar periodos como cero si no estan cargados.
-    latest_snapshot = db.query(SabanaSnapshotRow.ingestion_id).join(
-        IngestionRun, IngestionRun.id == SabanaSnapshotRow.ingestion_id
-    ).filter(
-        IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
-        IngestionRun.status == "COMPLETED",
-    ).order_by(IngestionRun.fecha_fin.desc(), IngestionRun.fecha_inicio.desc()).first()
-
-    snapshot_id = latest_snapshot[0] if latest_snapshot else None
-    max_snapshot_date = None
-    if snapshot_id:
-        max_snapshot_date = db.query(func.max(SabanaSnapshotRow.fecha_evento)).filter(
-            SabanaSnapshotRow.ingestion_id == snapshot_id
-        ).scalar()
-
+    snapshot_id = None
     max_modern_date = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
     ).scalar()
     max_legacy_date = db.query(func.max(Event.occurrence_date)).scalar()
 
-    use_modern_source = bool(max_modern_date and (not max_snapshot_date or max_modern_date > max_snapshot_date))
-    fecha_corte_date = max_modern_date if use_modern_source else (max_snapshot_date or max_legacy_date)
+    use_modern_source = bool(max_modern_date)
+    fecha_corte_date = max_modern_date or max_legacy_date
     fecha_corte = fecha_corte_date.isoformat() if fecha_corte_date else "sin datos cargados"
-    fuente_corte = "hechos de sabana cargada" if use_modern_source else ("sabana publica consolidada" if max_snapshot_date else "tabla interna historica")
+    fuente_corte = "base maestra consolidada de sabanas oficiales" if use_modern_source else "tabla interna historica"
 
     requested_years_for_context, requested_months_for_context = _extract_requested_periods(user_message, fecha_corte_date.year if fecha_corte_date else datetime.now().year)
     wants_monthly_breakdown = _wants_monthly_breakdown(user_message)

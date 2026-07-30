@@ -80,6 +80,70 @@ class PoliciaJamundiProcessor:
         raw = f"{data.get('id_fuente', '')}|{data['conducta_estandar']}|{data['fecha_evento']}|{data['hora_evento']}|{data['barrio_normalizado'] or data['vereda_normalizada']}|{data['sexo']}|{data['edad']}|{data['arma_medio']}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
+    def _truthy_value(self, value):
+        if value is None:
+            return False
+        if isinstance(value, float) and pd.isna(value):
+            return False
+        text = str(value).strip()
+        return text and text.upper() not in {"NAN", "NONE", "NULL", "NO REPORTA", "SIN INFORMACION", "SIN INFORMACI??N"}
+
+    def _find_master_hecho(self, processed_data, fingerprint):
+        source_id = processed_data.get("id_fuente")
+        q = self.db.query(HechoSeguridad).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL")
+        if source_id:
+            found = q.filter(HechoSeguridad.id_fuente == source_id).first()
+            if found:
+                return found
+        return q.filter(HechoSeguridad.fingerprint == fingerprint).first()
+
+    def _run_cutoff(self, ingestion_id):
+        if not ingestion_id:
+            return None
+        return self.db.query(SabanaSnapshotRow.fecha_evento).filter(
+            SabanaSnapshotRow.ingestion_id == ingestion_id
+        ).order_by(SabanaSnapshotRow.fecha_evento.desc()).scalar()
+
+    def _should_update_master(self, existing_hecho, current_cutoff):
+        if not existing_hecho:
+            return True
+        previous_cutoff = self._run_cutoff(existing_hecho.ingestion_id)
+        if not previous_cutoff or not current_cutoff:
+            return True
+        return current_cutoff >= previous_cutoff
+
+    def _apply_master_values(self, hecho, processed_data, data, conducta_raw, conducta_est, cat_delito, fingerprint, run_id):
+        hecho.fuente_codigo = "POLICIA_SEMANAL"
+        hecho.id_fuente = processed_data["id_fuente"] if processed_data["id_fuente"] else None
+        hecho.ingestion_id = run_id
+        hecho.conducta_original = str(conducta_raw)
+        hecho.conducta_estandar = conducta_est
+        hecho.categoria_delito = cat_delito
+        hecho.fecha_evento = processed_data["fecha_evento"]
+        hecho.hora_evento = processed_data["hora_evento"]
+        hecho.semana_num = processed_data.get("semana_num")
+        hecho.dia_semana = data.get("dia_semana")
+        hecho.sexo = processed_data["sexo"]
+        hecho.edad = processed_data["edad"]
+        hecho.grupo_edad = data.get("grupo_edad") if self._truthy_value(data.get("grupo_edad")) else hecho.grupo_edad
+        hecho.zona = data.get("zona") if self._truthy_value(data.get("zona")) else hecho.zona
+        hecho.arma_medio = processed_data["arma_medio"]
+        hecho.modalidad = data.get("modalidad") if self._truthy_value(data.get("modalidad")) else hecho.modalidad
+        hecho.movil_agresor = data.get("movil_agresor") if self._truthy_value(data.get("movil_agresor")) else hecho.movil_agresor
+        hecho.movil_victima = data.get("movil_victima") if self._truthy_value(data.get("movil_victima")) else hecho.movil_victima
+        hecho.clase_sitio = data.get("clase_sitio") if self._truthy_value(data.get("clase_sitio")) else hecho.clase_sitio
+        hecho.barrio_original = data.get("barrio_original") if self._truthy_value(data.get("barrio_original")) else hecho.barrio_original
+        hecho.barrio_normalizado = processed_data["barrio_normalizado"] or hecho.barrio_normalizado
+        hecho.vereda_original = data.get("vereda_original") if self._truthy_value(data.get("vereda_original")) else hecho.vereda_original
+        hecho.vereda_normalizada = processed_data["vereda_normalizada"] or hecho.vereda_normalizada
+        hecho.municipio = "JAMUNDI"
+        hecho.estado_calidad = "APROBADO"
+        hecho.fingerprint = fingerprint
+        hecho.fecha_reporte_fuente = pd.to_datetime(data["fecha_reporte_fuente"]) if data.get("fecha_reporte_fuente") else hecho.fecha_reporte_fuente
+        hecho.fecha_ingesta = datetime.utcnow()
+        hecho.usuario_ingesta = self.user_id
+        return hecho
+
     def _homologar_conducta(self, conducta_raw):
         val = self._normalize_text(conducta_raw)
         
@@ -153,11 +217,16 @@ class PoliciaJamundiProcessor:
             stats = {
                 "aprobadas": 0, "con_observacion": 0, "rechazadas": 0,
                 "duplicadas": 0, "fuera_territorio": 0, "georreferenciadas": 0,
-                "nuevas_consolidadas": 0, "existentes_historico": 0,
+                "nuevas_consolidadas": 0, "actualizadas_consolidadas": 0, "existentes_historico": 0,
                 "repetidas_en_archivo": 0, "filas_snapshot": 0,
             }
             snapshot_keys = set()
             snapshot_coverage = []
+            current_delivery_cutoff = None
+            if mapping.get("fecha_evento"):
+                valid_dates = pd.to_datetime(df[mapping["fecha_evento"]], errors="coerce").dropna()
+                if not valid_dates.empty:
+                    current_delivery_cutoff = valid_dates.max().date()
 
             for idx, row in df.iterrows():
                 if idx > 0 and idx % 50 == 0:
@@ -256,6 +325,7 @@ class PoliciaJamundiProcessor:
                             continue
 
                         semana_num = int(data["semana_num"]) if data.get("semana_num") and str(data["semana_num"]).isdigit() else None
+                        processed_data["semana_num"] = semana_num
                         snapshot_row = SabanaSnapshotRow(
                             ingestion_id=run.id,
                             fila_origen=idx + 2,
@@ -289,49 +359,28 @@ class PoliciaJamundiProcessor:
                             SabanaSnapshotRow.ingestion_id != run.id,
                             SabanaSnapshotRow.record_key == record_key,
                         ).first()
-                        legacy_exists = self.db.query(HechoSeguridad.id).filter(
-                            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
-                            HechoSeguridad.fingerprint == fp,
-                        ).first()
+                        master_hecho = self._find_master_hecho(processed_data, fp)
 
-                        if backfill_existing or exists_snapshot or legacy_exists:
+                        # i. Base maestra: una entrega reciente actualiza; una historica solo completa faltantes.
+                        if master_hecho:
                             stats["duplicadas"] += 1
                             stats["existentes_historico"] += 1
-                            continue
+                            hecho = master_hecho
+                            if self._should_update_master(master_hecho, current_delivery_cutoff):
+                                self._apply_master_values(hecho, processed_data, data, conducta_raw, conducta_est, cat_delito, fp, run.id)
+                                stats["actualizadas_consolidadas"] += 1
+                            else:
+                                continue
+                        else:
+                            if exists_snapshot:
+                                stats["duplicadas"] += 1
+                                stats["existentes_historico"] += 1
+                            hecho = HechoSeguridad()
+                            self._apply_master_values(hecho, processed_data, data, conducta_raw, conducta_est, cat_delito, fp, run.id)
+                            self.db.add(hecho)
+                            stats["nuevas_consolidadas"] += 1
 
-                        # i. Fact Insertion
-                        hecho = HechoSeguridad(
-                            fuente_codigo="POLICIA_SEMANAL",
-                            id_fuente=processed_data["id_fuente"] if processed_data["id_fuente"] else None,
-                            ingestion_id=run.id,
-                            conducta_original=str(conducta_raw),
-                            conducta_estandar=conducta_est,
-                            categoria_delito=cat_delito,
-                            fecha_evento=processed_data["fecha_evento"],
-                            hora_evento=processed_data["hora_evento"],
-                            semana_num=semana_num,
-                            dia_semana=data.get("dia_semana"),
-                            sexo=processed_data["sexo"],
-                            edad=processed_data["edad"],
-                            grupo_edad=data.get("grupo_edad"),
-                            zona=data.get("zona"),
-                            arma_medio=processed_data["arma_medio"],
-                            modalidad=data.get("modalidad"),
-                            movil_agresor=data.get("movil_agresor"),
-                            movil_victima=data.get("movil_victima"),
-                            clase_sitio=data.get("clase_sitio"),
-                            barrio_original=data.get("barrio_original"),
-                            barrio_normalizado=barrio_norm,
-                            vereda_original=data.get("vereda_original"),
-                            vereda_normalizada=vereda_norm,
-                            municipio="JAMUNDI",
-                            estado_calidad="APROBADO",
-                            fingerprint=record_key,
-                            fecha_reporte_fuente=pd.to_datetime(data["fecha_reporte_fuente"]) if data.get("fecha_reporte_fuente") else None,
-                            usuario_ingesta=self.user_id
-                        )
-                        self.db.add(hecho)
-                        stats["nuevas_consolidadas"] += 1
+                        self.db.flush()
 
                         # j. Sync to Legacy Event
                         event_type = self.db.query(EventType).filter(EventType.category == cat_delito.upper()).first()
@@ -353,22 +402,23 @@ class PoliciaJamundiProcessor:
                         ).first()
 
                         if not existing_event:
-                            new_event = Event(
+                            existing_event = Event(
                                 external_id=legacy_external_id,
-                                event_type_id=event_type.id,
-                                occurrence_date=processed_data["fecha_evento"],
-                                occurrence_time=processed_data["hora_evento"],
-                                barrio=barrio_norm or vereda_norm or "JAMUNDI",
-                                descripcion=f"[{conducta_est}] {data.get('modalidad', '')} - {data.get('arma_medio', '')}",
                                 source_name="POLICIA_SEMANAL",
-                                ingestion_id=run.id,
                             )
-                            self.db.add(new_event)
-                            self.db.flush()
-                            self.db.execute(
-                                sqlalchemy_text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
-                                {"lng": lng, "lat": lat, "id": new_event.id},
-                            )
+                            self.db.add(existing_event)
+
+                        existing_event.event_type_id = event_type.id
+                        existing_event.occurrence_date = processed_data["fecha_evento"]
+                        existing_event.occurrence_time = processed_data["hora_evento"]
+                        existing_event.barrio = barrio_norm or vereda_norm or "JAMUNDI"
+                        existing_event.descripcion = f"[{conducta_est}] {data.get('modalidad', '')} - {data.get('arma_medio', '')}"
+                        existing_event.ingestion_id = run.id
+                        self.db.flush()
+                        self.db.execute(
+                            sqlalchemy_text("UPDATE events SET location_geom = ST_SetSRID(ST_Point(:lng, :lat), 4326) WHERE id = :id"),
+                            {"lng": lng, "lat": lat, "id": existing_event.id},
+                        )
                         if coords: stats["georreferenciadas"] += 1
 
                 except Exception as e:
@@ -392,6 +442,7 @@ class PoliciaJamundiProcessor:
                 "snapshot": {
                     "filas": stats["filas_snapshot"],
                     "nuevas_consolidadas": stats["nuevas_consolidadas"],
+                    "actualizadas_consolidadas": stats["actualizadas_consolidadas"],
                     "existentes_historico": stats["existentes_historico"],
                     "repetidas_en_archivo": stats["repetidas_en_archivo"],
                     "coverage": build_coverage(snapshot_coverage),
