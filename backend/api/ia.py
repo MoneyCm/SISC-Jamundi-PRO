@@ -86,6 +86,20 @@ def _wants_monthly_breakdown(message: str):
     return any(term in normalized for term in [" por mes", "meses", "mensual", "mes a mes", "cada mes"])
 
 
+def _wants_recent_years(message: str):
+    normalized = (message or "").lower()
+    return any(term in normalized for term in [
+        "ultimos anos", "ultimos a?os", "ultimos a?os", "ultimos anios",
+        "ultimos a?os", "ultimos", "a?os recientes", "anios recientes", "anos recientes"
+    ])
+
+
+def _requested_period_is_after_cutoff(year: int, month: int, cutoff):
+    if not cutoff:
+        return False
+    return date(year, month, 1) > cutoff
+
+
 def _conversation_text(data: dict):
     history = data.get("history") or []
     if not isinstance(history, list):
@@ -121,7 +135,10 @@ def _format_year_monthly_breakdown_answer(user_message: str, conversation_text: 
         return None
 
     requested_years, explicit_months = _extract_requested_periods(user_message, fecha_corte_date.year)
-    if not re.search(r"\b20\d{2}\b", user_message or "") and not explicit_months:
+    if _wants_recent_years(user_message) and not re.search(r"\b20\d{2}\b", user_message or ""):
+        years_in_context = sorted({year for year, _month in monthly_summary.keys()}, reverse=True)
+        requested_years = sorted(years_in_context[:3]) if years_in_context else requested_years
+    elif not re.search(r"\b20\d{2}\b", user_message or "") and not explicit_months:
         requested_years = _extract_years_for_followup(user_message, conversation_text, fecha_corte_date.year)
 
     if explicit_months:
@@ -179,12 +196,7 @@ def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fech
     for requested_year in requested_years:
         for month in months:
             month_label = f"{MONTH_NAMES[month].capitalize()} {requested_year}"
-            if month == 12:
-                requested_period_end = date(requested_year, 12, 31)
-            else:
-                requested_period_end = date(requested_year, month + 1, 1) - timedelta(days=1)
-
-            if requested_period_end > fecha_corte_date:
+            if _requested_period_is_after_cutoff(requested_year, month, fecha_corte_date):
                 unavailable.append(month_label)
                 continue
 
@@ -457,7 +469,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
     ).scalar() or 0
 
-    homicidios = db.query(hechos_unicos_expr()).filter(
+    homicidios = db.query(func.count(HechoSeguridad.id)).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
         HechoSeguridad.categoria_delito == "HOMICIDIO",
     ).scalar() or 0
@@ -492,7 +504,8 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     for year in years_to_track:
         year_data = []
         for name, aliases in delitos_prioritarios.items():
-            count = db.query(hechos_unicos_expr()).filter(
+            metric = func.count(HechoSeguridad.id) if name == "HOMICIDIO" else hechos_unicos_expr()
+            count = db.query(metric).filter(
                 HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
                 func.extract('year', HechoSeguridad.fecha_evento) == year,
                 HechoSeguridad.categoria_delito.in_(aliases),
@@ -518,7 +531,10 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     requested_years_for_context, requested_months_for_context = _extract_requested_periods(user_message, fecha_corte_date.year if fecha_corte_date else datetime.now().year)
     wants_monthly_breakdown = _wants_monthly_breakdown(user_message)
     has_explicit_year = bool(re.search(r"\b20\d{2}\b", user_message or ""))
-    if wants_monthly_breakdown and not has_explicit_year and not requested_months_for_context:
+    if wants_monthly_breakdown and _wants_recent_years(user_message) and not has_explicit_year:
+        available_years = sorted(anual_dict.keys(), reverse=True)
+        requested_years_for_context = sorted(available_years[:3]) if available_years else requested_years_for_context
+    elif wants_monthly_breakdown and not has_explicit_year and not requested_months_for_context:
         requested_years_for_context = _extract_years_for_followup(user_message, conversation_text, fecha_corte_date.year if fecha_corte_date else datetime.now().year)
 
     if requested_months_for_context or wants_monthly_breakdown or has_explicit_year:
@@ -597,6 +613,22 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
             monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
             monthly_summary[key]["conductas"][label] = monthly_summary[key]["conductas"].get(label, 0) + int(total or 0)
             monthly_summary[key]["total"] += int(total or 0)
+
+    if use_modern_source:
+        homicide_monthly_rows = db.query(
+            func.extract('year', HechoSeguridad.fecha_evento).label('year'),
+            func.extract('month', HechoSeguridad.fecha_evento).label('month'),
+            func.count(HechoSeguridad.id).label('total'),
+        ).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+            HechoSeguridad.categoria_delito == "HOMICIDIO",
+            func.extract('year', HechoSeguridad.fecha_evento).in_(years_for_monthly_context),
+        ).group_by('year', 'month').order_by('year', 'month').all()
+
+        for year, month, total in homicide_monthly_rows:
+            key = (int(year), int(month))
+            monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
+            monthly_summary[key]["conductas"]["HOMICIDIO"] = int(total or 0)
 
     stats_mensuales = []
     for (year, month), info in sorted(monthly_summary.items()):
