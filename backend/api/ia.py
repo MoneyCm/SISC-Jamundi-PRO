@@ -51,6 +51,9 @@ MONTH_LOOKUP = {name: number for number, name in MONTH_NAMES.items()}
 MONTH_LOOKUP.update({"setiembre": 9})
 
 
+HOMICIDE_ALIASES = ["HOMICIDIO", "Homicidio", "HOMICIDIO INTENCIONAL", "HOMICIDIO DOLOSO"]
+
+
 def _extract_requested_periods(message: str, default_year: int):
     normalized = (message or "").lower()
     years = []
@@ -483,7 +486,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
 
     homicidios = db.query(func.count(HechoSeguridad.id)).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
-        HechoSeguridad.categoria_delito == "HOMICIDIO",
+        HechoSeguridad.conducta_estandar.in_(HOMICIDE_ALIASES),
     ).scalar() or 0
 
     min_modern_date = db.query(func.min(HechoSeguridad.fecha_evento)).filter(
@@ -517,11 +520,15 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         year_data = []
         for name, aliases in delitos_prioritarios.items():
             metric = func.count(HechoSeguridad.id) if name == "HOMICIDIO" else hechos_unicos_expr()
-            count = db.query(metric).filter(
+            filters = [
                 HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
                 func.extract('year', HechoSeguridad.fecha_evento) == year,
-                HechoSeguridad.categoria_delito.in_(aliases),
-            ).scalar() or 0
+            ]
+            if name == "HOMICIDIO":
+                filters.append(HechoSeguridad.conducta_estandar.in_(HOMICIDE_ALIASES))
+            else:
+                filters.append(HechoSeguridad.categoria_delito.in_(aliases))
+            count = db.query(metric).filter(*filters).scalar() or 0
             year_data.append(f"{name}: {count}")
         stats_detalladas.append(f"ANIO {year} [{', '.join(year_data)}]")
     stats_contexto_detallado = " | ".join(stats_detalladas)
@@ -636,7 +643,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
             func.count(HechoSeguridad.id).label('total'),
         ).filter(
             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
-            HechoSeguridad.categoria_delito == "HOMICIDIO",
+            HechoSeguridad.conducta_estandar.in_(HOMICIDE_ALIASES),
             func.extract('year', HechoSeguridad.fecha_evento).in_(years_for_monthly_context),
         ).group_by('year', 'month').order_by('year', 'month').all()
 
@@ -654,7 +661,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         ).filter(
             IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
             IngestionRun.status == "COMPLETED",
-            SabanaSnapshotRow.categoria_delito == "HOMICIDIO",
+            SabanaSnapshotRow.conducta_estandar.in_(HOMICIDE_ALIASES),
             func.extract('year', SabanaSnapshotRow.fecha_evento).in_(years_for_monthly_context),
         ).group_by('year', 'month').order_by('year', 'month').all()
 
