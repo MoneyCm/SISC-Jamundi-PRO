@@ -286,7 +286,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                         </button>
                         {bulletin && (
                             <a href={buildDownloadUrl(bulletin.url)} className="inline-flex items-center gap-2 bg-[#281FD0] text-white px-4 py-3 text-xs font-black uppercase tracking-widest">
-                                <FileText size={16} /> Boletin PDF
+                                <FileText size={16} /> Resumen PDF
                             </a>
                         )}
                         <button onClick={onLoginClick} className="inline-flex items-center gap-2 bg-slate-900 text-white px-4 py-3 text-xs font-black uppercase tracking-widest">
