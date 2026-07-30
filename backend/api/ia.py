@@ -499,9 +499,33 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     for year, month, conducta, total in monthly_rows:
         key = (int(year), int(month))
         monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
-        monthly_summary[key]["total"] += int(total or 0)
         label = conducta or "SIN CLASIFICAR"
         monthly_summary[key]["conductas"][label] = monthly_summary[key]["conductas"].get(label, 0) + int(total or 0)
+
+    monthly_total_rows = []
+    if fecha_corte_date and use_modern_source:
+        monthly_total_rows = db.query(
+            func.extract('year', HechoSeguridad.fecha_evento).label('year'),
+            func.extract('month', HechoSeguridad.fecha_evento).label('month'),
+            hechos_unicos_expr().label('total'),
+        ).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+            func.extract('year', HechoSeguridad.fecha_evento).in_(years_for_monthly_context),
+        ).group_by('year', 'month').order_by('year', 'month').all()
+    elif fecha_corte_date and snapshot_id:
+        monthly_total_rows = db.query(
+            func.extract('year', SabanaSnapshotRow.fecha_evento).label('year'),
+            func.extract('month', SabanaSnapshotRow.fecha_evento).label('month'),
+            func.count(func.distinct(SabanaSnapshotRow.hecho_key)).label('total'),
+        ).filter(
+            SabanaSnapshotRow.ingestion_id == snapshot_id,
+            func.extract('year', SabanaSnapshotRow.fecha_evento).in_(years_for_monthly_context),
+        ).group_by('year', 'month').order_by('year', 'month').all()
+
+    for year, month, total in monthly_total_rows:
+        key = (int(year), int(month))
+        monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
+        monthly_summary[key]["total"] = int(total or 0)
 
     # Respaldo historico: completa meses/conductas que no existan en la sabana moderna.
     legacy_monthly_rows = db.query(
