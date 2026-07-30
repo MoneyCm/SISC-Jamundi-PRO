@@ -76,6 +76,9 @@ const SiscAIChatbot = () => {
         if (!input.trim() || loading) return;
 
         const userMsg = { id: Date.now(), text: input, sender: 'user' };
+        const historyForRequest = [...messages, userMsg]
+            .slice(-8)
+            .map(({ text, sender }) => ({ text, sender }));
         setMessages(prev => [...prev, userMsg]);
         setInput('');
         setLoading(true);
@@ -84,7 +87,7 @@ const SiscAIChatbot = () => {
             const response = await fetch(`${API_BASE_URL}/ia/chat_ciudadano`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: input })
+                body: JSON.stringify({ message: input, history: historyForRequest })
             });
 
             if (!response.ok) throw new Error('Error de conexion');

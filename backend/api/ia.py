@@ -81,6 +81,84 @@ def _requested_conducta(message: str):
     return None, None
 
 
+def _wants_monthly_breakdown(message: str):
+    normalized = (message or "").lower()
+    return any(term in normalized for term in [" por mes", "meses", "mensual", "mes a mes", "cada mes"])
+
+
+def _conversation_text(data: dict):
+    history = data.get("history") or []
+    if not isinstance(history, list):
+        return data.get("message", "") or ""
+    parts = []
+    for item in history[-6:]:
+        if not isinstance(item, dict):
+            continue
+        sender = item.get("sender") or item.get("role") or ""
+        text = item.get("text") or item.get("content") or ""
+        if text:
+            parts.append(f"{sender}: {text}")
+    current = data.get("message", "") or ""
+    if current:
+        parts.append(f"user: {current}")
+    return "\n".join(parts)
+
+
+def _extract_years_for_followup(message: str, conversation_text: str, default_year: int):
+    years = []
+    for source in [message or "", conversation_text or ""]:
+        for raw_year in re.findall(r"\b(20\d{2})\b", source.lower()):
+            year = int(raw_year)
+            if year not in years:
+                years.append(year)
+        if years:
+            break
+    return years or [default_year]
+
+
+def _format_year_monthly_breakdown_answer(user_message: str, conversation_text: str, monthly_summary: dict, fecha_corte_date, fecha_corte: str, fuente_corte: str):
+    if not fecha_corte_date or not _wants_monthly_breakdown(user_message):
+        return None
+
+    requested_years, explicit_months = _extract_requested_periods(user_message, fecha_corte_date.year)
+    if not re.search(r"\b20\d{2}\b", user_message or "") and not explicit_months:
+        requested_years = _extract_years_for_followup(user_message, conversation_text, fecha_corte_date.year)
+
+    if explicit_months:
+        return None
+
+    conducta_key, conducta_label = _requested_conducta(user_message)
+    parts = [f"Con corte al **{fecha_corte}** ({fuente_corte}), el SISC registra este desglose mensual:"]
+
+    for year in requested_years:
+        lines = []
+        annual_total = 0
+        for month in range(1, 13):
+            period_start = date(year, month, 1)
+            if period_start > fecha_corte_date:
+                continue
+            info = monthly_summary.get((year, month))
+            if not info:
+                continue
+            if conducta_key:
+                count = int(info["conductas"].get(conducta_key, 0))
+                annual_total += count
+                lines.append(f"- **{MONTH_NAMES[month].capitalize()}:** {count} {conducta_label}.")
+            else:
+                annual_total += int(info["total"] or 0)
+                lines.append(f"- **{MONTH_NAMES[month].capitalize()}:** {int(info['total'] or 0)} casos.")
+
+        label = conducta_label if conducta_key else "delitos/casos consolidados"
+        if lines:
+            parts.append(f"**{year}: {annual_total} {label}.**")
+            parts.append("\n".join(lines))
+        else:
+            parts.append(f"**{year}:** no hay dato mensual desagregado suficiente en el contexto del asistente.")
+
+    parts.append("Para emergencias, llama al **123**.")
+    return "\n\n".join(parts)
+
+
 def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fecha_corte_date, fecha_corte: str, fuente_corte: str):
     if not fecha_corte_date:
         return None
@@ -301,6 +379,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     Ahora incluye contexto de datos reales para responder preguntas estadísticas básicas.
     """
     user_message = data.get("message", "")
+    conversation_text = _conversation_text(data)
     if not user_message:
         return {"response": "Hola, ¿en qué puedo ayudarte?"}
 
@@ -391,7 +470,15 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     fuente_corte = "hechos de sabana cargada" if use_modern_source else ("sabana publica consolidada" if max_snapshot_date else "tabla interna historica")
 
     requested_years_for_context, requested_months_for_context = _extract_requested_periods(user_message, fecha_corte_date.year if fecha_corte_date else datetime.now().year)
-    years_for_monthly_context = requested_years_for_context if requested_months_for_context else ([fecha_corte_date.year] if fecha_corte_date else [datetime.now().year])
+    wants_monthly_breakdown = _wants_monthly_breakdown(user_message)
+    has_explicit_year = bool(re.search(r"\b20\d{2}\b", user_message or ""))
+    if wants_monthly_breakdown and not has_explicit_year and not requested_months_for_context:
+        requested_years_for_context = _extract_years_for_followup(user_message, conversation_text, fecha_corte_date.year if fecha_corte_date else datetime.now().year)
+
+    if requested_months_for_context or wants_monthly_breakdown or has_explicit_year:
+        years_for_monthly_context = requested_years_for_context
+    else:
+        years_for_monthly_context = [fecha_corte_date.year] if fecha_corte_date else [datetime.now().year]
 
     monthly_rows = []
     if fecha_corte_date and use_modern_source:
@@ -451,6 +538,10 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     direct_cutoff_response = _format_cutoff_answer(user_message, fecha_corte, fuente_corte)
     if direct_cutoff_response:
         return {"response": direct_cutoff_response}
+
+    direct_year_monthly_response = _format_year_monthly_breakdown_answer(user_message, conversation_text, monthly_summary, fecha_corte_date, fecha_corte, fuente_corte)
+    if direct_year_monthly_response:
+        return {"response": direct_year_monthly_response}
 
     direct_monthly_response = _format_monthly_direct_answer(user_message, monthly_summary, fecha_corte_date, fecha_corte, fuente_corte)
     if direct_monthly_response:
