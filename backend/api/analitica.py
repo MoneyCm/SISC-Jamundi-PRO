@@ -154,19 +154,25 @@ def get_public_dashboard(
     max_date = latest_row.max_date if latest_row and latest_row.max_date else date.today()
     min_date = latest_row.min_date if latest_row and latest_row.min_date else date(max_date.year, 1, 1)
     target_year = year or max_date.year
-    period_start = date(target_year, 1, 1)
-    period_end = min(max_date, date(target_year, 12, 31)) if target_year == max_date.year else date(target_year, 12, 31)
+    year_start = date(target_year, 1, 1)
+    year_end = min(max_date, date(target_year, 12, 31)) if target_year == max_date.year else date(target_year, 12, 31)
+
+    # Si el ciudadano no filtra por anio, el tablero principal muestra toda la base publicada.
+    # La comparacion interanual se conserva como lectura del anio de corte frente al anio anterior.
+    period_start = year_start if year else min_date
+    period_end = year_end if year else max_date
     previous_start = date(target_year - 1, 1, 1)
     try:
-        previous_end = date(target_year - 1, period_end.month, period_end.day)
+        previous_end = date(target_year - 1, year_end.month, year_end.day)
     except ValueError:
-        previous_end = date(target_year - 1, period_end.month, period_end.day - 1)
+        previous_end = date(target_year - 1, year_end.month, year_end.day - 1)
 
     base_params = {"start": period_start, "end": period_end}
     if source["snapshot_id"]:
         base_params["snapshot_id"] = source["snapshot_id"]
 
     total_actual = _public_count(db, source, period_start, period_end)
+    total_current_year = _public_count(db, source, year_start, year_end)
     total_prev = _public_count(db, source, previous_start, previous_end)
 
     volume_row = db.execute(text(f"""
@@ -276,6 +282,9 @@ def get_public_dashboard(
             "latest_event_date": max_date.isoformat(),
             "first_available_date": min_date.isoformat(),
             "year": target_year,
+            "scope": "FULL_DATABASE" if year is None else "YEAR_FILTER",
+            "comparison_start": year_start.isoformat(),
+            "comparison_end": year_end.isoformat(),
             "population": POBLACION_JAMUNDI,
             "privacy": "Publicacion agregada. No incluye nombres, identificadores, telefonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
             "methodology": "Cada sabana oficial se valida y se conserva como evidencia. La publicacion ciudadana usa una base maestra consolidada: las entregas mas recientes actualizan hechos ya existentes y las entregas historicas completan hechos distintos. Las ubicaciones del mapa son centroides aproximados por barrio, vereda o corregimiento y se suprimen territorios con conteos bajos.",
@@ -299,12 +308,12 @@ def get_public_dashboard(
             "homicidios": homicidios,
             "tasa_homicidios": tasa_homicidios,
             "previous_total": total_prev,
-            "variation_pct": _pct_change(total_actual, total_prev),
+            "variation_pct": _pct_change(total_current_year, total_prev),
         },
         "interannual": {
-            "current": {"year": target_year, "total": total_actual, "start": report_start, "end": report_end},
+            "current": {"year": target_year, "total": total_current_year, "start": year_start.isoformat(), "end": year_end.isoformat()},
             "previous": {"year": target_year - 1, "total": total_prev, "start": previous_start.isoformat(), "end": previous_end.isoformat()},
-            "variation_pct": _pct_change(total_actual, total_prev),
+            "variation_pct": _pct_change(total_current_year, total_prev),
         },
         "monthly_trend": [{"name": row.bucket, "total": row.total} for row in monthly],
         "weekly_trend": [{"name": f"S{row.semana:02d}", "semana": row.semana, "total": row.total} for row in weekly],

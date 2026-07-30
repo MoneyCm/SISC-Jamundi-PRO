@@ -260,6 +260,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
     const currentYear = data.interannual?.current?.year || meta.year || '';
     const previousYear = data.interannual?.previous?.year || (currentYear ? currentYear - 1 : '');
     const periodText = `${formatDate(meta.period_start)} a ${formatDate(meta.period_end)}`;
+    const comparisonText = `${formatDate(meta.comparison_start || data.interannual?.current?.start)} a ${formatDate(meta.comparison_end || data.interannual?.current?.end)}`;
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -308,7 +309,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                             <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-950 leading-tight">Panorama ciudadano de seguridad</h2>
                             <p className="mt-3 max-w-3xl text-base md:text-lg font-semibold leading-7 text-slate-600">Consulta datos agregados del SISC para entender tendencias, conductas, zonas y territorios con informacion publica. No se publican registros individuales ni direcciones exactas.</p>
                             <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Periodo</p><p className="mt-1 font-black text-slate-950">{periodText}</p></div>
+                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Base disponible</p><p className="mt-1 font-black text-slate-950">{periodText}</p></div>
                                 <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fuente</p><p className="mt-1 font-black text-slate-950">SABANA SIEDCO/PONAL</p></div>
                                 <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ultima carga</p><p className="mt-1 font-black text-slate-950">{formatDateTime(meta.last_ingestion?.loaded_at)}</p></div>
                             </div>
@@ -318,7 +319,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                         <div>
                             <p className="text-xs font-black uppercase tracking-widest text-[#FFB600]">Lectura rapida</p>
                             <div className="mt-5 space-y-4">
-                                <div className="flex items-start gap-3"><TrendingUp className="mt-0.5 text-[#FFB600]" size={20} /><p className="text-sm font-semibold leading-6"><span className="font-black">{variationLabel(variation)}</span> frente a {previousYear} en el mismo rango calendario.</p></div>
+                                <div className="flex items-start gap-3"><TrendingUp className="mt-0.5 text-[#FFB600]" size={20} /><p className="text-sm font-semibold leading-6"><span className="font-black">{variationLabel(variation)}</span> frente a {previousYear} para el rango {comparisonText}.</p></div>
                                 <div className="flex items-start gap-3"><MapPinned className="mt-0.5 text-[#FFB600]" size={20} /><p className="text-sm font-semibold leading-6">Territorio con mayor registro visible: <span className="font-black">{topTerritory?.name || 'sin dato'}</span>{topTerritory ? ` (${numberFmt.format(topTerritory.total)} hechos)` : ''}.</p></div>
                                 <div className="flex items-start gap-3"><Users className="mt-0.5 text-[#FFB600]" size={20} /><p className="text-sm font-semibold leading-6">Zona principal reportada: <span className="font-black">{mainZone?.name || 'sin dato'}</span>{mainZone ? ` (${numberFmt.format(mainZone.value)})` : ''}.</p></div>
                             </div>
@@ -339,7 +340,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-                    <ChartShell title="Tendencia mensual" subtitle="Hechos unicos por mes dentro del periodo publicado">
+                    <ChartShell title="Tendencia mensual" subtitle="Hechos unicos por mes en toda la base publicada">
                         {data.monthly_trend?.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={data.monthly_trend} margin={{ top: 10, right: 20, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><YAxis tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Area type="monotone" dataKey="total" name="Hechos" stroke="#281FD0" fill="#281FD0" fillOpacity={0.16} strokeWidth={3} /></AreaChart></ResponsiveContainer> : <EmptyState />}
                     </ChartShell>
                     <ChartShell title="Comparacion interanual" subtitle="Mismo rango calendario frente al ano anterior">
