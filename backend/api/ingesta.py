@@ -1,10 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from db.models import get_db, Event, EventType, User
 import pandas as pd
 import io
 import uuid
+import hashlib
 from typing import List, Dict, Optional, Any
 import logging
 import traceback
@@ -255,6 +256,22 @@ def delete_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Evento eliminado correctamente"}
 
+
+
+def _process_policia_background(contents: bytes, filename: str, username: str):
+    from db.session import SessionLocal
+    from services.excel_policia_processor import PoliciaJamundiProcessor
+
+    db = SessionLocal()
+    try:
+        processor = PoliciaJamundiProcessor(db, user_id=username)
+        processor.process(contents, filename)
+    except Exception:
+        logger.error(f"Fallo en procesador Policia background: {filename}")
+        logger.error(traceback.format_exc())
+    finally:
+        db.close()
+
 # --- GATE DE INGESTA NUEVO ---
 from services import dq_service
 from db import crud_dq
@@ -262,6 +279,7 @@ from db import crud_dq
 @router.post("/gate/{dataset_code}")
 async def upload_with_gate(
     dataset_code: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     force: bool = False,
     db: Session = Depends(get_db),
@@ -278,25 +296,51 @@ async def upload_with_gate(
     dataset_code = dataset_code.upper()
     contents = await file.read()
     
-    # NUEVO: Procesador especializado para Policía Jamundí
+    # Procesador especializado para Policia Jamundi. En Render se ejecuta en segundo plano
+    # para evitar que la conexion HTTP quede leyendo hasta agotar timeout.
     if dataset_code == "POLICIA_SEMANAL":
-        from services.excel_policia_processor import PoliciaJamundiProcessor
-        processor = PoliciaJamundiProcessor(db, user_id=current_user.username)
-        try:
-            result = processor.process(contents, file.filename)
-            if result.get("status") == "skipped":
-                return result
-            return {
-                "status": "success",
-                "message": f"Base Policial procesada: {result['stats']['aprobadas']} aprobados, {result['stats']['rechazadas']} rechazados.",
-                "report_id": result["ingestion_id"],
-                "ingestion_id": result["ingestion_id"],
-                "stats": result["stats"]
-            }
-        except Exception as e:
-            logger.error(f"Fallo en procesador Policia: {e}")
-            logger.error(traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"Error en procesador Policia: {str(e)}")
+        from db.models_hechos_seguridad import IngestionRun, SabanaSnapshotRow
+
+        file_hash = hashlib.sha256(contents).hexdigest()
+        existing_run = db.query(IngestionRun).filter(
+            IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+            IngestionRun.hash_archivo == file_hash,
+        ).first()
+
+        if existing_run:
+            has_snapshot = db.query(SabanaSnapshotRow.id).filter(
+                SabanaSnapshotRow.ingestion_id == existing_run.id
+            ).first() is not None
+            if has_snapshot and existing_run.status == "COMPLETED":
+                return {
+                    "status": "skipped",
+                    "message": "Este archivo ya fue procesado anteriormente.",
+                    "ingestion_id": str(existing_run.id),
+                    "report_id": str(existing_run.id),
+                }
+            run = existing_run
+            run.status = "IN_PROGRESS"
+            run.usuario_carga = current_user.username
+            run.fecha_fin = None
+        else:
+            run = IngestionRun(
+                fuente_codigo="POLICIA_SEMANAL",
+                hash_archivo=file_hash,
+                filename=file.filename,
+                usuario_carga=current_user.username,
+                status="IN_PROGRESS",
+            )
+            db.add(run)
+
+        db.commit()
+        db.refresh(run)
+        background_tasks.add_task(_process_policia_background, contents, file.filename, current_user.username)
+        return {
+            "status": "accepted",
+            "message": "La base policial quedo en procesamiento. Puedes seguir el avance con el ID de proceso.",
+            "report_id": str(run.id),
+            "ingestion_id": str(run.id),
+        }
 
     # Resto de fuentes (MinDefensa / SIEDCO)
     if dataset_code.startswith("POLICIA_"):
@@ -502,7 +546,7 @@ def get_sabana_snapshot_rows(
         ],
     }
 
-@router.get("/runs/{run_id}", dependencies=[Depends(analyst_or_admin)])
+@router.get("/runs/{run_id}", dependencies=[Depends(ingestion_operator)])
 def get_ingestion_run(run_id: str, db: Session = Depends(get_db)):
     from db.models_hechos_seguridad import IngestionRun
     run = db.query(IngestionRun).filter(IngestionRun.id == run_id).first()
@@ -510,7 +554,7 @@ def get_ingestion_run(run_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Run no encontrado")
     return run
 
-@router.get("/runs/{run_id}/issues", dependencies=[Depends(analyst_or_admin)])
+@router.get("/runs/{run_id}/issues", dependencies=[Depends(ingestion_operator)])
 def get_ingestion_issues(run_id: str, db: Session = Depends(get_db)):
     from db.models_hechos_seguridad import IngestionIssue
     issues = db.query(IngestionIssue).filter(IngestionIssue.ingestion_id == run_id).all()

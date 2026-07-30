@@ -101,6 +101,47 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
         }
     };
 
+    const waitForIngestionRun = async (runId) => {
+        const token = localStorage.getItem('token');
+        const maxAttempts = 120;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            const response = await fetch(`${API_BASE_URL}/ingesta/runs/${runId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) continue;
+
+            const run = await response.json();
+            if (run.status === 'COMPLETED') {
+                const stats = {
+                    aprobadas: run.aprobadas || 0,
+                    rechazadas: run.rechazadas || 0,
+                    duplicadas: run.duplicadas || 0,
+                    fuera_territorio: run.fuera_territorio || 0,
+                    georreferenciadas: run.georreferenciadas || 0,
+                };
+                setStatus('success');
+                setReportInfo({
+                    status: 'success',
+                    message: `Base Policial procesada: ${stats.aprobadas} aprobados, ${stats.rechazadas} rechazados.`,
+                    report_id: runId,
+                    ingestion_id: runId,
+                    stats,
+                });
+                await loadSabanaHistory();
+                return;
+            }
+
+            if (run.status === 'FAILED') {
+                const detail = run.resumen?.error || 'El procesamiento de la base policial fallo.';
+                throw new Error(detail);
+            }
+        }
+
+        throw new Error('La carga sigue procesandose en Render. Revisa el historial en unos minutos.');
+    };
+
     const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -151,6 +192,9 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                 }
             } else if (!response.ok) {
                 throw new Error(data.detail || 'Error en la comunicación con el servidor');
+            } else if (data.status === 'accepted' && data.ingestion_id) {
+                setReportInfo(data);
+                await waitForIngestionRun(data.ingestion_id);
             } else {
                 setStatus('success');
                 setReportInfo(data);
