@@ -139,7 +139,15 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
             }
         }
 
-        throw new Error('La carga sigue procesandose en Render. Revisa el historial en unos minutos.');
+        setStatus('success');
+        setReportInfo({
+            status: 'accepted',
+            pending: true,
+            message: 'La carga sigue procesandose en Render. Revisa el historial en unos minutos.',
+            report_id: runId,
+            ingestion_id: runId,
+        });
+        await loadSabanaHistory();
     };
 
     const handleFileChange = async (e) => {
@@ -382,17 +390,17 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                         <CheckCircle2 size={64} />
                     </div>
                     <div className="space-y-3">
-                        <h3 className="text-4xl font-black text-slate-800 tracking-tighter uppercase">Ingesta Exitosa</h3>
+                        <h3 className="text-4xl font-black text-slate-800 tracking-tighter uppercase">{reportInfo.pending ? 'Procesamiento en curso' : 'Ingesta Exitosa'}</h3>
                         <p className="text-emerald-600 font-black uppercase tracking-[0.2em] text-xs leading-relaxed">{reportInfo.message}</p>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full">
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
                             <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                                {reportInfo.stats ? 'Aprobados' : 'Registros'}
+                                {reportInfo.pending ? 'Estado' : (reportInfo.stats ? 'Aprobados' : 'Registros')}
                             </div>
                             <div className="text-xl font-black text-emerald-600">
-                                {reportInfo.stats ? reportInfo.stats.aprobadas : (reportInfo.message.match(/\d+/) ? reportInfo.message.match(/\d+/)[0] : 'OK')}
+                                {reportInfo.pending ? 'EN CURSO' : (reportInfo.stats ? reportInfo.stats.aprobadas : (reportInfo.message.match(/\d+/) ? reportInfo.message.match(/\d+/)[0] : 'OK'))}
                             </div>
                         </div>
                         {reportInfo.stats && (
