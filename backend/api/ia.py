@@ -160,8 +160,10 @@ def _format_year_monthly_breakdown_answer(user_message: str, conversation_text: 
                 continue
             months_with_data.append(month)
             if conducta_key:
-                count = int(info["conductas"].get(f"{conducta_key}_REGISTROS", info["conductas"].get(conducta_key, 0)))
-                unique_count = int(info["conductas"].get(conducta_key, 0))
+                raw_count = int(info["conductas"].get(conducta_key, 0))
+                record_count = int(info["conductas"].get(f"{conducta_key}_REGISTROS", raw_count))
+                count = max(raw_count, record_count) if conducta_key == "HOMICIDIO" else raw_count
+                unique_count = min(raw_count, record_count) if conducta_key == "HOMICIDIO" else raw_count
                 annual_total += count
                 extra = f" ({unique_count} hechos unicos)" if conducta_key == "HOMICIDIO" and unique_count and unique_count != count else ""
                 lines.append(f"- **{MONTH_NAMES[month].capitalize()}:** {count} {conducta_label}{extra}.")
@@ -208,13 +210,16 @@ def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fech
                 continue
 
             if conducta_key:
-                count = int(info["conductas"].get(f"{conducta_key}_REGISTROS", info["conductas"].get(conducta_key, 0)))
-                unique_count = int(info["conductas"].get(conducta_key, 0))
+                raw_count = int(info["conductas"].get(conducta_key, 0))
+                record_count = int(info["conductas"].get(f"{conducta_key}_REGISTROS", raw_count))
+                count = max(raw_count, record_count) if conducta_key == "HOMICIDIO" else raw_count
+                unique_count = min(raw_count, record_count) if conducta_key == "HOMICIDIO" else raw_count
                 extra = f" ({unique_count} hechos unicos)" if conducta_key == "HOMICIDIO" and unique_count and unique_count != count else ""
                 available_lines.append(f"- **{month_label}:** {count} {conducta_label} registrados{extra}.")
                 continue
 
-            principales = sorted(info["conductas"].items(), key=lambda item: item[1], reverse=True)[:4]
+            public_conductas = {k: v for k, v in info["conductas"].items() if not k.endswith("_REGISTROS")}
+            principales = sorted(public_conductas.items(), key=lambda item: item[1], reverse=True)[:4]
             detalle = ", ".join([f"{name}: {count}" for name, count in principales])
             available_lines.append(f"- **{month_label}:** {info['total']} casos consolidados. Principales conductas: {detalle}.")
 
@@ -536,6 +541,9 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     wants_monthly_breakdown = _wants_monthly_breakdown(user_message)
     has_explicit_year = bool(re.search(r"\b20\d{2}\b", user_message or ""))
     if wants_monthly_breakdown and _wants_recent_years(user_message) and not has_explicit_year:
+        available_years = sorted(anual_dict.keys(), reverse=True)
+        requested_years_for_context = sorted(available_years[:3]) if available_years else requested_years_for_context
+    elif requested_months_for_context and not has_explicit_year and _wants_recent_years(conversation_text):
         available_years = sorted(anual_dict.keys(), reverse=True)
         requested_years_for_context = sorted(available_years[:3]) if available_years else requested_years_for_context
     elif wants_monthly_breakdown and not has_explicit_year and not requested_months_for_context:
