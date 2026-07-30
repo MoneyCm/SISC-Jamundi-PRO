@@ -522,11 +522,12 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
 
     for year, month, conducta, total in legacy_monthly_rows:
         key = (int(year), int(month))
+        if key in monthly_summary and monthly_summary[key].get("total", 0) > 0:
+            continue
         label = conducta or "SIN CLASIFICAR"
         monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
-        if label not in monthly_summary[key]["conductas"]:
-            monthly_summary[key]["conductas"][label] = int(total or 0)
-            monthly_summary[key]["total"] += int(total or 0)
+        monthly_summary[key]["conductas"][label] = monthly_summary[key]["conductas"].get(label, 0) + int(total or 0)
+        monthly_summary[key]["total"] += int(total or 0)
 
     stats_mensuales = []
     for (year, month), info in sorted(monthly_summary.items()):
