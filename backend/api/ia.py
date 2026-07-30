@@ -186,13 +186,19 @@ def _format_year_monthly_breakdown_answer(user_message: str, conversation_text: 
     return "\n\n".join(parts)
 
 
-def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fecha_corte_date, fecha_corte: str, fuente_corte: str):
+def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fecha_corte_date, fecha_corte: str, fuente_corte: str, conversation_text: str = ""):
     if not fecha_corte_date:
         return None
 
     requested_years, months = _extract_requested_periods(user_message, fecha_corte_date.year)
     if not months:
         return None
+
+    has_explicit_year = bool(re.search(r"\b20\d{2}\b", user_message or ""))
+    if not has_explicit_year and _wants_recent_years(conversation_text):
+        years_for_months = sorted({year for year, month in monthly_summary.keys() if month in months})
+        if years_for_months:
+            requested_years = years_for_months
 
     conducta_key, conducta_label = _requested_conducta(user_message)
     unavailable = []
@@ -683,7 +689,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     if direct_year_monthly_response:
         return {"response": direct_year_monthly_response}
 
-    direct_monthly_response = _format_monthly_direct_answer(user_message, monthly_summary, fecha_corte_date, fecha_corte, fuente_corte)
+    direct_monthly_response = _format_monthly_direct_answer(user_message, monthly_summary, fecha_corte_date, fecha_corte, fuente_corte, conversation_text)
     if direct_monthly_response:
         return {"response": direct_monthly_response}
 
