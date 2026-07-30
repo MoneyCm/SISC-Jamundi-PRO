@@ -53,44 +53,70 @@ MONTH_LOOKUP.update({"setiembre": 9})
 
 def _extract_requested_periods(message: str, default_year: int):
     normalized = (message or "").lower()
-    year_match = re.search(r"\b(20\d{2})\b", normalized)
-    requested_year = int(year_match.group(1)) if year_match else default_year
+    years = []
+    for raw_year in re.findall(r"\b(20\d{2})\b", normalized):
+        year = int(raw_year)
+        if year not in years:
+            years.append(year)
+    if not years:
+        years = [default_year]
+
     months = []
     for name, number in MONTH_LOOKUP.items():
         if re.search(rf"\b{name}\b", normalized) and number not in months:
             months.append(number)
-    return requested_year, months
+    return years, months
+
+
+def _requested_conducta(message: str):
+    normalized = (message or "").lower()
+    if "homicid" in normalized:
+        return "HOMICIDIO", "homicidios"
+    if "hurto" in normalized:
+        return "HURTO", "hurtos"
+    if "lesion" in normalized or "lesiones" in normalized:
+        return "LESIONES", "lesiones personales"
+    if "violencia intrafamiliar" in normalized or re.search(r"\bvif\b", normalized):
+        return "VIF", "violencia intrafamiliar"
+    return None, None
 
 
 def _format_monthly_direct_answer(user_message: str, monthly_summary: dict, fecha_corte_date, fecha_corte: str, fuente_corte: str):
     if not fecha_corte_date:
         return None
 
-    requested_year, months = _extract_requested_periods(user_message, fecha_corte_date.year)
+    requested_years, months = _extract_requested_periods(user_message, fecha_corte_date.year)
     if not months:
         return None
 
+    conducta_key, conducta_label = _requested_conducta(user_message)
     unavailable = []
     available_lines = []
-    for month in months:
-        month_label = f"{MONTH_NAMES[month].capitalize()} {requested_year}"
-        if month == 12:
-            requested_period_end = date(requested_year, 12, 31)
-        else:
-            requested_period_end = date(requested_year, month + 1, 1) - timedelta(days=1)
+    for requested_year in requested_years:
+        for month in months:
+            month_label = f"{MONTH_NAMES[month].capitalize()} {requested_year}"
+            if month == 12:
+                requested_period_end = date(requested_year, 12, 31)
+            else:
+                requested_period_end = date(requested_year, month + 1, 1) - timedelta(days=1)
 
-        if requested_period_end > fecha_corte_date:
-            unavailable.append(month_label)
-            continue
+            if requested_period_end > fecha_corte_date:
+                unavailable.append(month_label)
+                continue
 
-        info = monthly_summary.get((requested_year, month))
-        if not info:
-            available_lines.append(f"- **{month_label}:** no hay dato mensual desagregado suficiente en el contexto del asistente.")
-            continue
+            info = monthly_summary.get((requested_year, month))
+            if not info:
+                available_lines.append(f"- **{month_label}:** no hay dato mensual desagregado suficiente en el contexto del asistente.")
+                continue
 
-        principales = sorted(info["conductas"].items(), key=lambda item: item[1], reverse=True)[:4]
-        detalle = ", ".join([f"{name}: {count}" for name, count in principales])
-        available_lines.append(f"- **{month_label}:** {info['total']} casos consolidados. Principales conductas: {detalle}.")
+            if conducta_key:
+                count = int(info["conductas"].get(conducta_key, 0))
+                available_lines.append(f"- **{month_label}:** {count} {conducta_label} registrados.")
+                continue
+
+            principales = sorted(info["conductas"].items(), key=lambda item: item[1], reverse=True)[:4]
+            detalle = ", ".join([f"{name}: {count}" for name, count in principales])
+            available_lines.append(f"- **{month_label}:** {info['total']} casos consolidados. Principales conductas: {detalle}.")
 
     intro = f"Con corte al **{fecha_corte}** ({fuente_corte}), el SISC registra esta informacion para los meses consultados:"
     parts = [intro]
@@ -364,6 +390,9 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     fecha_corte = fecha_corte_date.isoformat() if fecha_corte_date else "sin datos cargados"
     fuente_corte = "hechos de sabana cargada" if use_modern_source else ("sabana publica consolidada" if max_snapshot_date else "tabla interna historica")
 
+    requested_years_for_context, requested_months_for_context = _extract_requested_periods(user_message, fecha_corte_date.year if fecha_corte_date else datetime.now().year)
+    years_for_monthly_context = requested_years_for_context if requested_months_for_context else ([fecha_corte_date.year] if fecha_corte_date else [datetime.now().year])
+
     monthly_rows = []
     if fecha_corte_date and use_modern_source:
         monthly_rows = db.query(
@@ -373,7 +402,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
             hechos_unicos_expr().label('total'),
         ).filter(
             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
-            func.extract('year', HechoSeguridad.fecha_evento) == fecha_corte_date.year,
+            func.extract('year', HechoSeguridad.fecha_evento).in_(years_for_monthly_context),
         ).group_by('year', 'month', HechoSeguridad.categoria_delito).order_by('year', 'month').all()
     elif fecha_corte_date and snapshot_id:
         monthly_rows = db.query(
@@ -383,7 +412,7 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
             func.count(func.distinct(SabanaSnapshotRow.hecho_key)).label('total'),
         ).filter(
             SabanaSnapshotRow.ingestion_id == snapshot_id,
-            func.extract('year', SabanaSnapshotRow.fecha_evento) == fecha_corte_date.year,
+            func.extract('year', SabanaSnapshotRow.fecha_evento).in_(years_for_monthly_context),
         ).group_by('year', 'month', SabanaSnapshotRow.categoria_delito).order_by('year', 'month').all()
 
     monthly_summary = {}
