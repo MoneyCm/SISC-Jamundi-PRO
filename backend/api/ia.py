@@ -133,6 +133,7 @@ def _format_year_monthly_breakdown_answer(user_message: str, conversation_text: 
     for year in requested_years:
         lines = []
         annual_total = 0
+        months_with_data = []
         for month in range(1, 13):
             period_start = date(year, month, 1)
             if period_start > fecha_corte_date:
@@ -140,6 +141,7 @@ def _format_year_monthly_breakdown_answer(user_message: str, conversation_text: 
             info = monthly_summary.get((year, month))
             if not info:
                 continue
+            months_with_data.append(month)
             if conducta_key:
                 count = int(info["conductas"].get(conducta_key, 0))
                 annual_total += count
@@ -150,8 +152,12 @@ def _format_year_monthly_breakdown_answer(user_message: str, conversation_text: 
 
         label = conducta_label if conducta_key else "delitos/casos consolidados"
         if lines:
-            parts.append(f"**{year}: {annual_total} {label}.**")
+            available_range = f"{MONTH_NAMES[min(months_with_data)]}-{MONTH_NAMES[max(months_with_data)]}" if months_with_data else "meses disponibles"
+            parts.append(f"**{year}: {annual_total} {label} en los meses disponibles ({available_range}).**")
             parts.append("\n".join(lines))
+            if year < fecha_corte_date.year and max(months_with_data) < 12:
+                missing = ", ".join(MONTH_NAMES[m] for m in range(max(months_with_data) + 1, 13))
+                parts.append(f"En esta entrega publica no hay datos mensuales cargados para {missing} de {year}.")
         else:
             parts.append(f"**{year}:** no hay dato mensual desagregado suficiente en el contexto del asistente.")
 
