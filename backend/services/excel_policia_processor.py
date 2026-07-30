@@ -39,6 +39,7 @@ COLUMN_ALIASES = {
     "sexo": ["GENERO", "SEXO", "SEXO_PERSONA"],
     "edad": ["EDAD", "EDAD_PERSONA"],
     "grupo_edad": ["AGRUPA_EDAD_PERSONA", "RANGO_EDAD", "GRUPO_ETAREO"],
+    "cantidad": ["CANTIDAD", "VICTIMAS", "CANTIDAD_VICTIMAS", "NUMERO_CASOS", "NRO_CASOS", "TOTAL"],
     "fecha_reporte_fuente": ["FECHA_CREACION", "FECHA_CREACIÓN", "CREADO", "FECHA_REPORTE"],
     "municipio_fuente": ["MUNICIPIO_HECHO", "MUNICIPIO", "MPIO", "CIUDAD"]
 }
@@ -87,6 +88,17 @@ class PoliciaJamundiProcessor:
             return False
         text = str(value).strip()
         return text and text.upper() not in {"NAN", "NONE", "NULL", "NO REPORTA", "SIN INFORMACION", "SIN INFORMACI??N"}
+
+    def _parse_count(self, value):
+        if value is None:
+            return 1
+        if isinstance(value, float) and pd.isna(value):
+            return 1
+        try:
+            parsed = int(float(str(value).strip().replace(",", ".")))
+            return parsed if parsed > 0 else 1
+        except Exception:
+            return 1
 
     def _find_master_hecho(self, processed_data, fingerprint):
         # La base policial puede traer varias victimas/registros con el mismo HECHOS_ID.
@@ -165,37 +177,55 @@ class PoliciaJamundiProcessor:
         
         return "Delito General", "OTROS"
 
-    def process(self, contents: bytes, filename: str):
+    def process(self, contents: bytes, filename: str, run_id: str = None, force: bool = False):
         file_hash = hashlib.sha256(contents).hexdigest()
         
-        # 1. Verificar si ya se proceso
-        existing_run = self.db.query(IngestionRun).filter(
-            IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
-            IngestionRun.hash_archivo == file_hash,
-        ).first()
+        # 1. Verificar si ya se proceso. Si viene de la cola HTTP, usar ese run exacto.
+        existing_run = None
         backfill_existing = False
-        if existing_run:
-            has_snapshot = self.db.query(SabanaSnapshotRow.id).filter(
-                SabanaSnapshotRow.ingestion_id == existing_run.id
-            ).first() is not None
-            if has_snapshot:
-                logger.info(f"Archivo ya procesado: {filename}")
-                return {"status": "skipped", "message": "Este archivo ya fue procesado anteriormente.", "ingestion_id": str(existing_run.id)}
-            backfill_existing = True
-            run = existing_run
+        if run_id:
+            try:
+                run_uuid = uuid.UUID(str(run_id))
+            except ValueError:
+                run_uuid = None
+            run = self.db.query(IngestionRun).filter(
+                IngestionRun.id == run_uuid,
+                IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+            ).first() if run_uuid else None
+            if not run:
+                raise ValueError(f"No existe la carga policial {run_id}")
+            run.hash_archivo = file_hash
+            run.filename = filename
             run.status = "IN_PROGRESS"
             run.usuario_carga = self.user_id
-            logger.info(f"Completando foto historica para archivo existente: {filename}")
+            run.fecha_fin = None
         else:
-            # 2. Iniciar Run
-            run = IngestionRun(
-                fuente_codigo="POLICIA_SEMANAL",
-                hash_archivo=file_hash,
-                filename=filename,
-                usuario_carga=self.user_id,
-                status="IN_PROGRESS"
-            )
-            self.db.add(run)
+            existing_run = self.db.query(IngestionRun).filter(
+                IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
+                IngestionRun.hash_archivo == file_hash,
+            ).first()
+            if existing_run and not force:
+                has_snapshot = self.db.query(SabanaSnapshotRow.id).filter(
+                    SabanaSnapshotRow.ingestion_id == existing_run.id
+                ).first() is not None
+                if has_snapshot:
+                    logger.info(f"Archivo ya procesado: {filename}")
+                    return {"status": "skipped", "message": "Este archivo ya fue procesado anteriormente.", "ingestion_id": str(existing_run.id)}
+                backfill_existing = True
+                run = existing_run
+                run.status = "IN_PROGRESS"
+                run.usuario_carga = self.user_id
+                logger.info(f"Completando foto historica para archivo existente: {filename}")
+            else:
+                # 2. Iniciar Run
+                run = IngestionRun(
+                    fuente_codigo="POLICIA_SEMANAL",
+                    hash_archivo=file_hash,
+                    filename=filename,
+                    usuario_carga=self.user_id,
+                    status="IN_PROGRESS"
+                )
+                self.db.add(run)
         self.db.commit()
 
         try:
@@ -311,7 +341,8 @@ class PoliciaJamundiProcessor:
                             "vereda_normalizada": vereda_norm,
                             "sexo": self._normalize_text(data.get("sexo", "NO REPORTA")),
                             "edad": int(data["edad"]) if data.get("edad") and str(data["edad"]).isdigit() else 0,
-                            "arma_medio": self._normalize_text(data.get("arma_medio", "NO REPORTA"))
+                            "arma_medio": self._normalize_text(data.get("arma_medio", "NO REPORTA")),
+                            "cantidad": self._parse_count(data.get("cantidad"))
                         }
                         
                         # h. Deduplicación por Fingerprint (Hecho + Víctima)
@@ -347,6 +378,7 @@ class PoliciaJamundiProcessor:
                                 "vereda": vereda_norm,
                                 "zona": str(data.get("zona") or ""),
                                 "modalidad": str(data.get("modalidad") or ""),
+                                "cantidad": processed_data["cantidad"],
                             },
                         )
                         self.db.add(snapshot_row)

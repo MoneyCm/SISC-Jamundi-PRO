@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from db.models import get_db, Event, EventType
 from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, SabanaSnapshotRow
 from services.hechos_metrics import hechos_unicos_expr
-from sqlalchemy import func
+from sqlalchemy import Integer, cast, func
 import os
 import re
 import httpx
@@ -652,10 +652,18 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
             monthly_summary.setdefault(key, {"total": 0, "conductas": {}})
             monthly_summary[key]["conductas"]["HOMICIDIO"] = int(total or 0)
 
-        homicide_snapshot_rows = db.query(
+        cantidad_snapshot_expr = cast(
+            func.coalesce(
+                func.nullif(SabanaSnapshotRow.datos_normalizados.op("->>")("cantidad"), ""),
+                "1",
+            ),
+            Integer,
+        )
+        homicide_snapshot_base = db.query(
             func.extract('year', SabanaSnapshotRow.fecha_evento).label('year'),
             func.extract('month', SabanaSnapshotRow.fecha_evento).label('month'),
-            func.count(func.distinct(SabanaSnapshotRow.record_key)).label('total'),
+            SabanaSnapshotRow.record_key.label('record_key'),
+            func.max(cantidad_snapshot_expr).label('cantidad'),
         ).join(
             IngestionRun, IngestionRun.id == SabanaSnapshotRow.ingestion_id
         ).filter(
@@ -663,7 +671,19 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
             IngestionRun.status == "COMPLETED",
             SabanaSnapshotRow.conducta_estandar.in_(HOMICIDE_ALIASES),
             func.extract('year', SabanaSnapshotRow.fecha_evento).in_(years_for_monthly_context),
-        ).group_by('year', 'month').order_by('year', 'month').all()
+        ).group_by('year', 'month', SabanaSnapshotRow.record_key).subquery()
+
+        homicide_snapshot_rows = db.query(
+            homicide_snapshot_base.c.year,
+            homicide_snapshot_base.c.month,
+            func.sum(homicide_snapshot_base.c.cantidad).label('total'),
+        ).group_by(
+            homicide_snapshot_base.c.year,
+            homicide_snapshot_base.c.month,
+        ).order_by(
+            homicide_snapshot_base.c.year,
+            homicide_snapshot_base.c.month,
+        ).all()
 
         for year, month, total in homicide_snapshot_rows:
             key = (int(year), int(month))

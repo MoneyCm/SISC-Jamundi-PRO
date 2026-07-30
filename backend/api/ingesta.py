@@ -258,14 +258,14 @@ def delete_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 
-def _process_policia_background(contents: bytes, filename: str, username: str):
+def _process_policia_background(contents: bytes, filename: str, username: str, run_id: str = None, force: bool = False):
     from db.session import SessionLocal
     from services.excel_policia_processor import PoliciaJamundiProcessor
 
     db = SessionLocal()
     try:
         processor = PoliciaJamundiProcessor(db, user_id=username)
-        processor.process(contents, filename)
+        processor.process(contents, filename, run_id=run_id, force=force)
     except Exception:
         logger.error(f"Fallo en procesador Policia background: {filename}")
         logger.error(traceback.format_exc())
@@ -307,7 +307,7 @@ async def upload_with_gate(
             IngestionRun.hash_archivo == file_hash,
         ).first()
 
-        if existing_run:
+        if existing_run and not force:
             has_snapshot = db.query(SabanaSnapshotRow.id).filter(
                 SabanaSnapshotRow.ingestion_id == existing_run.id
             ).first() is not None
@@ -334,7 +334,7 @@ async def upload_with_gate(
 
         db.commit()
         db.refresh(run)
-        background_tasks.add_task(_process_policia_background, contents, file.filename, current_user.username)
+        background_tasks.add_task(_process_policia_background, contents, file.filename, current_user.username, str(run.id), force)
         return {
             "status": "accepted",
             "message": "La base policial quedo en procesamiento. Puedes seguir el avance con el ID de proceso.",
