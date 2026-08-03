@@ -35,7 +35,7 @@ import {
     XAxis,
     YAxis
 } from 'recharts';
-import { MapContainer, TileLayer, GeoJSON, Popup, Tooltip as MapTooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Popup, Tooltip as MapTooltip, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { getCachedPublicDashboard, loadPublicDashboard } from '../utils/publicDashboardCache';
@@ -128,64 +128,56 @@ const CustomTooltip = ({ active, payload, label }) => {
     );
 };
 
-const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1, geographySource = '' }) => {
-    const maxTotal = Math.max(1, ...points.map((point) => point.total || 0));
-    const labelledTerritories = new Set([...points]
-        .sort((a, b) => (b.total || 0) - (a.total || 0))
-        .slice(0, 3)
-        .map((point) => point.name));
+const TerritoryPopup = ({ point }) => (
+    <div className="text-sm min-w-[190px]">
+        <p className="font-black text-slate-900">{point.name}</p>
+        <p className="text-slate-600">{numberFmt.format(point.total)} hechos agregados</p>
+        {point.zones?.length ? <p className="text-[11px] text-slate-500 mt-2">Zona: {point.zones.join(', ')}</p> : null}
+        {point.conductas?.length ? <p className="text-[11px] text-slate-500 mt-1">Conductas: {point.conductas.slice(0, 3).join(', ')}</p> : null}
+        {point.source && <p className="text-[11px] text-slate-500 mt-1">Fuente: {point.source}</p>}
+        <a className="mt-2 inline-flex text-[11px] font-bold text-[#281FD0] underline" href={googleMapsUrl(point.lat, point.lng)} target="_blank" rel="noreferrer">Abrir en Google Maps</a>
+    </div>
+);
+
+const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1, zoneFilter = '', conductaFilter = '', showBubbles = false, onZoneFilter, onConductaFilter, onToggleBubbles, onSelectTerritory }) => {
+    const zones = [...new Set(points.flatMap((point) => point.zones || []))].sort();
+    const conductas = [...new Set(points.flatMap((point) => point.conductas || []))].sort();
+    const visiblePoints = points.filter((point) => point.geometry && (!zoneFilter || point.zones?.includes(zoneFilter)) && (!conductaFilter || point.conductas?.includes(conductaFilter)));
+    const maxTotal = Math.max(1, ...visiblePoints.map((point) => point.total || 0));
+    const labelledTerritories = new Set([...visiblePoints].sort((a, b) => (b.total || 0) - (a.total || 0)).slice(0, 3).map((point) => point.name));
     return (
         <div className="border border-slate-200 rounded-md bg-white overflow-hidden shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
+                <select value={zoneFilter} onChange={(event) => onZoneFilter?.(event.target.value)} className="border border-slate-300 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700" aria-label="Filtrar por zona"><option value="">Todas las zonas</option>{zones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select>
+                <select value={conductaFilter} onChange={(event) => onConductaFilter?.(event.target.value)} className="border border-slate-300 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700" aria-label="Filtrar por conducta"><option value="">Todas las conductas</option>{conductas.map((conducta) => <option key={conducta} value={conducta}>{conducta}</option>)}</select>
+                <label className="inline-flex items-center gap-2 px-2 py-1.5 text-[11px] font-bold text-slate-700"><input type="checkbox" checked={showBubbles} onChange={(event) => onToggleBubbles?.(event.target.checked)} /> Ver burbujas</label>
+                <span className="ml-auto text-[11px] font-bold text-slate-500">{visiblePoints.length} territorios en mapa</span>
+            </div>
             <div className="h-[500px] relative">
                 <MapContainer center={[3.2606, -76.5364]} zoom={12} zoomControl={false} preferCanvas style={{ height: '100%', width: '100%' }}>
                     <TileLayer attribution='&copy; OpenStreetMap contributors &copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" maxZoom={19} />
-                    {points.filter((point) => point.geometry).map((point) => {
-                        const intensity = (point.total || 0) / maxTotal;
-                        return (
-                            <GeoJSON
-                                key={point.name}
-                                data={point.geometry}
-                                style={{
-                                    color: '#281FD0',
-                                    fillColor: intensity >= 0.7 ? '#FFB600' : '#384CF5',
-                                    fillOpacity: 0.28 + intensity * 0.38,
-                                    weight: 2,
-                                }}
-                            >
-                                {labelledTerritories.has(point.name) && <MapTooltip permanent direction="center" className="sisc-map-label">{point.name}</MapTooltip>}
-                                <Popup>
-                                    <div className="text-sm">
-                                        <p className="font-black text-slate-900">{point.name}</p>
-                                        <p className="text-slate-600">{numberFmt.format(point.total)} hechos agregados</p>
-                                        <p className="text-[11px] text-slate-500 mt-2">PolÃ­gono oficial del territorio.</p>{point.source && <p className="text-[11px] text-slate-500 mt-1">Fuente: {point.source}</p>}<a className="mt-2 inline-flex text-[11px] font-bold text-[#281FD0] underline" href={googleMapsUrl(point.lat, point.lng)} target="_blank" rel="noreferrer">Abrir en Google Maps</a>
-                                    </div>
-                                </Popup>
-                            </GeoJSON>
-                        );
-                    })}
+                    {visiblePoints.map((point) => { const intensity = (point.total || 0) / maxTotal; return <GeoJSON key={point.name} data={point.geometry} eventHandlers={{ click: () => onSelectTerritory?.(point) }} style={{ color: '#281FD0', fillColor: intensity >= 0.7 ? '#FFB600' : '#384CF5', fillOpacity: 0.28 + intensity * 0.38, weight: 2 }}>{labelledTerritories.has(point.name) && <MapTooltip permanent direction="center" className="sisc-map-label">{point.name}</MapTooltip>}<Popup><TerritoryPopup point={point} /></Popup></GeoJSON>; })}
+                    {showBubbles && visiblePoints.map((point) => <CircleMarker key={`bubble-${point.name}`} center={[point.lat, point.lng]} radius={Math.max(5, Math.min(20, 5 + Math.sqrt(point.total || 0) * 1.2))} pathOptions={{ color: '#FFB600', fillColor: '#FFB600', fillOpacity: 0.24, weight: 1 }} eventHandlers={{ click: () => onSelectTerritory?.(point) }}><Popup><TerritoryPopup point={point} /></Popup></CircleMarker>)}
                 </MapContainer>
             </div>
-            <details className="border-t border-slate-200">
-                <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-600">
-                    <Info size={14} className="text-[#281FD0]" /> InformaciÃ³n del mapa
-                </summary>
-                <div className="grid gap-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:grid-cols-2">
-                    <p>Solo se ubican barrios, veredas y corregimientos con polÃ­gono oficial verificado.</p>
-                    <p>{numberFmt.format(unmapped)} territorios visibles siguen pendientes de polÃ­gono o homologaciÃ³n.</p>
-                    <p>Se ocultan territorios que no alcanzan el umbral mÃ­nimo de {minCount} hecho(s).</p>
-                    <p>Fuentes: GobernaciÃ³n del Valle del Cauca (urbano) y R_VEREDA oficial de JamundÃ­ (rural).</p>
-                </div>
-            </details>
+            <details className="border-t border-slate-200"><summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-600"><Info size={14} className="text-[#281FD0]" /> Información del mapa</summary><div className="grid gap-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:grid-cols-2"><p>Solo se ubican barrios, veredas y corregimientos con polígono oficial verificado.</p><p>{numberFmt.format(unmapped)} territorios siguen pendientes de polígono u homologación.</p><p>Se ocultan territorios que no alcanzan el umbral mínimo de {minCount} hecho(s). Registros suprimidos: {numberFmt.format(suppressed)}.</p><p>Fuentes: Gobernación del Valle del Cauca (urbano) y R_VEREDA oficial de Jamundí (rural).</p></div></details>
         </div>
     );
 };
 
+const DecisionCard = ({ territory }) => (
+    <section className="border border-[#281FD0]/20 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">Ficha de decisión</p><h2 className="mt-1 text-xl font-black text-slate-950">Foco territorial: {territory.name}</h2></div><a className="inline-flex items-center gap-2 border border-[#281FD0] px-3 py-2 text-[11px] font-black uppercase tracking-wide text-[#281FD0]" href={googleMapsUrl(territory.lat, territory.lng)} target="_blank" rel="noreferrer"><MapPinned size={14} /> Ver ubicación</a></div><div className="mt-4 grid gap-4 md:grid-cols-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Evidencia</p><p className="mt-1 text-sm font-bold text-slate-800">{numberFmt.format(territory.total)} hechos agregados</p><p className="text-xs text-slate-500">{territory.zones?.join(', ') || 'Zona no clasificada'}</p></div><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decisión sugerida</p><p className="mt-1 text-sm font-bold text-slate-800">Mantener vigilancia focalizada y revisar la tendencia en el próximo corte.</p></div><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Seguimiento</p><p className="mt-1 text-sm font-bold text-slate-800">Comparar hechos, conducta y zona antes de mover o cerrar el foco.</p><p className="text-xs text-slate-500 mt-1">Fuente: {territory.source || 'SABANA SIEDCO/PONAL'}</p></div></div></section>
+);
 const PublicDashboard = ({ onLoginClick, onBack }) => {
     const [minLocationCount] = useState(1);
     const [data, setData] = useState(() => getCachedPublicDashboard(1));
     const [loading, setLoading] = useState(() => !getCachedPublicDashboard(1));
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
+    const [zoneFilter, setZoneFilter] = useState('');
+    const [conductaFilter, setConductaFilter] = useState('');
+    const [showBubbles, setShowBubbles] = useState(false);
+    const [selectedTerritory, setSelectedTerritory] = useState(null);
 
     const loadDashboard = async ({ force = false } = {}) => {
         const hasVisibleData = Boolean(data);
@@ -413,8 +405,10 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
 
                 <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
                     <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-4"><MapPinned size={20} className="text-[#281FD0]" /><h2 className="text-base font-black uppercase tracking-tight">Barrios y corregimientos</h2></div><div className="divide-y divide-slate-100 border-y border-slate-100">{(data.territories || []).slice(0, 12).map((territory, index) => <div key={territory.name} className="py-3 flex items-center justify-between gap-4"><div className="flex items-center gap-3 min-w-0"><span className="w-7 h-7 bg-slate-100 text-slate-700 text-xs font-black flex items-center justify-center shrink-0">{index + 1}</span><span className="font-bold text-slate-800 truncate">{territory.name}</span></div><span className="font-black text-slate-900">{numberFmt.format(territory.total)}</span></div>)}</div></div>
-                    <AggregatedMap points={data.map?.points || []} suppressed={data.map?.suppressed_count || 0} unmapped={data.map?.unmapped_count || 0} minCount={data.map?.min_location_count || 1} geographySource={data.map?.geography_source || ''} />
+                    <AggregatedMap points={data.map?.points || []} suppressed={data.map?.suppressed_count || 0} unmapped={data.map?.unmapped_count || 0} minCount={data.map?.min_location_count || 1} zoneFilter={zoneFilter} conductaFilter={conductaFilter} showBubbles={showBubbles} onZoneFilter={setZoneFilter} onConductaFilter={setConductaFilter} onToggleBubbles={setShowBubbles} onSelectTerritory={setSelectedTerritory} />
                 </section>
+
+                {selectedTerritory && <DecisionCard territory={selectedTerritory} />}
 
                 <section className="grid gap-6 lg:grid-cols-2">
                     <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><Info size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">MetodologÃ­a</h2></div><p className="text-sm leading-6 text-slate-700 font-medium">{meta.methodology}</p><p className="text-sm leading-6 text-slate-700 font-medium mt-3">{meta.privacy}</p></div>

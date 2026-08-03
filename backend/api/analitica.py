@@ -239,7 +239,9 @@ def get_public_dashboard(
 
     raw_locations = db.execute(text(f"""
         SELECT UPPER({source['location_expr']}) AS name,
-               COUNT(DISTINCT {source['identity_expr']}) AS total
+               COUNT(DISTINCT {source['identity_expr']}) AS total,
+               STRING_AGG(DISTINCT UPPER(COALESCE({source['zone_expr']}, 'SIN DATO')), '|') AS zones,
+               STRING_AGG(DISTINCT UPPER(COALESCE({source['conducta_col']}, 'SIN CLASIFICAR')), '|') AS conductas
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
         {source['snapshot_filter']}
@@ -254,14 +256,25 @@ def get_public_dashboard(
     map_points = []
     unmapped_locations = 0
     unmapped_locations_list = []
+    def pending_reason(name):
+        normalized = (name or '').upper()
+        if '/' in normalized or normalized.startswith('VIA ') or ' VIA ' in normalized:
+            return 'corredor o referencia vial'
+        if 'ALFAGUARA' in normalized or 'BONANZA' in normalized:
+            return 'nombre ambiguo; requiere homologacion territorial'
+        return 'pendiente de homologacion o poligono oficial'
+
+    def split_values(value):
+        return [item for item in (value or '').split('|') if item]
+
     for row in raw_locations:
         if not row.name or row.name == "SIN DATO":
             continue
         if row.total < min_location_count:
             suppressed_locations += row.total
-            unmapped_locations_list.append({"name": row.name, "total": row.total})
+            unmapped_locations_list.append({"name": row.name, "total": row.total, "reason": "baja frecuencia"})
             continue
-        item = {"name": row.name, "total": row.total}
+        item = {"name": row.name, "total": row.total, "zones": split_values(row.zones), "conductas": split_values(row.conductas)}
         territories.append(item)
         territory = GeocodingService.get_official_territory(row.name)
         if territory:
@@ -273,10 +286,12 @@ def get_public_dashboard(
                 "lng": lng,
                 "geometry": territory["geometry"],
                 "source": territory.get("source", "cartografia oficial"),
+                "zones": item["zones"],
+                "conductas": item["conductas"],
             })
         else:
             unmapped_locations += 1
-            unmapped_locations_list.append({"name": row.name, "total": row.total})
+            unmapped_locations_list.append({"name": row.name, "total": row.total, "reason": pending_reason(row.name), "zones": item["zones"], "conductas": item["conductas"]})
 
     run = source["run"]
     report_start = period_start.isoformat()
