@@ -128,7 +128,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     );
 };
 
-const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3, geographySource = '' }) => {
+const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1, geographySource = '' }) => {
     const maxTotal = Math.max(1, ...points.map((point) => point.total || 0));
     const labelledTerritories = new Set([...points]
         .sort((a, b) => (b.total || 0) - (a.total || 0))
@@ -145,7 +145,12 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
                             <GeoJSON
                                 key={point.name}
                                 data={point.geometry}
-                                style={{ color: '#281FD0', fillColor: intensity >= 0.7 ? '#FFB600' : '#384CF5', fillOpacity: 0.28 + intensity * 0.38, weight: 2 }}
+                                style={{
+                                    color: '#281FD0',
+                                    fillColor: intensity >= 0.7 ? '#FFB600' : '#384CF5',
+                                    fillOpacity: 0.28 + intensity * 0.38,
+                                    weight: 2,
+                                }}
                                 eventHandlers={{ click: () => window.open(googleMapsUrl(point.lat, point.lng), '_blank', 'noopener,noreferrer') }}
                             >
                                 {labelledTerritories.has(point.name) && <MapTooltip permanent direction="center" className="sisc-map-label">{point.name}</MapTooltip>}
@@ -153,16 +158,17 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
                                     <div className="text-sm">
                                         <p className="font-black text-slate-900">{point.name}</p>
                                         <p className="text-slate-600">{numberFmt.format(point.total)} hechos agregados</p>
-                                        <p className="text-[11px] text-slate-500 mt-2">Polígono oficial del barrio.</p>
+                                        <p className="text-[11px] text-slate-500 mt-2">Polígono oficial del barrio.</p>{point.source && <p className="text-[11px] text-slate-500 mt-1">Fuente: {point.source}</p>}
                                     </div>
                                 </Popup>
                             </GeoJSON>
                         );
-                    })}                </MapContainer>
+                    })}
+                </MapContainer>
                 <div className="absolute left-4 bottom-4 z-[1000] bg-white/95 border border-slate-200 rounded-md p-3 max-w-xs shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mapa agregado</p>
                     <p className="text-xs text-slate-700 mt-1">Solo se ubican territorios con polígono oficial verificado. Se ocultan territorios con menos de {minCount} hechos.</p>
-                    <p className="text-xs text-slate-700 mt-1">El fondo muestra calles, vías y referencias de CARTO/OpenStreetMap; los nombres destacados corresponden a territorios con ubicación verificada.</p>
+                    <p className="text-xs text-slate-700 mt-1">El fondo muestra calles, vías y referencias de CARTO/OpenStreetMap; los polígonos coloreados corresponden a barrios con ubicación oficial verificada.</p>
                     {unmapped > 0 && <p className="text-xs font-bold text-slate-600 mt-2">{numberFmt.format(unmapped)} territorios visibles no se ubican porque aún no tienen polígono oficial verificado.</p>}
                     {suppressed > 0 && <p className="text-xs font-bold text-amber-700 mt-2">{numberFmt.format(suppressed)} hechos en territorios de baja frecuencia fueron suprimidos.</p>}
                     {geographySource && <p className="text-[10px] text-slate-500 mt-2">{geographySource}</p>}
@@ -173,8 +179,9 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
 };
 
 const PublicDashboard = ({ onLoginClick, onBack }) => {
-    const [data, setData] = useState(() => getCachedPublicDashboard());
-    const [loading, setLoading] = useState(() => !getCachedPublicDashboard());
+    const [minLocationCount] = useState(1);
+    const [data, setData] = useState(() => getCachedPublicDashboard(1));
+    const [loading, setLoading] = useState(() => !getCachedPublicDashboard(1));
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
 
@@ -184,7 +191,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
         else setLoading(true);
         setError('');
         try {
-            setData(await loadPublicDashboard({ force }));
+            setData(await loadPublicDashboard({ force, minLocationCount }));
         } catch (requestError) {
             if (!hasVisibleData) setData(null);
             setError(requestError.message || 'No fue posible cargar el tablero ciudadano.');
@@ -352,7 +359,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                     <KpiTile icon={Database} label={`Registros validados ${currentYear}`} value={numberFmt.format(data.kpis?.total_registros || 0)} helper="Filas válidas de la SABANA" tone="slate" />
                     <KpiTile icon={TrendingUp} label="Comparación interanual" value={variationLabel(variation)} helper={`${data.interannual?.current?.year || ''} frente a ${data.interannual?.previous?.year || ''}`} tone={variationIsUp ? 'red' : 'blue'} />
                     <KpiTile icon={ShieldCheck} label={`Homicidios ${currentYear}`} value={numberFmt.format(data.kpis?.homicidios || 0)} helper={`Tasa acumulada al corte: ${data.kpis?.tasa_homicidios || 0} por 100.000 hab.`} tone="red" />
-                    <KpiTile icon={Layers} label="Territorios visibles" value={numberFmt.format(data.territories?.length || 0)} helper={`Mínimo ${data.map?.min_location_count || 3} hechos para publicar`} tone="amber" />
+                    <KpiTile icon={Layers} label="Territorios visibles" value={numberFmt.format(data.territories?.length || 0)} helper={`Mínimo ${data.map?.min_location_count || 1} hechos para publicar`} tone="amber" />
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -404,7 +411,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
 
                 <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
                     <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-4"><MapPinned size={20} className="text-[#281FD0]" /><h2 className="text-base font-black uppercase tracking-tight">Barrios y corregimientos</h2></div><div className="divide-y divide-slate-100 border-y border-slate-100">{(data.territories || []).slice(0, 12).map((territory, index) => <div key={territory.name} className="py-3 flex items-center justify-between gap-4"><div className="flex items-center gap-3 min-w-0"><span className="w-7 h-7 bg-slate-100 text-slate-700 text-xs font-black flex items-center justify-center shrink-0">{index + 1}</span><span className="font-bold text-slate-800 truncate">{territory.name}</span></div><span className="font-black text-slate-900">{numberFmt.format(territory.total)}</span></div>)}</div></div>
-                    <AggregatedMap points={data.map?.points || []} suppressed={data.map?.suppressed_count || 0} unmapped={data.map?.unmapped_count || 0} minCount={data.map?.min_location_count || 3} geographySource={data.map?.geography_source || ''} />
+                    <AggregatedMap points={data.map?.points || []} suppressed={data.map?.suppressed_count || 0} unmapped={data.map?.unmapped_count || 0} minCount={data.map?.min_location_count || 1} geographySource={data.map?.geography_source || ''} />
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-2">
@@ -419,3 +426,5 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
 };
 
 export default PublicDashboard;
+
+
