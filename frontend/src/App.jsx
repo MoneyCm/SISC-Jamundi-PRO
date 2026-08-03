@@ -17,7 +17,7 @@ const SecureReporting = lazy(() => import('./pages/SecureReporting'));
 const CommunityParticipation = lazy(() => import('./pages/CommunityParticipation'));
 const IntelligenceModule = lazy(() => import('./pages/IntelligenceModule'));
 const DataQuality = lazy(() => import('./pages/DataQuality'));
-const SiscAIChatbot = lazy(() => import('./components/SiscAIChatbot'));
+
 const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
 const StatsModule = lazy(() => import('./pages/StatsModule'));
 const MindefensaMonitor = lazy(() => import('./pages/MindefensaMonitor'));
@@ -231,7 +231,6 @@ const App = () => {
         <div className="min-h-screen animate-fade-in">
           <Suspense fallback={<PageLoading />}>{renderContent()}</Suspense>
         </div>
-        <Suspense fallback={null}><SiscAIChatbot /></Suspense>
       </>
     );
   }
