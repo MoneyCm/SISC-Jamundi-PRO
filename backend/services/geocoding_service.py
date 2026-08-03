@@ -26,6 +26,7 @@ OFFICIAL_NAME_ALIASES = {
     "TERRANOVA": "CIUDADELA TERRANOVA",
     "SACHAMATE (URB MUNICIPAL)": "SACHAMATE",
     "VILLA PAZ": "VIILA PAZ",
+    "LA PRADERA I": "LA PRADERA",
 }
 
 
@@ -140,7 +141,7 @@ class GeocodingService:
         aliases = GeocodingService._load_aliases()
         territories = GeocodingService._official_territories()
         candidates = [normalized]
-        for prefix in ("CGTO ", "CORREGIMIENTO ", "VEREDA "):
+        for prefix in ("CGTO ", "CGTO DE ", "CORREGIMIENTO ", "CORREGIMIENTO DE ", "VEREDA ", "VDA "):
             if normalized.startswith(prefix):
                 candidates.append(normalized[len(prefix):].strip())
         for candidate in candidates:
