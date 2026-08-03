@@ -167,8 +167,8 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1
                 </MapContainer>
                 <div className="absolute left-4 bottom-4 z-[1000] bg-white/95 border border-slate-200 rounded-md p-3 max-w-xs shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mapa agregado</p>
-                    <p className="text-xs text-slate-700 mt-1">Solo se ubican territorios con polígono oficial verificado. Se ocultan territorios con menos de {minCount} hechos.</p>
-                    <p className="text-xs text-slate-700 mt-1">El fondo muestra calles, vías y referencias de CARTO/OpenStreetMap; los polígonos coloreados corresponden a barrios con ubicación oficial verificada.</p>
+                    <p className="text-xs text-slate-700 mt-1">Solo se ubican territorios con polígono oficial verificado. Se ocultan territorios que no alcanzan el umbral mínimo de {minCount} hecho(s).</p>
+                    <p className="text-xs text-slate-700 mt-1">El fondo muestra calles, vías y referencias de CARTO/OpenStreetMap; los polígonos coloreados corresponden a barrios, veredas y corregimientos con ubicación oficial verificada.</p>
                     {unmapped > 0 && <p className="text-xs font-bold text-slate-600 mt-2">{numberFmt.format(unmapped)} territorios visibles no se ubican porque aún no tienen polígono oficial verificado.</p>}
                     {suppressed > 0 && <p className="text-xs font-bold text-amber-700 mt-2">{numberFmt.format(suppressed)} hechos en territorios de baja frecuencia fueron suprimidos.</p>}
                     {geographySource && <p className="text-[10px] text-slate-500 mt-2">{geographySource}</p>}

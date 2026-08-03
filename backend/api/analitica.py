@@ -336,7 +336,7 @@ def get_public_dashboard(
             "suppressed_count": suppressed_locations,
             "unmapped_count": unmapped_locations,
             "unmapped_names": unmapped_locations_list,
-            "geography_source": "Poligonos urbanos del visor geografico de la Gobernacion del Valle del Cauca",
+            "geography_source": "Polígonos oficiales urbanos y rurales: visor geográfico de la Gobernación del Valle del Cauca y capa rural R_VEREDA de Jamundí",
             "points": map_points,
         },
     }
