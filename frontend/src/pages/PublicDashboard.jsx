@@ -130,13 +130,17 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3, geographySource = '' }) => {
     const maxTotal = Math.max(1, ...points.map((point) => point.total || 0));
+    const labelledTerritories = new Set([...points]
+        .sort((a, b) => (b.total || 0) - (a.total || 0))
+        .slice(0, 3)
+        .map((point) => point.name));
     return (
         <div className="h-[500px] border border-slate-200 rounded-md bg-white overflow-hidden shadow-sm">
             <div className="h-full relative">
                 <MapContainer center={[3.2606, -76.5364]} zoom={12} zoomControl={false} preferCanvas style={{ height: '100%', width: '100%' }}>
                     <TileLayer attribution='&copy; OpenStreetMap contributors &copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" maxZoom={19} />
                     {points.map((point) => {
-                        const radius = 8 + ((point.total || 0) / maxTotal) * 26;
+                        const radius = 6 + ((point.total || 0) / maxTotal) * 19;
                         return (
                             <CircleMarker
                                 key={point.name}
@@ -145,7 +149,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
                                 pathOptions={{ color: '#281FD0', fillColor: '#FFB600', fillOpacity: 0.45, weight: 2 }}
                                 eventHandlers={{ click: () => window.open(googleMapsUrl(point.lat, point.lng), '_blank', 'noopener,noreferrer') }}
                             >
-                                {point.total >= 10 && <MapTooltip permanent direction="top" offset={[0, -radius]} className="sisc-map-label">{point.name}</MapTooltip>}
+                                {labelledTerritories.has(point.name) && <MapTooltip permanent direction="top" offset={[0, -radius]} className="sisc-map-label">{point.name}</MapTooltip>}
                                 <Popup>
                                     <div className="text-sm">
                                         <p className="font-black text-slate-900">{point.name}</p>
