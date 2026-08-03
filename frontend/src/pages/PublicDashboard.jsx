@@ -35,7 +35,7 @@ import {
     XAxis,
     YAxis
 } from 'recharts';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip as MapTooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { getCachedPublicDashboard, loadPublicDashboard } from '../utils/publicDashboardCache';
@@ -132,7 +132,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
         <div className="h-[500px] border border-slate-200 rounded-md bg-white overflow-hidden shadow-sm">
             <div className="h-full relative">
                 <MapContainer center={[3.2606, -76.5364]} zoom={12} zoomControl={false} preferCanvas style={{ height: '100%', width: '100%' }}>
-                    <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+                    <TileLayer attribution='&copy; OpenStreetMap contributors &copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" maxZoom={19} />
                     {points.map((point) => {
                         const radius = 8 + ((point.total || 0) / maxTotal) * 26;
                         return (
@@ -142,6 +142,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
                                 radius={radius}
                                 pathOptions={{ color: '#281FD0', fillColor: '#FFB600', fillOpacity: 0.45, weight: 2 }}
                             >
+                                {point.total >= 10 && <MapTooltip permanent direction="top" offset={[0, -radius]} className="sisc-map-label">{point.name}</MapTooltip>}
                                 <Popup>
                                     <div className="text-sm">
                                         <p className="font-black text-slate-900">{point.name}</p>
@@ -156,6 +157,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
                 <div className="absolute left-4 bottom-4 z-[1000] bg-white/95 border border-slate-200 rounded-md p-3 max-w-xs shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mapa agregado</p>
                     <p className="text-xs text-slate-700 mt-1">Solo se ubican territorios con polígono oficial verificado. Se ocultan territorios con menos de {minCount} hechos.</p>
+                    <p className="text-xs text-slate-700 mt-1">El fondo muestra calles, vías y referencias de CARTO/OpenStreetMap; los nombres destacados corresponden a territorios con ubicación verificada.</p>
                     {unmapped > 0 && <p className="text-xs font-bold text-slate-600 mt-2">{numberFmt.format(unmapped)} territorios visibles no se ubican porque aún no tienen polígono oficial verificado.</p>}
                     {suppressed > 0 && <p className="text-xs font-bold text-amber-700 mt-2">{numberFmt.format(suppressed)} hechos en territorios de baja frecuencia fueron suprimidos.</p>}
                     {geographySource && <p className="text-[10px] text-slate-500 mt-2">{geographySource}</p>}

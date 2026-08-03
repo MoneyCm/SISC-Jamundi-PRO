@@ -3,6 +3,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+.sisc-map-label {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 5px;
+  white-space: nowrap;
+}
+
+.sisc-map-label::before {
+  display: none;
+}
 
 :root {
   /* ALCALDÍA DE JAMUNDÍ - MANUAL DE IDENTIDAD VISUAL OFICIAL */
