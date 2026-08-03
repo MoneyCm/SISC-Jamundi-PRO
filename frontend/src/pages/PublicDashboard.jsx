@@ -135,8 +135,8 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1
         .slice(0, 3)
         .map((point) => point.name));
     return (
-        <div className="h-[500px] border border-slate-200 rounded-md bg-white overflow-hidden shadow-sm">
-            <div className="h-full relative">
+        <div className="border border-slate-200 rounded-md bg-white overflow-hidden shadow-sm">
+            <div className="h-[500px] relative">
                 <MapContainer center={[3.2606, -76.5364]} zoom={12} zoomControl={false} preferCanvas style={{ height: '100%', width: '100%' }}>
                     <TileLayer attribution='&copy; OpenStreetMap contributors &copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" maxZoom={19} />
                     {points.filter((point) => point.geometry).map((point) => {
@@ -166,6 +166,17 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1
                     })}
                 </MapContainer>
             </div>
+            <details className="border-t border-slate-200">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-600">
+                    <Info size={14} className="text-[#281FD0]" /> Información del mapa
+                </summary>
+                <div className="grid gap-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:grid-cols-2">
+                    <p>Solo se ubican barrios, veredas y corregimientos con polígono oficial verificado.</p>
+                    <p>{numberFmt.format(unmapped)} territorios visibles siguen pendientes de polígono o homologación.</p>
+                    <p>Se ocultan territorios que no alcanzan el umbral mínimo de {minCount} hecho(s).</p>
+                    <p>Fuentes: Gobernación del Valle del Cauca (urbano) y R_VEREDA oficial de Jamundí (rural).</p>
+                </div>
+            </details>
         </div>
     );
 };
