@@ -250,6 +250,7 @@ def get_public_dashboard(
     suppressed_locations = 0
     territories = []
     map_points = []
+    unmapped_locations = 0
     for row in raw_locations:
         if not row.name or row.name == "SIN DATO":
             continue
@@ -268,6 +269,8 @@ def get_public_dashboard(
                 "lng": lng,
                 "radius": min(42, 12 + row.total * 2),
             })
+        else:
+            unmapped_locations += 1
 
     run = source["run"]
     report_start = period_start.isoformat()
@@ -322,9 +325,11 @@ def get_public_dashboard(
         "zones": [{"name": row.zona or "SIN DATO", "value": row.total} for row in zones],
         "territories": territories[:20],
         "map": {
-            "type": "centroid_aggregates",
+            "type": "official_territory_points",
             "min_location_count": min_location_count,
             "suppressed_count": suppressed_locations,
+            "unmapped_count": unmapped_locations,
+            "geography_source": "Poligonos urbanos del visor geografico de la Gobernacion del Valle del Cauca",
             "points": map_points,
         },
     }

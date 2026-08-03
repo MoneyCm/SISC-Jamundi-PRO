@@ -126,7 +126,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     );
 };
 
-const AggregatedMap = ({ points = [], suppressed = 0, minCount = 3 }) => {
+const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3, geographySource = '' }) => {
     const maxTotal = Math.max(1, ...points.map((point) => point.total || 0));
     return (
         <div className="h-[500px] border border-slate-200 rounded-md bg-white overflow-hidden shadow-sm">
@@ -146,7 +146,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, minCount = 3 }) => {
                                     <div className="text-sm">
                                         <p className="font-black text-slate-900">{point.name}</p>
                                         <p className="text-slate-600">{numberFmt.format(point.total)} hechos agregados</p>
-                                        <p className="text-[11px] text-slate-500 mt-2">Centroide territorial aproximado.</p>
+                                        <p className="text-[11px] text-slate-500 mt-2">Punto interior del polígono oficial del barrio.</p>
                                     </div>
                                 </Popup>
                             </CircleMarker>
@@ -155,8 +155,10 @@ const AggregatedMap = ({ points = [], suppressed = 0, minCount = 3 }) => {
                 </MapContainer>
                 <div className="absolute left-4 bottom-4 z-[1000] bg-white/95 border border-slate-200 rounded-md p-3 max-w-xs shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mapa agregado</p>
-                    <p className="text-xs text-slate-700 mt-1">Centroides por barrio, vereda o corregimiento. Se ocultan territorios con menos de {minCount} hechos.</p>
+                    <p className="text-xs text-slate-700 mt-1">Solo se ubican territorios con polígono oficial verificado. Se ocultan territorios con menos de {minCount} hechos.</p>
+                    {unmapped > 0 && <p className="text-xs font-bold text-slate-600 mt-2">{numberFmt.format(unmapped)} territorios visibles no se ubican porque aún no tienen polígono oficial verificado.</p>}
                     {suppressed > 0 && <p className="text-xs font-bold text-amber-700 mt-2">{numberFmt.format(suppressed)} hechos en territorios de baja frecuencia fueron suprimidos.</p>}
+                    {geographySource && <p className="text-[10px] text-slate-500 mt-2">{geographySource}</p>}
                 </div>
             </div>
         </div>
@@ -395,7 +397,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
 
                 <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
                     <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-4"><MapPinned size={20} className="text-[#281FD0]" /><h2 className="text-base font-black uppercase tracking-tight">Barrios y corregimientos</h2></div><div className="divide-y divide-slate-100 border-y border-slate-100">{(data.territories || []).slice(0, 12).map((territory, index) => <div key={territory.name} className="py-3 flex items-center justify-between gap-4"><div className="flex items-center gap-3 min-w-0"><span className="w-7 h-7 bg-slate-100 text-slate-700 text-xs font-black flex items-center justify-center shrink-0">{index + 1}</span><span className="font-bold text-slate-800 truncate">{territory.name}</span></div><span className="font-black text-slate-900">{numberFmt.format(territory.total)}</span></div>)}</div></div>
-                    <AggregatedMap points={data.map?.points || []} suppressed={data.map?.suppressed_count || 0} minCount={data.map?.min_location_count || 3} />
+                    <AggregatedMap points={data.map?.points || []} suppressed={data.map?.suppressed_count || 0} unmapped={data.map?.unmapped_count || 0} minCount={data.map?.min_location_count || 3} geographySource={data.map?.geography_source || ''} />
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-2">
