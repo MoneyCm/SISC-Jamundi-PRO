@@ -335,7 +335,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                         </div>
                         <div className="rounded-md bg-white/10 p-4 ring-1 ring-white/10">
                             <p className="text-[11px] font-black uppercase tracking-widest text-white/60">Protección de datos</p>
-                            <p className="mt-2 text-sm font-semibold leading-6 text-white/90">El mapa usa centroides y suprime territorios de baja frecuencia para reducir riesgo de identificación.</p>
+                            <p className="mt-2 text-sm font-semibold leading-6 text-white/90">El mapa usa puntos interiores de polígonos oficiales y suprime territorios de baja frecuencia para reducir riesgo de identificación.</p>
                         </div>
                     </aside>
                 </section>

@@ -291,7 +291,7 @@ def get_public_dashboard(
             "comparison_end": year_end.isoformat(),
             "population": POBLACION_JAMUNDI,
             "privacy": "Publicacion agregada. No incluye nombres, identificadores, telefonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
-            "methodology": "Cada sabana oficial se valida y se conserva como evidencia. La publicacion ciudadana usa una base maestra consolidada: las entregas mas recientes actualizan hechos ya existentes y las entregas historicas completan hechos distintos. Las ubicaciones del mapa son centroides aproximados por barrio, vereda o corregimiento y se suprimen territorios con conteos bajos.",
+            "methodology": "Cada sabana oficial se valida y se conserva como evidencia. La publicacion ciudadana usa una base maestra consolidada: las entregas mas recientes actualizan hechos ya existentes y las entregas historicas completan hechos distintos. El mapa solo ubica territorios con poligono oficial verificado, mediante un punto interior de ese poligono; los demas se conservan en las tablas sin ubicacion cartografica.",
             "last_ingestion": {
                 "id": str(run.id) if run else None,
                 "filename": run.filename if run else None,
