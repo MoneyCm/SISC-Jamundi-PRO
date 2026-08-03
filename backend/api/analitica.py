@@ -3,7 +3,7 @@ Módulo de Analítica del SISC Jamundí.
 Fuente primaria de datos: hechos_seguridad (sabanas semanales SIEDCO).
 Fallback para geolocalización: tabla events (legacy).
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import bindparam, func, or_, text
 from db.models import get_db, Event, EventType, User
@@ -135,11 +135,13 @@ def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
 
 @router.get("/public/dashboard")
 def get_public_dashboard(
+    response: Response,
     year: Optional[int] = None,
     min_location_count: int = Query(3, ge=1, le=20),
     db: Session = Depends(get_db),
 ):
     """Dashboard ciudadano: solo datos agregados, anonimizados y trazables."""
+    response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
     source = _latest_public_source(db)
     params = {}
     if source["snapshot_id"]:
@@ -157,10 +159,9 @@ def get_public_dashboard(
     year_start = date(target_year, 1, 1)
     year_end = min(max_date, date(target_year, 12, 31)) if target_year == max_date.year else date(target_year, 12, 31)
 
-    # Si el ciudadano no filtra por anio, el tablero principal muestra toda la base publicada.
-    # La comparacion interanual se conserva como lectura del anio de corte frente al anio anterior.
-    period_start = year_start if year else min_date
-    period_end = year_end if year else max_date
+    # La vista principal siempre usa el ano del corte. La cobertura historica se informa aparte.
+    period_start = year_start
+    period_end = year_end
     previous_start = date(target_year - 1, 1, 1)
     try:
         previous_end = date(target_year - 1, year_end.month, year_end.day)
@@ -282,7 +283,7 @@ def get_public_dashboard(
             "latest_event_date": max_date.isoformat(),
             "first_available_date": min_date.isoformat(),
             "year": target_year,
-            "scope": "FULL_DATABASE" if year is None else "YEAR_FILTER",
+            "scope": "YEAR_TO_DATE" if year is None else "YEAR_FILTER",
             "comparison_start": year_start.isoformat(),
             "comparison_end": year_end.isoformat(),
             "population": POBLACION_JAMUNDI,

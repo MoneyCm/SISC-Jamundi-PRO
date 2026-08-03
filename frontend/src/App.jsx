@@ -1,34 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import './index.css';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import MapPage from './pages/MapPage';
-import ReportsPage from './pages/ReportsPage';
-import DataPage from './pages/DataPage';
-import PublicDashboard from './pages/PublicDashboard';
-import PublicInformation from './pages/PublicInformation';
-import LoginPage from './pages/LoginPage';
-import PQRPage from './pages/PQRPage';
 import CitizenPortalHub from './pages/CitizenPortalHub';
-import VictimRoutes from './pages/VictimRoutes';
-import SecureReporting from './pages/SecureReporting';
-import CommunityParticipation from './pages/CommunityParticipation';
-import IntelligenceModule from './pages/IntelligenceModule';
-import DataQuality from './pages/DataQuality';
-import SiscAIChatbot from './components/SiscAIChatbot';
-import UniversalIngesta from './pages/UniversalIngesta';
-import StatsModule from './pages/StatsModule';
-import MindefensaMonitor from './pages/MindefensaMonitor';
-import PoliceMonitor from './pages/PoliceMonitor';
-import RegionalContext from './pages/RegionalContext';
-import RNMCModule from './pages/RNMCModule';
-import AlertsFeed from './pages/AlertsFeed';
-import UsersManagement from './pages/UsersManagement';
-import AccessRequests from './pages/AccessRequests';
-import AuditLog from './pages/AuditLog';
-import InspeccionesModule from './pages/InspeccionesModule';
-import PoliceIngestionAudit from './pages/PoliceIngestionAudit';
+import { loadPublicDashboard } from './utils/publicDashboardCache';
 
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const MapPage = lazy(() => import('./pages/MapPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const DataPage = lazy(() => import('./pages/DataPage'));
+const PublicDashboard = lazy(() => import('./pages/PublicDashboard'));
+const PublicInformation = lazy(() => import('./pages/PublicInformation'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const PQRPage = lazy(() => import('./pages/PQRPage'));
+const VictimRoutes = lazy(() => import('./pages/VictimRoutes'));
+const SecureReporting = lazy(() => import('./pages/SecureReporting'));
+const CommunityParticipation = lazy(() => import('./pages/CommunityParticipation'));
+const IntelligenceModule = lazy(() => import('./pages/IntelligenceModule'));
+const DataQuality = lazy(() => import('./pages/DataQuality'));
+const SiscAIChatbot = lazy(() => import('./components/SiscAIChatbot'));
+const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
+const StatsModule = lazy(() => import('./pages/StatsModule'));
+const MindefensaMonitor = lazy(() => import('./pages/MindefensaMonitor'));
+const PoliceMonitor = lazy(() => import('./pages/PoliceMonitor'));
+const RegionalContext = lazy(() => import('./pages/RegionalContext'));
+const RNMCModule = lazy(() => import('./pages/RNMCModule'));
+const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
+const UsersManagement = lazy(() => import('./pages/UsersManagement'));
+const AccessRequests = lazy(() => import('./pages/AccessRequests'));
+const AuditLog = lazy(() => import('./pages/AuditLog'));
+const InspeccionesModule = lazy(() => import('./pages/InspeccionesModule'));
+const PoliceIngestionAudit = lazy(() => import('./pages/PoliceIngestionAudit'));
+
+const PageLoading = () => (
+  <div className="flex min-h-[45vh] items-center justify-center bg-slate-50">
+    <div className="text-center">
+      <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-[#281FD0]" />
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cargando contenido</p>
+    </div>
+  </div>
+);
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [userRoles, setUserRoles] = useState([]);
@@ -69,10 +79,15 @@ const App = () => {
       } else {
         setAppMode('public');
       }
-      setTimeout(() => setIsLoading(false), 500);
+      setIsLoading(false);
     };
     initApp();
   }, []);
+
+  useEffect(() => {
+    if (appMode !== 'public' || !['hub', 'transparency'].includes(publicActivePage)) return;
+    loadPublicDashboard().catch(() => {});
+  }, [appMode, publicActivePage]);
 
   const handleLoginSuccess = (newToken, roles, dl) => {
     setToken(newToken);
@@ -108,10 +123,14 @@ const App = () => {
   }
 
   if (appMode === 'login') {
-    return <LoginPage
-      onLoginSuccess={handleLoginSuccess}
-      onBackClick={() => setAppMode('public')}
-    />;
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <LoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onBackClick={() => setAppMode('public')}
+        />
+      </Suspense>
+    );
   }
 
   const isPublic = appMode === 'public';
@@ -210,9 +229,9 @@ const App = () => {
     return (
       <>
         <div className="min-h-screen animate-fade-in">
-          {renderContent()}
+          <Suspense fallback={<PageLoading />}>{renderContent()}</Suspense>
         </div>
-        <SiscAIChatbot />
+        <Suspense fallback={null}><SiscAIChatbot /></Suspense>
       </>
     );
   }
@@ -227,7 +246,7 @@ const App = () => {
       dataLevel={dataLevel}
     >
       <div className="animate-fade-in h-full">
-        {renderContent()}
+        <Suspense fallback={<PageLoading />}>{renderContent()}</Suspense>
       </div>
     </Layout>
   );
