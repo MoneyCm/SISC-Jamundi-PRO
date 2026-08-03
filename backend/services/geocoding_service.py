@@ -13,6 +13,7 @@ logger = logging.getLogger("sisc_geocoding")
 
 GEOJSON_PATH = Path(__file__).resolve().parents[1] / "data" / "barrios_jamundi_valle.geojson"
 EXTRA_GEOJSON_PATH = Path(__file__).resolve().parents[1] / "data" / "barrios_jamundi_valle_extra.geojson"
+RURAL_GEOJSON_PATH = Path(__file__).resolve().parents[1] / "data" / "veredas_jamundi_oficial.geojson"
 OVERRIDES_PATH = Path(__file__).resolve().parents[1] / "data" / "barrios_official_aliases.json"
 REMOTE_GEOJSON_URLS = [
     ("CVC_CATASTRO_VEREDAS", "https://geo.cvc.gov.co/arcgis/rest/services/TERRITORIAL_ADMINISTRATIVA/Catastro_Alcaldia_Jamundi/FeatureServer/3/query?where=1%3D1&outFields=%2A&returnGeometry=true&outSR=4326&f=geojson"),
@@ -24,6 +25,7 @@ REMOTE_GEOJSON_URLS = [
 OFFICIAL_NAME_ALIASES = {
     "TERRANOVA": "CIUDADELA TERRANOVA",
     "SACHAMATE (URB MUNICIPAL)": "SACHAMATE",
+    "VILLA PAZ": "VIILA PAZ",
 }
 
 
@@ -80,6 +82,8 @@ class GeocodingService:
                     paths.append(path)
         if EXTRA_GEOJSON_PATH.exists():
             paths.append(EXTRA_GEOJSON_PATH)
+        if RURAL_GEOJSON_PATH.exists():
+            paths.append(RURAL_GEOJSON_PATH)
         return paths
 
     @staticmethod
