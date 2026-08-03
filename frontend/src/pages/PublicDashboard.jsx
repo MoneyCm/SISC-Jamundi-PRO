@@ -35,7 +35,7 @@ import {
     XAxis,
     YAxis
 } from 'recharts';
-import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip as MapTooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Popup, Tooltip as MapTooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { getCachedPublicDashboard, loadPublicDashboard } from '../utils/publicDashboardCache';
@@ -139,28 +139,26 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
             <div className="h-full relative">
                 <MapContainer center={[3.2606, -76.5364]} zoom={12} zoomControl={false} preferCanvas style={{ height: '100%', width: '100%' }}>
                     <TileLayer attribution='&copy; OpenStreetMap contributors &copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" maxZoom={19} />
-                    {points.map((point) => {
-                        const radius = 6 + ((point.total || 0) / maxTotal) * 19;
+                    {points.filter((point) => point.geometry).map((point) => {
+                        const intensity = (point.total || 0) / maxTotal;
                         return (
-                            <CircleMarker
+                            <GeoJSON
                                 key={point.name}
-                                center={[point.lat, point.lng]}
-                                radius={radius}
-                                pathOptions={{ color: '#281FD0', fillColor: '#FFB600', fillOpacity: 0.45, weight: 2 }}
+                                data={point.geometry}
+                                style={{ color: '#281FD0', fillColor: intensity >= 0.7 ? '#FFB600' : '#384CF5', fillOpacity: 0.28 + intensity * 0.38, weight: 2 }}
                                 eventHandlers={{ click: () => window.open(googleMapsUrl(point.lat, point.lng), '_blank', 'noopener,noreferrer') }}
                             >
-                                {labelledTerritories.has(point.name) && <MapTooltip permanent direction="top" offset={[0, -radius]} className="sisc-map-label">{point.name}</MapTooltip>}
+                                {labelledTerritories.has(point.name) && <MapTooltip permanent direction="center" className="sisc-map-label">{point.name}</MapTooltip>}
                                 <Popup>
                                     <div className="text-sm">
                                         <p className="font-black text-slate-900">{point.name}</p>
                                         <p className="text-slate-600">{numberFmt.format(point.total)} hechos agregados</p>
-                                        <p className="text-[11px] text-slate-500 mt-2">Punto interior del polígono oficial del barrio.</p>
+                                        <p className="text-[11px] text-slate-500 mt-2">Polígono oficial del barrio.</p>
                                     </div>
                                 </Popup>
-                            </CircleMarker>
+                            </GeoJSON>
                         );
-                    })}
-                </MapContainer>
+                    })}                </MapContainer>
                 <div className="absolute left-4 bottom-4 z-[1000] bg-white/95 border border-slate-200 rounded-md p-3 max-w-xs shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mapa agregado</p>
                     <p className="text-xs text-slate-700 mt-1">Solo se ubican territorios con polígono oficial verificado. Se ocultan territorios con menos de {minCount} hechos.</p>

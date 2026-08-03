@@ -259,15 +259,15 @@ def get_public_dashboard(
             continue
         item = {"name": row.name, "total": row.total}
         territories.append(item)
-        coords = GeocodingService.get_coords_for_localidad(row.name)
-        if coords:
-            lat, lng = coords
+        territory = GeocodingService.get_official_territory(row.name)
+        if territory:
+            lat, lng = territory["coords"]
             map_points.append({
                 "name": row.name,
                 "total": row.total,
                 "lat": lat,
                 "lng": lng,
-                "radius": min(42, 12 + row.total * 2),
+                "geometry": territory["geometry"],
             })
         else:
             unmapped_locations += 1
@@ -325,7 +325,7 @@ def get_public_dashboard(
         "zones": [{"name": row.zona or "SIN DATO", "value": row.total} for row in zones],
         "territories": territories[:20],
         "map": {
-            "type": "official_territory_points",
+            "type": "official_territory_polygons",
             "min_location_count": min_location_count,
             "suppressed_count": suppressed_locations,
             "unmapped_count": unmapped_locations,
