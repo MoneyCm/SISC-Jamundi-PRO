@@ -137,10 +137,18 @@ class GeocodingService:
         if not normalized:
             return None
 
-        official_name = GeocodingService._load_aliases().get(normalized, normalized)
-        return GeocodingService._official_territories().get(
-            GeocodingService.normalize_name(official_name)
-        )
+        aliases = GeocodingService._load_aliases()
+        territories = GeocodingService._official_territories()
+        candidates = [normalized]
+        for prefix in ("CGTO ", "CORREGIMIENTO ", "VEREDA "):
+            if normalized.startswith(prefix):
+                candidates.append(normalized[len(prefix):].strip())
+        for candidate in candidates:
+            official_name = aliases.get(candidate, candidate)
+            territory = territories.get(GeocodingService.normalize_name(official_name))
+            if territory:
+                return territory
+        return None
 
     @staticmethod
     def get_coords_for_localidad(localidad: str) -> Optional[Tuple[float, float]]:
