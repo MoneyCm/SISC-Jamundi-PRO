@@ -151,14 +151,13 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1
                                     fillOpacity: 0.28 + intensity * 0.38,
                                     weight: 2,
                                 }}
-                                eventHandlers={{ click: () => window.open(googleMapsUrl(point.lat, point.lng), '_blank', 'noopener,noreferrer') }}
                             >
                                 {labelledTerritories.has(point.name) && <MapTooltip permanent direction="center" className="sisc-map-label">{point.name}</MapTooltip>}
                                 <Popup>
                                     <div className="text-sm">
                                         <p className="font-black text-slate-900">{point.name}</p>
                                         <p className="text-slate-600">{numberFmt.format(point.total)} hechos agregados</p>
-                                        <p className="text-[11px] text-slate-500 mt-2">Polígono oficial del barrio.</p>{point.source && <p className="text-[11px] text-slate-500 mt-1">Fuente: {point.source}</p>}
+                                        <p className="text-[11px] text-slate-500 mt-2">PolÃ­gono oficial del territorio.</p>{point.source && <p className="text-[11px] text-slate-500 mt-1">Fuente: {point.source}</p>}<a className="mt-2 inline-flex text-[11px] font-bold text-[#281FD0] underline" href={googleMapsUrl(point.lat, point.lng)} target="_blank" rel="noreferrer">Abrir en Google Maps</a>
                                     </div>
                                 </Popup>
                             </GeoJSON>
@@ -168,13 +167,13 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1
             </div>
             <details className="border-t border-slate-200">
                 <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-600">
-                    <Info size={14} className="text-[#281FD0]" /> Información del mapa
+                    <Info size={14} className="text-[#281FD0]" /> InformaciÃ³n del mapa
                 </summary>
                 <div className="grid gap-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:grid-cols-2">
-                    <p>Solo se ubican barrios, veredas y corregimientos con polígono oficial verificado.</p>
-                    <p>{numberFmt.format(unmapped)} territorios visibles siguen pendientes de polígono o homologación.</p>
-                    <p>Se ocultan territorios que no alcanzan el umbral mínimo de {minCount} hecho(s).</p>
-                    <p>Fuentes: Gobernación del Valle del Cauca (urbano) y R_VEREDA oficial de Jamundí (rural).</p>
+                    <p>Solo se ubican barrios, veredas y corregimientos con polÃ­gono oficial verificado.</p>
+                    <p>{numberFmt.format(unmapped)} territorios visibles siguen pendientes de polÃ­gono o homologaciÃ³n.</p>
+                    <p>Se ocultan territorios que no alcanzan el umbral mÃ­nimo de {minCount} hecho(s).</p>
+                    <p>Fuentes: GobernaciÃ³n del Valle del Cauca (urbano) y R_VEREDA oficial de JamundÃ­ (rural).</p>
                 </div>
             </details>
         </div>
@@ -254,8 +253,8 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                             <div className="flex items-center gap-3">
                                 <div className="p-3 bg-[#281FD0] text-white"><Globe size={22} /></div>
                                 <div>
-                                    <h1 className="text-2xl md:text-3xl font-black tracking-tight">Tablero ciudadano SISC Jamundí</h1>
-                                    <p className="text-sm text-slate-600 mt-1">Información agregada y anonimizada sobre seguridad y convivencia.</p>
+                                    <h1 className="text-2xl md:text-3xl font-black tracking-tight">Tablero ciudadano SISC JamundÃ­</h1>
+                                    <p className="text-sm text-slate-600 mt-1">InformaciÃ³n agregada y anonimizada sobre seguridad y convivencia.</p>
                                 </div>
                             </div>
                         </div>
@@ -266,7 +265,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                 </header>
                 <main className="max-w-3xl mx-auto px-4 py-12">
                     <div className="border-l-4 border-red-600 bg-red-50 p-5 text-red-800">
-                        <h2 className="font-black text-lg">No fue posible cargar los datos públicos</h2>
+                        <h2 className="font-black text-lg">No fue posible cargar los datos pÃºblicos</h2>
                         <p className="text-sm font-semibold mt-2">{error || 'El servicio de datos no respondio.'}</p>
                     </div>
                 </main>
@@ -298,8 +297,8 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                         <div className="flex items-center gap-3">
                             <div className="p-3 bg-[#281FD0] text-white"><Globe size={22} /></div>
                             <div>
-                                <h1 className="text-2xl md:text-3xl font-black tracking-tight">Tablero ciudadano SISC Jamundí</h1>
-                                <p className="text-sm text-slate-600 mt-1">Información agregada y anonimizada sobre seguridad y convivencia.</p>
+                                <h1 className="text-2xl md:text-3xl font-black tracking-tight">Tablero ciudadano SISC JamundÃ­</h1>
+                                <p className="text-sm text-slate-600 mt-1">InformaciÃ³n agregada y anonimizada sobre seguridad y convivencia.</p>
                             </div>
                         </div>
                     </div>
@@ -328,16 +327,16 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                         <div className="h-2 bg-[#FFB600]" />
                         <div className="p-6 md:p-7">
                             <div className="flex flex-wrap items-center gap-2 mb-5">
-                                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700"><CheckCircle2 size={14} /> Público y anonimizado</span>
+                                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700"><CheckCircle2 size={14} /> PÃºblico y anonimizado</span>
                                 <span className="inline-flex items-center gap-2 rounded-full bg-[#281FD0]/10 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-[#281FD0]"><CalendarClock size={14} /> Corte {formatDate(meta.latest_event_date)}</span>
                             </div>
                             <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-950 leading-tight">Panorama ciudadano de seguridad</h2>
-                            <p className="mt-3 max-w-3xl text-base md:text-lg font-semibold leading-7 text-slate-600">Consulta datos agregados del SISC para entender tendencias, conductas, zonas y territorios con información pública. No se publican registros individuales ni direcciones exactas.</p>
+                            <p className="mt-3 max-w-3xl text-base md:text-lg font-semibold leading-7 text-slate-600">Consulta datos agregados del SISC para entender tendencias, conductas, zonas y territorios con informaciÃ³n pÃºblica. No se publican registros individuales ni direcciones exactas.</p>
                             <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                 <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Periodo mostrado</p><p className="mt-1 font-black text-slate-950">{periodText}</p></div>
-                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobertura histórica</p><p className="mt-1 font-black text-slate-950">{coverageText}</p></div>
+                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobertura histÃ³rica</p><p className="mt-1 font-black text-slate-950">{coverageText}</p></div>
                                 <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fuente</p><p className="mt-1 font-black text-slate-950">SABANA SIEDCO/PONAL</p></div>
-                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Última carga</p><p className="mt-1 font-black text-slate-950">{formatDateTime(meta.last_ingestion?.loaded_at)}</p></div>
+                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ãšltima carga</p><p className="mt-1 font-black text-slate-950">{formatDateTime(meta.last_ingestion?.loaded_at)}</p></div>
                             </div>
                         </div>
                     </div>
@@ -351,25 +350,25 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                             </div>
                         </div>
                         <div className="rounded-md bg-white/10 p-4 ring-1 ring-white/10">
-                            <p className="text-[11px] font-black uppercase tracking-widest text-white/60">Protección de datos</p>
-                            <p className="mt-2 text-sm font-semibold leading-6 text-white/90">El mapa usa puntos interiores de polígonos oficiales y suprime territorios de baja frecuencia para reducir riesgo de identificación.</p>
+                            <p className="text-[11px] font-black uppercase tracking-widest text-white/60">ProtecciÃ³n de datos</p>
+                            <p className="mt-2 text-sm font-semibold leading-6 text-white/90">El mapa usa puntos interiores de polÃ­gonos oficiales y suprime territorios de baja frecuencia para reducir riesgo de identificaciÃ³n.</p>
                         </div>
                     </aside>
                 </section>
 
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                    <KpiTile icon={BarChart3} label={`Hechos únicos ${currentYear}`} value={numberFmt.format(data.kpis?.total_hechos || 0)} helper="Conteo deduplicado por hecho" />
-                    <KpiTile icon={Database} label={`Registros validados ${currentYear}`} value={numberFmt.format(data.kpis?.total_registros || 0)} helper="Filas válidas de la SABANA" tone="slate" />
-                    <KpiTile icon={TrendingUp} label="Comparación interanual" value={variationLabel(variation)} helper={`${data.interannual?.current?.year || ''} frente a ${data.interannual?.previous?.year || ''}`} tone={variationIsUp ? 'red' : 'blue'} />
+                    <KpiTile icon={BarChart3} label={`Hechos Ãºnicos ${currentYear}`} value={numberFmt.format(data.kpis?.total_hechos || 0)} helper="Conteo deduplicado por hecho" />
+                    <KpiTile icon={Database} label={`Registros validados ${currentYear}`} value={numberFmt.format(data.kpis?.total_registros || 0)} helper="Filas vÃ¡lidas de la SABANA" tone="slate" />
+                    <KpiTile icon={TrendingUp} label="ComparaciÃ³n interanual" value={variationLabel(variation)} helper={`${data.interannual?.current?.year || ''} frente a ${data.interannual?.previous?.year || ''}`} tone={variationIsUp ? 'red' : 'blue'} />
                     <KpiTile icon={ShieldCheck} label={`Homicidios ${currentYear}`} value={numberFmt.format(data.kpis?.homicidios || 0)} helper={`Tasa acumulada al corte: ${data.kpis?.tasa_homicidios || 0} por 100.000 hab.`} tone="red" />
-                    <KpiTile icon={Layers} label="Territorios visibles" value={numberFmt.format(data.territories?.length || 0)} helper={`Mínimo ${data.map?.min_location_count || 1} hechos para publicar`} tone="amber" />
+                    <KpiTile icon={Layers} label="Territorios visibles" value={numberFmt.format(data.territories?.length || 0)} helper={`MÃ­nimo ${data.map?.min_location_count || 1} hechos para publicar`} tone="amber" />
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-                    <ChartShell title="Tendencia mensual" subtitle={`Hechos únicos por mes de ${currentYear} hasta el corte`}>
+                    <ChartShell title="Tendencia mensual" subtitle={`Hechos Ãºnicos por mes de ${currentYear} hasta el corte`}>
                         {data.monthly_trend?.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={data.monthly_trend} margin={{ top: 10, right: 20, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><YAxis tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Area type="monotone" dataKey="total" name="Hechos" stroke="#281FD0" fill="#281FD0" fillOpacity={0.16} strokeWidth={3} /></AreaChart></ResponsiveContainer> : <EmptyState />}
                     </ChartShell>
-                    <ChartShell title="Comparación interanual" subtitle="Mismo rango calendario frente al año anterior">
+                    <ChartShell title="ComparaciÃ³n interanual" subtitle="Mismo rango calendario frente al aÃ±o anterior">
                         <ResponsiveContainer width="100%" height="100%"><BarChart data={[data.interannual.previous, data.interannual.current]} margin={{ top: 10, right: 20, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="year" tick={{ fontSize: 12, fill: '#64748b', fontWeight: 800 }} tickLine={false} axisLine={false} /><YAxis tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Bar dataKey="total" name="Hechos" fill="#281FD0" /></BarChart></ResponsiveContainer>
                         <div className={`mt-3 inline-flex items-center gap-2 text-sm font-black ${variationIsUp ? 'text-red-700' : 'text-emerald-700'}`}>{variationIsUp ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}Variacion: {variationLabel(variation)}</div>
                     </ChartShell>
@@ -404,10 +403,10 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                             </div>
                         ) : <EmptyState />}
                     </ChartShell>
-                    <ChartShell title="Zona urbana/rural" subtitle="Distribución declarada en la fuente">
+                    <ChartShell title="Zona urbana/rural" subtitle="DistribuciÃ³n declarada en la fuente">
                         {data.zones?.length ? <div className="space-y-3">{data.zones.map((zone, index) => { const max = Math.max(...data.zones.map((item) => item.value || 0), 1); return <div key={zone.name}><div className="flex justify-between text-xs font-black uppercase text-slate-600 mb-1"><span>{zone.name}</span><span>{numberFmt.format(zone.value)}</span></div><div className="h-3 bg-slate-100"><div className="h-3" style={{ width: `${(zone.value / max) * 100}%`, backgroundColor: COLORS[index % COLORS.length] }} /></div></div>; })}</div> : <EmptyState />}
                     </ChartShell>
-                    <ChartShell title="Tendencia semanal" subtitle={`Evolución semanal de ${currentYear} hasta el corte`}>
+                    <ChartShell title="Tendencia semanal" subtitle={`EvoluciÃ³n semanal de ${currentYear} hasta el corte`}>
                         {data.weekly_trend?.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.weekly_trend} margin={{ top: 10, right: 10, left: -24, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} interval="preserveStartEnd" /><YAxis tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Bar dataKey="total" name="Hechos" fill="#FFB600" /></BarChart></ResponsiveContainer> : <EmptyState />}
                     </ChartShell>
                 </section>
@@ -418,7 +417,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-2">
-                    <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><Info size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">Metodología</h2></div><p className="text-sm leading-6 text-slate-700 font-medium">{meta.methodology}</p><p className="text-sm leading-6 text-slate-700 font-medium mt-3">{meta.privacy}</p></div>
+                    <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><Info size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">MetodologÃ­a</h2></div><p className="text-sm leading-6 text-slate-700 font-medium">{meta.methodology}</p><p className="text-sm leading-6 text-slate-700 font-medium mt-3">{meta.privacy}</p></div>
                     <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><CalendarClock size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">Trazabilidad de carga</h2></div><dl className="grid grid-cols-2 gap-px bg-slate-200 border border-slate-200 text-sm"><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Archivo</dt><dd className="font-bold break-words">{meta.last_ingestion?.filename || 'No disponible'}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Aprobadas</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.approved || 0)}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Rechazadas</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.rejected || 0)}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Ya existentes</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.duplicates || 0)}</dd></div></dl></div>
                 </section>
             </main>
