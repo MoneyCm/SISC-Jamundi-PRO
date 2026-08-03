@@ -1,6 +1,6 @@
 import { API_BASE_URL } from './apiConfig';
 
-const CACHE_KEY = 'sisc_public_dashboard_v1';
+const CACHE_KEY = 'sisc_public_dashboard_v2_polygons';
 const MAX_AGE_MS = 15 * 60 * 1000;
 
 let memoryEntry = null;
