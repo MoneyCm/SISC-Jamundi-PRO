@@ -171,7 +171,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1
                     <p className="text-xs text-slate-700 mt-1">El fondo muestra calles, vías y referencias de CARTO/OpenStreetMap; los polígonos coloreados corresponden a barrios, veredas y corregimientos con ubicación oficial verificada.</p>
                     {unmapped > 0 && <p className="text-xs font-bold text-slate-600 mt-2">{numberFmt.format(unmapped)} territorios visibles no se ubican porque aún no tienen polígono oficial verificado.</p>}
                     {suppressed > 0 && <p className="text-xs font-bold text-amber-700 mt-2">{numberFmt.format(suppressed)} hechos en territorios de baja frecuencia fueron suprimidos.</p>}
-                    {geographySource && <p className="text-[10px] text-slate-500 mt-2">{geographySource}</p>}
+                    <p className="text-[10px] text-slate-500 mt-2">Fuentes cartográficas: Gobernación del Valle del Cauca (urbano) y R_VEREDA oficial de Jamundí (rural).</p>
                 </div>
             </div>
         </div>
