@@ -68,6 +68,8 @@ const variationLabel = (value) => {
     return `${value > 0 ? '+' : ''}${pctFmt.format(value)}%`;
 };
 
+const googleMapsUrl = (lat, lng) => 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
+
 const KpiTile = ({ icon: Icon, label, value, helper, tone = 'blue' }) => {
     const toneClasses = {
         blue: 'bg-[#281FD0]/10 text-[#281FD0] ring-[#281FD0]/10',
@@ -141,6 +143,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 3
                                 center={[point.lat, point.lng]}
                                 radius={radius}
                                 pathOptions={{ color: '#281FD0', fillColor: '#FFB600', fillOpacity: 0.45, weight: 2 }}
+                                eventHandlers={{ click: () => window.open(googleMapsUrl(point.lat, point.lng), '_blank', 'noopener,noreferrer') }}
                             >
                                 {point.total >= 10 && <MapTooltip permanent direction="top" offset={[0, -radius]} className="sisc-map-label">{point.name}</MapTooltip>}
                                 <Popup>
