@@ -1,14 +1,19 @@
 import { API_BASE_URL } from './apiConfig';
 
-const CACHE_KEY = 'sisc_public_dashboard_v2_polygons';
+const CACHE_KEY_PREFIX = 'sisc_public_dashboard_v3_rural_polygons';
 const MAX_AGE_MS = 15 * 60 * 1000;
 
-let memoryEntry = null;
-let pendingRequest = null;
+let memoryCache = {};
+let pendingRequests = {};
 
-const readStoredEntry = () => {
+const cacheKey = (minLocationCount) => {
+    const normalized = Number.isFinite(Number(minLocationCount)) ? Number(minLocationCount) : 1;
+    return `${CACHE_KEY_PREFIX}_min_${Math.max(1, Math.min(200, normalized))}`;
+};
+
+const readStoredEntry = (key) => {
     try {
-        const raw = sessionStorage.getItem(CACHE_KEY);
+        const raw = sessionStorage.getItem(key);
         if (!raw) return null;
         const entry = JSON.parse(raw);
         return entry?.data && entry?.savedAt ? entry : null;
@@ -17,41 +22,49 @@ const readStoredEntry = () => {
     }
 };
 
-export const getCachedPublicDashboard = () => {
-    const entry = memoryEntry || readStoredEntry();
+export const getCachedPublicDashboard = (minLocationCount = 1) => {
+    const key = cacheKey(minLocationCount);
+    const entry = memoryCache[key] || readStoredEntry(key);
     if (!entry || Date.now() - entry.savedAt > MAX_AGE_MS) return null;
-    memoryEntry = entry;
+    memoryCache[key] = entry;
     return entry.data;
 };
 
-const saveDashboard = (data) => {
+const saveDashboard = (data, minLocationCount = 1) => {
+    const key = cacheKey(minLocationCount);
     const entry = { data, savedAt: Date.now() };
-    memoryEntry = entry;
+    memoryCache[key] = entry;
     try {
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+        sessionStorage.setItem(key, JSON.stringify(entry));
     } catch {
         // Memory cache remains available when storage is restricted.
     }
     return data;
 };
 
-export const loadPublicDashboard = async ({ force = false } = {}) => {
+export const loadPublicDashboard = async ({ force = false, minLocationCount = 1 } = {}) => {
+    const threshold = Number.isFinite(Number(minLocationCount)) ? Number(minLocationCount) : 1;
+    const normalizedMin = Math.max(1, Math.min(200, threshold));
     if (!force) {
-        const cached = getCachedPublicDashboard();
+        const cached = getCachedPublicDashboard(normalizedMin);
         if (cached) return cached;
     }
-    if (pendingRequest) return pendingRequest;
+    const key = cacheKey(normalizedMin);
+    if (pendingRequests[key]) return pendingRequests[key];
 
-    pendingRequest = fetch(`${API_BASE_URL}/analitica/public/dashboard`, {
+    const query = new URLSearchParams({ min_location_count: String(normalizedMin), map_schema: 'official_territory_polygons_v1' });
+    pendingRequests[key] = fetch(`${API_BASE_URL}/analitica/public/dashboard?${query}`, {
         headers: { Accept: 'application/json' },
     })
         .then(async (response) => {
             if (!response.ok) throw new Error(`Servicio no disponible (${response.status})`);
-            return saveDashboard(await response.json());
+            return saveDashboard(await response.json(), normalizedMin);
         })
         .finally(() => {
-            pendingRequest = null;
+            pendingRequests[key] = null;
         });
 
-    return pendingRequest;
+    return pendingRequests[key];
 };
+
+
