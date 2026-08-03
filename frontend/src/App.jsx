@@ -17,6 +17,7 @@ const SecureReporting = lazy(() => import('./pages/SecureReporting'));
 const CommunityParticipation = lazy(() => import('./pages/CommunityParticipation'));
 const IntelligenceModule = lazy(() => import('./pages/IntelligenceModule'));
 const DataQuality = lazy(() => import('./pages/DataQuality'));
+const SiscAIChatbot = lazy(() => import('./components/SiscAIChatbot'));
 
 const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
 const StatsModule = lazy(() => import('./pages/StatsModule'));
@@ -134,6 +135,7 @@ const App = () => {
   }
 
   const isPublic = appMode === 'public';
+  const showCitizenAssistant = isPublic && ['reporting', 'victim-support', 'pqr'].includes(publicActivePage);
 
   const renderContent = () => {
     if (isPublic) {
@@ -231,6 +233,11 @@ const App = () => {
         <div className="min-h-screen animate-fade-in">
           <Suspense fallback={<PageLoading />}>{renderContent()}</Suspense>
         </div>
+        {showCitizenAssistant && (
+          <Suspense fallback={null}>
+            <SiscAIChatbot />
+          </Suspense>
+        )}
       </>
     );
   }
