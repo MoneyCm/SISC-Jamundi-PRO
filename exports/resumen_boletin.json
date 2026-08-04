@@ -1,0 +1,382 @@
+{
+  "contrato": "boletin_seguimiento.v1",
+  "fecha_corte": "2026-08-03",
+  "periodo": {
+    "inicio": "2026-07-28",
+    "fin": "2026-08-03"
+  },
+  "eventos_semana": {
+    "total": 0,
+    "por_tipo": {}
+  },
+  "boletines": {
+    "total": 0,
+    "por_modulo": {
+      "Inspecciones": 0
+    }
+  },
+  "usuarios": {
+    "activos_semana": 2,
+    "total_registrados": 2,
+    "por_dependencia": {}
+  },
+  "acciones": [
+    {
+      "estado": "pendiente",
+      "responsable": "PAGO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": "2026-03-05",
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "PAGO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": "2026-03-05",
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "PAGO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": "2026-03-05",
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "PAGO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": "2026-03-05",
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "PAGO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": "2026-03-05",
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "CONTROL POSTERIOR",
+      "foco": "SUSPENSION TEMPORAL DE ACTIVIDAD",
+      "fecha_inicio": "2026-01-30",
+      "fecha_fin": "2026-02-13"
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "DOCUMENTACION",
+      "foco": "DESTRUCCION DE BIEN",
+      "fecha_inicio": "2026-01-10",
+      "fecha_fin": "2026-01-25"
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "CONTROL POSTERIOR",
+      "foco": "DESTRUCCION DE BIEN",
+      "fecha_inicio": "2026-02-22",
+      "fecha_fin": "2026-03-03"
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "DOCUMENTACION",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": "2026-01-27",
+      "fecha_fin": "2026-02-08"
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "CONTROL POSTERIOR",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": "2026-02-13",
+      "fecha_fin": "2026-02-17"
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "CONTROL POSTERIOR",
+      "foco": "DECOMISO",
+      "fecha_inicio": "2026-02-17",
+      "fecha_fin": "2026-03-04"
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "VERIFICACION CAMPO",
+      "foco": "SUSPENSION TEMPORAL DE ACTIVIDAD",
+      "fecha_inicio": "2026-01-16",
+      "fecha_fin": "2026-01-20"
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "VERIFICACION CAMPO",
+      "foco": "DESTRUCCION DE BIEN",
+      "fecha_inicio": "2026-03-01",
+      "fecha_fin": "2026-03-13"
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "VERIFICACION CAMPO",
+      "foco": "DISOLUCION DE REUNION O ACTIVIDAD QUE INVOLUCRE AGLOMERACIONES",
+      "fecha_inicio": "2026-02-17",
+      "fecha_fin": "2026-02-21"
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "DOCUMENTACION",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": "2026-02-03",
+      "fecha_fin": "2026-02-17"
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PROHIBICION DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PROHIBICION DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 2",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PROHIBICION DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "SUSPENSION DEFINITIVA DE ACTIVIDAD",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PROHIBICION DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 2",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PROHIBICION DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PROHIBICION DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PARTICIPACION EN PROGRAMA COMUNITARIO O ACTIVIDAD PEDAGOGICA DE CONVIVENCIA",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "NAN",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "NAN",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "NAN",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "PROHIBICION DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 2",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "NAN",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 2",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "Inspeccion",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 2",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "pendiente",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PARTICIPACION EN PROGRAMA COMUNITARIO O ACTIVIDAD PEDAGOGICA DE CONVIVENCIA",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "abierta",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "PROHIBICION DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 4",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    },
+    {
+      "estado": "cumplida",
+      "responsable": "SEGUIMIENTO",
+      "foco": "MULTA GENERAL TIPO 2",
+      "fecha_inicio": null,
+      "fecha_fin": null
+    }
+  ],
+  "acciones_resumen": {
+    "abiertas": 3336,
+    "cerradas": 55,
+    "focos_con_seguimiento": 50
+  },
+  "generado_en": "2026-08-03T11:58:52",
+  "fuente": "SISC-Jamundi-PRO"
+}

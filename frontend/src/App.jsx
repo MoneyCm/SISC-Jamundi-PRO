@@ -87,7 +87,7 @@ const App = () => {
 
   useEffect(() => {
     if (appMode !== 'public' || !['hub', 'transparency'].includes(publicActivePage)) return;
-    loadPublicDashboard().catch(() => {});
+    loadPublicDashboard({ minLocationCount: 1 }).catch(() => {});
   }, [appMode, publicActivePage]);
 
   const handleLoginSuccess = (newToken, roles, dl) => {
@@ -259,3 +259,4 @@ const App = () => {
 };
 
 export default App;
+

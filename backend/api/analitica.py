@@ -1,7 +1,7 @@
-"""
-MÃ³dulo de AnalÃ­tica del SISC JamundÃ­.
+﻿"""
+Módulo de Analítica del SISC Jamundí.
 Fuente primaria de datos: hechos_seguridad (sabanas semanales SIEDCO).
-Fallback para geolocalizaciÃ³n: tabla events (legacy).
+Fallback para geolocalización: tabla events (legacy).
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
@@ -32,16 +32,16 @@ CONDUCTA_KEYS = {
     'HURTO_PERSONAS':     ['HURTO_PERSONAS', 'Hurto a personas', 'HURTO A PERSONAS'],
     'HURTO_VEHICULOS':    ['HURTO_VEHICULOS', 'HURTO_AUTOMOTORES', 'Hurto a automotores',
                            'HURTO_MOTOS', 'Hurto a motocicletas', 'HURTO A AUTOMOTORES',
-                           'HURTO A MOTOCICLETAS', 'Hurto a vehÃ­culos'],
+                           'HURTO A MOTOCICLETAS', 'Hurto a vehículos'],
     'HURTO_COMERCIO':     ['HURTO_COMERCIO', 'Hurto a comercio', 'HURTO A COMERCIO'],
     'HURTO_RESIDENCIAS':  ['HURTO_RESIDENCIAS', 'Hurto a residencias', 'HURTO A RESIDENCIAS'],
     'LESIONES':           ['LESIONES', 'Lesiones personales', 'LESIONES PERSONALES', 'LESIONES COMUNES'],
-    'EXTORSION':          ['EXTORSION', 'EXTORSIÃ“N', 'ExtorsiÃ³n'],
+    'EXTORSION':          ['EXTORSION', 'EXTORSIÓN', 'Extorsión'],
     'VIF':                ['VIOLENCIA INTRAFAMILIAR', 'VIOLENCIA_INTRAFAMILIAR', 'VIF',
                            'Violencia intrafamiliar'],
     'SECUESTRO':          ['SECUESTRO', 'SECUESTRO EXTORSIVO', 'Secuestro'],
-    'TRAFICO':            ['TRAFICO DE ESTUPEFACIENTES', 'TRÃFICO DE ESTUPEFACIENTES',
-                           'INCAUTACIÃ“N DE COCAINA', 'INCAUTACIÃ“N DE MARIHUANA'],
+    'TRAFICO':            ['TRAFICO DE ESTUPEFACIENTES', 'TRÁFICO DE ESTUPEFACIENTES',
+                           'INCAUTACIÓN DE COCAINA', 'INCAUTACIÓN DE MARIHUANA'],
 }
 
 
@@ -130,9 +130,9 @@ def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
 
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─────────────────────────────────────────────
 # ENDPOINTS
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─────────────────────────────────────────────
 
 
 @router.get("/public/dashboard")
@@ -351,7 +351,7 @@ def get_public_dashboard(
             "suppressed_count": suppressed_locations,
             "unmapped_count": unmapped_locations,
             "unmapped_names": unmapped_locations_list,
-            "geography_source": "Polígonos oficiales urbanos y rurales: visor geográfico de la Gobernación del Valle del Cauca y capa rural R_VEREDA de Jamundí",
+            "geography_source": "Pol�gonos oficiales urbanos y rurales: visor geogr�fico de la Gobernaci�n del Valle del Cauca y capa rural R_VEREDA de Jamund�",
             "points": map_points,
         },
     }
@@ -365,7 +365,7 @@ def get_dashboard_kpis(
     fuente: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """KPIs del dashboard â€” fuente: hechos_seguridad (sabanas SIEDCO)."""
+    """KPIs del dashboard — fuente: hechos_seguridad (sabanas SIEDCO)."""
     try:
         snapshot_id = _latest_snapshot_id(db)
         total = _hechos_total(db, start_date, end_date)
@@ -430,7 +430,7 @@ def get_tendencia_delictiva(
         "Sep": "Sep", "Oct": "Oct", "Nov": "Nov", "Dec": "Dic"
     }
 
-    # Determinar granularidad segÃºn el rango
+    # Determinar granularidad según el rango
     intervalo = "month"
     if start_date and end_date:
         dias = (end_date - start_date).days
@@ -496,18 +496,18 @@ def get_distribucion_delitos(
     fuente: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """DistribuciÃ³n de los delitos por categorÃ­a desde hechos_seguridad."""
+    """Distribución de los delitos por categoría desde hechos_seguridad."""
     labels = {
         'HOMICIDIO':         'HOMICIDIO',
         'HURTO_PERSONAS':    'HURTO PERSONAS',
-        'HURTO_VEHICULOS':   'HURTO VEHÃCULOS',
+        'HURTO_VEHICULOS':   'HURTO VEHÍCULOS',
         'HURTO_COMERCIO':    'HURTO COMERCIO',
         'HURTO_RESIDENCIAS': 'HURTO RESIDENCIAS',
         'LESIONES':          'LESIONES',
-        'EXTORSION':         'EXTORSIÃ“N',
+        'EXTORSION':         'EXTORSIÓN',
         'VIF':               'V. INTRAFAMILIAR',
         'SECUESTRO':         'SECUESTRO',
-        'TRAFICO':           'TRÃFICO DROGAS',
+        'TRAFICO':           'TRÁFICO DROGAS',
     }
     total_stats = []
     for key, label in labels.items():
@@ -525,7 +525,7 @@ def get_top_barrios(
     end_date: Optional[date] = None,
     db: Session = Depends(get_db)
 ):
-    """Top 10 barrios con mÃ¡s delitos."""
+    """Top 10 barrios con más delitos."""
     q = db.query(
         HechoSeguridad.barrio_normalizado.label('barrio'),
         hechos_unicos_expr().label('total')
@@ -550,7 +550,7 @@ def get_resumen_estadistico(
     end_date: Optional[date] = None,
     db: Session = Depends(get_db)
 ):
-    """Ãšltimos 50 hechos para el feed de actividad reciente del dashboard."""
+    """Últimos 50 hechos para el feed de actividad reciente del dashboard."""
     q = db.query(HechoSeguridad).order_by(HechoSeguridad.fecha_evento.desc())
     if start_date:
         q = q.filter(HechoSeguridad.fecha_evento >= start_date)
@@ -583,7 +583,7 @@ def get_resumen_estadistico(
         if h.arma_medio:
             desc_parts.append(h.arma_medio)
         if h.sexo and h.edad:
-            desc_parts.append(f"(VÃ­ctima: {h.sexo}, {h.edad} aÃ±os)")
+            desc_parts.append(f"(Víctima: {h.sexo}, {h.edad} años)")
 
         result.append({
             "id":          str(h.id),
@@ -614,7 +614,7 @@ def get_tasa_homicidios(
         "total_eventos":      conteo,
         "tasa_por_100k":      round(tasa, 2),
         "periodo": {
-            "inicio": start_date if start_date else "HistÃ³rico",
+            "inicio": start_date if start_date else "Histórico",
             "fin":    end_date if end_date else "Actual"
         },
         "poblacion_referencia": POBLACION_JAMUNDI
@@ -630,7 +630,7 @@ def get_comparativa_periodos(
     fuente: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """Compara dos perÃ­odos de tiempo."""
+    """Compara dos períodos de tiempo."""
     def get_stats(s, e):
         homicidios = _hechos_count(db, CONDUCTA_KEYS['HOMICIDIO'], s, e)
         otros      = _hechos_total(db, s, e) - homicidios
@@ -664,7 +664,7 @@ async def get_eventos_geojson(
 ):
     """
     GeoJSON para el mapa. Usa la tabla events (legacy) porque tiene coordenadas PostGIS.
-    La tabla hechos_seguridad no tiene geolocalizaciÃ³n aÃºn.
+    La tabla hechos_seguridad no tiene geolocalización aún.
     """
     data_level = current_user.data_level_max if current_user else 1
     is_institutional = data_level >= 2
@@ -754,7 +754,7 @@ def get_por_semana(
     anio: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """Hechos agrupados por semana del aÃ±o para anÃ¡lisis temporal."""
+    """Hechos agrupados por semana del año para análisis temporal."""
     q = db.query(
         HechoSeguridad.semana_num.label('semana'),
         func.extract('year', HechoSeguridad.fecha_evento).label('anio'),
@@ -784,7 +784,7 @@ def get_por_zona(
     end_date: Optional[date] = None,
     db: Session = Depends(get_db)
 ):
-    """DistribuciÃ³n de hechos por zona (urbana/rural/corregimiento)."""
+    """Distribución de hechos por zona (urbana/rural/corregimiento)."""
     q = db.query(
         HechoSeguridad.zona.label('zona'),
         hechos_unicos_expr().label('total')
@@ -797,6 +797,7 @@ def get_por_zona(
 
     results = q.group_by(HechoSeguridad.zona).order_by(text('total DESC')).all()
     return [{"zona": r.zona, "total": r.total} for r in results]
+
 
 
 

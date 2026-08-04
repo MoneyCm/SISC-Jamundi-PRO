@@ -1,0 +1,24 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "Nombre": "NOMBRE OFICIAL DEL TERRITORIO",
+        "fuente": "Gobernacion Valle del Cauca"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-76.5500, 3.2500],
+            [-76.5450, 3.2500],
+            [-76.5450, 3.2550],
+            [-76.5500, 3.2550],
+            [-76.5500, 3.2500]
+          ]
+        ]
+      }
+    }
+  ]
+}
