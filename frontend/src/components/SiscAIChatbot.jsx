@@ -71,6 +71,15 @@ const SiscAIChatbot = () => {
         }
     }, [messages, isOpen]);
 
+    useEffect(() => {
+        const openAssistant = () => {
+            setIsOpen(true);
+            setIsMinimized(false);
+        };
+        window.addEventListener('sisc:open-assistant', openAssistant);
+        return () => window.removeEventListener('sisc:open-assistant', openAssistant);
+    }, []);
+
     const handleSend = async (e) => {
         e.preventDefault();
         if (!input.trim() || loading) return;
