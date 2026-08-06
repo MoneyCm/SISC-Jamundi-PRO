@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useState, useEffect } from 'react';
 import './index.css';
 import Layout from './components/Layout';
 import CitizenPortalHub from './pages/CitizenPortalHub';
+import SiscAIChatbot from './components/SiscAIChatbot';
 import { loadPublicDashboard } from './utils/publicDashboardCache';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -135,7 +136,7 @@ const App = () => {
   }
 
   const isPublic = appMode === 'public';
-  const showCitizenAssistant = isPublic && ['reporting', 'victim-support', 'pqr'].includes(publicActivePage);
+  const showCitizenAssistant = isPublic;
 
   const renderContent = () => {
     if (isPublic) {
@@ -259,4 +260,5 @@ const App = () => {
 };
 
 export default App;
+
 
