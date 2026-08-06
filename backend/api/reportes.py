@@ -150,6 +150,11 @@ async def generar_boletin_pdf(
     total_prev = sum(d.total for d in datos_prev)
     var_total = ((total_actual - total_prev) / total_prev * 100) if total_prev > 0 else 0
     color_var = colors.red if var_total > 0 else colors.green if var_total < 0 else colors.grey
+    trend_text = "aumento" if var_total > 0 else "disminuyo" if var_total < 0 else "se mantuvo estable"
+    citizen_summary = f"Entre {fecha_inicio.strftime('%d/%m/%Y')} y {fecha_fin.strftime('%d/%m/%Y')} se registraron <b>{total_actual}</b> casos unicos agregados. Frente al mismo periodo de {fecha_fin_prev.year}, el total {trend_text} <b>{abs(var_total):.1f}%</b>."
+
+    content.append(Paragraph("LECTURA CIUDADANA", ParagraphStyle('CitizenTitle', parent=styles['Heading2'], fontSize=13, textColor=AZUL_OSCURO, spaceAfter=7)))
+    content.append(Paragraph(citizen_summary, ParagraphStyle('CitizenText', parent=styles['Normal'], fontSize=10.5, leading=15, textColor=AZUL_ESTRATEGICO, backColor=GRIS_PREMIUM, borderColor=BORDE_SUTIL, borderWidth=0.5, borderPadding=10, spaceAfter=16)))
 
     summary_data = [
         [Paragraph(f"<font color='#334155' size=10><b>AÑO {fecha_fin_prev.year}</b></font><br/><font size=22 color='#1e293b'><b>{total_prev}</b></font>", styles['Normal']),
@@ -237,9 +242,12 @@ async def generar_boletin_pdf(
             ('TOPPADDING', (0, 0), (-1, -1), 10),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
         ]))
-        content.append(t)
+        content.append(t)    content.append(Spacer(1, 20))
+    content.append(Paragraph("TRANSPARENCIA Y PRIVACIDAD", ParagraphStyle('PrivacyTitle', parent=styles['Heading2'], fontSize=12, textColor=AZUL_OSCURO, spaceAfter=6)))
+    privacy_text = "Este resumen usa datos agregados de la fuente indicada y compara periodos equivalentes. No incluye nombres, direcciones, identificadores ni detalles de casos individuales. Los resultados sirven para comprender tendencias generales y no para reportar emergencias. Para una emergencia, llame al 123."
+    content.append(Paragraph(privacy_text, ParagraphStyle('PrivacyText', parent=styles['Normal'], fontSize=9.5, leading=13, textColor=AZUL_ESTRATEGICO, spaceAfter=12)))
 
-    # --- PIE DE PÁGINA ---
+    # --- PIE DE PAGINA ---
     content.append(Spacer(1, 40))
     footer_text = "<b>ALCALDÍA DE JAMUNDÍ - VALLE DEL CAUCA</b><br/>Secretaría de Seguridad y Convivencia Ciudadana<br/><i>Documento Oficial Generado por el Sistema SISC</i>"
     content.append(Paragraph(footer_text, ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, alignment=1, textColor=colors.grey)))
