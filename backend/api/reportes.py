@@ -108,6 +108,14 @@ async def generar_boletin_pdf(
             Event.source_name.like(prefix)
         ).group_by(Event.descripcion).all()
 
+    monthly_data = []
+    zone_data = []
+    neighborhood_data = []
+    if fuente == "POLICIA_SEMANAL":
+        base_filter = [HechoSeguridad.fecha_evento >= fecha_inicio, HechoSeguridad.fecha_evento <= fecha_fin, HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"]
+        monthly_data = db.query(func.extract('month', HechoSeguridad.fecha_evento).label("month"), hechos_unicos_expr().label("total")).filter(*base_filter).group_by(func.extract('month', HechoSeguridad.fecha_evento)).order_by(func.extract('month', HechoSeguridad.fecha_evento)).all()
+        zone_data = db.query(HechoSeguridad.zona.label("name"), hechos_unicos_expr().label("total")).filter(*base_filter, HechoSeguridad.zona.isnot(None), HechoSeguridad.zona != "").group_by(HechoSeguridad.zona).order_by(hechos_unicos_expr().desc()).all()
+        neighborhood_data = db.query(HechoSeguridad.barrio_normalizado.label("name"), hechos_unicos_expr().label("total")).filter(*base_filter, HechoSeguridad.barrio_normalizado.isnot(None), HechoSeguridad.barrio_normalizado != "").group_by(HechoSeguridad.barrio_normalizado).having(hechos_unicos_expr() >= 3).order_by(hechos_unicos_expr().desc()).limit(10).all()
     # 5. Construcción del PDF
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.5*cm, leftMargin=1.5*cm, topMargin=1.2*cm, bottomMargin=1.5*cm)
@@ -156,22 +164,14 @@ async def generar_boletin_pdf(
     content.append(Paragraph("LECTURA CIUDADANA", ParagraphStyle('CitizenTitle', parent=styles['Heading2'], fontSize=13, textColor=AZUL_OSCURO, spaceAfter=7)))
     content.append(Paragraph(citizen_summary, ParagraphStyle('CitizenText', parent=styles['Normal'], fontSize=10.5, leading=15, textColor=AZUL_ESTRATEGICO, backColor=GRIS_PREMIUM, borderColor=BORDE_SUTIL, borderWidth=0.5, borderPadding=10, spaceAfter=16)))
 
-    summary_data = [
-        [Paragraph(f"<font color='#334155' size=10><b>AÑO {fecha_fin_prev.year}</b></font><br/><font size=22 color='#1e293b'><b>{total_prev}</b></font>", styles['Normal']),
-         Paragraph(f"<font color='#2563eb' size=10><b>AÑO {fecha_fin.year}</b></font><br/><font size=22 color='#2563eb'><b>{total_actual}</b></font>", styles['Normal']),
-         Paragraph(f"<font color='#334155' size=10><b>VARIACIÓN</b></font><br/><font size=22 color='{color_var.hexval()}'><b>{'+' if var_total > 0 else ''}{round(var_total, 1)}%</b></font>", styles['Normal'])]
-    ]
-    st = Table(summary_data, colWidths=[6*cm, 6*cm, 6*cm])
-    st.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), GRIS_PREMIUM),
-        ('BOX', (0,0), (-1,-1), 0.5, BORDE_SUTIL),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING', (0,0), (-1,-1), 18),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 18),
-    ]))
+    card_label = ParagraphStyle('CardLabel', parent=styles['Normal'], fontSize=9, leading=11, textColor=colors.HexColor("#475569"), alignment=1)
+    card_value = ParagraphStyle('CardValue', parent=styles['Normal'], fontSize=22, leading=27, textColor=AZUL_OSCURO, alignment=1)
+    card_variation = ParagraphStyle('CardVariation', parent=card_value, textColor=color_var)
+    summary_data = [[Paragraph(f"CASOS {fecha_fin_prev.year}", card_label), Paragraph(f"CASOS {fecha_fin.year}", card_label), Paragraph("VARIACION", card_label)], [Paragraph(str(total_prev), card_value), Paragraph(str(total_actual), card_value), Paragraph(f"{'+' if var_total > 0 else ''}{var_total:.1f}%", card_variation)]]
+    st = Table(summary_data, colWidths=[6*cm, 6*cm, 6*cm], rowHeights=[0.7*cm, 1.15*cm])
+    st.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), GRIS_PREMIUM), ('BOX', (0,0), (-1,-1), 0.5, BORDE_SUTIL), ('LINEABOVE', (0,1), (-1,1), 0.5, BORDE_SUTIL), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('TOPPADDING', (0,0), (-1,-1), 5), ('BOTTOMPADDING', (0,0), (-1,-1), 5)]))
     content.append(st)
-    content.append(Spacer(1, 35))
+    content.append(Spacer(1, 24))
 
     # --- TABLA DE DATOS COMPARATIVA ---
     if not datos_actual and not datos_prev:
@@ -243,6 +243,25 @@ async def generar_boletin_pdf(
             ('FONTSIZE', (0, 0), (-1, -1), 9),
         ]))
         content.append(t)
+
+    if monthly_data or zone_data or neighborhood_data:
+        content.append(PageBreak())
+        content.append(Paragraph("DATOS DESTACADOS DEL PERIODO", ParagraphStyle('DetailTitle', parent=styles['Heading2'], fontSize=14, textColor=AZUL_OSCURO, spaceAfter=10)))
+        content.append(Paragraph("Estas tablas amplian el resumen con datos agregados. Para descargar el conjunto completo y reutilizable, use Datos abiertos CSV en el tablero ciudadano.", ParagraphStyle('DetailIntro', parent=styles['Normal'], fontSize=9.5, leading=13, textColor=AZUL_ESTRATEGICO, spaceAfter=12)))
+        month_names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+        def public_table(rows, title, color):
+            table = Table(rows, colWidths=[9*cm, 4*cm])
+            table.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), color), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('ALIGN', (1,0), (-1,-1), 'CENTER'), ('GRID', (0,0), (-1,-1), 0.4, BORDE_SUTIL), ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GRIS_PREMIUM]), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('TOPPADDING', (0,0), (-1,-1), 7), ('BOTTOMPADDING', (0,0), (-1,-1), 7)]))
+            content.append(Paragraph(title, ParagraphStyle(f'{title}Style', parent=styles['Heading2'], fontSize=11, textColor=AZUL_OSCURO, spaceAfter=6)))
+            content.append(table)
+            content.append(Spacer(1, 16))
+        if monthly_data:
+            public_table([["MES", "CASOS UNICOS"]] + [[month_names[int(item.month) - 1], str(item.total)] for item in monthly_data], "TENDENCIA MENSUAL", AZUL_OSCURO)
+        if zone_data:
+            public_table([["ZONA", "CASOS UNICOS"]] + [[str(item.name), str(item.total)] for item in zone_data], "DISTRIBUCION POR ZONA", AZUL_ESTRATEGICO)
+        if neighborhood_data:
+            public_table([["BARRIO PUBLICADO", "CASOS UNICOS"]] + [[str(item.name), str(item.total)] for item in neighborhood_data], "BARRIOS CON DATOS AGREGADOS", AZUL_VIBRANTE)
+            content.append(Paragraph("Solo se incluyen barrios con al menos 3 casos agregados. No se publican direcciones ni registros individuales.", ParagraphStyle('NeighborhoodNote', parent=styles['Normal'], fontSize=8.5, leading=11, textColor=colors.HexColor("#64748b"), spaceBefore=2)))
 
     content.append(Spacer(1, 20))
     content.append(Paragraph("TRANSPARENCIA Y PRIVACIDAD", ParagraphStyle('PrivacyTitle', parent=styles['Heading2'], fontSize=12, textColor=AZUL_OSCURO, spaceAfter=6)))
@@ -325,6 +344,25 @@ async def generar_boletin_ejecutivo(
     # Resumen Ejecutivo IA
     content.append(Paragraph("PERSPECTIVA ESTRATÉGICA (IA)", ParagraphStyle('H', parent=styles['Heading2'], fontSize=12, textColor=AZUL_VIBRANTE)))
     content.append(Paragraph(insight_exec, insight_style))
+    if monthly_data or zone_data or neighborhood_data:
+        content.append(PageBreak())
+        content.append(Paragraph("DATOS DESTACADOS DEL PERIODO", ParagraphStyle('DetailTitle', parent=styles['Heading2'], fontSize=14, textColor=AZUL_OSCURO, spaceAfter=10)))
+        content.append(Paragraph("Estas tablas amplian el resumen con datos agregados. Para descargar el conjunto completo y reutilizable, use Datos abiertos CSV en el tablero ciudadano.", ParagraphStyle('DetailIntro', parent=styles['Normal'], fontSize=9.5, leading=13, textColor=AZUL_ESTRATEGICO, spaceAfter=12)))
+        month_names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+        def public_table(rows, title, color):
+            table = Table(rows, colWidths=[9*cm, 4*cm])
+            table.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), color), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('ALIGN', (1,0), (-1,-1), 'CENTER'), ('GRID', (0,0), (-1,-1), 0.4, BORDE_SUTIL), ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GRIS_PREMIUM]), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('TOPPADDING', (0,0), (-1,-1), 7), ('BOTTOMPADDING', (0,0), (-1,-1), 7)]))
+            content.append(Paragraph(title, ParagraphStyle(f'{title}Style', parent=styles['Heading2'], fontSize=11, textColor=AZUL_OSCURO, spaceAfter=6)))
+            content.append(table)
+            content.append(Spacer(1, 16))
+        if monthly_data:
+            public_table([["MES", "CASOS UNICOS"]] + [[month_names[int(item.month) - 1], str(item.total)] for item in monthly_data], "TENDENCIA MENSUAL", AZUL_OSCURO)
+        if zone_data:
+            public_table([["ZONA", "CASOS UNICOS"]] + [[str(item.name), str(item.total)] for item in zone_data], "DISTRIBUCION POR ZONA", AZUL_ESTRATEGICO)
+        if neighborhood_data:
+            public_table([["BARRIO PUBLICADO", "CASOS UNICOS"]] + [[str(item.name), str(item.total)] for item in neighborhood_data], "BARRIOS CON DATOS AGREGADOS", AZUL_VIBRANTE)
+            content.append(Paragraph("Solo se incluyen barrios con al menos 3 casos agregados. No se publican direcciones ni registros individuales.", ParagraphStyle('NeighborhoodNote', parent=styles['Normal'], fontSize=8.5, leading=11, textColor=colors.HexColor("#64748b"), spaceBefore=2)))
+
     content.append(Spacer(1, 20))
 
     # Tabla Comparativa Unificada
