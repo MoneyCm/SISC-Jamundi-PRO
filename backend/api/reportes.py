@@ -126,12 +126,12 @@ async def generar_boletin_pdf(
     logo_img = Image(logo_path, width=1.8*cm, height=2.3*cm) if os.path.exists(logo_path) else Paragraph("", styles['Normal'])
 
     title_block = [
-        Paragraph("SISC JAMUNDÍ", title_style),
-        Paragraph("Centro de Gestión de Datos y Seguridad", sub_style)
+        Paragraph("RESUMEN CIUDADANO SISC", title_style),
+        Paragraph("SEGURIDAD Y CONVIVENCIA - DATOS ABIERTOS AGREGADOS", sub_style)
     ]
 
     meta_block = [
-        Paragraph(f"<b>INFORME EJECUTIVO INTERANUAL</b>", ParagraphStyle('B', parent=meta_style, fontSize=10, textColor=AZUL_OSCURO)),
+        Paragraph(f"<b>RESUMEN CIUDADANO DE SEGURIDAD</b>", ParagraphStyle('B', parent=meta_style, fontSize=10, textColor=AZUL_OSCURO)),
         Spacer(1, 2),
         Paragraph(f"Corte: {fecha_fin.strftime('%d/%m/%Y')}", meta_style),
         Paragraph(f"Fuente oficial: {fuente_label}", meta_style)
@@ -260,7 +260,7 @@ async def generar_boletin_pdf(
     return Response(
         content=pdf_out,
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=Boletin_SISC.pdf"},
+        headers={"Content-Disposition": "attachment; filename=Resumen_Ciudadano_SISC.pdf"},
     )
 @router.get("/generar-boletin-ejecutivo")
 async def generar_boletin_ejecutivo(
@@ -316,7 +316,7 @@ async def generar_boletin_ejecutivo(
     # Header
     logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates", "escudo_jamundi.png")
     logo_img = Image(logo_path, width=1.5*cm, height=2*cm) if os.path.exists(logo_path) else Paragraph("", styles['Normal'])
-    header_data = [[logo_img, [Paragraph("SISC JAMUNDÍ", title_style), Paragraph("BOLETÍN ESTRATÉGICO DE SEGURIDAD", styles['Normal'])], Paragraph(f"Fecha: {fin_act.strftime('%d/%m/%y')}<br/>Corte: DATOS UNIFICADOS", styles['Normal'])]]
+    header_data = [[logo_img, [Paragraph("RESUMEN CIUDADANO SISC", title_style), Paragraph("BOLETÍN ESTRATÉGICO DE SEGURIDAD", styles['Normal'])], Paragraph(f"Fecha: {fin_act.strftime('%d/%m/%y')}<br/>Corte: DATOS UNIFICADOS", styles['Normal'])]]
     t_header = Table(header_data, colWidths=[2*cm, 12*cm, 4*cm])
     t_header.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     content.append(t_header)
