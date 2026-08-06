@@ -18,7 +18,7 @@ const SecureReporting = lazy(() => import('./pages/SecureReporting'));
 const CommunityParticipation = lazy(() => import('./pages/CommunityParticipation'));
 const IntelligenceModule = lazy(() => import('./pages/IntelligenceModule'));
 const DataQuality = lazy(() => import('./pages/DataQuality'));
-const SiscAIChatbot = lazy(() => import('./components/SiscAIChatbot'));
+
 
 const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
 const StatsModule = lazy(() => import('./pages/StatsModule'));
