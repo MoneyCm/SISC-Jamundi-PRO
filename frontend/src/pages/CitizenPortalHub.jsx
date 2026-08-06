@@ -104,22 +104,6 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                 </div>
             </div>
 
-            <section className="max-w-6xl mx-auto w-full px-6 pt-10 relative z-10">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6 rounded-3xl bg-white border border-[#281FD0]/15 p-6 md:p-8 shadow-lg">
-                    <div className="flex items-center gap-4">
-                        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[#281FD0]/10 text-[#281FD0]"><MessageCircle size={30} /></div>
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-[#281FD0]">Asistente ciudadano</p>
-                            <h2 className="mt-1 text-xl font-black text-slate-900">¿Tienes una pregunta sobre seguridad?</h2>
-                            <p className="mt-1 text-sm font-medium text-slate-500">Consulta cifras públicas, tendencias y rutas de atención.</p>
-                        </div>
-                    </div>
-                    <button type="button" onClick={() => window.dispatchEvent(new Event('sisc:open-assistant'))} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#281FD0] px-6 py-3 text-sm font-black text-white shadow-lg shadow-[#281FD0]/20 transition hover:-translate-y-0.5 hover:bg-[#1f18a8]">
-                        Abrir asistente <ChevronRight size={18} />
-                    </button>
-                </div>
-            </section>
-
             {/* Services Grid */}
             <div className="max-w-6xl mx-auto px-6 -mt-12 mb-20 relative z-20">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
