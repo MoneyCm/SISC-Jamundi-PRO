@@ -242,7 +242,9 @@ async def generar_boletin_pdf(
             ('TOPPADDING', (0, 0), (-1, -1), 10),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
         ]))
-        content.append(t)    content.append(Spacer(1, 20))
+        content.append(t)
+
+    content.append(Spacer(1, 20))
     content.append(Paragraph("TRANSPARENCIA Y PRIVACIDAD", ParagraphStyle('PrivacyTitle', parent=styles['Heading2'], fontSize=12, textColor=AZUL_OSCURO, spaceAfter=6)))
     privacy_text = "Este resumen usa datos agregados de la fuente indicada y compara periodos equivalentes. No incluye nombres, direcciones, identificadores ni detalles de casos individuales. Los resultados sirven para comprender tendencias generales y no para reportar emergencias. Para una emergencia, llame al 123."
     content.append(Paragraph(privacy_text, ParagraphStyle('PrivacyText', parent=styles['Normal'], fontSize=9.5, leading=13, textColor=AZUL_ESTRATEGICO, spaceAfter=12)))
