@@ -9,6 +9,8 @@ def create_tables():
         from db.models_intelligence import NationalCrimeStats, IngestionLog, TerritorialContext
         from db.models_dq import DqReport, DqIssue
         from db.models_mindefensa import MindefensaAsset
+        from db.models_policia import PoliceAsset
+        from db.models_source_center import SourceConnectorState
         from db.models_alerts import IntelligenceAlert
         from db.models_auth import User, Role, Permission, AuditLog, AccessRequest
         from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion, InspeccionFinanza

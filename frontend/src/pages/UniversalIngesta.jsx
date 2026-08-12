@@ -280,10 +280,10 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                             <p className="text-[10px] font-bold opacity-80">Se detectó una nueva versión de {currentDataset.label} en el portal oficial.</p>
                         </div>
                         <button
-                            onClick={() => setActivePage('monitoring')}
+                            onClick={() => setActivePage('sources')}
                             className="ml-4 px-3 py-1 bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase"
                         >
-                            Ver Monitor
+                            Ver fuentes
                         </button>
                     </div>
                 )}
@@ -438,10 +438,10 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                         </button>
                         {reportInfo.type === 'OUTDATED_SOURCE' ? (
                             <button
-                                onClick={() => setActivePage('monitoring')}
+                                onClick={() => setActivePage('sources')}
                                 className="px-10 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-700 transition-all flex items-center gap-2 shadow-xl active:scale-95"
                             >
-                                <RefreshCcw size={16} /> Ir al Monitor
+                                <RefreshCcw size={16} /> Ir a fuentes
                             </button>
                         ) : (
                             <>

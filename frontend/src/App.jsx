@@ -27,8 +27,7 @@ const DataQuality = lazy(() => import('./pages/DataQuality'));
 const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
 const InstitutionalAgents = lazy(() => import('./pages/InstitutionalAgents'));
 const StatsModule = lazy(() => import('./pages/StatsModule'));
-const MindefensaMonitor = lazy(() => import('./pages/MindefensaMonitor'));
-const PoliceMonitor = lazy(() => import('./pages/PoliceMonitor'));
+const SourceCenter = lazy(() => import('./pages/SourceCenter'));
 const PoliceWeeklyExplorer = lazy(() => import('./pages/PoliceWeeklyExplorer'));
 const SiscCifras = lazy(() => import('./pages/SiscCifras'));
 const RegionalContext = lazy(() => import('./pages/RegionalContext'));
@@ -263,10 +262,10 @@ const App = () => {
         return <ReportsPage />;
       case 'data':
         return <DataPage userRoles={userRoles} />;
-      case 'monitoring': // Added new case for monitoring (MinDefensa)
-        return <MindefensaMonitor onIngest={handleIngestDataset} />;
-      case 'police_monitor': // New case for Police assets monitor
-        return <PoliceMonitor onIngest={handleIngestDataset} />;
+      case 'sources':
+      case 'monitoring':
+      case 'police_monitor':
+        return <SourceCenter onIngest={handleIngestDataset} userRoles={userRoles} />;
       case 'police_explorer':
         return <PoliceWeeklyExplorer />;
       case 'sisc_cifras':

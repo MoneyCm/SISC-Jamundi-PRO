@@ -23,6 +23,8 @@ services:
         generateValue: true
       - key: SISC_REPORT_TRIGGER_KEY
         generateValue: true
+      - key: SISC_SOURCE_MONITOR_KEY
+        generateValue: true
       - key: CORS_ORIGINS
         value: https://sisc-frontend.onrender.com
       - key: AI_PROVIDER

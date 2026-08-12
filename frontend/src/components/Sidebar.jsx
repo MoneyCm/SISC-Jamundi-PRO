@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -11,10 +11,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
 
     const allItems = [
         { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, category: 'HOME', show: true },
-        // Monitor de fuentes externas (MinDefensa)
-        { id: 'monitoring', label: 'Monitor Mindefensa', icon: Globe, category: 'OPERACIONES', show: isUploader || isSteward },
-        // Nuevo monitor de activos de la Policía Nacional
-        { id: 'police_monitor', label: 'Monitor Policía', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward },
+        { id: 'sources', label: 'Centro de fuentes', icon: Layers, category: 'OPERACIONES', show: isUploader || isSteward || isDataOwner || isAnalyst || isDirective },
         { id: 'police_explorer', label: 'Explorador Policial', icon: BarChart2, category: 'ESTRATEGIA', show: isAnalyst || isDirective || isSteward || isDataOwner },
         { id: 'sisc_cifras', label: 'SISC en cifras', icon: Newspaper, category: 'SALIDA', show: isAnalyst || isDirective },
 

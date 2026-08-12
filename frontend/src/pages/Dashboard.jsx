@@ -4,7 +4,7 @@ import MapComponent from '../components/Map/MapComponent';
 import DashboardFilters from '../components/DashboardFilters';
 import ComparisonWidget from '../components/ComparisonWidget';
 import IntelligenceBriefTicker from '../components/IntelligenceBriefTicker';
-import { Loader, Download, RefreshCcw, ShieldCheck, Activity, Users, Globe, FileText, ArrowUpRight, Skull, UserMinus, Car, PhoneForwarded, Home, Brain, Zap } from 'lucide-react';
+import { Loader, Download, RefreshCcw, ShieldCheck, Activity, Users, Layers, FileText, ArrowUpRight, Skull, UserMinus, Car, PhoneForwarded, Home, Brain, Zap } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
 const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
@@ -448,22 +448,12 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
 
                             <div className="space-y-3">
                                 <button
-                                    onClick={() => onNavigate?.('monitoring')}
+                                    onClick={() => onNavigate?.('sources')}
                                     className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn"
                                 >
                                     <div className="flex items-center gap-3">
-                                        <Globe className="text-primary" size={20} />
-                                        <span className="font-bold text-sm">Monitor Mindefensa</span>
-                                    </div>
-                                    <ArrowUpRight size={16} className="text-slate-500 group-hover/btn:text-white transition-colors" />
-                                </button>
-                                <button
-                                    onClick={() => onNavigate?.('police_monitor')}
-                                    className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all group/btn"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <ShieldCheck className="text-emerald-500" size={20} />
-                                        <span className="font-bold text-sm">Monitor Policial</span>
+                                        <Layers className="text-emerald-500" size={20} />
+                                        <span className="font-bold text-sm">Centro de fuentes</span>
                                     </div>
                                     <ArrowUpRight size={16} className="text-slate-500 group-hover/btn:text-white transition-colors" />
                                 </button>
