@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -80,14 +81,16 @@ def test_overall_status_never_calls_a_source_current_without_cutoff_or_review():
 def test_heartbeat_fails_closed_without_a_strong_service_key(monkeypatch):
     monkeypatch.delenv("SISC_SOURCE_MONITOR_KEY", raising=False)
     with pytest.raises(HTTPException) as error:
-        source_center._authorize_heartbeat(_request(), None)
+        asyncio.run(source_center._authorize_heartbeat(_request(), None))
     assert error.value.status_code == 503
 
     monkeypatch.setenv("SISC_SOURCE_MONITOR_KEY", "replace_with_another_random_service_key")
     with pytest.raises(HTTPException) as placeholder_error:
-        source_center._authorize_heartbeat(
-            _request("replace_with_another_random_service_key"),
-            None,
+        asyncio.run(
+            source_center._authorize_heartbeat(
+                _request("replace_with_another_random_service_key"),
+                None,
+            )
         )
     assert placeholder_error.value.status_code == 503
 
@@ -95,10 +98,66 @@ def test_heartbeat_fails_closed_without_a_strong_service_key(monkeypatch):
 def test_heartbeat_accepts_service_key_or_authorized_operator(monkeypatch):
     service_key = "source-monitor-key-" + "x" * 40
     monkeypatch.setenv("SISC_SOURCE_MONITOR_KEY", service_key)
-    assert source_center._authorize_heartbeat(_request(service_key), None) == "SERVICE"
+    assert asyncio.run(source_center._authorize_heartbeat(_request(service_key), None)) == "SERVICE"
 
     monkeypatch.delenv("SISC_SOURCE_MONITOR_KEY", raising=False)
-    assert source_center._authorize_heartbeat(_request(), _user("STEWARD")) == "USER"
+    assert asyncio.run(source_center._authorize_heartbeat(_request(), _user("STEWARD"))) == "USER"
+
+
+def test_github_oidc_claims_are_scoped_to_connector_workflow():
+    claims = {
+        "repository": "MoneyCm/monitor-siedco",
+        "workflow_ref": (
+            "MoneyCm/monitor-siedco/.github/workflows/monitor_siedco.yml@refs/heads/main"
+        ),
+        "ref": "refs/heads/main",
+        "event_name": "schedule",
+        "runner_environment": "github-hosted",
+    }
+    source_center._validate_github_claims(claims, "SIEDCO_PUBLICO")
+
+    with pytest.raises(HTTPException) as wrong_connector:
+        source_center._validate_github_claims(claims, "OBSERVATORIO_VALLE")
+    assert wrong_connector.value.status_code == 403
+
+    with pytest.raises(HTTPException):
+        source_center._validate_github_claims({**claims, "ref": "refs/heads/feature"}, "SIEDCO_PUBLICO")
+
+
+def test_github_oidc_verification_uses_expected_issuer_and_audience(monkeypatch):
+    claims = {
+        "repository": "MoneyCm/monitor-siedco",
+        "workflow_ref": (
+            "MoneyCm/monitor-siedco/.github/workflows/monitor_siedco.yml@refs/heads/main"
+        ),
+        "ref": "refs/heads/main",
+        "event_name": "workflow_dispatch",
+        "runner_environment": "github-hosted",
+    }
+
+    async def fake_jwks(force_refresh=False):
+        return [{"kid": "trusted-key"}]
+
+    def fake_decode(token, key, algorithms, audience, issuer):
+        assert token == "signed-token"
+        assert key["kid"] == "trusted-key"
+        assert algorithms == ["RS256"]
+        assert audience == "sisc-source-center"
+        assert issuer == "https://token.actions.githubusercontent.com"
+        return claims
+
+    monkeypatch.setattr(source_center, "_github_jwks", fake_jwks)
+    monkeypatch.setattr(
+        source_center.jwt,
+        "get_unverified_header",
+        lambda _token: {"alg": "RS256", "kid": "trusted-key"},
+    )
+    monkeypatch.setattr(source_center.jwt, "decode", fake_decode)
+
+    assert (
+        asyncio.run(source_center._authorize_github_oidc("signed-token", "SIEDCO_PUBLICO"))
+        == "GITHUB_OIDC"
+    )
 
 
 def test_heartbeat_rejects_oversized_monitor_metadata():
@@ -110,6 +169,21 @@ def test_heartbeat_rejects_oversized_monitor_metadata():
         source_center.SourceHeartbeat(**base, warnings=["x" * 501])
     with pytest.raises(ValidationError):
         source_center.SourceHeartbeat(**base, details={"raw": "x" * 20_001})
+
+
+def test_heartbeat_payload_can_preserve_previous_success_fields():
+    payload = source_center.SourceHeartbeat(
+        connector_code="SIEDCO_PUBLICO",
+        status="ERROR",
+        quality_status="ERROR",
+        last_checked_at=datetime.now(timezone.utc),
+        last_success_at=None,
+        source_cutoff_date=None,
+    )
+
+    update = payload.model_dump(exclude_none=True)
+    assert "last_success_at" not in update
+    assert "source_cutoff_date" not in update
 
 
 def test_source_center_routes_enforce_read_and_operation_permissions():

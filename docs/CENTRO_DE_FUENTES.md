@@ -18,7 +18,15 @@ El Centro de fuentes consolida el control operativo de los origenes de datos del
 - `POST /api/source-center/check/{connector_code}`: revisa MinDefensa o Policia Nacional. Acepta `dataset_code` como parametro opcional para revisar un solo archivo.
 - `POST /api/source-center/heartbeat`: registra el resultado de un monitor externo.
 
-El `heartbeat` puede autenticarse con un usuario operativo o con el encabezado `X-SISC-SOURCE-KEY`. La clave se configura en `SISC_SOURCE_MONITOR_KEY` y nunca debe viajar en la URL ni quedar escrita en los repositorios de monitores.
+El `heartbeat` puede autenticarse con un usuario operativo, con el encabezado
+`X-SISC-SOURCE-KEY` o mediante un token OIDC de GitHub Actions. Los workflows
+autorizados de `monitor-siedco` y `monitor-valle` usan OIDC con la audiencia
+`sisc-source-center`; el backend valida firma, repositorio, archivo de workflow,
+rama, evento y entorno de ejecucion. No requieren secretos permanentes.
+
+`SISC_SOURCE_MONITOR_KEY` permanece disponible para monitores que se ejecuten
+fuera de GitHub Actions. Esa clave nunca debe viajar en la URL ni quedar escrita
+en un repositorio.
 
 ```json
 {
