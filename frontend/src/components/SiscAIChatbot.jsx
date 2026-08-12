@@ -187,7 +187,7 @@ const SiscAIChatbot = () => {
             <div
                 ref={assistantRef}
                 style={positionedStyle}
-                className="fixed right-4 bottom-4 md:bottom-4 md:right-6 z-[60] print:hidden"
+                className="fixed bottom-3 right-3 z-[60] print:hidden md:bottom-4 md:right-6"
             >
                 <div className="relative flex items-end gap-3">
                     <div className="hidden 2xl:block max-w-[420px] overflow-hidden rounded-md border border-[#281FD0]/15 bg-white shadow-2xl ring-1 ring-white/80">
@@ -212,7 +212,7 @@ const SiscAIChatbot = () => {
                         onPointerMove={handleDragMove}
                         onPointerUp={handleDragEnd}
                         onPointerCancel={handleDragEnd}
-                        className="absolute -left-2 -top-2 z-10 grid h-8 w-8 cursor-grab place-items-center rounded-full border-2 border-white bg-slate-800 text-white shadow-lg active:cursor-grabbing"
+                        className="absolute -left-2 -top-2 z-10 hidden h-8 w-8 cursor-grab place-items-center rounded-full border-2 border-white bg-slate-800 text-white shadow-lg active:cursor-grabbing md:grid"
                     >
                         <GripVertical size={18} />
                     </button>
@@ -220,13 +220,13 @@ const SiscAIChatbot = () => {
                         type="button"
                         onClick={openAssistant}
                         aria-label="Abrir asistente SISC"
-                        className="group relative grid h-24 w-24 place-items-center rounded-full bg-[#281FD0] text-white shadow-2xl shadow-[#281FD0]/35 transition-all hover:-translate-y-1 hover:bg-[#1f18a8] active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-[#FFB600]/40 md:h-20 md:w-20"
+                        className="group relative grid h-14 w-14 place-items-center rounded-full bg-[#281FD0] text-white shadow-xl shadow-[#281FD0]/30 transition-all hover:-translate-y-1 hover:bg-[#1f18a8] active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-[#FFB600]/40 md:h-20 md:w-20 md:shadow-2xl"
                     >
-                        <span className="absolute inset-0 rounded-full border-8 border-[#FFB600]/80 opacity-80 animate-ping"></span>
-                        <span className="absolute -top-2 -right-2 grid h-10 w-10 place-items-center md:h-9 md:w-9 rounded-full border-2 border-white bg-[#FFB600] text-[#281FD0] shadow-lg">
-                            <Sparkles size={20} />
+                        <span className="absolute inset-0 rounded-full border-4 border-[#FFB600]/80 opacity-80 animate-ping md:border-8"></span>
+                        <span className="absolute -right-1 -top-1 grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-[#FFB600] text-[#281FD0] shadow-lg md:-right-2 md:-top-2 md:h-9 md:w-9">
+                            <Sparkles size={16} />
                         </span>
-                        <MessageCircle size={30} className="relative transition-transform group-hover:scale-110" />
+                        <MessageCircle size={22} className="relative transition-transform group-hover:scale-110 md:h-[30px] md:w-[30px]" />
                     </button>
                 </div>
             </div>
@@ -234,7 +234,7 @@ const SiscAIChatbot = () => {
     }
 
     return (
-        <div ref={assistantRef} style={positionedStyle} className={`fixed right-4 bottom-24 md:right-6 z-[60] bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col transition-all duration-300 border border-slate-200 rounded-md ring-1 ring-white/80 print:hidden ${isMinimized ? 'h-20 w-[min(560px,calc(100vw-2rem))]' : 'h-[min(760px,calc(100vh-4rem))] w-[min(760px,calc(100vw-2rem))]'}`}>
+        <div ref={assistantRef} style={positionedStyle} className={`fixed bottom-2 right-2 z-[60] flex flex-col overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-white/80 transition-all duration-300 print:hidden md:bottom-24 md:right-6 ${isMinimized ? 'h-16 w-[calc(100vw-1rem)] md:h-20 md:w-[min(560px,calc(100vw-2rem))]' : 'h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] md:h-[min(760px,calc(100vh-4rem))] md:w-[min(760px,calc(100vw-2rem))]'}`}>
             <div
                 className="bg-[#281FD0] text-white shrink-0 cursor-move"
                 onPointerDown={handleDragStart}
@@ -243,14 +243,14 @@ const SiscAIChatbot = () => {
                 onPointerCancel={handleDragEnd}
             >
                 <div className="h-2 bg-[#FFB600]" />
-                <div className="px-6 py-5 flex items-center justify-between">
+                <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-5">
                 <div className="flex items-center gap-3 min-w-0">
-                    <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/20 shrink-0">
-                        <Bot size={30} />
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-white/15 ring-1 ring-white/20 md:h-14 md:w-14 md:rounded-2xl">
+                        <Bot size={24} />
                     </div>
                     <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                            <h4 className="font-black text-lg truncate">Asistente SISC Jamundi</h4>
+                            <h4 className="truncate text-base font-black md:text-lg">Asistente SISC Jamundi</h4>
                             <ShieldCheck size={20} className="shrink-0 text-[#FFB600]" />
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -272,11 +272,11 @@ const SiscAIChatbot = () => {
 
             {!isMinimized && (
                 <>
-                    <div className="px-6 py-5 bg-[#FFF8DF] border-b border-[#FFB600]/35">
+                    <div className="border-b border-[#FFB600]/35 bg-[#FFF8DF] px-4 py-3 md:px-6 md:py-5">
                         <p className="text-sm font-bold text-slate-800">Canal informativo ciudadano. Para emergencias llama al <span className="text-[#281FD0] font-black">123</span>.</p>
                     </div>
 
-                    <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-5 bg-slate-50/70">
+                    <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-slate-50/70 p-4 md:space-y-5 md:p-6">
                         {messages.map(msg => (
                             <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[88%] p-4 text-base leading-relaxed shadow-sm ${msg.sender === 'user'
@@ -293,7 +293,7 @@ const SiscAIChatbot = () => {
                         )}
                     </div>
 
-                    <form onSubmit={handleSend} className="p-6 border-t border-slate-100 bg-white">
+                    <form onSubmit={handleSend} className="border-t border-slate-100 bg-white p-4 md:p-6">
                         <div className="mb-3 flex flex-wrap gap-2">
                             {['Resume que informacion tienes', 'Homicidios en julio', 'Barrios con mas casos', 'Rutas de atencion'].map((quick) => (
                                 <button

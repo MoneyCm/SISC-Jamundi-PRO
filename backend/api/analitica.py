@@ -16,7 +16,7 @@ from services.hechos_metrics import (
     victimas_identificables_expr,
 )
 import os
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional, List
 
 from api.auth import get_current_user, get_optional_user, log_audit
@@ -24,7 +24,7 @@ from api.auth import get_current_user, get_optional_user, log_audit
 router = APIRouter()
 
 POBLACION_JAMUNDI = 180942
-PUBLIC_MAP_MIN_LOCATION_COUNT = int(os.getenv("SISC_PUBLIC_MIN_LOCATION_COUNT", "1"))
+PUBLIC_MAP_MIN_LOCATION_COUNT = int(os.getenv("SISC_PUBLIC_MIN_LOCATION_COUNT", "3"))
 
 # Mapeo unificado: conducta_estandar en BD -> clave interna
 CONDUCTA_KEYS = {
@@ -43,6 +43,110 @@ CONDUCTA_KEYS = {
     'TRAFICO':            ['TRAFICO DE ESTUPEFACIENTES', 'TRÁFICO DE ESTUPEFACIENTES',
                            'INCAUTACIÓN DE COCAINA', 'INCAUTACIÓN DE MARIHUANA'],
 }
+
+CONDUCTA_PUBLIC_LABELS = {
+    'HOMICIDIO': 'Homicidio',
+    'HURTO_PERSONAS': 'Hurto a personas',
+    'HURTO_VEHICULOS': 'Hurto de vehículos y motocicletas',
+    'HURTO_COMERCIO': 'Hurto a comercio',
+    'HURTO_RESIDENCIAS': 'Hurto a residencias',
+    'LESIONES': 'Lesiones personales',
+    'EXTORSION': 'Extorsión',
+    'VIF': 'Violencia intrafamiliar',
+    'SECUESTRO': 'Secuestro',
+    'TRAFICO': 'Tráfico de estupefacientes',
+}
+
+PUBLIC_INVALID_LOCATION_MARKERS = (
+    'PENDIENTE POR ASIGNAR',
+    'BARRIO PENDIENTE',
+    'NO APLICA',
+    'NO REPORTA',
+    'SIN DATO',
+    'SIN INFORMACION',
+    'SIN UBICACION',
+    'NAN',
+)
+
+
+def _sql_literal(value: str) -> str:
+    """Quote trusted, server-owned lookup values used to build a CASE expression."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _canonical_conducta_sql(column: str) -> str:
+    branches = []
+    for code, aliases in CONDUCTA_KEYS.items():
+        values = sorted({alias.strip().upper() for alias in aliases})
+        quoted = ', '.join(_sql_literal(value) for value in values)
+        branches.append(f"WHEN UPPER(BTRIM({column})) IN ({quoted}) THEN {_sql_literal(code)}")
+    return (
+        "CASE "
+        + " ".join(branches)
+        + f" ELSE COALESCE(NULLIF(UPPER(BTRIM({column})), ''), 'SIN_CLASIFICAR') END"
+    )
+
+
+def _canonical_location_sql(expression: str) -> str:
+    """Remove source-version suffixes that are not part of the official place name."""
+    return f"REGEXP_REPLACE(UPPER({expression}), '\\s+E24$', '')"
+
+
+def _public_conducta_label(code: str) -> str:
+    if code in CONDUCTA_PUBLIC_LABELS:
+        return CONDUCTA_PUBLIC_LABELS[code]
+    if not code or code == 'SIN_CLASIFICAR':
+        return 'Sin clasificar'
+    return code.replace('_', ' ').strip().title()
+
+
+def _is_publishable_location(name: Optional[str]) -> bool:
+    normalized = (name or '').strip().upper()
+    return bool(normalized) and not any(marker in normalized for marker in PUBLIC_INVALID_LOCATION_MARKERS)
+
+
+def _shift_year(value: date, years: int = -1) -> date:
+    try:
+        return value.replace(year=value.year + years)
+    except ValueError:
+        return value.replace(year=value.year + years, day=28)
+
+
+def _comparison_period(period_start: date, period_end: date, mode: str):
+    if mode == 'none':
+        return None, None
+    if mode == 'previous_period':
+        span = (period_end - period_start).days + 1
+        previous_end = period_start - timedelta(days=1)
+        return previous_end - timedelta(days=span - 1), previous_end
+    return _shift_year(period_start), _shift_year(period_end)
+
+
+def _resolve_public_period(
+    max_date: date,
+    selected_year: Optional[int],
+    period_mode: str,
+    custom_start: Optional[date],
+    custom_end: Optional[date],
+):
+    allowed_modes = {'year_to_date', 'last_30_days', 'last_7_days', 'custom'}
+    if period_mode not in allowed_modes:
+        raise HTTPException(status_code=400, detail='Periodo no soportado.')
+
+    target_year = selected_year or max_date.year
+    if period_mode == 'custom':
+        if not custom_start or not custom_end:
+            raise HTTPException(status_code=400, detail='El periodo personalizado requiere fecha inicial y final.')
+        if custom_start > custom_end:
+            raise HTTPException(status_code=400, detail='La fecha inicial no puede ser posterior a la fecha final.')
+        return custom_start, custom_end, custom_end.year
+
+    effective_end = min(max_date, date(target_year, 12, 31)) if target_year == max_date.year else date(target_year, 12, 31)
+    if period_mode == 'last_30_days':
+        return effective_end - timedelta(days=29), effective_end, target_year
+    if period_mode == 'last_7_days':
+        return effective_end - timedelta(days=6), effective_end, target_year
+    return date(target_year, 1, 1), effective_end, target_year
 
 
 def _latest_snapshot_id(db: Session):
@@ -74,8 +178,15 @@ def _latest_public_source(db: Session):
     }
 
 
-def _public_count(db: Session, source: dict, start: date, end: date) -> int:
-    params = {"start": start, "end": end}
+def _public_count(
+    db: Session,
+    source: dict,
+    start: date,
+    end: date,
+    filter_sql: str = '',
+    filter_params: Optional[dict] = None,
+) -> int:
+    params = {"start": start, "end": end, **(filter_params or {})}
     if source["snapshot_id"]:
         params["snapshot_id"] = source["snapshot_id"]
     row = db.execute(text(f"""
@@ -83,8 +194,33 @@ def _public_count(db: Session, source: dict, start: date, end: date) -> int:
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
         {source['snapshot_filter']}
+        {filter_sql}
     """), params).first()
     return row.total or 0
+
+
+def _public_filter_clause(source: dict, conducta: Optional[str], zona: Optional[str], territorio: Optional[str]):
+    clauses = []
+    params = {}
+    canonical_expr = _canonical_conducta_sql(source['conducta_col'])
+    if conducta:
+        normalized = conducta.strip().upper().replace(' ', '_')
+        matching_code = next(
+            (
+                code for code, label in CONDUCTA_PUBLIC_LABELS.items()
+                if normalized in {code, label.upper().replace(' ', '_')}
+            ),
+            normalized,
+        )
+        clauses.append(f"AND {canonical_expr} = :conducta")
+        params['conducta'] = matching_code
+    if zona:
+        clauses.append(f"AND UPPER({source['zone_expr']}) = :zona")
+        params['zona'] = zona.strip().upper()
+    if territorio:
+        clauses.append(f"AND {_canonical_location_sql(source['location_expr'])} = :territorio")
+        params['territorio'] = territorio.strip().upper()
+    return '\n'.join(clauses), params
 
 
 def _pct_change(current: int, previous: int) -> Optional[float]:
@@ -139,10 +275,21 @@ def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
 def get_public_dashboard(
     response: Response,
     year: Optional[int] = None,
+    period_mode: str = Query('year_to_date'),
+    comparison: str = Query('same_period_previous_year'),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    conducta: Optional[str] = None,
+    zona: Optional[str] = None,
+    territorio: Optional[str] = None,
+    include_map: bool = Query(True),
     min_location_count: int = Query(PUBLIC_MAP_MIN_LOCATION_COUNT, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
     """Dashboard ciudadano: solo datos agregados, anonimizados y trazables."""
+    if comparison not in {'same_period_previous_year', 'previous_period', 'none'}:
+        raise HTTPException(status_code=400, detail='Comparacion no soportada.')
+
     response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
     source = _latest_public_source(db)
     params = {}
@@ -157,43 +304,42 @@ def get_public_dashboard(
 
     max_date = latest_row.max_date if latest_row and latest_row.max_date else date.today()
     min_date = latest_row.min_date if latest_row and latest_row.min_date else date(max_date.year, 1, 1)
-    target_year = year or max_date.year
-    year_start = date(target_year, 1, 1)
-    year_end = min(max_date, date(target_year, 12, 31)) if target_year == max_date.year else date(target_year, 12, 31)
+    period_start, period_end, target_year = _resolve_public_period(max_date, year, period_mode, start_date, end_date)
+    period_end = min(period_end, max_date)
+    if period_start > period_end:
+        raise HTTPException(status_code=400, detail='El periodo solicitado es posterior al corte disponible.')
+    previous_start, previous_end = _comparison_period(period_start, period_end, comparison)
+    filter_sql, filter_params = _public_filter_clause(source, conducta, zona, territorio)
 
-    # La vista principal siempre usa el ano del corte. La cobertura historica se informa aparte.
-    period_start = year_start
-    period_end = year_end
-    previous_start = date(target_year - 1, 1, 1)
-    try:
-        previous_end = date(target_year - 1, year_end.month, year_end.day)
-    except ValueError:
-        previous_end = date(target_year - 1, year_end.month, year_end.day - 1)
-
-    base_params = {"start": period_start, "end": period_end}
+    base_params = {"start": period_start, "end": period_end, **filter_params}
     if source["snapshot_id"]:
         base_params["snapshot_id"] = source["snapshot_id"]
 
-    total_actual = _public_count(db, source, period_start, period_end)
-    total_current_year = _public_count(db, source, year_start, year_end)
-    total_prev = _public_count(db, source, previous_start, previous_end)
+    total_actual = _public_count(db, source, period_start, period_end, filter_sql, filter_params)
+    total_prev = (
+        _public_count(db, source, previous_start, previous_end, filter_sql, filter_params)
+        if previous_start and previous_end else 0
+    )
 
     volume_row = db.execute(text(f"""
         SELECT COUNT(*) AS registros
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
         {source['snapshot_filter']}
+        {filter_sql}
     """), base_params).first()
 
-    hom_vals = tuple(CONDUCTA_KEYS['HOMICIDIO'])
+    canonical_expr = _canonical_conducta_sql(source['conducta_col'])
+    canonical_location_expr = _canonical_location_sql(source['location_expr'])
     hom_stmt = text(f"""
         SELECT COUNT(DISTINCT {source['identity_expr']}) AS total
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
-        AND {source['conducta_col']} IN :hom_vals
+        AND {canonical_expr} = 'HOMICIDIO'
         {source['snapshot_filter']}
-    """).bindparams(bindparam("hom_vals", expanding=True))
-    homicidios = db.execute(hom_stmt, {**base_params, "hom_vals": hom_vals}).first().total or 0
+        {filter_sql}
+    """)
+    homicidios = db.execute(hom_stmt, base_params).first().total or 0
     tasa_homicidios = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
 
     monthly = db.execute(text(f"""
@@ -202,30 +348,73 @@ def get_public_dashboard(
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
         {source['snapshot_filter']}
+        {filter_sql}
         GROUP BY 1, date_trunc('month', {source['date_col']})
         ORDER BY date_trunc('month', {source['date_col']})
     """), base_params).fetchall()
 
     weekly = db.execute(text(f"""
-        SELECT EXTRACT(WEEK FROM {source['date_col']})::int AS semana,
+        SELECT EXTRACT(YEAR FROM {source['date_col']})::int AS anio,
+               EXTRACT(WEEK FROM {source['date_col']})::int AS semana,
                COUNT(DISTINCT {source['identity_expr']}) AS total
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
         {source['snapshot_filter']}
-        GROUP BY 1
-        ORDER BY 1
+        {filter_sql}
+        GROUP BY 1, 2
+        ORDER BY 1, 2
     """), base_params).fetchall()
 
-    conductas = db.execute(text(f"""
-        SELECT COALESCE(NULLIF(BTRIM({source['conducta_col']}), ''), 'SIN CLASIFICAR') AS name,
+    current_conductas = db.execute(text(f"""
+        SELECT {canonical_expr} AS code,
                COUNT(DISTINCT {source['identity_expr']}) AS value
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
         {source['snapshot_filter']}
+        {filter_sql}
         GROUP BY 1
-        ORDER BY value DESC, name ASC
+        ORDER BY value DESC, code ASC
         LIMIT 12
     """), base_params).fetchall()
+
+    previous_conductas = []
+    comparison_monthly = []
+    if previous_start and previous_end:
+        previous_params = {"start": previous_start, "end": previous_end, **filter_params}
+        if source["snapshot_id"]:
+            previous_params["snapshot_id"] = source["snapshot_id"]
+        previous_conductas = db.execute(text(f"""
+            SELECT {canonical_expr} AS code,
+                   COUNT(DISTINCT {source['identity_expr']}) AS value
+            FROM {source['source_table']}
+            WHERE {source['date_col']} BETWEEN :start AND :end
+            {source['snapshot_filter']}
+            {filter_sql}
+            GROUP BY 1
+        """), previous_params).fetchall()
+        comparison_monthly = db.execute(text(f"""
+            SELECT TO_CHAR(date_trunc('month', {source['date_col']}), 'YYYY-MM') AS bucket,
+                   COUNT(DISTINCT {source['identity_expr']}) AS total
+            FROM {source['source_table']}
+            WHERE {source['date_col']} BETWEEN :start AND :end
+            {source['snapshot_filter']}
+            {filter_sql}
+            GROUP BY 1, date_trunc('month', {source['date_col']})
+            ORDER BY date_trunc('month', {source['date_col']})
+        """), previous_params).fetchall()
+
+    previous_by_conducta = {row.code: row.value for row in previous_conductas}
+    conductas = []
+    for row in current_conductas:
+        previous_value = previous_by_conducta.get(row.code, 0)
+        conductas.append({
+            "code": row.code,
+            "name": _public_conducta_label(row.code),
+            "value": row.value,
+            "previous_value": previous_value,
+            "difference": row.value - previous_value,
+            "variation_pct": _pct_change(row.value, previous_value) if previous_start else None,
+        })
 
     zones = db.execute(text(f"""
         SELECT UPPER({source['zone_expr']}) AS zona,
@@ -233,25 +422,80 @@ def get_public_dashboard(
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
         {source['snapshot_filter']}
+        {filter_sql}
         GROUP BY 1
         ORDER BY total DESC
     """), base_params).fetchall()
 
     raw_locations = db.execute(text(f"""
-        SELECT UPPER({source['location_expr']}) AS name,
+        SELECT {canonical_location_expr} AS name,
                COUNT(DISTINCT {source['identity_expr']}) AS total,
                STRING_AGG(DISTINCT UPPER(COALESCE({source['zone_expr']}, 'SIN DATO')), '|') AS zones,
-               STRING_AGG(DISTINCT UPPER(COALESCE({source['conducta_col']}, 'SIN CLASIFICAR')), '|') AS conductas
+               STRING_AGG(DISTINCT {canonical_expr}, '|') AS conductas
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        {filter_sql}
+        GROUP BY 1
+        ORDER BY total DESC, name ASC
+        LIMIT 120
+    """), base_params).fetchall()
+
+    previous_locations = {}
+    if previous_start and previous_end:
+        previous_location_rows = db.execute(text(f"""
+            SELECT {canonical_location_expr} AS name,
+                   COUNT(DISTINCT {source['identity_expr']}) AS total
+            FROM {source['source_table']}
+            WHERE {source['date_col']} BETWEEN :start AND :end
+            {source['snapshot_filter']}
+            {filter_sql}
+            GROUP BY 1
+        """), previous_params).fetchall()
+        previous_locations = {row.name: row.total for row in previous_location_rows}
+
+    catalog_params = {"start": period_start, "end": period_end}
+    if source["snapshot_id"]:
+        catalog_params["snapshot_id"] = source["snapshot_id"]
+    catalog_conductas = db.execute(text(f"""
+        SELECT {canonical_expr} AS code,
+               COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        GROUP BY 1
+        ORDER BY total DESC, code ASC
+    """), catalog_params).fetchall()
+    catalog_zones = db.execute(text(f"""
+        SELECT UPPER({source['zone_expr']}) AS name,
+               COUNT(DISTINCT {source['identity_expr']}) AS total
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
         {source['snapshot_filter']}
         GROUP BY 1
         ORDER BY total DESC, name ASC
-        LIMIT 60
-    """), base_params).fetchall()
+    """), catalog_params).fetchall()
+    catalog_locations = db.execute(text(f"""
+        SELECT {canonical_location_expr} AS name,
+               COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        GROUP BY 1
+        ORDER BY total DESC, name ASC
+        LIMIT 300
+    """), catalog_params).fetchall()
+    available_year_rows = db.execute(text(f"""
+        SELECT DISTINCT EXTRACT(YEAR FROM {source['date_col']})::int AS year
+        FROM {source['source_table']}
+        WHERE {source['date_col']} IS NOT NULL
+        {source['snapshot_filter']}
+        ORDER BY year DESC
+    """), params).fetchall()
 
     from services.geocoding_service import GeocodingService
     suppressed_locations = 0
+    excluded_non_territorial_count = 0
     territories = []
     map_points = []
     unmapped_locations = 0
@@ -268,15 +512,25 @@ def get_public_dashboard(
         return [item for item in (value or '').split('|') if item]
 
     for row in raw_locations:
-        if not row.name or row.name == "SIN DATO":
+        if not _is_publishable_location(row.name):
+            excluded_non_territorial_count += row.total or 0
             continue
         if row.total < min_location_count:
             suppressed_locations += row.total
             unmapped_locations_list.append({"name": row.name, "total": row.total, "reason": "baja frecuencia"})
             continue
-        item = {"name": row.name, "total": row.total, "zones": split_values(row.zones), "conductas": split_values(row.conductas)}
+        previous_value = previous_locations.get(row.name, 0)
+        item = {
+            "name": row.name,
+            "total": row.total,
+            "previous_value": previous_value,
+            "difference": row.total - previous_value,
+            "variation_pct": _pct_change(row.total, previous_value) if previous_start else None,
+            "zones": split_values(row.zones),
+            "conductas": [_public_conducta_label(code) for code in split_values(row.conductas)],
+        }
         territories.append(item)
-        territory = GeocodingService.get_official_territory(row.name)
+        territory = GeocodingService.get_official_territory(row.name) if include_map else None
         if territory:
             lat, lng = territory["coords"]
             map_points.append({
@@ -289,7 +543,7 @@ def get_public_dashboard(
                 "zones": item["zones"],
                 "conductas": item["conductas"],
             })
-        else:
+        elif include_map:
             unmapped_locations += 1
             unmapped_locations_list.append({"name": row.name, "total": row.total, "reason": pending_reason(row.name), "zones": item["zones"], "conductas": item["conductas"]})
 
@@ -297,22 +551,34 @@ def get_public_dashboard(
     report_start = period_start.isoformat()
     report_end = period_end.isoformat()
     bulletin_url = f"/api/reportes/generar-boletin?fuente=POLICIA_SEMANAL&fecha_inicio={report_start}&fecha_fin={report_end}"
+    comparison_label = {
+        'same_period_previous_year': 'Mismo periodo del año anterior',
+        'previous_period': 'Periodo inmediatamente anterior',
+        'none': 'Sin comparación',
+    }[comparison]
+    available_territories = [
+        {"name": row.name, "value": row.total}
+        for row in catalog_locations
+        if _is_publishable_location(row.name) and row.total >= min_location_count
+    ]
 
     return {
         "metadata": {
-            "source": "SABANA SIEDCO/PONAL - Policia Nacional",
+            "source": "SÁBANA SIEDCO/PONAL - Policía Nacional",
             "basis": "BASE_MAESTRA_CONSOLIDADA",
             "period_start": report_start,
             "period_end": report_end,
             "latest_event_date": max_date.isoformat(),
             "first_available_date": min_date.isoformat(),
             "year": target_year,
-            "scope": "YEAR_TO_DATE" if year is None else "YEAR_FILTER",
-            "comparison_start": year_start.isoformat(),
-            "comparison_end": year_end.isoformat(),
+            "scope": period_mode.upper(),
+            "comparison_mode": comparison,
+            "comparison_label": comparison_label,
+            "comparison_start": previous_start.isoformat() if previous_start else None,
+            "comparison_end": previous_end.isoformat() if previous_end else None,
             "population": POBLACION_JAMUNDI,
-            "privacy": "Publicacion agregada. No incluye nombres, identificadores, telefonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
-            "methodology": "Cada sabana oficial se valida y se conserva como evidencia. La publicacion ciudadana usa una base maestra consolidada: las entregas mas recientes actualizan hechos ya existentes y las entregas historicas completan hechos distintos. El mapa solo ubica territorios con poligono oficial verificado, mediante un punto interior de ese poligono; los demas se conservan en las tablas sin ubicacion cartografica.",
+            "privacy": "Publicación agregada. No incluye nombres, identificadores, teléfonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
+            "methodology": "Cada sábana oficial se valida y se conserva como evidencia. La publicación ciudadana usa una base maestra consolidada: las entregas más recientes actualizan hechos ya existentes y las entregas históricas completan hechos distintos. El mapa solo ubica territorios con polígono oficial verificado, mediante un punto interior de ese polígono; los demás se conservan en las tablas sin ubicación cartográfica.",
             "last_ingestion": {
                 "id": str(run.id) if run else None,
                 "filename": run.filename if run else None,
@@ -333,25 +599,47 @@ def get_public_dashboard(
             "homicidios": homicidios,
             "tasa_homicidios": tasa_homicidios,
             "previous_total": total_prev,
-            "variation_pct": _pct_change(total_current_year, total_prev),
+            "variation_pct": _pct_change(total_actual, total_prev) if previous_start else None,
         },
         "interannual": {
-            "current": {"year": target_year, "total": total_current_year, "start": year_start.isoformat(), "end": year_end.isoformat()},
-            "previous": {"year": target_year - 1, "total": total_prev, "start": previous_start.isoformat(), "end": previous_end.isoformat()},
-            "variation_pct": _pct_change(total_current_year, total_prev),
+            "current": {"year": period_end.year, "total": total_actual, "start": period_start.isoformat(), "end": period_end.isoformat()},
+            "previous": {"year": previous_end.year if previous_end else None, "total": total_prev, "start": previous_start.isoformat() if previous_start else None, "end": previous_end.isoformat() if previous_end else None},
+            "variation_pct": _pct_change(total_actual, total_prev) if previous_start else None,
         },
         "monthly_trend": [{"name": row.bucket, "total": row.total} for row in monthly],
-        "weekly_trend": [{"name": f"S{row.semana:02d}", "semana": row.semana, "total": row.total} for row in weekly],
-        "conductas": [{"name": row.name, "value": row.value} for row in conductas],
+        "comparison_monthly_trend": [{"name": row.bucket, "total": row.total} for row in comparison_monthly],
+        "weekly_trend": [{"name": f"S{row.semana:02d}", "year": row.anio, "semana": row.semana, "total": row.total} for row in weekly],
+        "conductas": conductas,
+        "priority_kpis": conductas[:4],
         "zones": [{"name": row.zona or "SIN DATO", "value": row.total} for row in zones],
         "territories": territories[:20],
+        "filters": {
+            "selected": {
+                "year": year,
+                "period_mode": period_mode,
+                "comparison": comparison,
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
+                "conducta": conducta,
+                "zona": zona,
+                "territorio": territorio,
+                "include_map": include_map,
+            },
+            "available": {
+                "years": [row.year for row in available_year_rows],
+                "conductas": [{"code": row.code, "name": _public_conducta_label(row.code), "value": row.total} for row in catalog_conductas],
+                "zones": [{"name": row.name or "SIN DATO", "value": row.total} for row in catalog_zones],
+                "territories": available_territories,
+            },
+        },
         "map": {
             "type": "official_territory_polygons",
             "min_location_count": min_location_count,
             "suppressed_count": suppressed_locations,
+            "excluded_non_territorial_count": excluded_non_territorial_count,
             "unmapped_count": unmapped_locations,
             "unmapped_names": unmapped_locations_list,
-            "geography_source": "Pol�gonos oficiales urbanos y rurales: visor geogr�fico de la Gobernaci�n del Valle del Cauca y capa rural R_VEREDA de Jamund�",
+            "geography_source": "Polígonos oficiales urbanos y rurales: visor geográfico de la Gobernación del Valle del Cauca y capa rural R_VEREDA de Jamundí",
             "points": map_points,
         },
     }

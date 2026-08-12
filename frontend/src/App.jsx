@@ -1,7 +1,8 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
 import './index.css';
 import Layout from './components/Layout';
-import CitizenPortalHub from './pages/CitizenPortalHub';
+import CitizenPortalHome from './pages/CitizenPortalHome';
+import PublicPortalHeader from './components/public/PublicPortalHeader';
 import SiscAIChatbot from './components/SiscAIChatbot';
 import { loadPublicDashboard } from './utils/publicDashboardCache';
 
@@ -9,7 +10,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const MapPage = lazy(() => import('./pages/MapPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const DataPage = lazy(() => import('./pages/DataPage'));
-const PublicDashboard = lazy(() => import('./pages/PublicDashboard'));
+const PublicDashboard = lazy(() => import('./pages/PublicDataExplorer'));
 const PublicInformation = lazy(() => import('./pages/PublicInformation'));
 const PublicMeasures = lazy(() => import('./pages/PublicMeasures'));
 const PublicInspectionManagement = lazy(() => import('./pages/PublicInspectionManagement'));
@@ -47,6 +48,16 @@ const PageLoading = () => (
     </div>
   </div>
 );
+
+const PUBLIC_PAGE_META = {
+  hub: ['SISC Jamundí | Seguridad y convivencia', 'Información oficial para entender la seguridad y convivencia en Jamundí.'],
+  transparency: ['Explorar datos | SISC Jamundí', 'Consulta tendencias, comparaciones y datos territoriales agregados de Jamundí.'],
+  'sisc-cifras': ['SISC en cifras | SISC Jamundí', 'Genera y descarga piezas visuales institucionales con cifras agregadas del periodo.'],
+  'technical-bulletins': ['Boletines | SISC Jamundí', 'Consulta boletines técnicos públicos del SISC Jamundí.'],
+  'open-data': ['Datos abiertos | SISC Jamundí', 'Descarga información pública agregada en formatos CSV, JSON y XLSX.'],
+  'transparency-info': ['Metodología y fuentes | SISC Jamundí', 'Conoce las fuentes, fechas de corte, metodología y límites de las cifras públicas.'],
+};
+
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [userRoles, setUserRoles] = useState([]);
@@ -62,6 +73,21 @@ const App = () => {
   const [selectedReportId, setSelectedReportId] = useState(null);
   const [selectedDataset, setSelectedDataset] = useState({ code: 'SECUESTRO', label: 'Secuestro' });
   const [rnmcFilters, setRnmcFilters] = useState(null);
+
+  const navigatePublic = (page, options = {}) => {
+    const nextPage = page || 'hub';
+    const params = new URLSearchParams(window.location.search);
+    if (nextPage === 'hub') params.delete('page');
+    else params.set('page', nextPage);
+    const query = params.toString();
+    const hash = options.hash ? `#${options.hash}` : '';
+    window.history.pushState({ page: nextPage }, '', `${window.location.pathname}${query ? `?${query}` : ''}${hash}`);
+    setPublicActivePage(nextPage);
+    window.setTimeout(() => {
+      if (options.hash) document.getElementById(options.hash)?.scrollIntoView({ block: 'start' });
+      else window.scrollTo({ top: 0, behavior: 'auto' });
+    }, 0);
+  };
 
   const handleIngestDataset = (code, label) => {
     setSelectedDataset({ code, label });
@@ -93,8 +119,33 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (appMode !== 'public' || !['hub', 'transparency'].includes(publicActivePage)) return;
-    loadPublicDashboard({ minLocationCount: 1 }).catch(() => {});
+    if (appMode !== 'public' || publicActivePage !== 'hub') return;
+    loadPublicDashboard({ minLocationCount: 3, includeMap: false }).catch(() => {});
+  }, [appMode, publicActivePage]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      setPublicActivePage(params.get('page') || 'hub');
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (appMode !== 'public') return;
+    const [title, description] = PUBLIC_PAGE_META[publicActivePage] || PUBLIC_PAGE_META.hub;
+    document.title = title;
+    const setContent = (selector, value) => document.querySelector(selector)?.setAttribute('content', value);
+    setContent('meta[name="description"]', description);
+    setContent('meta[property="og:title"]', title);
+    setContent('meta[property="og:description"]', description);
+    setContent('meta[property="og:url"]', window.location.href);
+    setContent('meta[name="twitter:title"]', title);
+    setContent('meta[name="twitter:description"]', description);
+    const canonicalUrl = new URL(window.location.pathname, window.location.origin);
+    if (publicActivePage !== 'hub') canonicalUrl.searchParams.set('page', publicActivePage);
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', canonicalUrl.toString());
   }, [appMode, publicActivePage]);
 
   const handleLoginSuccess = (newToken, roles, dl) => {
@@ -115,7 +166,7 @@ const App = () => {
     setIsAuthenticated(false);
     setUserRoles([]);
     setAppMode('public');
-    setPublicActivePage('hub');
+    navigatePublic('hub');
     setActivePage('dashboard');
   };
 
@@ -148,14 +199,15 @@ const App = () => {
     if (isPublic) {
       switch (publicActivePage) {
         case 'hub':
-          return <CitizenPortalHub
-            onNavigate={(page) => setPublicActivePage(page)}
+          return <CitizenPortalHome
+            onNavigate={navigatePublic}
             onLoginClick={() => setAppMode('login')}
           />;
         case 'transparency':
           return <PublicDashboard
             onLoginClick={() => setAppMode('login')}
-            onBack={() => setPublicActivePage('hub')}
+            onBack={() => navigatePublic('hub')}
+            onNavigate={navigatePublic}
           />;
         case 'transparency-info':
         case 'open-data':
@@ -163,30 +215,36 @@ const App = () => {
         case 'accountability':
           return <PublicInformation
             initialSection={publicActivePage}
-            onBack={() => setPublicActivePage('hub')}
-            onNavigate={(page) => setPublicActivePage(page)}
+            onBack={() => navigatePublic('hub')}
+            onNavigate={navigatePublic}
+            onLoginClick={() => setAppMode('login')}
           />;
+        case 'sisc-cifras':
+          return <>
+            <PublicPortalHeader currentPage="sisc-cifras" onNavigate={navigatePublic} onLoginClick={() => setAppMode('login')} />
+            <SiscCifras />
+          </>;
         case 'public-measures':
-          return <PublicMeasures onBack={() => setPublicActivePage('hub')} />;
-    case 'public-inspections':
-          return <PublicInspectionManagement onBack={() => setPublicActivePage('hub')} onNavigate={setPublicActivePage} />;
+          return <PublicMeasures onBack={() => navigatePublic('hub')} />;
+        case 'public-inspections':
+          return <PublicInspectionManagement onBack={() => navigatePublic('hub')} onNavigate={navigatePublic} />;
         case 'public-family-protection':
-          return <PublicFamilyProtection onBack={() => setPublicActivePage('hub')} />;
+          return <PublicFamilyProtection onBack={() => navigatePublic('hub')} />;
         case 'victim-support':
-          return <VictimRoutes onBack={() => setPublicActivePage('hub')} />;
+          return <VictimRoutes onBack={() => navigatePublic('hub')} />;
         case 'reporting':
-          return <SecureReporting onBack={() => setPublicActivePage('hub')} />;
+          return <SecureReporting onBack={() => navigatePublic('hub')} />;
         case 'participation':
-          return <CommunityParticipation onBack={() => setPublicActivePage('hub')} />;
+          return <CommunityParticipation onBack={() => navigatePublic('hub')} />;
         case 'intelligence':
           return <IntelligenceModule />;
         case 'educational':
           return <div className="p-20 text-center">Módulo Educativo en Desarrollo</div>;
         case 'pqr':
-          return <PQRPage onBack={() => setPublicActivePage('hub')} />;
+          return <PQRPage onBack={() => navigatePublic('hub')} />;
         default:
-          return <CitizenPortalHub
-            onNavigate={(page) => setPublicActivePage(page)}
+          return <CitizenPortalHome
+            onNavigate={navigatePublic}
             onLoginClick={() => setAppMode('login')}
           />;
       }

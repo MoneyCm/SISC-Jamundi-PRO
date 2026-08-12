@@ -20,6 +20,7 @@ const COMPARISON_MODES = [
 ];
 
 const DEFAULT_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'];
+const CORE_PERIOD_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC'];
 const DOMAIN_COLORS = {
   SEGURIDAD: '#281FD0',
   CONVIVENCIA: '#3A30F1',
@@ -63,6 +64,20 @@ const sevenDaysAgoIso = () => {
   const d = new Date();
   d.setDate(d.getDate() - 6);
   return d.toISOString().slice(0, 10);
+};
+
+const suggestedPeriod = (sources = [], edition = 'weekly') => {
+  const coreCutoffs = CORE_PERIOD_SOURCES
+    .map((code) => sources.find((source) => source.code === code)?.last_cutoff_date)
+    .filter(Boolean)
+    .sort();
+  const allCutoffs = sources.map((source) => source.last_cutoff_date).filter(Boolean).sort();
+  const endIso = coreCutoffs[0] || allCutoffs.at(-1) || todayIso();
+  const end = new Date(`${endIso}T12:00:00`);
+  const start = new Date(end);
+  if (edition === 'monthly') start.setDate(1);
+  else start.setDate(start.getDate() - 6);
+  return { start: start.toISOString().slice(0, 10), end: endIso };
 };
 
 const authHeaders = () => {
@@ -847,6 +862,7 @@ const SiscCifras = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [shareStatus, setShareStatus] = useState(null);
+  const [periodSuggested, setPeriodSuggested] = useState(false);
 
   const publicSources = useMemo(
     () => sources.filter((source) => source.publication_level === 'PUBLICO'),
@@ -895,6 +911,12 @@ const SiscCifras = () => {
     setSelectedSources((current) =>
       current.includes(code) ? current.filter((item) => item !== code) : [...current, code]
     );
+  };
+
+  const applySuggestedPeriod = (nextEdition = edition) => {
+    const suggested = suggestedPeriod(sources, nextEdition);
+    setPeriodStart(suggested.start);
+    setPeriodEnd(suggested.end);
   };
 
   const downloadJson = () => {
@@ -998,6 +1020,14 @@ const SiscCifras = () => {
     });
   }, [sources]);
 
+  useEffect(() => {
+    if (!sources.length || periodSuggested) return;
+    applySuggestedPeriod(edition);
+    setPeriodSuggested(true);
+  }, [sources, periodSuggested, edition]);
+
+  const recommendedPeriod = useMemo(() => suggestedPeriod(sources, edition), [sources, edition]);
+
   return (
     <div className="min-h-screen bg-[#F2F4F7]">
       <div className="border-b border-slate-200 bg-white px-6 py-4">
@@ -1043,7 +1073,10 @@ const SiscCifras = () => {
               {EDITIONS.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setEdition(item.id)}
+                  onClick={() => {
+                    setEdition(item.id);
+                    applySuggestedPeriod(item.id);
+                  }}
                   className={`rounded-md px-3 py-2 text-xs font-black uppercase transition ${edition === item.id ? 'bg-[#281FD0] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                 >
                   {item.label}
@@ -1053,13 +1086,16 @@ const SiscCifras = () => {
             <div className="mt-5 grid grid-cols-2 gap-3">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                 Inicio
-                <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-[#281FD0]" />
+                <input type="date" value={periodStart} max={recommendedPeriod.end} onChange={(e) => setPeriodStart(e.target.value)} className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-[#281FD0]" />
               </label>
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                 Corte
-                <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-[#281FD0]" />
+                <input type="date" value={periodEnd} max={recommendedPeriod.end} onChange={(e) => setPeriodEnd(e.target.value)} className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-[#281FD0]" />
               </label>
             </div>
+            <button onClick={() => applySuggestedPeriod()} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-[#281FD0]/30 bg-[#281FD0]/5 px-3 text-xs font-black text-[#281FD0] hover:bg-[#281FD0]/10">
+              <CalendarDays size={15} /> Usar ultimo corte disponible
+            </button>
             <div className="mt-5">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Comparacion</p>
               <div className="mt-2 grid grid-cols-3 gap-2">

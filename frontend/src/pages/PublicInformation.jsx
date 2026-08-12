@@ -6,13 +6,17 @@ import {
     CheckCircle2,
     Database,
     Download,
+    FileJson2,
+    FileSpreadsheet,
     FileText,
     Info,
     Printer,
     RefreshCcw,
     ShieldCheck
 } from 'lucide-react';
+import PublicPortalHeader from '../components/public/PublicPortalHeader';
 import { API_BASE_URL } from '../utils/apiConfig';
+import { downloadCsvFile, downloadJsonFile, downloadXlsxFile } from '../utils/publicDataDownloads';
 
 const SECTIONS = [
     { id: 'transparency-info', label: 'Transparencia', icon: ShieldCheck },
@@ -21,24 +25,21 @@ const SECTIONS = [
     { id: 'accountability', label: 'Rendición de cuentas', icon: CheckCircle2, href: 'https://www.jamundi.gov.co/Paginas/Rendici%C3%B3n-de-cuentas.aspx' },
 ];
 
-const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+const OPEN_DATA_DICTIONARY = [
+    { field: 'indicator', description: 'Nombre público del indicador consolidado.' },
+    { field: 'category', description: 'Categoría ciudadana agregada.' },
+    { field: 'value', description: 'Cantidad agregada para el periodo publicado.' },
+    { field: 'cutoff_date', description: 'Fecha del último registro disponible.' },
+    { field: 'source', description: 'Fuente institucional del dato.' },
+];
 
-const downloadCsv = (filename, headers, rows) => {
-    const body = [headers, ...rows].map((row) => row.map(csvCell).join(';')).join('\n');
-    const blob = new Blob([`\uFEFF${body}`], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-};
-
-const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNavigate }) => {
+const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNavigate, onLoginClick }) => {
     const [activeSection, setActiveSection] = useState(initialSection);
     const [data, setData] = useState({ kpis: null, distribution: [], metadata: null });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [exportingXlsx, setExportingXlsx] = useState(false);
+    const [exportStatus, setExportStatus] = useState('');
 
     const loadData = async () => {
         setLoading(true);
@@ -91,21 +92,57 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
         : data.kpis?.fuente || 'Fuente oficial en validación';
     const cutoff = data.metadata?.ultima_fecha || 'Corte no disponible';
 
-    const downloadIndicators = () => downloadCsv(
+    const downloadIndicators = () => downloadCsvFile(
         `sisc_indicadores_${new Date().toISOString().slice(0, 10)}.csv`,
         ['indicador', 'valor', 'fecha_corte', 'fuente'],
         indicatorRows.map(([indicator, value]) => [indicator, value, cutoff, source])
     );
 
-    const downloadDistribution = () => downloadCsv(
+    const downloadDistribution = () => downloadCsvFile(
         `sisc_distribucion_${new Date().toISOString().slice(0, 10)}.csv`,
         ['delito', 'casos', 'fecha_corte', 'fuente'],
         data.distribution.map((item) => [item.name, item.value, cutoff, source])
     );
 
+    const openDataPackage = useMemo(() => ({
+        metadata: { cutoff_date: cutoff, source, downloaded_at: new Date().toISOString() },
+        privacy: 'Solo contiene cifras agregadas aptas para publicación. No incluye datos personales, direcciones ni coordenadas puntuales.',
+        data_dictionary: OPEN_DATA_DICTIONARY,
+        indicators: indicatorRows.map(([indicator, value]) => ({ indicator, value, cutoff_date: cutoff, source })),
+        distribution: data.distribution.map((item) => ({ category: item.name, value: item.value, cutoff_date: cutoff, source })),
+    }), [cutoff, data.distribution, indicatorRows, source]);
+
+    const downloadOpenDataJson = () => {
+        downloadJsonFile(`sisc_datos_abiertos_${new Date().toISOString().slice(0, 10)}.json`, openDataPackage);
+    };
+
+    const downloadOpenDataXlsx = async () => {
+        if (exportingXlsx) return;
+        setExportingXlsx(true);
+        setExportStatus('');
+        try {
+            await downloadXlsxFile(
+                `sisc_datos_abiertos_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                [
+                    { name: 'Indicadores', rows: openDataPackage.indicators },
+                    { name: 'Distribucion', rows: openDataPackage.distribution },
+                    { name: 'Diccionario', rows: OPEN_DATA_DICTIONARY },
+                    { name: 'Metadatos', rows: Object.entries(openDataPackage.metadata).map(([field, value]) => ({ field, value })) },
+                ]
+            );
+            setExportStatus('Archivo XLSX generado.');
+        } catch {
+            setExportStatus('No fue posible generar el archivo XLSX.');
+        } finally {
+            setExportingXlsx(false);
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-900">
-            <header className="bg-[#171f3a] text-white border-b-4 border-amber-400 print:bg-white print:text-slate-900">
+        <div className="public-portal min-h-screen bg-slate-50 text-slate-900">
+            <a href="#public-information-main" className="skip-link">Saltar al contenido principal</a>
+            <div className="print:hidden"><PublicPortalHeader currentPage={activeSection} onNavigate={onNavigate} onLoginClick={onLoginClick} /></div>
+            <header className="border-t-4 border-[#FFE000] bg-[#281FD0] text-white print:bg-white print:text-slate-900">
                 <div className="max-w-6xl mx-auto px-5 py-6 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                     <div>
                         <button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-bold text-white/70 hover:text-white mb-3 print:hidden">
@@ -144,7 +181,7 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
                 </div>
             </nav>
 
-            <main className="max-w-6xl mx-auto px-5 py-8 md:py-12">
+            <main id="public-information-main" className="max-w-6xl mx-auto px-5 py-8 md:py-12">
                 {error && <div className="mb-8 border-l-4 border-red-500 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
                 {activeSection === 'transparency-info' && (
@@ -166,7 +203,7 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
                 {activeSection === 'open-data' && (
                     <section>
                         <h2 className="text-2xl font-black mb-2">Descargar datos abiertos</h2>
-                        <p className="text-slate-600 mb-8">Archivos CSV anonimizados, listos para análisis y con trazabilidad de fuente y corte.</p>
+                        <p className="text-slate-600 mb-8">Archivos anonimizados y agregados, listos para análisis y con trazabilidad de fuente y corte.</p>
                         <div className="divide-y divide-slate-200 border-y border-slate-200">
                             <div className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                 <div><h3 className="font-black">Indicadores consolidados</h3><p className="text-sm text-slate-500 mt-1">{indicatorRows.length} indicadores públicos · corte {cutoff}</p></div>
@@ -176,7 +213,15 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
                                 <div><h3 className="font-black">Distribución por delito</h3><p className="text-sm text-slate-500 mt-1">{data.distribution.length} categorías agregadas · corte {cutoff}</p></div>
                                 <button onClick={downloadDistribution} disabled={!data.distribution.length} className="inline-flex items-center justify-center gap-2 border border-[#281FD0] text-[#281FD0] px-5 py-3 font-bold disabled:opacity-40"><Download size={18} /> Descargar CSV</button>
                             </div>
+                            <div className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <div><h3 className="font-black">Paquete completo y diccionario</h3><p className="text-sm text-slate-500 mt-1">Indicadores, categorías, metadatos y definición de campos.</p></div>
+                                <div className="flex flex-wrap gap-2">
+                                    <button onClick={downloadOpenDataJson} disabled={!indicatorRows.length} className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#281FD0] px-4 font-bold text-[#281FD0] disabled:opacity-40"><FileJson2 size={18} /> JSON</button>
+                                    <button onClick={downloadOpenDataXlsx} disabled={!indicatorRows.length || exportingXlsx} className="inline-flex min-h-11 items-center justify-center gap-2 bg-[#281FD0] px-4 font-bold text-white disabled:opacity-40"><FileSpreadsheet size={18} /> {exportingXlsx ? 'Generando' : 'XLSX'}</button>
+                                </div>
+                            </div>
                         </div>
+                        {exportStatus && <p className="mt-4 text-sm font-bold text-slate-700" role="status">{exportStatus}</p>}
                         <p className="mt-6 flex gap-2 text-xs text-slate-500"><Info size={16} className="shrink-0" /> Cite la fuente como “SISC Jamundí / Policía Nacional - SABANA SIEDCO/PONAL” e indique la fecha de descarga.</p>
                     </section>
                 )}

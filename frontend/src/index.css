@@ -131,3 +131,60 @@
     box-shadow: 0 10px 40px -10px rgba(40, 31, 208, 0.15);
   }
 }
+
+html {
+  scroll-behavior: smooth;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+summary {
+  outline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 3px solid #ffb600;
+}
+
+.skip-link {
+  position: fixed;
+  left: 1rem;
+  top: -5rem;
+  z-index: 5000;
+  background: #ffffff;
+  color: #281fd0;
+  padding: 0.75rem 1rem;
+  border: 2px solid #281fd0;
+  font-weight: 700;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+.public-portal * {
+  letter-spacing: 0 !important;
+}
+
+.public-portal .leaflet-container {
+  border-radius: 0;
+  background: #e2e8f0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
