@@ -22,6 +22,10 @@ estado remoto cambia. La sabana
 semanal se procesa dentro del SISC o en almacenamiento privado y no se publica
 como artefacto de GitHub Actions.
 
+Las ejecuciones manuales tampoco notifican por defecto. El operador puede
+forzar el procesamiento o el correo mediante los controles explicitos del
+workflow, sin confundir una prueba tecnica con una nueva publicacion.
+
 ## API
 
 - `GET /api/source-center`: resumen institucional de conectores, cortes, calidad y activos.
