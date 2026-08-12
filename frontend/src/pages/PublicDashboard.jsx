@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
     ArrowDownRight,
     ArrowLeft,
@@ -160,21 +160,21 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1
                     {showBubbles && visiblePoints.map((point) => <CircleMarker key={`bubble-${point.name}`} center={[point.lat, point.lng]} radius={Math.max(5, Math.min(20, 5 + Math.sqrt(point.total || 0) * 1.2))} pathOptions={{ color: '#FFB600', fillColor: '#FFB600', fillOpacity: 0.24, weight: 1 }} eventHandlers={{ click: () => onSelectTerritory?.(point) }}><Popup><TerritoryPopup point={point} /></Popup></CircleMarker>)}
                 </MapContainer>
             </div>
-            <details className="border-t border-slate-200"><summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-600"><Info size={14} className="text-[#281FD0]" /> Resumen del mapa</summary><div className="grid gap-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:grid-cols-2"><p>Solo aparecen barrios o sectores con polígono oficial verificado.</p><p>{numberFmt.format(unmapped)} barrios aún no se ubican en el mapa porque falta validación cartográfica.</p><p>No se muestran barrios con menos de {minCount} casos para proteger la privacidad de personas y comunidades. Registros omitidos: {numberFmt.format(suppressed)}.</p><p>Fuentes cartográficas: Gobernación del Valle y cartografía oficial de Jamundí.</p></div></details>
+            <details className="border-t border-slate-200"><summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-600"><Info size={14} className="text-[#281FD0]" /> Resumen del mapa</summary><div className="grid gap-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:grid-cols-2"><p>Solo aparecen barrios o sectores con polÃ­gono oficial verificado.</p><p>{numberFmt.format(unmapped)} barrios aÃºn no se ubican en el mapa porque falta validaciÃ³n cartogrÃ¡fica.</p><p>No se muestran barrios con menos de {minCount} casos para proteger la privacidad de personas y comunidades. Registros omitidos: {numberFmt.format(suppressed)}.</p><p>Fuentes cartogrÃ¡ficas: GobernaciÃ³n del Valle y cartografÃ­a oficial de JamundÃ­.</p></div></details>
         </div>
     );
 };
 
 const DecisionCard = ({ territory }) => (
-    <section className="border border-[#281FD0]/20 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">Ficha de decisión</p><h2 className="mt-1 text-xl font-black text-slate-950">Foco territorial: {territory.name}</h2></div><a className="inline-flex items-center gap-2 border border-[#281FD0] px-3 py-2 text-[11px] font-black uppercase tracking-wide text-[#281FD0]" href={googleMapsUrl(territory.lat, territory.lng)} target="_blank" rel="noreferrer"><MapPinned size={14} /> Ver ubicación</a></div><div className="mt-4 grid gap-4 md:grid-cols-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Resumen</p><p className="mt-1 text-sm font-bold text-slate-800">{numberFmt.format(territory.total)} casos agregados</p><p className="text-xs text-slate-500">{territory.zones?.join(', ') || 'Zona no clasificada'}</p></div><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Decisión sugerida</p><p className="mt-1 text-sm font-bold text-slate-800">Mantener vigilancia focalizada y revisar la tendencia en el próximo corte.</p></div><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Seguimiento</p><p className="mt-1 text-sm font-bold text-slate-800">Comparar casos, conducta y zona antes de mover o cerrar el foco.</p><p className="text-xs text-slate-500 mt-1">Fuente: {territory.source || 'SABANA SIEDCO/PONAL'}</p></div></div></section>
+    <section className="border border-[#281FD0]/20 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">Ficha de decisiÃ³n</p><h2 className="mt-1 text-xl font-black text-slate-950">Foco territorial: {territory.name}</h2></div><a className="inline-flex items-center gap-2 border border-[#281FD0] px-3 py-2 text-[11px] font-black uppercase tracking-wide text-[#281FD0]" href={googleMapsUrl(territory.lat, territory.lng)} target="_blank" rel="noreferrer"><MapPinned size={14} /> Ver ubicaciÃ³n</a></div><div className="mt-4 grid gap-4 md:grid-cols-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Resumen</p><p className="mt-1 text-sm font-bold text-slate-800">{numberFmt.format(territory.total)} casos agregados</p><p className="text-xs text-slate-500">{territory.zones?.join(', ') || 'Zona no clasificada'}</p></div><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">DecisiÃ³n sugerida</p><p className="mt-1 text-sm font-bold text-slate-800">Mantener vigilancia focalizada y revisar la tendencia en el prÃ³ximo corte.</p></div><div><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Seguimiento</p><p className="mt-1 text-sm font-bold text-slate-800">Comparar casos, conducta y zona antes de mover o cerrar el foco.</p><p className="text-xs text-slate-500 mt-1">Fuente: {territory.source || 'SABANA SIEDCO/PONAL'}</p></div></div></section>
 );
 const PendingTerritories = ({ items = [] }) => {
     if (!items.length) return null;
     return (
         <section className="border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Calidad cartográfica</p><h2 className="mt-1 text-lg font-black text-slate-950">Territorios pendientes de ubicación</h2></div><span className="text-xs font-black text-slate-500">{items.length} registrados</span></div>
-            <div className="mt-4 grid gap-2 md:grid-cols-2 lg:grid-cols-3">{items.slice(0, 12).map((item) => <div key={item.name} className="border border-slate-200 px-3 py-2"><div className="flex items-start justify-between gap-2"><p className="truncate text-xs font-black text-slate-800" title={item.name}>{item.name}</p><span className="shrink-0 text-xs font-black text-slate-900">{numberFmt.format(item.total)}</span></div><p className="mt-1 text-[11px] font-semibold text-amber-700">{item.reason || 'pendiente de verificación de barrio'}</p></div>)}</div>
-            {items.length > 12 && <p className="mt-3 text-xs font-semibold text-slate-500">Se muestran los primeros 12; el total completo queda disponible en la respuesta técnica del tablero.</p>}
+            <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Calidad cartogrÃ¡fica</p><h2 className="mt-1 text-lg font-black text-slate-950">Territorios pendientes de ubicaciÃ³n</h2></div><span className="text-xs font-black text-slate-500">{items.length} registrados</span></div>
+            <div className="mt-4 grid gap-2 md:grid-cols-2 lg:grid-cols-3">{items.slice(0, 12).map((item) => <div key={item.name} className="border border-slate-200 px-3 py-2"><div className="flex items-start justify-between gap-2"><p className="truncate text-xs font-black text-slate-800" title={item.name}>{item.name}</p><span className="shrink-0 text-xs font-black text-slate-900">{numberFmt.format(item.total)}</span></div><p className="mt-1 text-[11px] font-semibold text-amber-700">{item.reason || 'pendiente de verificaciÃ³n de barrio'}</p></div>)}</div>
+            {items.length > 12 && <p className="mt-3 text-xs font-semibold text-slate-500">Se muestran los primeros 12; el total completo queda disponible en la respuesta tÃ©cnica del tablero.</p>}
         </section>
     );
 };
@@ -216,7 +216,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
         const cutoff = metadata.latest_event_date || '';
         const periodStart = metadata.period_start || '';
         const periodEnd = metadata.period_end || '';
-        const privacyRule = `Solo datos agregados; barrios publicados con mínimo ${data.map?.min_location_count || 1} casos y ubicación oficial verificada.`;
+        const privacyRule = `Solo datos agregados; barrios publicados con mÃ­nimo ${data.map?.min_location_count || 1} casos y ubicaciÃ³n oficial verificada.`;
         const rows = [['conjunto', 'dimension_1', 'dimension_2', 'valor', 'periodo_inicio', 'periodo_fin', 'fecha_corte', 'fuente', 'regla_privacidad']];
         const add = (set, dimension1, dimension2, value) => rows.push([set, dimension1, dimension2, value ?? 0, periodStart, periodEnd, cutoff, source, privacyRule]);
 
@@ -268,8 +268,8 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                             <div className="flex items-center gap-3">
                                 <div className="p-3 bg-[#281FD0] text-white"><Globe size={22} /></div>
                                 <div>
-                                    <h1 className="text-2xl md:text-3xl font-black tracking-tight">Tablero ciudadano SISC Jamundí</h1>
-                                    <p className="text-sm text-slate-600 mt-1">Información agregada y anonimizada sobre seguridad y convivencia.</p>
+                                    <h1 className="text-2xl md:text-3xl font-black tracking-tight">Tablero ciudadano SISC JamundÃ­</h1>
+                                    <p className="text-sm text-slate-600 mt-1">InformaciÃ³n agregada y anonimizada sobre seguridad y convivencia.</p>
                                 </div>
                             </div>
                         </div>
@@ -280,7 +280,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                 </header>
                 <main className="max-w-3xl mx-auto px-4 py-12">
                     <div className="border-l-4 border-red-600 bg-red-50 p-5 text-red-800">
-                        <h2 className="font-black text-lg">No fue posible cargar los datos públicos</h2>
+                        <h2 className="font-black text-lg">No fue posible cargar los datos pÃºblicos</h2>
                         <p className="text-sm font-semibold mt-2">{error || 'El servicio de datos no respondio.'}</p>
                     </div>
                 </main>
@@ -300,6 +300,19 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
     const periodText = `${formatDate(meta.period_start)} a ${formatDate(meta.period_end)}`;
     const comparisonText = `${formatDate(meta.comparison_start || data.interannual?.current?.start)} a ${formatDate(meta.comparison_end || data.interannual?.current?.end)}`;
     const coverageText = `${formatDate(meta.first_available_date)} a ${formatDate(meta.latest_event_date)}`;
+  const weeklyItems = data.weekly_trend || [];
+  const latestWeeklyItem = weeklyItems.length ? weeklyItems[weeklyItems.length - 1] : null;
+  const previousWeeklyItem = weeklyItems.length > 1 ? weeklyItems[weeklyItems.length - 2] : null;
+  const weeklyDifference = latestWeeklyItem && previousWeeklyItem
+    ? Number(latestWeeklyItem.total || 0) - Number(previousWeeklyItem.total || 0)
+    : null;
+  const weeklyMovement = weeklyDifference === null
+    ? 'Sin comparacion con la semana anterior.'
+    : weeklyDifference === 0
+      ? 'Sin cambio frente a la semana anterior.'
+      : weeklyDifference > 0
+        ? `${numberFmt.format(Math.abs(weeklyDifference))} casos mas que la semana anterior.`
+        : `${numberFmt.format(Math.abs(weeklyDifference))} casos menos que la semana anterior.`;
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -312,8 +325,8 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                         <div className="flex items-center gap-3">
                             <div className="p-3 bg-[#281FD0] text-white"><Globe size={22} /></div>
                             <div>
-                                <h1 className="text-2xl md:text-3xl font-black tracking-tight">Tablero ciudadano SISC Jamundí</h1>
-                                <p className="text-sm text-slate-600 mt-1">Información agregada y anonimizada sobre seguridad y convivencia.</p>
+                                <h1 className="text-2xl md:text-3xl font-black tracking-tight">Tablero ciudadano SISC JamundÃ­</h1>
+                                <p className="text-sm text-slate-600 mt-1">InformaciÃ³n agregada y anonimizada sobre seguridad y convivencia.</p>
                             </div>
                         </div>
                     </div>
@@ -342,16 +355,16 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                         <div className="h-2 bg-[#FFB600]" />
                         <div className="p-6 md:p-7">
                             <div className="flex flex-wrap items-center gap-2 mb-5">
-                                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700"><CheckCircle2 size={14} /> Datos públicos y protegidos</span>
+                                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700"><CheckCircle2 size={14} /> Datos pÃºblicos y protegidos</span>
                                 <span className="inline-flex items-center gap-2 rounded-full bg-[#281FD0]/10 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-[#281FD0]"><CalendarClock size={14} /> Corte: {formatDate(meta.latest_event_date)}</span>
                             </div>
                             <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-950 leading-tight">Panorama ciudadano de seguridad</h2>
-                            <p className="mt-3 max-w-3xl text-base md:text-lg font-semibold leading-7 text-slate-600">Consulta datos agregados del SISC para entender tendencias, conductas, zonas y barrios con información pública. No se publican registros individuales ni direcciones exactas.</p>
+                            <p className="mt-3 max-w-3xl text-base md:text-lg font-semibold leading-7 text-slate-600">Consulta datos agregados del SISC para entender tendencias, conductas, zonas y barrios con informaciÃ³n pÃºblica. No se publican registros individuales ni direcciones exactas.</p>
                             <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                 <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Periodo mostrado</p><p className="mt-1 font-black text-slate-950">{periodText}</p></div>
-                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobertura histórica</p><p className="mt-1 font-black text-slate-950">{coverageText}</p></div>
+                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobertura histÃ³rica</p><p className="mt-1 font-black text-slate-950">{coverageText}</p></div>
                                 <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fuente</p><p className="mt-1 font-black text-slate-950">SABANA SIEDCO/PONAL</p></div>
-                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Última carga</p><p className="mt-1 font-black text-slate-950">{formatDateTime(meta.last_ingestion?.loaded_at)}</p></div>
+                                <div className="border border-slate-200 rounded-md p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ãšltima carga</p><p className="mt-1 font-black text-slate-950">{formatDateTime(meta.last_ingestion?.loaded_at)}</p></div>
                             </div>
                         </div>
                     </div>
@@ -366,24 +379,57 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                         </div>
                         <div className="rounded-md bg-white/10 p-4 ring-1 ring-white/10">
                             <p className="text-[11px] font-black uppercase tracking-widest text-white/60">Privacidad</p>
-                            <p className="mt-2 text-sm font-semibold leading-6 text-white/90">Este panel muestra información territorial agregada; para proteger la privacidad, se ocultan barrios de bajo volumen.</p>
+                            <p className="mt-2 text-sm font-semibold leading-6 text-white/90">Este panel muestra informaciÃ³n territorial agregada; para proteger la privacidad, se ocultan barrios de bajo volumen.</p>
                         </div>
                     </aside>
                 </section>
 
+                <section className="border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="max-w-2xl">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Lectura ciudadana</p>
+                      <h2 className="mt-1 text-xl font-bold text-slate-900">Esta semana en cifras</h2>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        Consulta el ultimo dato semanal disponible y las conductas con mayor numero de casos.
+                        Son cifras agregadas: no muestran personas, direcciones ni expedientes.
+                      </p>
+                    </div>
+                    <div className="border-l-4 border-amber-400 bg-amber-50 px-4 py-3 lg:min-w-72">
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Ultima semana reportada</p>
+                      {latestWeeklyItem ? (
+                        <>
+                          <p className="mt-1 text-lg font-bold text-slate-900">{latestWeeklyItem.name || 'Corte semanal disponible'}</p>
+                          <p className="text-2xl font-black text-blue-800">{numberFmt.format(latestWeeklyItem.total || 0)} casos</p>
+                          <p className="mt-1 text-xs text-slate-600">{weeklyMovement}</p>
+                        </>
+                      ) : (
+                        <p className="mt-1 text-sm text-slate-600">Aun no hay un corte semanal disponible.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-5 grid gap-3 md:grid-cols-3">
+                    {topConductas.slice(0, 3).map((item, index) => (
+                      <div key={`${item.name || item.conducta || 'conducta'}-${index}`} className="border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{index + 1}. Principal conducta</p>
+                        <p className="mt-1 font-bold text-slate-900">{item.name || item.conducta || 'Sin clasificar'}</p>
+                        <p className="text-sm text-slate-600">{numberFmt.format(item.total || item.value || 0)} casos en el periodo consultado</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
                 <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                    <KpiTile icon={BarChart3} label={`Casos únicos ${currentYear}`} value={numberFmt.format(data.kpis?.total_hechos || 0)} helper="Se cuentan solo casos únicos (sin registros repetidos)." />
-                    <KpiTile icon={Database} label={`Registros validados ${currentYear}`} value={numberFmt.format(data.kpis?.total_registros || 0)} helper="Filas válidas de la SABANA" tone="slate" />
-                    <KpiTile icon={TrendingUp} label="Comparación interanual" value={variationLabel(variation)} helper={`${data.interannual?.current?.year || ''} frente a ${data.interannual?.previous?.year || ''}`} tone={variationIsUp ? 'red' : 'blue'} />
+                    <KpiTile icon={BarChart3} label={`Casos Ãºnicos ${currentYear}`} value={numberFmt.format(data.kpis?.total_hechos || 0)} helper="Se cuentan solo casos Ãºnicos (sin registros repetidos)." />
+                    <KpiTile icon={Database} label={`Registros validados ${currentYear}`} value={numberFmt.format(data.kpis?.total_registros || 0)} helper="Filas vÃ¡lidas de la SABANA" tone="slate" />
+                    <KpiTile icon={TrendingUp} label="ComparaciÃ³n interanual" value={variationLabel(variation)} helper={`${data.interannual?.current?.year || ''} frente a ${data.interannual?.previous?.year || ''}`} tone={variationIsUp ? 'red' : 'blue'} />
                     <KpiTile icon={ShieldCheck} label={`Homicidios ${currentYear}`} value={numberFmt.format(data.kpis?.homicidios || 0)} helper={`Tasa acumulada al corte: ${data.kpis?.tasa_homicidios || 0} por 100.000 hab.`} tone="red" />
-                    <KpiTile icon={Layers} label="Barrios visibles" value={numberFmt.format(data.territories?.length || 0)} helper={`Mínimo ${data.map?.min_location_count || 1} casos para publicar`} tone="amber" />
+                    <KpiTile icon={Layers} label="Barrios visibles" value={numberFmt.format(data.territories?.length || 0)} helper={`MÃ­nimo ${data.map?.min_location_count || 1} casos para publicar`} tone="amber" />
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-                    <ChartShell title="Tendencia mensual" subtitle={`Casos únicos por mes de ${currentYear} hasta el corte`}>
+                    <ChartShell title="Tendencia mensual" subtitle={`Casos Ãºnicos por mes de ${currentYear} hasta el corte`}>
                         {data.monthly_trend?.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={data.monthly_trend} margin={{ top: 10, right: 20, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><YAxis tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Area type="monotone" dataKey="total" name="Casos" stroke="#281FD0" fill="#281FD0" fillOpacity={0.16} strokeWidth={3} /></AreaChart></ResponsiveContainer> : <EmptyState />}
                     </ChartShell>
-                    <ChartShell title="Comparación interanual" subtitle="Mismo rango calendario frente al año anterior">
+                    <ChartShell title="ComparaciÃ³n interanual" subtitle="Mismo rango calendario frente al aÃ±o anterior">
                         <ResponsiveContainer width="100%" height="100%"><BarChart data={[data.interannual.previous, data.interannual.current]} margin={{ top: 10, right: 20, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="year" tick={{ fontSize: 12, fill: '#64748b', fontWeight: 800 }} tickLine={false} axisLine={false} /><YAxis tick={{ fontSize: 11, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Bar dataKey="total" name="Casos" fill="#281FD0" /></BarChart></ResponsiveContainer>
                         <div className={`mt-3 inline-flex items-center gap-2 text-sm font-black ${variationIsUp ? 'text-red-700' : 'text-emerald-700'}`}>{variationIsUp ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}Variacion: {variationLabel(variation)}</div>
                     </ChartShell>
@@ -418,10 +464,10 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                             </div>
                         ) : <EmptyState />}
                     </ChartShell>
-                    <ChartShell title="Zona urbana/rural" subtitle="Distribución declarada en la fuente">
+                    <ChartShell title="Zona urbana/rural" subtitle="DistribuciÃ³n declarada en la fuente">
                         {data.zones?.length ? <div className="space-y-3">{data.zones.map((zone, index) => { const max = Math.max(...data.zones.map((item) => item.value || 0), 1); return <div key={zone.name}><div className="flex justify-between text-xs font-black uppercase text-slate-600 mb-1"><span>{zone.name}</span><span>{numberFmt.format(zone.value)}</span></div><div className="h-3 bg-slate-100"><div className="h-3" style={{ width: `${(zone.value / max) * 100}%`, backgroundColor: COLORS[index % COLORS.length] }} /></div></div>; })}</div> : <EmptyState />}
                     </ChartShell>
-                    <ChartShell title="Tendencia semanal" subtitle={`Evolución semanal de ${currentYear} hasta el corte`}>
+                    <ChartShell title="Tendencia semanal" subtitle={`EvoluciÃ³n semanal de ${currentYear} hasta el corte`}>
                         {data.weekly_trend?.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.weekly_trend} margin={{ top: 10, right: 10, left: -24, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" /><XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} interval="preserveStartEnd" /><YAxis tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} tickLine={false} axisLine={false} /><Tooltip content={<CustomTooltip />} /><Bar dataKey="total" name="Casos" fill="#FFB600" /></BarChart></ResponsiveContainer> : <EmptyState />}
                     </ChartShell>
                 </section>
@@ -448,7 +494,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
 
                     {data.map?.unmapped_names?.length ? (
                         <details className="border border-slate-200 bg-white rounded-md xl:col-span-2" open>
-                            <summary className="px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">Calidad cartográfica</summary>
+                            <summary className="px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">Calidad cartogrÃ¡fica</summary>
                             <div className="border-t border-slate-200 p-4">
                                 <PendingTerritories items={data.map?.unmapped_names || []} />
                             </div>
@@ -456,17 +502,18 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
                     ) : null}
                 </section>
                 <section className="grid gap-6 lg:grid-cols-2">
-                    <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><Info size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">Metodología</h2></div><p className="text-sm leading-6 text-slate-700 font-medium">{meta.methodology}</p><p className="text-sm leading-6 text-slate-700 font-medium mt-3">{meta.privacy}</p></div>
+                    <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><Info size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">MetodologÃ­a</h2></div><p className="text-sm leading-6 text-slate-700 font-medium">{meta.methodology}</p><p className="text-sm leading-6 text-slate-700 font-medium mt-3">{meta.privacy}</p></div>
                     <div className="bg-white border border-slate-200 p-5"><div className="flex items-center gap-2 mb-3"><CalendarClock size={20} className="text-[#281FD0]" /><h2 className="font-black uppercase">Ultima actualizacion de la base</h2></div><dl className="grid grid-cols-2 gap-px bg-slate-200 border border-slate-200 text-sm"><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Archivo</dt><dd className="font-bold break-words">{meta.last_ingestion?.filename || 'No disponible'}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Aprobadas</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.approved || 0)}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Rechazadas</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.rejected || 0)}</dd></div><div className="bg-white p-3"><dt className="text-[10px] font-black uppercase text-slate-500">Sin cambios</dt><dd className="font-bold">{numberFmt.format(meta.last_ingestion?.duplicates || 0)}</dd></div></dl></div>
                 </section>
             </main>
 
-            <footer className="border-t border-slate-200 bg-white px-4 py-8 text-center"><button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-[#281FD0]"><Home size={15} /> Volver al inicio del portal</button><p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-4">SISC Jamundí - Publicación ciudadana agregada</p></footer>
+            <footer className="border-t border-slate-200 bg-white px-4 py-8 text-center"><button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-[#281FD0]"><Home size={15} /> Volver al inicio del portal</button><p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-4">SISC JamundÃ­ - PublicaciÃ³n ciudadana agregada</p></footer>
         </div>
     );
 };
 
 export default PublicDashboard;
+
 
 
 

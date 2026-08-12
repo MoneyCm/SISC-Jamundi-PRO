@@ -32,11 +32,11 @@ const categories = [
     { id: 'lesiones',   label: 'Lesiones Personales',   icon: HeartPulse },
     { id: 'hurtos',     label: 'Hurtos',                icon: ShieldAlert },
     { id: 'zona',       label: 'Por Zona',              icon: MapPin     },
-    { id: 'semanal',    label: 'Análisis Semanal',      icon: Calendar   },
+    { id: 'semanal',    label: 'AnÃ¡lisis Semanal',      icon: Calendar   },
 ];
 
-// ─── helpers ───────────────────────────────────────────────────────────────
-const fmt = (n) => n?.toLocaleString('es-CO') ?? '—';
+// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const fmt = (n) => n?.toLocaleString('es-CO') ?? 'â€”';
 
 const DeltaBadge = ({ v1, v2 }) => {
     if (v2 == null || v2 === 0) return null;
@@ -57,13 +57,13 @@ const KpiCard = ({ label, value2026, value2025, color = PRIMARY }) => (
         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
         <p className="text-3xl font-black" style={{ color }}>{fmt(value2026)}</p>
         <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-400">vs {value2025 ?? '—'} en 2025</span>
+            <span className="text-[10px] text-slate-400">vs {value2025 ?? 'â€”'} en 2025</span>
             <DeltaBadge v1={value2026} v2={value2025} />
         </div>
     </div>
 );
 
-// ─── main component ────────────────────────────────────────────────────────
+// â”€â”€â”€ main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const StatsModule = ({ userRoles = [] }) => {
     const [selectedCategory, setSelectedCategory] = useState('resumen');
     const [loading, setLoading]   = useState(false);
@@ -131,7 +131,7 @@ const StatsModule = ({ userRoles = [] }) => {
             })));
 
         } catch(e) {
-            setError('Error cargando datos de analítica.');
+            setError('Error cargando datos de analÃ­tica.');
             console.error(e);
         } finally {
             setLoading(false);
@@ -140,24 +140,24 @@ const StatsModule = ({ userRoles = [] }) => {
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
-    // ── Vista: Resumen General ──────────────────────────────────────────────
+    // â”€â”€ Vista: Resumen General â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const ViewResumen = () => (
         <div className="space-y-6 animate-fade-in">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KpiCard label="Hechos únicos"      value2026={kpis2026?.total_hechos} value2025={kpis2025?.total_hechos} />
+                <KpiCard label="Hechos Ãºnicos"      value2026={kpis2026?.total_hechos} value2025={kpis2025?.total_hechos} />
                 <KpiCard label="Registros SABANA"   value2026={kpis2026?.total_registros} value2025={kpis2025?.total_registros} color="#475569" />
-                <KpiCard label="Víctimas identificables" value2026={kpis2026?.victimas_identificables} value2025={kpis2025?.victimas_identificables} color="#0f766e" />
+                <KpiCard label="VÃ­ctimas identificables" value2026={kpis2026?.victimas_identificables} value2025={kpis2025?.victimas_identificables} color="#0f766e" />
                 <KpiCard label="Homicidios"         value2026={kpis2026?.homicidios}       value2025={kpis2025?.homicidios}       color="#ef4444" />
                 <KpiCard label="Hurto Personas"     value2026={kpis2026?.hurto_personas}   value2025={kpis2025?.hurto_personas}   color="#f97316" />
-                <KpiCard label="Hurto Vehículos"    value2026={kpis2026?.hurto_vehiculos}  value2025={kpis2025?.hurto_vehiculos}  color="#8b5cf6" />
+                <KpiCard label="Hurto VehÃ­culos"    value2026={kpis2026?.hurto_vehiculos}  value2025={kpis2025?.hurto_vehiculos}  color="#8b5cf6" />
                 <KpiCard label="Lesiones"           value2026={kpis2026?.lesiones}         value2025={kpis2025?.lesiones}         color="#06b6d4" />
                 <KpiCard label="Tasa Homic/100k"    value2026={kpis2026?.tasa_homicidios}  value2025={kpis2025?.tasa_homicidios}  color="#ef4444" />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {/* Distribución */}
+                {/* DistribuciÃ³n */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Distribución por Delito</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">DistribuciÃ³n por Delito</h3>
                     <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={distribucion} layout="vertical" margin={{ left: 20 }}>
                             <XAxis type="number" hide />
@@ -196,7 +196,7 @@ const StatsModule = ({ userRoles = [] }) => {
         </div>
     );
 
-    // ── Vista: Homicidios ───────────────────────────────────────────────────
+    // â”€â”€ Vista: Homicidios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const ViewHomicidios = () => {
         const semHom = semanal.map(s => ({ semana: s.semana, v2025: s.hom25, v2026: s.hom26 }));
         return (
@@ -205,7 +205,7 @@ const StatsModule = ({ userRoles = [] }) => {
                     <KpiCard label="Homicidios 2026" value2026={kpis2026?.homicidios} value2025={kpis2025?.homicidios} color="#ef4444" />
                     <KpiCard label="Tasa / 100k hab" value2026={kpis2026?.tasa_homicidios} value2025={kpis2025?.tasa_homicidios} color="#ef4444" />
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Sem. más crítica (2026)</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Sem. mÃ¡s crÃ­tica (2026)</p>
                         {(() => {
                             const peak = [...semHom].sort((a,b) => b.v2026 - a.v2026)[0];
                             return peak ? (
@@ -213,7 +213,7 @@ const StatsModule = ({ userRoles = [] }) => {
                                     <p className="text-3xl font-black text-red-500">{peak.semana}</p>
                                     <p className="text-[10px] text-slate-400">{peak.v2026} homicidios</p>
                                 </>
-                            ) : <p className="text-slate-300 text-sm">—</p>;
+                            ) : <p className="text-slate-300 text-sm">â€”</p>;
                         })()}
                     </div>
                 </div>
@@ -235,7 +235,7 @@ const StatsModule = ({ userRoles = [] }) => {
         );
     };
 
-    // ── Vista: Lesiones ─────────────────────────────────────────────────────
+    // â”€â”€ Vista: Lesiones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const ViewLesiones = () => (
         <div className="space-y-6 animate-fade-in">
             <div className="grid grid-cols-2 gap-4">
@@ -259,22 +259,22 @@ const StatsModule = ({ userRoles = [] }) => {
         </div>
     );
 
-    // ── Vista: Hurtos ───────────────────────────────────────────────────────
+    // â”€â”€ Vista: Hurtos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const ViewHurtos = () => {
         const hurtoDist = distribucion.filter(d =>
-            ['HURTO PERSONAS','HURTO VEHÍCULOS','HURTO COMERCIO','HURTO RESIDENCIAS'].includes(d.name)
+            ['HURTO PERSONAS','HURTO VEHÃCULOS','HURTO COMERCIO','HURTO RESIDENCIAS'].includes(d.name)
         );
         return (
             <div className="space-y-6 animate-fade-in">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <KpiCard label="Hurto Personas"    value2026={kpis2026?.hurto_personas}    value2025={kpis2025?.hurto_personas}    color="#f97316" />
-                    <KpiCard label="Hurto Vehículos"   value2026={kpis2026?.hurto_vehiculos}   value2025={kpis2025?.hurto_vehiculos}   color="#8b5cf6" />
+                    <KpiCard label="Hurto VehÃ­culos"   value2026={kpis2026?.hurto_vehiculos}   value2025={kpis2025?.hurto_vehiculos}   color="#8b5cf6" />
                     <KpiCard label="Hurto Comercio"    value2026={kpis2026?.hurto_comercio}    value2025={kpis2025?.hurto_comercio}    color="#eab308" />
                     <KpiCard label="Hurto Residencias" value2026={kpis2026?.hurto_residencias} value2025={kpis2025?.hurto_residencias} color="#ec4899" />
                 </div>
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Distribución de Modalidades</h3>
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">DistribuciÃ³n de Modalidades</h3>
                         <ResponsiveContainer width="100%" height={240}>
                             <PieChart>
                                 <Pie data={hurtoDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name.replace('HURTO ','')}: ${(percent*100).toFixed(0)}%`} labelLine={false}>
@@ -310,7 +310,7 @@ const StatsModule = ({ userRoles = [] }) => {
         );
     };
 
-    // ── Vista: Por Zona ─────────────────────────────────────────────────────
+    // â”€â”€ Vista: Por Zona â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const ViewZona = () => (
         <div className="space-y-6 animate-fade-in">
             <div className="grid grid-cols-2 gap-4">
@@ -336,7 +336,7 @@ const StatsModule = ({ userRoles = [] }) => {
         </div>
     );
 
-    // ── Vista: Análisis Semanal ─────────────────────────────────────────────
+    // â”€â”€ Vista: AnÃ¡lisis Semanal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const ViewSemanal = () => {
         const lastSem26 = [...semanal].filter(s => s.v2026 > 0).pop();
         const lastSem25 = semanal.find(s => s.semana === lastSem26?.semana);
@@ -344,15 +344,15 @@ const StatsModule = ({ userRoles = [] }) => {
             <div className="space-y-6 animate-fade-in">
                 <div className="grid grid-cols-3 gap-4">
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Última Semana (2026)</p>
-                        <p className="text-3xl font-black text-primary">{lastSem26?.semana ?? '—'}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Ãšltima Semana (2026)</p>
+                        <p className="text-3xl font-black text-primary">{lastSem26?.semana ?? 'â€”'}</p>
                         <p className="text-[10px] text-slate-400">{lastSem26?.v2026 ?? 0} hechos registrados</p>
                     </div>
                     <KpiCard label="Esta semana vs igual sem. 2025" value2026={lastSem26?.v2026 ?? 0} value2025={lastSem25?.v2025 ?? 0} />
-                    <KpiCard label="Homicidios última sem." value2026={lastSem26?.hom26 ?? 0} value2025={lastSem26?.hom25 ?? 0} color="#ef4444" />
+                    <KpiCard label="Homicidios Ãºltima sem." value2026={lastSem26?.hom26 ?? 0} value2025={lastSem26?.hom25 ?? 0} color="#ef4444" />
                 </div>
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Todos los Hechos por Semana — 2025 vs 2026</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Todos los Hechos por Semana â€” 2025 vs 2026</h3>
                     <ResponsiveContainer width="100%" height={320}>
                         <BarChart data={semanal} barGap={2}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
@@ -384,16 +384,16 @@ const StatsModule = ({ userRoles = [] }) => {
             {/* Header */}
             <div className="bg-primary px-6 py-3 flex justify-between items-center shadow-md">
                 <div className="flex items-center gap-3">
-                    <img src="/assets/escudo.png" alt="Jamundí" className="w-7 h-7 object-contain brightness-0 invert" />
+                    <img src="/assets/escudo-limpio.png" alt="JamundÃ­" className="w-8 h-8 object-contain" />
                     <h2 className="text-white font-black text-base uppercase tracking-tighter font-titles">
                         Indicadores de Seguridad
-                        <span className="text-white/40 italic font-normal text-xs ml-2">| SIEDCO · Policía Nacional</span>
+                        <span className="text-white/40 italic font-normal text-xs ml-2">| SIEDCO Â· PolicÃ­a Nacional</span>
                     </h2>
                 </div>
                 <div className="flex items-center gap-3">
                     {lastUpdate && (
                         <div className="text-white/70 text-[9px] font-bold uppercase tracking-widest">
-                            Al: {lastUpdate.ultima_fecha} · {fmt(lastUpdate.total_hechos)} registros
+                            Al: {lastUpdate.ultima_fecha} Â· {fmt(lastUpdate.total_hechos)} registros
                         </div>
                     )}
                     <button onClick={fetchAll} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition text-white" title="Actualizar">
@@ -442,3 +442,4 @@ const StatsModule = ({ userRoles = [] }) => {
 };
 
 export default StatsModule;
+

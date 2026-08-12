@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { FileText, Search, User, Shield, Clock, Globe, Laptop, Activity } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
@@ -6,6 +6,7 @@ const AuditLog = () => {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [error, setError] = useState(null);
 
     const fetchLogs = async () => {
         try {
@@ -13,6 +14,7 @@ const AuditLog = () => {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'No fue posible cargar la trazabilidad.');
             if (Array.isArray(data)) {
                 setLogs(data);
             } else {
@@ -20,6 +22,7 @@ const AuditLog = () => {
             }
         } catch (err) {
             console.error(err);
+            setError(err.message || 'No fue posible cargar la trazabilidad.');
             setLogs([]);
         } finally {
             setLoading(false);
@@ -28,10 +31,12 @@ const AuditLog = () => {
 
     useEffect(() => { fetchLogs(); }, []);
 
-    const filteredLogs = logs.filter(log =>
-        log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.module?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.actor?.toLowerCase().includes(searchTerm.toLowerCase())
+    const normalizedSearch = searchTerm.toLowerCase();
+    const auditableLogs = logs.filter(log => log && log.created_at && log.action);
+    const filteredLogs = auditableLogs.filter(log =>
+        [log.action, log.module, log.actor].some(value =>
+            String(value || '').toLowerCase().includes(normalizedSearch)
+        )
     );
 
     const getLevelColor = (level) => {
@@ -48,14 +53,14 @@ const AuditLog = () => {
                 <div>
                     <h2 className="text-4xl font-black text-slate-800 tracking-tight">Trazabilidad Total</h2>
                     <p className="text-slate-500 font-bold mt-1 flex items-center gap-2 uppercase tracking-widest text-[10px]">
-                        <Activity size={14} className="text-primary" /> Log de Auditoría Institucional
+                        <Activity size={14} className="text-primary" /> Log de AuditorÃ­a Institucional
                     </p>
                 </div>
                 <div className="relative group">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={20} />
                     <input
                         type="text"
-                        placeholder="Buscar por acción, módulo o usuario..."
+                        placeholder="Buscar por acciÃ³n, mÃ³dulo o usuario..."
                         className="pl-12 pr-6 py-4 bg-slate-50 border-none rounded-2xl w-80 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -63,21 +68,21 @@ const AuditLog = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-slate-100">
+            {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">{error}</div>}`r`n`r`n            <div className="bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-slate-100">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-50/50 border-b border-slate-100">
                                 <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha / Nodo</th>
                                 <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Actor (ID)</th>
-                                <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Acción / Módulo</th>
+                                <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">AcciÃ³n / MÃ³dulo</th>
                                 <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Nivel</th>
                                 <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Origen</th>
                                 <th className="px-6 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Ref</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {filteredLogs.map(log => (
+                            {!loading && !error && filteredLogs.length === 0 && <tr><td colSpan="6" className="px-8 py-12 text-center text-sm font-bold text-slate-400">No hay eventos de auditoría para los filtros seleccionados.</td></tr>}`r`n                            {filteredLogs.map(log => (
                                 <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-8 py-6">
                                         <div className="flex items-center gap-3">
@@ -143,3 +148,4 @@ const AuditLog = () => {
 };
 
 export default AuditLog;
+

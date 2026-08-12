@@ -12,6 +12,8 @@ def create_tables():
         from db.models_alerts import IntelligenceAlert
         from db.models_auth import User, Role, Permission, AuditLog, AccessRequest
         from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion, InspeccionFinanza
+        from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator, InstitutionalAgentRun, InstitutionalAgentFinding
+        from db.models_sisc_cifras import SiscCifrasPublication
         from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIssue, StagingPoliciaSemanal, SabanaSnapshotRow, CatalogoConductaFuente
         
         with engine.connect() as conn:
@@ -95,6 +97,7 @@ def create_tables():
                 conn.execute(text("ALTER TABLE rnmc_measures ADD COLUMN IF NOT EXISTS source_id VARCHAR(50);"))
                 conn.execute(text("UPDATE rnmc_measures SET source_id = 'INSPECCION_MEDIDAS_RNMC' WHERE source_id IS NULL;"))
                 conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_rnmc_source_fingerprint ON rnmc_measures (source_id, event_fingerprint);"))
+                conn.execute(text("ALTER TABLE institutional_data_batches ADD COLUMN IF NOT EXISTS reporting_basis VARCHAR(20) DEFAULT 'CUMULATIVE';"))
                 
                 conn.commit()
                 print("Estructura de Base de Datos verificada con éxito.")

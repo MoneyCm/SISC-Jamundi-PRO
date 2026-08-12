@@ -8,6 +8,41 @@ import logging
 
 logger = logging.getLogger("alert_engine")
 
+NON_PUBLIC_TERRITORY_VALUES = {
+    "BARRIO PENDIENTE POR ASIGNAR",
+    "PENDIENTE POR ASIGNAR",
+    "SIN ASIGNAR",
+    "SIN BARRIO",
+    "SIN COMUNA",
+    "SIN ESPECIFICAR",
+    "SIN LOCALIDAD",
+    "NO APLICA",
+    "NO APLICA LOCALIDAD",
+    "NO APLICA LOCALIDAD - COMUNA",
+    "NO DEFINIDO",
+    "NO REPORTA",
+    "NO REGISTRA",
+    "N/A",
+}
+NON_PUBLIC_TERRITORY_PATTERNS = (
+    "PENDIENTE",
+    "POR ASIGNAR",
+    "NO APLICA",
+    "NO DEFINIDO",
+    "SIN LOCALIDAD",
+    "SIN COMUNA",
+)
+
+
+def is_public_territory_name(value):
+    if not value:
+        return False
+    clean = " ".join(str(value).strip().upper().split())
+    if not clean or clean in NON_PUBLIC_TERRITORY_VALUES:
+        return False
+    return not any(pattern in clean for pattern in NON_PUBLIC_TERRITORY_PATTERNS)
+
+
 class AlertEngine:
     @staticmethod
     def get_unified_counts(db: Session, start_date, end_date, category=None):
@@ -127,11 +162,18 @@ class AlertEngine:
             HechoSeguridad.barrio_normalizado,
             hechos_unicos_expr().label('total')
         ).filter(
-            HechoSeguridad.fecha_evento >= hace_30
+            HechoSeguridad.fecha_evento >= hace_30,
+            HechoSeguridad.barrio_normalizado.isnot(None),
+            HechoSeguridad.barrio_normalizado != "",
+            func.upper(func.trim(HechoSeguridad.barrio_normalizado)).notin_(NON_PUBLIC_TERRITORY_VALUES),
+            ~func.upper(HechoSeguridad.barrio_normalizado).like("%PENDIENTE%"),
+            ~func.upper(HechoSeguridad.barrio_normalizado).like("%POR ASIGNAR%"),
+            ~func.upper(HechoSeguridad.barrio_normalizado).like("%NO APLICA%"),
+            ~func.upper(HechoSeguridad.barrio_normalizado).like("%NO DEFINIDO%"),
         ).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).limit(3).all()
 
         for b_name, b_count in top_barrios:
-            if b_name and b_count >= 10:
+            if is_public_territory_name(b_name) and b_count >= 10:
                 alertas.append({
                     "id": f"GEO-{b_name}-{hoy}",
                     "titulo": f"Foco de Inseguridad: {b_name}",

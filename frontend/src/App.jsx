@@ -11,6 +11,9 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const DataPage = lazy(() => import('./pages/DataPage'));
 const PublicDashboard = lazy(() => import('./pages/PublicDashboard'));
 const PublicInformation = lazy(() => import('./pages/PublicInformation'));
+const PublicMeasures = lazy(() => import('./pages/PublicMeasures'));
+const PublicInspectionManagement = lazy(() => import('./pages/PublicInspectionManagement'));
+const PublicFamilyProtection = lazy(() => import('./pages/PublicFamilyProtection'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const PQRPage = lazy(() => import('./pages/PQRPage'));
 const VictimRoutes = lazy(() => import('./pages/VictimRoutes'));
@@ -21,9 +24,12 @@ const DataQuality = lazy(() => import('./pages/DataQuality'));
 
 
 const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
+const InstitutionalAgents = lazy(() => import('./pages/InstitutionalAgents'));
 const StatsModule = lazy(() => import('./pages/StatsModule'));
 const MindefensaMonitor = lazy(() => import('./pages/MindefensaMonitor'));
 const PoliceMonitor = lazy(() => import('./pages/PoliceMonitor'));
+const PoliceWeeklyExplorer = lazy(() => import('./pages/PoliceWeeklyExplorer'));
+const SiscCifras = lazy(() => import('./pages/SiscCifras'));
 const RegionalContext = lazy(() => import('./pages/RegionalContext'));
 const RNMCModule = lazy(() => import('./pages/RNMCModule'));
 const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
@@ -160,6 +166,12 @@ const App = () => {
             onBack={() => setPublicActivePage('hub')}
             onNavigate={(page) => setPublicActivePage(page)}
           />;
+        case 'public-measures':
+          return <PublicMeasures onBack={() => setPublicActivePage('hub')} />;
+    case 'public-inspections':
+          return <PublicInspectionManagement onBack={() => setPublicActivePage('hub')} onNavigate={setPublicActivePage} />;
+        case 'public-family-protection':
+          return <PublicFamilyProtection onBack={() => setPublicActivePage('hub')} />;
         case 'victim-support':
           return <VictimRoutes onBack={() => setPublicActivePage('hub')} />;
         case 'reporting':
@@ -199,6 +211,10 @@ const App = () => {
         return <MindefensaMonitor onIngest={handleIngestDataset} />;
       case 'police_monitor': // New case for Police assets monitor
         return <PoliceMonitor onIngest={handleIngestDataset} />;
+      case 'police_explorer':
+        return <PoliceWeeklyExplorer />;
+      case 'sisc_cifras':
+        return <SiscCifras />;
 
       case 'intelligence':
         return <IntelligenceModule />;
@@ -216,6 +232,8 @@ const App = () => {
         return <InspeccionesModule />;
       case 'police_audit':
         return <PoliceIngestionAudit runId={selectedReportId} onBack={() => setActivePage('ingesta_universal')} />;
+      case 'institutional_agents':
+        return <InstitutionalAgents />;
       case 'ingesta_universal':
         return <UniversalIngesta
           setActivePage={setActivePage}
@@ -260,5 +278,7 @@ const App = () => {
 };
 
 export default App;
+
+
 
 

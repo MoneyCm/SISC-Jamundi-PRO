@@ -1,4 +1,4 @@
-import pandas as pd
+﻿import pandas as pd
 import io
 import hashlib
 import uuid
@@ -21,7 +21,7 @@ logger = logging.getLogger("sisc_policia_processor")
 
 COLUMN_ALIASES = {
     "id_fuente": ["HECHOS_ID", "ID_HECHO", "ID", "HECHO_ID", "COD_HECHO"],
-    "conducta_original": ["DESCRIPCION_CONDUCTA", "CONDUCTA", "DELITO", "DESCRIPCIÓN_CONDUCTA", "CONDUCTA_SITIO"],
+    "conducta_original": ["DESCRIPCION_CONDUCTA", "CONDUCTA", "DELITO", "DESCRIPCIÃ“N_CONDUCTA", "CONDUCTA_SITIO"],
     "fecha_evento": ["FECHA_HECHO", "FECHA", "FECHA DEL HECHO", "FECHA_INCIDENTE"],
     "hora_evento": ["HORA_HECHO", "HORA", "HORA_INCIDENTE"],
     "hora_24": ["HORA24", "HORA_24", "FRANJA_HORA", "FRANJA_HORARIA"],
@@ -33,14 +33,14 @@ COLUMN_ALIASES = {
     "zona": ["ZONA", "ZONA_HECHO"],
     "arma_medio": ["ARMAS_MEDIOS", "ARMA", "MEDIO", "ARMAS O MEDIOS", "ARMA_MEDIO"],
     "modalidad": ["MODALIDAD", "MODALIDAD_HECHO"],
-    "movil_agresor": ["MOVIL_AGRESOR", "MÓVIL_AGRESOR", "MOVIL_AGR"],
-    "movil_victima": ["MOVIL_VICTIMA", "MÓVIL_VICTIMA", "MOVIL_VIC"],
+    "movil_agresor": ["MOVIL_AGRESOR", "MÃ“VIL_AGRESOR", "MOVIL_AGR"],
+    "movil_victima": ["MOVIL_VICTIMA", "MÃ“VIL_VICTIMA", "MOVIL_VIC"],
     "clase_sitio": ["CLASE_SITIO", "SITIO", "LUGAR", "CLASE_DE_SITIO"],
     "sexo": ["GENERO", "SEXO", "SEXO_PERSONA"],
     "edad": ["EDAD", "EDAD_PERSONA"],
     "grupo_edad": ["AGRUPA_EDAD_PERSONA", "RANGO_EDAD", "GRUPO_ETAREO"],
     "cantidad": ["CANTIDAD", "VICTIMAS", "CANTIDAD_VICTIMAS", "NUMERO_CASOS", "NRO_CASOS", "TOTAL"],
-    "fecha_reporte_fuente": ["FECHA_CREACION", "FECHA_CREACIÓN", "CREADO", "FECHA_REPORTE"],
+    "fecha_reporte_fuente": ["FECHA_CREACION", "FECHA_CREACIÃ“N", "CREADO", "FECHA_REPORTE"],
     "municipio_fuente": ["MUNICIPIO_HECHO", "MUNICIPIO", "MPIO", "CIUDAD"]
 }
 
@@ -77,7 +77,7 @@ class PoliciaJamundiProcessor:
         return mapping
 
     def _generate_fingerprint(self, data):
-        # Fingerprint expandido para permitir múltiples víctimas en el mismo hecho
+        # Fingerprint expandido para permitir mÃºltiples vÃ­ctimas en el mismo hecho
         raw = f"{data.get('id_fuente', '')}|{data['conducta_estandar']}|{data['fecha_evento']}|{data['hora_evento']}|{data['barrio_normalizado'] or data['vereda_normalizada']}|{data['sexo']}|{data['edad']}|{data['arma_medio']}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
@@ -111,9 +111,10 @@ class PoliciaJamundiProcessor:
     def _run_cutoff(self, ingestion_id):
         if not ingestion_id:
             return None
-        return self.db.query(SabanaSnapshotRow.fecha_evento).filter(
+        row = self.db.query(SabanaSnapshotRow.fecha_evento).filter(
             SabanaSnapshotRow.ingestion_id == ingestion_id
-        ).order_by(SabanaSnapshotRow.fecha_evento.desc()).scalar()
+        ).order_by(SabanaSnapshotRow.fecha_evento.desc()).first()
+        return row[0] if row else None
 
     def _should_update_master(self, existing_hecho, current_cutoff):
         if not existing_hecho:
@@ -158,12 +159,12 @@ class PoliciaJamundiProcessor:
     def _homologar_conducta(self, conducta_raw):
         val = self._normalize_text(conducta_raw)
         
-        # 1. Intento por catálogo
+        # 1. Intento por catÃ¡logo
         if val in self.catalogo_conductas:
             c = self.catalogo_conductas[val]
             return c.valor_estandar, c.categoria_delito
         
-        # 2. Heurística robusta
+        # 2. HeurÃ­stica robusta
         if any(x in val for x in ["HOMICIDIO", "MUERTE"]): return "Homicidio", "HOMICIDIO"
         if any(x in val for x in ["LESIONES", "HERIDO"]): return "Lesiones personales", "LESIONES"
         if any(x in val for x in ["HURTO", "ROBO"]):
@@ -236,7 +237,7 @@ class PoliciaJamundiProcessor:
             
             mapping = self._map_columns(df.columns)
             
-            # REFINAMIENTO DE MAPEO: Corregir si se seleccionó Clase de Sitio como Conducta
+            # REFINAMIENTO DE MAPEO: Corregir si se seleccionÃ³ Clase de Sitio como Conducta
             if mapping.get("conducta_original") == "CLASE_SITIO" or "SITIO" in str(mapping.get("conducta_original")).upper():
                 for col in df.columns:
                     if any(x in col.upper() for x in ["DELITO", "CONDUCTA"]):
@@ -285,7 +286,7 @@ class PoliciaJamundiProcessor:
                             )
                             self.db.add(stg)
 
-                        # b. Mapeo y Normalización
+                        # b. Mapeo y NormalizaciÃ³n
                         data = {canonical: (row[col] if pd.notna(row[col]) else None) for canonical, col in mapping.items()}
                         
                         # c. Filtro Territorial
@@ -300,7 +301,7 @@ class PoliciaJamundiProcessor:
                         converted_fecha = pd.to_datetime(raw_fecha, errors='coerce') if raw_fecha else None
                         
                         if not raw_fecha or pd.isna(converted_fecha):
-                            issues.append(IngestionIssue(ingestion_id=run.id, fila=idx+2, regla="FECHA_INVALIDA", descripcion=f"La fecha '{raw_fecha}' no es válida", severidad="ERROR"))
+                            issues.append(IngestionIssue(ingestion_id=run.id, fila=idx+2, regla="FECHA_INVALIDA", descripcion=f"La fecha '{raw_fecha}' no es vÃ¡lida", severidad="ERROR"))
                         
                         conducta_raw = data.get("conducta_original")
                         if not conducta_raw or pd.isna(conducta_raw):
@@ -311,10 +312,10 @@ class PoliciaJamundiProcessor:
                             stats["rechazadas"] += 1
                             continue
 
-                        # e. Homologación
+                        # e. HomologaciÃ³n
                         conducta_est, cat_delito = self._homologar_conducta(conducta_raw)
 
-                        # f. Georeferenciación básica
+                        # f. GeoreferenciaciÃ³n bÃ¡sica
                         barrio_norm = self._normalize_text(data.get("barrio_original"))
                         barrio_norm = re.sub(r'\s+E\d+$', '', barrio_norm)
                         vereda_norm = self._normalize_text(data.get("vereda_original"))
@@ -322,7 +323,7 @@ class PoliciaJamundiProcessor:
                         coords = GeocodingService.get_coords_for_localidad(barrio_norm or vereda_norm or "JAMUNDI")
                         lat, lng = coords if coords else (3.2612, -76.5365) 
 
-                        # g. Preparar datos procesados para Deduplicación
+                        # g. Preparar datos procesados para DeduplicaciÃ³n
                         raw_hora = data.get("hora_24") or data.get("hora_evento")
                         try:
                             if isinstance(raw_hora, time): occ_time = raw_hora
@@ -345,8 +346,8 @@ class PoliciaJamundiProcessor:
                             "cantidad": self._parse_count(data.get("cantidad"))
                         }
                         
-                        # h. Deduplicación por Fingerprint (Hecho + Víctima)
-                        # Eliminamos la deduplicación estricta por id_fuente para aceptar múltiples víctimas
+                        # h. DeduplicaciÃ³n por Fingerprint (Hecho + VÃ­ctima)
+                        # Eliminamos la deduplicaciÃ³n estricta por id_fuente para aceptar mÃºltiples vÃ­ctimas
                         fp = self._generate_fingerprint(processed_data)
                         record_key = stable_record_key(sanitized_payload)
                         if not claim_snapshot_record(snapshot_keys, record_key):
@@ -382,10 +383,6 @@ class PoliciaJamundiProcessor:
                             },
                         )
                         self.db.add(snapshot_row)
-                        stats["aprobadas"] += 1
-                        stats["filas_snapshot"] += 1
-                        snapshot_coverage.append((processed_data["fecha_evento"], semana_num))
-
                         exists_snapshot = self.db.query(SabanaSnapshotRow.id).filter(
                             SabanaSnapshotRow.ingestion_id != run.id,
                             SabanaSnapshotRow.record_key == record_key,
@@ -401,6 +398,9 @@ class PoliciaJamundiProcessor:
                                 self._apply_master_values(hecho, processed_data, data, conducta_raw, conducta_est, cat_delito, fp, run.id)
                                 stats["actualizadas_consolidadas"] += 1
                             else:
+                                stats["aprobadas"] += 1
+                                stats["filas_snapshot"] += 1
+                                snapshot_coverage.append((processed_data["fecha_evento"], semana_num))
                                 continue
                         else:
                             if exists_snapshot:
@@ -451,6 +451,9 @@ class PoliciaJamundiProcessor:
                             {"lng": lng, "lat": lat, "id": existing_event.id},
                         )
                         if coords: stats["georreferenciadas"] += 1
+                        stats["aprobadas"] += 1
+                        stats["filas_snapshot"] += 1
+                        snapshot_coverage.append((processed_data["fecha_evento"], semana_num))
 
                 except Exception as e:
                     logger.error(f"Error procesando fila {idx}: {e}")
@@ -485,7 +488,7 @@ class PoliciaJamundiProcessor:
 
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Fallo crítico en procesador: {traceback.format_exc()}")
+            logger.error(f"Fallo crÃ­tico en procesador: {traceback.format_exc()}")
             run = self.db.query(IngestionRun).filter(IngestionRun.id == run.id).first()
             if run:
                 run.status = "FAILED"
@@ -493,3 +496,4 @@ class PoliciaJamundiProcessor:
                 run.resumen = {"error": str(e)}
                 self.db.commit()
             raise e
+

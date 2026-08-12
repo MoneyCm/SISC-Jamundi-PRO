@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
 import {
     Upload,
     ShieldCheck,
@@ -43,6 +43,8 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
     const [forcing, setForcing] = useState(false);
     const [sabanaHistory, setSabanaHistory] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [preflight, setPreflight] = useState(null);
+    const [pendingFile, setPendingFile] = useState(null);
     const fileInputRef = useRef(null);
     const forceInputRef = useRef(null);
 
@@ -150,13 +152,38 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
         await loadSabanaHistory();
     };
 
+    const runPolicePreflight = async (file) => {
+        setStatus('uploading');
+        setError(null);
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/ingesta/policia/preflight`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'No fue posible previsualizar la SABANA.');
+            setPreflight(data);
+            setPendingFile(file);
+            setStatus('preview');
+        } catch (err) {
+            setError(err.message);
+            setStatus('idle');
+        }
+    };
+
     const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        await startUpload(file);
+        if (safeDatasetCode === 'POLICIA_SEMANAL') await runPolicePreflight(file);
+        else await startUpload(file);
     };
 
     const startUpload = async (file, force = false) => {
+        if (safeDatasetCode === 'POLICIA_SEMANAL' && force) {
+            setError('La sabana semanal no admite carga forzada. Revisala primero en la previsualizacion.');
+            setStatus('idle');
+            return;
+        }
         if (force) setForcing(true);
         else setForcing(false);
         setStatus('uploading');
@@ -296,6 +323,64 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                 </div>
             )}
 
+            {status === 'preview' && preflight && (
+                <section className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200 space-y-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600">Previsualización de la sábana</p>
+                            <h2 className="text-3xl font-black text-slate-800 tracking-tight mt-2">Revisa antes de consolidar</h2>
+                            <p className="text-sm text-slate-500 mt-2">Este diagnóstico no guarda datos. Las filas que comparten un HECHOS_ID se revisan como posibles registros del mismo hecho, no como error automático.</p>
+                        </div>
+                        <span className={`px-4 py-2 rounded-full text-xs font-black ${preflight.status === 'READY' ? 'bg-emerald-100 text-emerald-700' : preflight.status === 'REVIEW' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                            {preflight.status === 'READY' ? 'LISTO PARA PROCESAR' : preflight.status === 'REVIEW' ? 'REQUIERE REVISIÓN' : 'CARGA BLOQUEADA'}
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {[
+                            ['Filas leídas', preflight.summary.rows],
+                            ['Hechos únicos', preflight.summary.unique_fact_ids],
+                            ['Filas con HECHOS_ID repetido', preflight.summary.rows_sharing_fact_id],
+                            ['Cobertura', `${preflight.summary.date_min || 'N/D'} a ${preflight.summary.date_max || 'N/D'}`],
+                            ['Semanas', `${preflight.summary.week_min ?? 'N/D'} a ${preflight.summary.week_max ?? 'N/D'}`],
+                            ['Fechas inválidas', preflight.summary.invalid_dates]
+                        ].map(([label, value]) => (
+                            <div key={label} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                                <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{label}</div>
+                                <div className="mt-2 text-lg text-slate-800 font-black break-words">{value}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-5">
+                        <div className="border border-slate-200 rounded-2xl p-5">
+                            <h3 className="font-black text-slate-800">Variables disponibles</h3>
+                            <div className="mt-3 space-y-2">
+                                {preflight.schema.available_fields.map((group) => (
+                                    <div key={group.group} className="flex items-start justify-between gap-3 text-sm">
+                                        <span className="font-bold text-slate-700">{group.group}</span>
+                                        <span className={group.available ? 'text-emerald-700 text-right' : 'text-slate-400 text-right'}>{group.available ? group.columns.join(', ') : 'No disponible'}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="border border-slate-200 rounded-2xl p-5">
+                            <h3 className="font-black text-slate-800">Hallazgos y privacidad</h3>
+                            <p className="text-sm text-slate-500 mt-2">{preflight.privacy.message}</p>
+                            <div className="mt-3 space-y-2">
+                                {preflight.issues.length === 0 && <p className="text-sm font-bold text-emerald-700">No se detectaron bloqueos de esquema o cobertura.</p>}
+                                {preflight.issues.map((issue, index) => <p key={index} className={issue.severity === 'ERROR' ? 'text-sm font-bold text-red-700' : 'text-sm font-bold text-amber-700'}>{issue.message}</p>)}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap justify-end gap-3">
+                        <button type="button" onClick={() => { setPreflight(null); setPendingFile(null); setStatus('idle'); }} className="px-5 py-3 rounded-xl bg-slate-100 text-slate-600 font-black text-xs uppercase tracking-widest">Elegir otro archivo</button>
+                        <button type="button" disabled={preflight.status === 'BLOCKED' || !pendingFile} onClick={() => startUpload(pendingFile)} className="px-5 py-3 rounded-xl bg-indigo-600 disabled:bg-slate-300 text-white font-black text-xs uppercase tracking-widest">Enviar a procesamiento</button>
+                    </div>
+                </section>
+            )}
+
             {status === 'uploading' && (
                 <div className="bg-white p-20 rounded-3xl shadow-xl border border-slate-200 flex flex-col items-center text-center space-y-8">
                     <div className="relative">
@@ -360,24 +445,25 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                             </button>
                         ) : (
                             <>
-                                {reportInfo.report_id && (
+                                {(reportInfo.ingestion_id || reportInfo.report_id) && (
                                     <button
                                         onClick={() => { 
-                                            setReportId(reportInfo.report_id); 
+                                            setReportId(reportInfo.ingestion_id || reportInfo.report_id); 
                                             setActivePage(safeDatasetCode === 'POLICIA_SEMANAL' ? 'police_audit' : 'dq'); 
                                         }}
                                         className="px-8 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-700 transition-all flex items-center gap-2 shadow-xl shadow-red-200 active:scale-95"
                                     >
                                         <FileSearch size={16} /> Auditoría
                                     </button>
+                                )}                                {safeDatasetCode !== 'POLICIA_SEMANAL' && (
+                                    <button
+                                        onClick={() => forceInputRef.current?.click()}
+                                        title="Salta el gate de calidad e ingesta el archivo tal como está"
+                                        className="px-8 py-4 bg-orange-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-orange-600 transition-all flex items-center gap-2 shadow-xl shadow-orange-200 active:scale-95"
+                                    >
+                                        <ShieldAlert size={16} /> Forzar Ingesta
+                                    </button>
                                 )}
-                                <button
-                                    onClick={() => forceInputRef.current?.click()}
-                                    title="Salta el gate de calidad e ingesta el archivo tal como está"
-                                    className="px-8 py-4 bg-orange-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-orange-600 transition-all flex items-center gap-2 shadow-xl shadow-orange-200 active:scale-95"
-                                >
-                                    <ShieldAlert size={16} /> Forzar Ingesta
-                                </button>
                             </>
                         )}
                     </div>
@@ -473,7 +559,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                         </button>
                     </div>
                     <div className="overflow-x-auto border border-slate-200 bg-white">
-                        <table className="w-full min-w-[760px] text-left text-sm">
+                        <table className="w-full min-w-[880px] text-left text-sm">
                             <thead className="bg-slate-800 text-white text-[10px] uppercase tracking-wider">
                                 <tr>
                                     <th className="px-4 py-3">Entrega</th>
@@ -482,6 +568,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                                     <th className="px-4 py-3 text-right">Novedades</th>
                                     <th className="px-4 py-3 text-right">Ya existentes</th>
                                     <th className="px-4 py-3">Responsable</th>
+                                    <th className="px-4 py-3 text-right">Accion</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -502,11 +589,14 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                                             <td className="px-4 py-3 text-right font-bold text-emerald-700">{snapshot.nuevas_consolidadas ?? 0}</td>
                                             <td className="px-4 py-3 text-right font-bold text-amber-700">{snapshot.existentes_historico ?? run.duplicadas ?? 0}</td>
                                             <td className="px-4 py-3">{run.usuario_carga || 'Sistema'}</td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button type="button" onClick={() => { setReportId(run.id); setActivePage('police_audit'); }} className="rounded-lg bg-indigo-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-indigo-700 hover:bg-indigo-600 hover:text-white">Auditar lote</button>
+                                            </td>
                                         </tr>
                                     );
                                 })}
                                 {!historyLoading && sabanaHistory.length === 0 && (
-                                    <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">La primera entrega registrada aparecerá aquí.</td></tr>
+                                    <tr><td colSpan="7" className="px-4 py-8 text-center text-slate-400">La primera entrega registrada aparecerá aquí.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -524,3 +614,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
 };
 
 export default UniversalIngesta;
+
+
+
+

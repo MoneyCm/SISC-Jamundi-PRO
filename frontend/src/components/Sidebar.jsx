@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Globe, CheckCircle, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -7,6 +7,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
     const isDirective = userRoles.includes('DIRECTIVE') || isAdmin;
     const isUploader = userRoles.includes('SOURCE_UPLOADER') || isAdmin;
     const isSteward = userRoles.includes('STEWARD') || isAdmin;
+    const isDataOwner = userRoles.includes('DATA_OWNER') || isAdmin;
 
     const allItems = [
         { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, category: 'HOME', show: true },
@@ -14,11 +15,14 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'monitoring', label: 'Monitor Mindefensa', icon: Globe, category: 'OPERACIONES', show: isUploader || isSteward },
         // Nuevo monitor de activos de la Policía Nacional
         { id: 'police_monitor', label: 'Monitor Policía', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward },
+        { id: 'police_explorer', label: 'Explorador Policial', icon: BarChart2, category: 'ESTRATEGIA', show: isAnalyst || isDirective || isSteward || isDataOwner },
+        { id: 'sisc_cifras', label: 'SISC en cifras', icon: Newspaper, category: 'SALIDA', show: isAnalyst || isDirective },
 
         { id: 'users', label: 'Gestión Usuarios', icon: ShieldAlert, category: 'ADMINISTRACIÓN', show: isAdmin },
 
         { id: 'dq', label: 'Calidad (DQ)', icon: ShieldCheck, category: 'OPERACIONES', show: isSteward },
         { id: 'ingesta_universal', label: 'Ingesta Universal', icon: LayoutDashboard, category: 'OPERACIONES', show: isUploader || isSteward },
+        { id: 'institutional_agents', label: 'Agentes institucionales', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward },
 
         { id: 'stats', label: 'Estadísticas', icon: BarChart2, category: 'ESTRATEGIA', show: true },
         { id: 'map', label: 'Mapa Interactivo', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
@@ -54,8 +58,8 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
                 </button>
 
                 <div className="flex flex-col items-center space-y-4">
-                    <div className="bg-white p-1 rounded-2xl shadow-xl flex items-center justify-center transform group-hover:scale-105 transition-transform">
-                        <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-[100px] h-[100px] object-contain" />
+                    <div className="flex items-center justify-center drop-shadow-xl transform group-hover:scale-105 transition-transform">
+                        <img src="/assets/escudo-limpio.png" alt="Escudo Jamundí" className="w-[100px] h-[100px] object-contain" />
                     </div>
                     <div className="text-center px-2">
                         <h1 className="text-6xl font-black tracking-tighter text-white leading-none font-titles uppercase">SISC</h1>
@@ -125,3 +129,5 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
 };
 
 export default Sidebar;
+
+

@@ -269,7 +269,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 <div className="flex items-center gap-6">
                     <div className="hidden md:flex items-center gap-4">
                         <div className="relative bg-white p-1 rounded-lg border border-slate-100 shadow-sm flex items-center justify-center">
-                            <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-10 h-10 object-contain" />
+                            <img src="/assets/escudo-limpio.png" alt="Escudo Jamundí" className="w-10 h-10 object-contain" />
                         </div>
                         <div className="space-y-0.5">
                             <h2 className="text-xl font-black tracking-tight leading-none text-primary font-titles">
@@ -314,7 +314,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             {/* Banner de Bienvenida Institucional */}
             <div className="relative overflow-hidden bg-white p-10 rounded-3xl border border-slate-100 shadow-xl">
                 <div className="absolute top-0 right-0 w-1/4 h-full opacity-[0.03] pointer-events-none">
-                    <img src="/assets/escudo.png" alt="" className="w-full h-full object-contain translate-x-10 translate-y-10" />
+                    <img src="/assets/escudo-limpio.png" alt="" className="w-full h-full object-contain translate-x-10 translate-y-10" />
                 </div>
                 <div className="relative z-10 max-w-4xl">
                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/5 rounded-full border border-primary/10 mb-4">

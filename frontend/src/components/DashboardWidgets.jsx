@@ -15,6 +15,22 @@ const iconMap = {
     PhoneForwarded: PhoneForwarded,
 };
 
+const NON_PUBLIC_TERRITORY_PATTERNS = [
+    'BARRIO PENDIENTE POR ASIGNAR',
+    'PENDIENTE POR ASIGNAR',
+    'PENDIENTE',
+    'POR ASIGNAR',
+    'NO APLICA',
+    'NO DEFINIDO',
+    'SIN LOCALIDAD',
+    'SIN COMUNA',
+];
+
+const hasNonPublicTerritory = (value = '') => {
+    const clean = String(value).trim().replace(/\s+/g, ' ').toUpperCase();
+    return NON_PUBLIC_TERRITORY_PATTERNS.some((pattern) => clean.includes(pattern));
+};
+
 export const KPICard = ({ data }) => {
     const Icon = iconMap[data.icon] || AlertTriangle;
     const isNegative = data.trend === 'up' || data.trend === 'negative';
@@ -377,7 +393,9 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
 };
 
 export const EarlyWarningWidget = ({ alerts = [] }) => {
-    if (alerts.length === 0) return (
+    const publicAlerts = alerts.filter((alert) => !hasNonPublicTerritory(`${alert.titulo || ''} ${alert.mensaje || ''}`));
+
+    if (publicAlerts.length === 0) return (
         <div className="bg-emerald-50/30 border border-emerald-100 p-6 rounded-[2rem] flex flex-col items-center justify-center text-center">
             <ShieldCheck className="text-emerald-500 mb-2 opacity-40" size={32} />
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Sistema de Alertas Tempranas</p>
@@ -425,7 +443,7 @@ export const EarlyWarningWidget = ({ alerts = [] }) => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {alerts.map((alert, idx) => {
+                {publicAlerts.map((alert, idx) => {
                     const config = getTierConfig(alert.nivel);
                     return (
                         <div key={idx} className={`relative overflow-hidden group p-5 rounded-[2rem] border ${config.border} ${config.bg} transition-all hover:scale-[1.02] hover:shadow-xl`}>

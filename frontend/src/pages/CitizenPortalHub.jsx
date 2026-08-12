@@ -11,11 +11,24 @@ import {
     Eye,
     MessageCircle,
     BellRing,
-    PhoneCall
+    PhoneCall,
+    Gavel
 } from 'lucide-react';
 
 const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
     const services = [
+    {
+      id: 'public-inspections',
+      title: 'Gesti\u00f3n de Inspecciones',
+      description: 'Consulta actuaciones, tr\u00e1mites y servicios reportados por las Inspecciones de Polic\u00eda.',
+      icon: Gavel,
+    },
+        {
+            id: 'public-family-protection',
+            title: 'Atenci\u00f3n y Protecci\u00f3n Familiar',
+            description: 'Consulta cifras agregadas de atenci\u00f3n y medidas de protecci\u00f3n de las Comisar\u00edas de Familia.',
+            icon: Gavel,
+        },
         {
             id: 'reporting',
             title: 'Reporte Seguro',
@@ -47,6 +60,16 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
             tag: 'Datos Abiertos'
         },
         {
+            id: 'public-measures',
+            title: 'Medidas Correctivas',
+            description: 'Consulta cifras agregadas sobre medidas gestionadas por las Inspecciones de Policia.',
+            icon: Gavel,
+            color: 'bg-amber-500',
+            bg: 'bg-amber-50',
+            textColor: 'text-amber-700',
+            tag: 'Transparencia'
+        },
+        {
             id: 'participation',
             title: 'Participación Ciudadana',
             description: 'Espacio para JAC y ciudadanos para reportar riesgos y colaborar en la seguridad comunitaria.',
@@ -64,7 +87,6 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
             <div className="bg-gradient-to-br from-[#281FD0] via-[#384CF5] to-indigo-800 text-white py-16 md:py-24 px-6 relative overflow-hidden">
                 {/* Orla Institucional Superior */}
                 <div className="absolute top-0 left-0 orla-hidirica"></div>
-
                 <div className="max-w-6xl mx-auto relative z-10 text-center">
                     <button
                         onClick={() => onNavigate('pqr')}
@@ -73,9 +95,15 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                         <Globe size={16} className="text-white/80" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-white/90">Abrir Ventanilla Única (PQR)</span>
                     </button>
-                    <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter leading-none font-titles">
-                        SISC <span className="text-white uppercase">JAMUNDÍ</span>
-                    </h1>
+                    <div className="mb-6 flex flex-col items-center gap-3 md:flex-row md:justify-center md:gap-5">
+                        <img src="/assets/escudo-limpio.png" alt="Escudo de la Alcaldia de Jamundi" className="h-[74px] w-[74px] object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.32)] md:h-[92px] md:w-[92px]" />
+                        <div className="text-center md:text-left">
+                            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-[#FFE000]">Alcaldia de Jamundi</p>
+                            <h1 className="text-5xl font-black tracking-tighter leading-none font-titles md:text-7xl">
+                                SISC <span className="text-white uppercase">JAMUNDÍ</span>
+                            </h1>
+                        </div>
+                    </div>
                     <p className="text-xl md:text-2xl text-white/80 max-w-3xl mx-auto font-medium mb-10 leading-relaxed">
                         Sistema de Información para la Seguridad y Convivencia de la <span className="text-white font-bold uppercase">ALCALDÍA DE JAMUNDÍ</span>.
                     </p>
@@ -98,10 +126,6 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                     </div>
                 </div>
 
-                {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 w-1/4 h-full opacity-[0.03] pointer-events-none">
-                    <img src="/assets/escudo.png" alt="" className="w-full h-full object-contain translate-x-10 translate-y-10" />
-                </div>
             </div>
 
             {/* Services Grid */}
@@ -139,8 +163,8 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
                 <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12">
                     <div className="space-y-6">
                         <div className="flex items-center gap-3">
-                            <div className="bg-white p-2 rounded-lg">
-                                <img src="/assets/escudo.png" alt="Escudo Jamundí" className="h-10 w-auto" />
+                            <div className="">
+                                <img src="/assets/escudo-limpio.png" alt="Escudo Jamundí" className="h-10 w-auto" />
                             </div>
                             <div>
                                 <h4 className="font-black tracking-tighter text-2xl font-titles">SISC</h4>

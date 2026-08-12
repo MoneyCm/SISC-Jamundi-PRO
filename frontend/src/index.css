@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -46,7 +44,7 @@
 
   /* Fuentes Oficiales */
   --font-titles: 'Calibri', 'Arial', sans-serif; /* Calibri Bold para títulos críticos */
-  --font-interface: 'Inter', 'Outfit', sans-serif; /* Fallback para Br Omny */
+  --font-interface: 'Calibri', 'Arial', sans-serif; /* Br Omny no esta incluida en el proyecto */
 }
 
 @layer base {
@@ -74,8 +72,10 @@
 
   .dashboard-container {
     @apply min-h-screen p-8;
-    background: radial-gradient(circle at top right, rgba(255, 42, 109, 0.05), transparent),
-      radial-gradient(circle at bottom left, rgba(5, 217, 232, 0.05), transparent);
+    background:
+      linear-gradient(135deg, rgba(40, 31, 208, 0.035), transparent 42%),
+      linear-gradient(315deg, rgba(255, 224, 0, 0.09), transparent 36%),
+      var(--bg-app);
   }
 
   .glass-card {

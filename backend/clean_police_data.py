@@ -1,7 +1,7 @@
-from sqlalchemy import create_engine, text
+﻿from sqlalchemy import create_engine, text
 import os
 
-DATABASE_URL = "postgresql://neondb_owner:npg_ZzBiN3DU6dgc@ep-holy-lake-aiso6dd5-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)
 
@@ -30,3 +30,6 @@ with engine.connect() as conn:
     
     conn.commit()
     print("Limpieza completada. La base de datos está lista para una carga limpia.")
+
+
+

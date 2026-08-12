@@ -339,6 +339,52 @@ async def get_crime_accumulated(
     res = IntelligenceService.get_multi_year_accumulated(db, source_id, start_mm_dd, end_mm_dd)
     return res
 
+@router.get("/public/rnmc-summary")
+async def get_public_rnmc_summary(db: Session = Depends(get_db)):
+    """Public RNMC statistics. This endpoint never returns people, case files, or individual records."""
+    minimum_group_size = 10
+    base_filters = [
+        RNMCMeasure.source_id == "INSPECCION_MEDIDAS_RNMC",
+        RNMCMeasure.municipio.ilike("%JAMUNDI%"),
+    ]
+    latest_date = db.query(func.max(RNMCMeasure.fecha_actuacion)).filter(*base_filters).scalar()
+    if not latest_date:
+        return {"metadata": {"available": False, "minimum_group_size": minimum_group_size}, "kpis": {}, "monthly": [], "states": [], "measures": [], "zones": []}
+
+    year_start = datetime(latest_date.year, 1, 1)
+    year_end = datetime(latest_date.year + 1, 1, 1)
+    period_filters = [*base_filters, RNMCMeasure.fecha_actuacion >= year_start, RNMCMeasure.fecha_actuacion < year_end]
+    total_measures = db.query(func.count(RNMCMeasure.id)).filter(*period_filters).scalar() or 0
+    total_paid = db.query(func.coalesce(func.sum(RNMCMeasure.valor_pagado), 0)).filter(*period_filters).scalar() or 0
+    total_net = db.query(func.coalesce(func.sum(RNMCMeasure.valor_neto), 0)).filter(*period_filters).scalar() or 0
+
+    def grouped(column, limit=10):
+        rows = db.query(column.label("name"), func.count(RNMCMeasure.id).label("value")).filter(
+            *period_filters, column.isnot(None), column != ""
+        ).group_by(column).having(func.count(RNMCMeasure.id) >= minimum_group_size).order_by(func.count(RNMCMeasure.id).desc()).limit(limit).all()
+        return [{"name": row.name, "value": int(row.value)} for row in rows]
+
+    monthly_rows = db.query(
+        func.extract("month", RNMCMeasure.fecha_actuacion).label("month"),
+        func.count(RNMCMeasure.id).label("value"),
+    ).filter(*period_filters).group_by(func.extract("month", RNMCMeasure.fecha_actuacion)).order_by(func.extract("month", RNMCMeasure.fecha_actuacion)).all()
+    months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+    return {
+        "metadata": {
+            "available": True,
+            "year": latest_date.year,
+            "cutoff": latest_date.date().isoformat(),
+            "source": "Inspecciones de Policia / RNMC",
+            "minimum_group_size": minimum_group_size,
+            "privacy": "Datos agregados. No se publican personas, expedientes, comparendos, direcciones ni relatos.",
+        },
+        "kpis": {"measures": int(total_measures), "paid_value": float(total_paid), "net_value": float(total_net)},
+        "monthly": [{"name": months[int(row.month) - 1], "value": int(row.value)} for row in monthly_rows],
+        "states": grouped(RNMCMeasure.estado),
+        "measures": grouped(RNMCMeasure.medida),
+        "zones": grouped(RNMCMeasure.localidad),
+    }
 @router.get("/stats/rnmc")
 async def get_rnmc_stats(
     request: Request,
@@ -2021,3 +2067,39 @@ async def get_intelligence_insights(
     except Exception as general_err:
         logger.error(f"Error estructurando datos locales para insights: {general_err}")
         return {"insight": "Error interno al preparar los datos estratégicos. Por favor verifique la conexión a la base de datos.", "error": str(general_err)}
+
+@router.get("/public/rnmc-history")
+def public_rnmc_history():
+    """Return only the pre-aggregated, privacy-protected RNMC public dataset."""
+    import csv
+    from pathlib import Path
+
+    dataset_path = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "public"
+        / "rnmc_jamundi_2017_2025_agregado.csv"
+    )
+
+    if not dataset_path.exists():
+        return {
+            "metadata": {
+                "available": False,
+                "message": "La serie publica agregada de medidas correctivas aun no ha sido cargada."
+            },
+            "records": []
+        }
+
+    with dataset_path.open(encoding="utf-8-sig", newline="") as stream:
+        records = list(csv.DictReader(stream))
+
+    return {
+        "metadata": {
+            "available": True,
+            "title": "Medidas correctivas y convivencia",
+            "source": "Registro Nacional de Medidas Correctivas",
+            "privacy_rule": "La fuente contiene solo datos agregados. Las categorias menores a 10 registros se agrupan u ocultan.",
+            "updated_at": records[0]["fecha_corte"] if records else None
+        },
+        "records": records
+    }

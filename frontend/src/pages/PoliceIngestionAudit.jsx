@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
     AlertCircle, 
     CheckCircle2, 
@@ -51,6 +51,9 @@ const PoliceIngestionAudit = ({ runId, onBack }) => {
     if (error) return <div className="p-20 text-center text-red-500 font-bold">{error}</div>;
 
     const topConductas = run?.resumen?.top_conductas || {};
+    const snapshotSummary = run?.resumen?.snapshot || {};
+    const existingHistory = snapshotSummary.existentes_historico ?? run?.duplicadas ?? 0;
+    const repeatedInFile = snapshotSummary.repetidas_en_archivo ?? 0;
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 py-6 animate-fade-in">
@@ -75,7 +78,7 @@ const PoliceIngestionAudit = ({ runId, onBack }) => {
                     </div>
                 </div>
 
-                <div className="p-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="p-8 grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Leídos</p>
                         <p className="text-3xl font-black text-slate-800">{run.total_filas}</p>
@@ -89,8 +92,12 @@ const PoliceIngestionAudit = ({ runId, onBack }) => {
                         <p className="text-3xl font-black text-red-700">{run.rechazadas}</p>
                     </div>
                     <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100">
-                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Duplicados</p>
-                        <p className="text-3xl font-black text-amber-700">{run.duplicadas}</p>
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Ya existentes</p>
+                        <p className="text-3xl font-black text-amber-700">{existingHistory}</p>
+                    </div>
+                    <div className="bg-violet-50 p-6 rounded-3xl border border-violet-100">
+                        <p className="text-[10px] font-black text-violet-600 uppercase tracking-widest mb-1">Repetidos en archivo</p>
+                        <p className="text-3xl font-black text-violet-700">{repeatedInFile}</p>
                     </div>
                 </div>
 
@@ -161,3 +168,5 @@ const PoliceIngestionAudit = ({ runId, onBack }) => {
 };
 
 export default PoliceIngestionAudit;
+
+

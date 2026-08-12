@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -51,7 +52,33 @@ class GeocodingService:
             char for char in unicodedata.normalize("NFD", name)
             if not unicodedata.combining(char)
         )
-        return normalized.upper().strip().replace("  ", " ")
+        return " ".join(normalized.upper().strip().split())
+
+    @staticmethod
+    def _candidate_territory_names(name: str) -> list[str]:
+        """Build a small set of canonical variants before official matching."""
+        normalized = GeocodingService.normalize_name(name)
+        if not normalized:
+            return []
+
+        variants = [normalized]
+        candidates = [normalized]
+
+        # Common suffixes used in ingested reports
+        variants.append(re.sub(r"\s+E\d+\s*$", "", normalized))
+        variants.append(re.sub(r"\s*\([^)]*\)\s*$", "", normalized))
+        variants.append(re.sub(r"\s+E\d+\s*\([^)]*\)\s*$", "", normalized))
+
+        for variant in variants:
+            if variant and variant not in candidates:
+                candidates.append(variant)
+
+        for candidate in list(candidates):
+            for prefix in ("CGTO ", "CGTO DE ", "CORREGIMIENTO ", "CORREGIMIENTO DE ", "VEREDA ", "VDA "):
+                if candidate.startswith(prefix):
+                    candidates.append(candidate[len(prefix):].strip())
+
+        return list(dict.fromkeys(candidates))
 
     @staticmethod
     @lru_cache(maxsize=1)
@@ -134,16 +161,18 @@ class GeocodingService:
     @staticmethod
     def get_official_territory(localidad: str) -> Optional[Dict]:
         """Return verified official geometry and an interior reference point for a territory."""
-        normalized = GeocodingService.normalize_name(localidad)
-        if not normalized:
-            return None
-
         aliases = GeocodingService._load_aliases()
         territories = GeocodingService._official_territories()
-        candidates = [normalized]
+        candidates = GeocodingService._candidate_territory_names(localidad)
+        if not candidates:
+            return None
+
         for prefix in ("CGTO ", "CGTO DE ", "CORREGIMIENTO ", "CORREGIMIENTO DE ", "VEREDA ", "VDA "):
-            if normalized.startswith(prefix):
-                candidates.append(normalized[len(prefix):].strip())
+            for candidate in list(candidates):
+                if candidate.startswith(prefix):
+                    stripped = candidate[len(prefix):].strip()
+                    if stripped and stripped not in candidates:
+                        candidates.append(stripped)
         for candidate in candidates:
             official_name = aliases.get(candidate, candidate)
             territory = territories.get(GeocodingService.normalize_name(official_name))

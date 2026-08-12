@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.models import get_db, Event, EventType
 from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, SabanaSnapshotRow
+from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator
+from services.institutional_agent_service import InstitutionalAgentService
 from services.hechos_metrics import hechos_unicos_expr
 from sqlalchemy import Integer, cast, func
 import os
@@ -12,16 +14,16 @@ from api.auth import analyst_or_admin, institutional_access
 
 router = APIRouter()
 
-# Configuración de Modelos
+# ConfiguraciÃ³n de Modelos
 GEMINI_MODEL = "gemini-2.0-flash-lite"
-MISTRAL_MODEL = "open-mistral-7b"
+MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-2603")
 
-# Configuración desde .env
+# ConfiguraciÃ³n desde .env
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "GEMINI").upper()
 
-print(f"SISC Jamundí AI: Iniciando con Proveedor: {AI_PROVIDER}")
+print(f"SISC JamundÃ­ AI: Iniciando con Proveedor: {AI_PROVIDER}")
 
 # Cache simple en memoria para evitar Rate Limits
 ia_cache = {
@@ -52,6 +54,39 @@ MONTH_LOOKUP.update({"setiembre": 9})
 
 
 HOMICIDE_ALIASES = ["HOMICIDIO", "Homicidio", "HOMICIDIO INTENCIONAL", "HOMICIDIO DOLOSO"]
+NON_PUBLIC_TERRITORY_VALUES = {
+    "BARRIO PENDIENTE POR ASIGNAR",
+    "PENDIENTE POR ASIGNAR",
+    "SIN ASIGNAR",
+    "SIN BARRIO",
+    "SIN COMUNA",
+    "SIN ESPECIFICAR",
+    "SIN LOCALIDAD",
+    "NO APLICA",
+    "NO APLICA LOCALIDAD",
+    "NO APLICA LOCALIDAD - COMUNA",
+    "NO DEFINIDO",
+    "NO REPORTA",
+    "NO REGISTRA",
+    "N/A",
+}
+NON_PUBLIC_TERRITORY_PATTERNS = (
+    "PENDIENTE",
+    "POR ASIGNAR",
+    "NO APLICA",
+    "NO DEFINIDO",
+    "SIN LOCALIDAD",
+    "SIN COMUNA",
+)
+
+
+def _is_public_territory_name(value):
+    if not value:
+        return False
+    clean = " ".join(str(value).strip().upper().split())
+    if not clean or clean in NON_PUBLIC_TERRITORY_VALUES:
+        return False
+    return not any(pattern in clean for pattern in NON_PUBLIC_TERRITORY_PATTERNS)
 
 
 def _extract_requested_periods(message: str, default_year: int):
@@ -249,16 +284,14 @@ def _format_cutoff_answer(user_message: str, fecha_corte: str, fuente_corte: str
 def _wants_available_dates_answer(message: str):
     normalized = (message or "").lower()
     return any(term in normalized for term in [
-        "que fechas", "qu? fechas", "de que fechas", "de qu? fechas",
-        "desde cuando", "desde cu?ndo", "rango", "periodo disponible",
-        "periodos disponibles", "fechas disponibles", "informacion de que", "informaci?n de qu?"
+        "quÃ© fechas", "que fechas", "de quÃ© fechas", "de cuÃ¡ndo fechas", "desde cuÃ¡ndo", "desde cuÃ¡ndo", "rango", "perÃ­odo disponible", "perÃ­odos disponibles", "fechas disponibles", "informaciÃ³n de quÃ©", "informaciÃ³n de quiÃ©n"
     ])
 
 
 def _wants_annual_records_answer(message: str):
     normalized = (message or "").lower()
     return (
-        any(term in normalized for term in ["por a?o", "por anio", "por ano", "por a?", "anuales", "cada a?o", "cada anio", "cada ano"])
+        any(term in normalized for term in ["por aÃ±o", "por aÃ±o", "por aÃ±o", "por aÃ±o", "anuales", "cada aÃ±o", "cada aÃ±o", "cada aÃ±o"])
         and any(term in normalized for term in ["registro", "registros", "delito", "delitos", "casos", "hechos"])
     )
 
@@ -339,6 +372,159 @@ def _format_data_summary_answer(user_message: str, min_date, max_date, fuente_co
         "Para emergencias, llama al **123**."
     )
 
+def _format_institutional_answer(message: str, db: Session):
+    """Answer public institutional questions only with approved aggregate indicators."""
+    normalized = (message or "").lower()
+    inspection_terms = [
+        "inspeccion", "inspecci\u00f3n", "recaud", "tramite", "tr\u00e1mite",
+        "certificado", "vecindad", "defuncion", "defunci\u00f3n", "proceso verbal",
+        "pva", "despacho comisorio", "actuacion", "actuaci\u00f3n",
+    ]
+    family_terms = [
+        "comisaria", "comisar\u00eda", "violencia intrafamiliar", "violencia familiar",
+        "medida de protecci", "pard", "restablecimiento", "psicolog", "trabajo social",
+    ]
+
+    if any(term in normalized for term in inspection_terms):
+        program = "INSPECCIONES"
+        program_label = "Inspecciones de Polic\u00eda"
+    elif any(term in normalized for term in family_terms):
+        program = "COMISARIAS"
+        program_label = "Comisar\u00edas de Familia"
+    else:
+        return None
+
+    rows = db.query(InstitutionalDataBatch, InstitutionalIndicator).join(
+        InstitutionalIndicator, InstitutionalIndicator.batch_id == InstitutionalDataBatch.id
+    ).filter(
+        InstitutionalDataBatch.program == program,
+        InstitutionalDataBatch.validation_status == "APPROVED",
+        InstitutionalIndicator.is_public.is_(True),
+        InstitutionalIndicator.value >= InstitutionalIndicator.privacy_threshold,
+    ).order_by(
+        InstitutionalDataBatch.period.desc(),
+        InstitutionalDataBatch.reporting_entity.asc(),
+        InstitutionalIndicator.indicator.asc(),
+    ).all()
+
+    requested_entity = None
+    if program == "COMISARIAS":
+        if "primera" in normalized:
+            requested_entity = "COMISARIA PRIMERA DE FAMILIA"
+        elif "segunda" in normalized:
+            requested_entity = "COMISARIA SEGUNDA DE FAMILIA"
+    elif program == "INSPECCIONES":
+        if "segunda" in normalized:
+            requested_entity = "INSPECCION SEGUNDA"
+        elif "tercera" in normalized:
+            requested_entity = "INSPECCION TERCERA"
+    if requested_entity:
+        rows = [
+            (batch, indicator) for batch, indicator in rows
+            if InstitutionalAgentService._normalize(batch.reporting_entity) == requested_entity
+        ]
+
+    explicit_years = [int(value) for value in re.findall(r"\b(20\d{2})\b", normalized)]
+    _, requested_months = _extract_requested_periods(message, date.today().year)
+    if explicit_years:
+        requested_periods = {
+            f"{year}-{month:02d}"
+            for year in explicit_years
+            for month in (requested_months or range(1, 13))
+        }
+        rows = [(batch, indicator) for batch, indicator in rows if batch.period in requested_periods]
+        if not rows:
+            period_label = ", ".join(sorted(requested_periods))
+            return (
+                f"El SISC no tiene indicadores institucionales aprobados para **{period_label}**. "
+                "No se reemplaza el periodo solicitado con cifras de otro mes o ano. "
+                "Para emergencias, llama al **123**."
+            )
+
+    if not rows:
+        return (
+            f"El SISC todav\u00eda no tiene indicadores aprobados de **{program_label}** "
+            "para responder esta consulta. Las cargas pendientes no se muestran al p\u00fablico. "
+            "Cuando el Observatorio revise y apruebe un informe, el asistente se actualizar\u00e1 autom\u00e1ticamente. "
+            "Para emergencias, llama al **123**."
+        )
+
+    latest_period_by_entity = {}
+    latest_rows = []
+    for batch, indicator in rows:
+        entity_key = batch.reporting_entity.strip().upper()
+        latest_period_by_entity.setdefault(entity_key, batch.period)
+        if batch.period == latest_period_by_entity[entity_key]:
+            latest_rows.append((batch, indicator))
+
+    indicator_filters = []
+    if "recaud" in normalized:
+        indicator_filters = ["RECAUDO"]
+    elif "audien" in normalized:
+        indicator_filters = ["AUDIENCIA"]
+    elif "medida de protecci" in normalized:
+        indicator_filters = ["MEDIDA DE PROTECCION"]
+    elif "pard" in normalized or "restablecimiento" in normalized:
+        indicator_filters = ["RESTABLECIMIENTO", "PARD"]
+    elif "psicolog" in normalized:
+        indicator_filters = ["PSICOLOG"]
+    elif "trabajo social" in normalized:
+        indicator_filters = ["TRABAJO SOCIAL"]
+    elif any(term in normalized for term in ["tramite", "tr\u00e1mite", "certificado", "vecindad", "defuncion", "defunci\u00f3n"]):
+        indicator_filters = ["TRAMITE", "CERTIFICADO", "CONSTANCIA", "RESOLUCION"]
+
+    if indicator_filters:
+        filtered_rows = [
+            (batch, indicator)
+            for batch, indicator in latest_rows
+            if any(term in indicator.indicator.upper() for term in indicator_filters)
+        ]
+    else:
+        filtered_rows = latest_rows
+
+    if not filtered_rows:
+        return (
+            f"Hay datos aprobados de **{program_label}**, pero no existe un indicador p\u00fablico "
+            "que corresponda exactamente a esta pregunta. No se reemplaza con cifras de delitos ni se estima. "
+            "Para emergencias, llama al **123**."
+        )
+
+    grouped = {}
+    for batch, indicator in filtered_rows:
+        grouped.setdefault(str(batch.id), {"batch": batch, "indicators": []})
+        grouped[str(batch.id)]["indicators"].append(indicator)
+
+    sections = []
+    for item in grouped.values():
+        batch = item["batch"]
+        basis = "acumulado" if batch.reporting_basis == "CUMULATIVE" else "mensual"
+        lines = []
+        for indicator in item["indicators"]:
+            indicator_label = (indicator.indicator
+                .replace("psicologia", "psicolog\u00eda")
+                .replace("proteccion", "protecci\u00f3n")
+                .replace("institucionalizacion", "institucionalizaci\u00f3n")
+                .replace("genero", "g\u00e9nero")
+                .replace("verificacion", "verificaci\u00f3n")
+            )
+            value = float(indicator.value)
+            if indicator.unit.upper() == "COP":
+                value_text = "$" + f"{value:,.0f}".replace(",", ".") + " COP"
+            else:
+                value_text = f"{value:,.0f}".replace(",", ".") if value.is_integer() else f"{value:,.2f}"
+                value_text = f"{value_text} {indicator.unit}"
+            lines.append(f"- **{indicator_label}:** {value_text}.")
+        sections.append(
+            f"**{batch.reporting_entity}** - periodo **{batch.period}**, reporte {basis}, "
+            f"corte **{batch.cutoff_date.isoformat()}**:\n" + "\n".join(lines)
+        )
+
+    closing = (
+        "Los informes acumulados de distintas dependencias se presentan por separado y no se suman autom\u00e1ticamente. "
+        "Solo se muestran cargas aprobadas y cifras agregadas. Para emergencias, llama al **123**."
+    )
+    return "\n\n".join(sections + [closing])
+
 async def call_gemini(contexto):
     url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": contexto}]}]}
@@ -376,9 +562,9 @@ async def call_mistral(contexto):
 @router.get("/insights", dependencies=[Depends(institutional_access)])
 async def get_ai_insights(db: Session = Depends(get_db)):
     """
-    Genera un análisis narrativo basado en los datos actuales usando el proveedor configurado.
+    Genera un anÃ¡lisis narrativo basado en los datos actuales usando el proveedor configurado.
     """
-    # Validar llaves según proveedor
+    # Validar llaves segÃºn proveedor
     if AI_PROVIDER == "GEMINI" and not GEMINI_API_KEY:
         return {"insight": "Falta GEMINI_API_KEY", "status": "error"}
     if AI_PROVIDER == "MISTRAL" and not MISTRAL_API_KEY:
@@ -403,10 +589,10 @@ async def get_ai_insights(db: Session = Depends(get_db)):
             "cached": True
         }
 
-    # Estadísticas para el INSIGHT (Año Actual 2026) - AGREGACIÓN DEDUPLICADA
+    # EstadÃ­sticas para el INSIGHT (AÃ±o Actual 2026) - AGREGACIÃ“N DEDUPLICADA
     current_year = datetime.now().year
 
-    # 1. Obtener conteos diarios de HOMICIDIOS de ambas fuentes para el año actual
+    # 1. Obtener conteos diarios de HOMICIDIOS de ambas fuentes para el aÃ±o actual
     hom_mod_daily = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(
         func.extract('year', HechoSeguridad.fecha_evento) == current_year,
         HechoSeguridad.categoria_delito == "HOMICIDIO"
@@ -417,37 +603,53 @@ async def get_ai_insights(db: Session = Depends(get_db)):
         EventType.category == "HOMICIDIO"
     ).group_by(Event.occurrence_date).all()
 
-    # Unificar por fecha (DEDUPLICACIÓN POR DÍA)
+    # Unificar por fecha (DEDUPLICACIÃ“N POR DÃA)
     daily_hom = {}
     for d, c in hom_leg_daily: daily_hom[d] = c
-    # Priorizar fuente Policial (Sobrescribe si hay dato el mismo día)
+    # Priorizar fuente Policial (Sobrescribe si hay dato el mismo dÃ­a)
     for d, c in hom_mod_daily: daily_hom[d] = c
     homicidios_2026 = sum(daily_hom.values())
 
-    # 2. Conteo de Incidentes Totales (Aproximación por mayor fuente)
+    # 2. Conteo de Incidentes Totales (AproximaciÃ³n por mayor fuente)
     total_legacy = db.query(Event).filter(func.extract('year', Event.occurrence_date) == current_year).count()
     total_moderno = db.query(hechos_unicos_expr()).filter(func.extract('year', HechoSeguridad.fecha_evento) == current_year).scalar() or 0
     total_real_2026 = total_moderno if total_moderno > 0 else total_legacy
 
-    # 3. Barrios (Priorizar la base más poblada)
+    # 3. Barrios (Priorizar la base mÃ¡s poblada)
     if total_moderno > 0:
         top_barrio_2026 = db.query(HechoSeguridad.barrio_normalizado, hechos_unicos_expr()).filter(
-            func.extract('year', HechoSeguridad.fecha_evento) == current_year
+            func.extract('year', HechoSeguridad.fecha_evento) == current_year,
+            HechoSeguridad.barrio_normalizado.isnot(None),
+            HechoSeguridad.barrio_normalizado != "",
+            func.upper(func.trim(HechoSeguridad.barrio_normalizado)).notin_(NON_PUBLIC_TERRITORY_VALUES),
+            ~func.upper(HechoSeguridad.barrio_normalizado).like("%PENDIENTE%"),
+            ~func.upper(HechoSeguridad.barrio_normalizado).like("%POR ASIGNAR%"),
+            ~func.upper(HechoSeguridad.barrio_normalizado).like("%NO APLICA%"),
+            ~func.upper(HechoSeguridad.barrio_normalizado).like("%NO DEFINIDO%"),
         ).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).first()
     else:
         top_barrio_2026 = db.query(Event.barrio, func.count(Event.id)).filter(
-            func.extract('year', Event.occurrence_date) == current_year
+            func.extract('year', Event.occurrence_date) == current_year,
+            Event.barrio.isnot(None),
+            Event.barrio != "",
+            func.upper(func.trim(Event.barrio)).notin_(NON_PUBLIC_TERRITORY_VALUES),
+            ~func.upper(Event.barrio).like("%PENDIENTE%"),
+            ~func.upper(Event.barrio).like("%POR ASIGNAR%"),
+            ~func.upper(Event.barrio).like("%NO APLICA%"),
+            ~func.upper(Event.barrio).like("%NO DEFINIDO%"),
         ).group_by(Event.barrio).order_by(func.count(Event.id).desc()).first()
+    if top_barrio_2026 and not _is_public_territory_name(top_barrio_2026[0]):
+        top_barrio_2026 = None
 
     contexto = f"""
-    Eres el analista experto del Sistema de Información para la Seguridad y Convivencia (SISC) de Jamundí.
-    Analiza estos datos del AÑO ACTUAL {current_year} (Cifras Consolidadas y Sin Duplicados):
+    Eres el analista experto del Sistema de InformaciÃ³n para la Seguridad y Convivencia (SISC) de JamundÃ­.
+    Analiza estos datos del AÃ‘O ACTUAL {current_year} (Cifras Consolidadas y Sin Duplicados):
     - Incidentes registrados en {current_year}: {total_real_2026}
-    - Homicidios totales unificados (Policía + MinDefensa): {homicidios_2026}
-    - Zona con mayor criticidad este año: {top_barrio_2026[0] if top_barrio_2026 else 'N/A'} ({top_barrio_2026[1] if top_barrio_2026 else 0} casos).
+    - Homicidios totales unificados (PolicÃ­a + MinDefensa): {homicidios_2026}
+    - Zona con mayor criticidad este aÃ±o: {top_barrio_2026[0] if top_barrio_2026 else 'N/A'} ({top_barrio_2026[1] if top_barrio_2026 else 0} casos).
 
-    IMPORTANTE: Has detectado un traslape de fuentes y has priorizado la información de la Policía por su actualización.
-    Responde en español, tono institucional firme. Máximo 60 palabras.
+    IMPORTANTE: Has detectado un traslape de fuentes y has priorizado la informaciÃ³n de la PolicÃ­a por su actualizaciÃ³n.
+    Responde en espaÃ±ol, tono institucional firme. MÃ¡ximo 60 palabras.
     """
 
     try:
@@ -471,7 +673,7 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error con IA ({AI_PROVIDER}): {e}")
         return {
-            "insight": f"El analista del SISC ({AI_PROVIDER}) está saturado. Reintentando en breve...",
+            "insight": f"El analista del SISC ({AI_PROVIDER}) estÃ¡ saturado. Reintentando en breve...",
             "status": "error",
             "detail": str(e)
         }
@@ -481,8 +683,8 @@ from services.alert_engine import AlertEngine
 @router.get("/alertas", dependencies=[Depends(institutional_access)])
 async def get_ai_alerts(db: Session = Depends(get_db)):
     """
-    Sistema de Alertas Tempranas (SAT): Detecta incrementos anómalos en delitos
-    para la Secretaría de Seguridad de Jamundí.
+    Sistema de Alertas Tempranas (SAT): Detecta incrementos anÃ³malos en delitos
+    para la SecretarÃ­a de Seguridad de JamundÃ­.
     """
     try:
         # Usar el nuevo motor de alertas deductivo y unificado
@@ -501,14 +703,17 @@ async def get_ai_alerts(db: Session = Depends(get_db)):
 @router.post("/chat_ciudadano")
 async def citizen_chat(data: dict, db: Session = Depends(get_db)):
     """
-    Chatbot público para ciudadanos: Proporciona información sobre rutas y convivencia.
-    Ahora incluye contexto de datos reales para responder preguntas estadísticas básicas.
+    Chatbot pÃºblico para ciudadanos: Proporciona informaciÃ³n sobre rutas y convivencia.
+    Ahora incluye contexto de datos reales para responder preguntas estadÃ­sticas bÃ¡sicas.
     """
     user_message = data.get("message", "")
     conversation_text = _conversation_text(data)
     if not user_message:
-        return {"response": "Hola, ¿en qué puedo ayudarte?"}
+        return {"response": "Hola, Â¿en quÃ© puedo ayudarte?"}
 
+    direct_institutional_response = _format_institutional_answer(user_message, db)
+    if direct_institutional_response:
+        return {"response": direct_institutional_response}
     # 1. Base maestra consolidada para consulta ciudadana
     total_incidentes = db.query(hechos_unicos_expr()).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
@@ -756,14 +961,14 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         return {"response": direct_monthly_response}
 
     contexto = f"""
-    Eres el Asistente Virtual del SISC Jamundí (Sistema de Información para la Seguridad y Convivencia).
+    Eres el Asistente Virtual del SISC JamundÃ­ (Sistema de InformaciÃ³n para la Seguridad y Convivencia).
     Tu objetivo es guiar a los ciudadanos y responder dudas sobre seguridad con DATOS REALES.
 
     DATOS ACTUALES DEL SISTEMA (USA ESTO PARA RESPONDER):
-    - Total histórico de incidentes en plataforma: {total_incidentes}
+    - Total histÃ³rico de incidentes en plataforma: {total_incidentes}
     - Total de homicidios registrados: {homicidios}
-    - Casos totales por año: {stats_anuales}
-    - DETALLE POR CATEGORÍA Y AÑO: {stats_contexto_detallado}
+    - Casos totales por aÃ±o: {stats_anuales}
+    - DETALLE POR CATEGORÃA Y AÃ‘O: {stats_contexto_detallado}
     - Resumen mensual consolidado de la fuente mas reciente: {stats_mensuales}
     - Fecha de corte de los datos cargados para consulta ciudadana: {fecha_corte}
     - Fuente usada para la fecha de corte: {fuente_corte}
@@ -791,4 +996,5 @@ async def citizen_chat(data: dict, db: Session = Depends(get_db)):
         return {"response": response_text}
     except Exception as e:
         print(f"Error en Chat Ciudadano ({AI_PROVIDER}): {e}")
-        return {"response": "Lo siento, tengo dificultades técnicas. Por favor, consulta los tableros de datos en el portal o llama al 123 en caso de emergencia."}
+        return {"response": "Lo siento, tengo dificultades tÃ©cnicas. Por favor, consulta los tableros de datos en el portal o llama al 123 en caso de emergencia."}
+

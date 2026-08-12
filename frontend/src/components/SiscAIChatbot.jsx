@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, Minimize2, Maximize2, Sparkles, ShieldCheck } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, Minimize2, Maximize2, Sparkles, ShieldCheck, GripVertical } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
 const normalizeAssistantText = (value) => {
@@ -64,6 +64,70 @@ const SiscAIChatbot = () => {
     ]);
     const [loading, setLoading] = useState(false);
     const scrollRef = useRef(null);
+    const assistantRef = useRef(null);
+    const dragState = useRef(null);
+    const wasDragged = useRef(false);
+    const [position, setPosition] = useState(null);
+
+    const openAssistant = () => {
+        setPosition((currentPosition) => {
+            if (!currentPosition) return currentPosition;
+            const panelWidth = Math.min(760, window.innerWidth - 32);
+            const panelHeight = Math.min(760, window.innerHeight - 64);
+            return {
+                x: Math.max(8, Math.min(currentPosition.x, window.innerWidth - panelWidth - 8)),
+                y: Math.max(8, Math.min(currentPosition.y, window.innerHeight - panelHeight - 8))
+            };
+        });
+        setIsOpen(true);
+        setIsMinimized(false);
+    };
+
+    const handleDragStart = (event, allowButton = false) => {
+        if (event.button !== 0 || (!allowButton && event.target.closest('button'))) return;
+        const element = assistantRef.current;
+        if (!element) return;
+
+        const rect = element.getBoundingClientRect();
+        wasDragged.current = false;
+        dragState.current = {
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top,
+            width: rect.width,
+            height: rect.height,
+            startX: event.clientX,
+            startY: event.clientY,
+            moved: false
+        };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+    };
+
+    const handleDragMove = (event) => {
+        const drag = dragState.current;
+        if (!drag) return;
+
+        if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
+            drag.moved = true;
+        }
+
+        const maxX = Math.max(8, window.innerWidth - drag.width - 8);
+        const maxY = Math.max(8, window.innerHeight - drag.height - 8);
+        setPosition({
+            x: Math.min(Math.max(8, event.clientX - drag.offsetX), maxX),
+            y: Math.min(Math.max(8, event.clientY - drag.offsetY), maxY)
+        });
+    };
+
+    const handleDragEnd = (event) => {
+        const moved = dragState.current?.moved || false;
+        dragState.current = null;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        return moved;
+    };
+
+    const positionedStyle = position
+        ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' }
+        : undefined;
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -120,7 +184,11 @@ const SiscAIChatbot = () => {
 
     if (!isOpen) {
         return (
-            <div className="fixed right-4 bottom-4 md:bottom-4 md:right-6 z-[60] print:hidden">
+            <div
+                ref={assistantRef}
+                style={positionedStyle}
+                className="fixed right-4 bottom-4 md:bottom-4 md:right-6 z-[60] print:hidden"
+            >
                 <div className="relative flex items-end gap-3">
                     <div className="hidden 2xl:block max-w-[420px] overflow-hidden rounded-md border border-[#281FD0]/15 bg-white shadow-2xl ring-1 ring-white/80">
                         <div className="h-2 bg-[#FFB600]" />
@@ -138,7 +206,19 @@ const SiscAIChatbot = () => {
                     </div>
                     <button
                         type="button"
-                        onClick={() => setIsOpen(true)}
+                        aria-label="Mover asistente"
+                        title="Arrastrar para mover el asistente"
+                        onPointerDown={(event) => { event.preventDefault(); handleDragStart(event, true); }}
+                        onPointerMove={handleDragMove}
+                        onPointerUp={handleDragEnd}
+                        onPointerCancel={handleDragEnd}
+                        className="absolute -left-2 -top-2 z-10 grid h-8 w-8 cursor-grab place-items-center rounded-full border-2 border-white bg-slate-800 text-white shadow-lg active:cursor-grabbing"
+                    >
+                        <GripVertical size={18} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={openAssistant}
                         aria-label="Abrir asistente SISC"
                         className="group relative grid h-24 w-24 place-items-center rounded-full bg-[#281FD0] text-white shadow-2xl shadow-[#281FD0]/35 transition-all hover:-translate-y-1 hover:bg-[#1f18a8] active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-[#FFB600]/40 md:h-20 md:w-20"
                     >
@@ -154,8 +234,14 @@ const SiscAIChatbot = () => {
     }
 
     return (
-        <div className={`fixed right-4 bottom-24 md:right-6 z-[60] bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col transition-all duration-300 border border-slate-200 rounded-md ring-1 ring-white/80 print:hidden ${isMinimized ? 'h-20 w-[min(560px,calc(100vw-2rem))]' : 'h-[min(760px,calc(100vh-4rem))] w-[min(760px,calc(100vw-2rem))]'}`}>
-            <div className="bg-[#281FD0] text-white shrink-0">
+        <div ref={assistantRef} style={positionedStyle} className={`fixed right-4 bottom-24 md:right-6 z-[60] bg-white shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col transition-all duration-300 border border-slate-200 rounded-md ring-1 ring-white/80 print:hidden ${isMinimized ? 'h-20 w-[min(560px,calc(100vw-2rem))]' : 'h-[min(760px,calc(100vh-4rem))] w-[min(760px,calc(100vw-2rem))]'}`}>
+            <div
+                className="bg-[#281FD0] text-white shrink-0 cursor-move"
+                onPointerDown={handleDragStart}
+                onPointerMove={handleDragMove}
+                onPointerUp={handleDragEnd}
+                onPointerCancel={handleDragEnd}
+            >
                 <div className="h-2 bg-[#FFB600]" />
                 <div className="px-6 py-5 flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">

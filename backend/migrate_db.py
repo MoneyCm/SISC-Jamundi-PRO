@@ -1,10 +1,10 @@
-import os
+﻿import os
 import sys
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.orm import sessionmaker
 
 def migrate_data():
-    neon_url = "postgresql://neondb_owner:npg_ZzBiN3DU6dgc@ep-holy-lake-aiso6dd5-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require"
+    neon_url = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
     local_url = "postgresql://sisc_user:sisc_password@db:5432/sisc_jamundi"
     
     print("Connecting to Neon DB...")
@@ -111,3 +111,6 @@ def migrate_data():
 
 if __name__ == "__main__":
     migrate_data()
+
+
+

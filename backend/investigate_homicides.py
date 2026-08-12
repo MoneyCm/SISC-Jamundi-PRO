@@ -1,7 +1,7 @@
-from sqlalchemy import create_engine, text
+﻿from sqlalchemy import create_engine, text
 import os
 
-DATABASE_URL = "postgresql://neondb_owner:npg_ZzBiN3DU6dgc@ep-holy-lake-aiso6dd5-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)
 
@@ -44,3 +44,6 @@ with engine.connect() as conn:
             issues = conn.execute(text("SELECT regla, descripcion, count(*) FROM ingestion_issues WHERE ingestion_id = :id GROUP BY regla, descripcion"), {"id": run.id}).fetchall()
             for issue in issues:
                 print(f"[{issue.regla}] {issue.descripcion} | Total: {issue.count}")
+
+
+

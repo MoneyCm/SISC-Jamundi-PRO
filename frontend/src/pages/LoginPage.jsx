@@ -76,7 +76,7 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
                     <div className="p-8 md:p-10">
                         <div className="flex flex-col items-center mb-10">
                             <div className="bg-primary/5 p-5 rounded-2xl mb-6 flex items-center justify-center">
-                                <img src="/assets/escudo.png" alt="Escudo Jamundí" className="w-16 h-16 object-contain" />
+                                <img src="/assets/escudo-limpio.png" alt="Escudo Jamundí" className="w-16 h-16 object-contain" />
                             </div>
                             <h2 className="text-4xl font-black text-slate-800 font-titles uppercase tracking-tighter">SISC</h2>
                             <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-2">ALCALDÍA DE JAMUNDÍ</p>

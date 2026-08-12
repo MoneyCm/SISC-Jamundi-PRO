@@ -1,7 +1,7 @@
-from sqlalchemy import create_engine, text
+﻿from sqlalchemy import create_engine, text
 import os
 
-DATABASE_URL = "postgresql://neondb_owner:npg_ZzBiN3DU6dgc@ep-holy-lake-aiso6dd5-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)
 
@@ -15,3 +15,6 @@ with engine.connect() as conn:
     res = conn.execute(text("SELECT descripcion, count(*) FROM events WHERE source_name LIKE 'POLICIA_SEMANAL%' GROUP BY descripcion ORDER BY count(*) DESC LIMIT 20")).fetchall()
     for row in res:
         print(f"{row[0]}: {row[1]}")
+
+
+
