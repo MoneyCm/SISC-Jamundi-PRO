@@ -43,8 +43,12 @@ def test_catalog_has_the_five_distinct_source_connectors():
         "OBSERVATORIO_VALLE",
     }
     assert SOURCE_CONNECTORS["POLICIA_JAMUNDI"]["purpose"] == "Fuente operativa principal"
-    assert SOURCE_CONNECTORS["MINDEFENSA"]["purpose"] == "Contraste institucional"
-    assert SOURCE_CONNECTORS["SIEDCO_PUBLICO"]["purpose"] == "Contraste estadistico"
+    assert SOURCE_CONNECTORS["POLICIA_NACIONAL"]["purpose"] == "Contraste mensual oficial de la sabana semanal"
+    assert SOURCE_CONNECTORS["MINDEFENSA"]["purpose"] == "Respaldo historico de Policia Nacional"
+    assert SOURCE_CONNECTORS["POLICIA_NACIONAL"]["action_type"] == "OPEN"
+    assert SOURCE_CONNECTORS["MINDEFENSA"]["action_type"] == "OPEN"
+    assert SOURCE_CONNECTORS["SIEDCO_PUBLICO"]["expected_frequency"] == "Mensual y bajo demanda"
+    assert SOURCE_CONNECTORS["OBSERVATORIO_VALLE"]["expected_frequency"] == "Semanal"
 
 
 def test_freshness_thresholds_are_explicit():
@@ -122,6 +126,25 @@ def test_github_oidc_claims_are_scoped_to_connector_workflow():
 
     with pytest.raises(HTTPException):
         source_center._validate_github_claims({**claims, "ref": "refs/heads/feature"}, "SIEDCO_PUBLICO")
+
+
+@pytest.mark.parametrize(
+    ("connector_code", "repository", "workflow"),
+    [
+        ("POLICIA_NACIONAL", "MoneyCm/monitor-policia", "monitor.yml"),
+        ("MINDEFENSA", "MoneyCm/monitor-mindefensa", "monitor.yml"),
+    ],
+)
+def test_github_oidc_accepts_daily_metadata_monitors(connector_code, repository, workflow):
+    claims = {
+        "repository": repository,
+        "workflow_ref": f"{repository}/.github/workflows/{workflow}@refs/heads/main",
+        "ref": "refs/heads/main",
+        "event_name": "schedule",
+        "runner_environment": "github-hosted",
+    }
+
+    source_center._validate_github_claims(claims, connector_code)
 
 
 def test_github_oidc_verification_uses_expected_issuer_and_audience(monkeypatch):

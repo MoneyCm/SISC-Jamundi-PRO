@@ -7,20 +7,31 @@ El Centro de fuentes consolida el control operativo de los origenes de datos del
 | Codigo | Fuente | Uso en SISC | Actualizacion |
 | --- | --- | --- | --- |
 | `POLICIA_JAMUNDI` | Sabana semanal de la Estacion de Policia | Fuente operativa principal | Carga institucional semanal |
-| `POLICIA_NACIONAL` | Archivos publicos de Policia Nacional | Contraste de archivos publicos | Monitor automatico |
-| `MINDEFENSA` | Estadistica del Ministerio de Defensa | Contraste institucional | Monitor automatico |
-| `SIEDCO_PUBLICO` | Portal publico SIEDCO | Contraste estadistico | Monitor externo cada 12 horas |
-| `OBSERVATORIO_VALLE` | Observatorio del Delito del Valle | Contexto territorial | Monitor externo diario |
+| `POLICIA_NACIONAL` | Registros oficiales de Policia Nacional | Contraste mensual oficial | Revision diaria 07:29; procesa solo cambios |
+| `MINDEFENSA` | Estadistica del Ministerio de Defensa | Respaldo historico de Policia | Revision diaria 07:17; procesa solo cambios |
+| `SIEDCO_PUBLICO` | Portal publico SIEDCO | Validacion mensual | Dia 18 a las 07:53 o ejecucion manual |
+| `OBSERVATORIO_VALLE` | Observatorio del Delito del Valle | Contexto regional para el cierre mensual | Lunes a las 07:41 |
+
+La sabana semanal es la fuente operativa principal. Policia/SIEDCO se usan para
+el contraste mensual oficial, Valle para el contexto regional y MinDefensa como
+respaldo historico. Las cifras de fuentes distintas nunca se suman entre si.
+
+Los monitores diarios consultan primero los metadatos remotos disponibles
+(fecha, tamano, ETag o huella). Solo descargan, procesan y notifican cuando el
+estado remoto cambia. La sabana
+semanal se procesa dentro del SISC o en almacenamiento privado y no se publica
+como artefacto de GitHub Actions.
 
 ## API
 
 - `GET /api/source-center`: resumen institucional de conectores, cortes, calidad y activos.
-- `POST /api/source-center/check/{connector_code}`: revisa MinDefensa o Policia Nacional. Acepta `dataset_code` como parametro opcional para revisar un solo archivo.
+- `POST /api/source-center/check/{connector_code}`: conservado por compatibilidad; las fuentes externas se revisan en sus workflows y responden `409` para evitar procesos duplicados.
 - `POST /api/source-center/heartbeat`: registra el resultado de un monitor externo.
 
 El `heartbeat` puede autenticarse con un usuario operativo, con el encabezado
 `X-SISC-SOURCE-KEY` o mediante un token OIDC de GitHub Actions. Los workflows
-autorizados de `monitor-siedco` y `monitor-valle` usan OIDC con la audiencia
+autorizados de `monitor-mindefensa`, `monitor-policia`, `monitor-siedco` y
+`monitor-valle` usan OIDC con la audiencia
 `sisc-source-center`; el backend valida firma, repositorio, archivo de workflow,
 rama, evento y entorno de ejecucion. No requieren secretos permanentes.
 
@@ -59,4 +70,6 @@ Estados de calidad permitidos: `VALIDATED`, `WARNING`, `INCOMPLETE` y `ERROR`.
 - **Sin revisar**: existe conexion, pero falta corte o comprobacion.
 - **Sin conexion**: el SISC aun no recibe estado de ese monitor.
 
-Los umbrales son mas estrictos para la sabana semanal de Policia Jamundi y mensuales para las fuentes nacionales y territoriales.
+Los umbrales son mas estrictos para la sabana semanal y Valle. Las fuentes
+nacionales mensuales admiten el rezago normal entre el corte estadistico y la
+fecha de publicacion institucional.

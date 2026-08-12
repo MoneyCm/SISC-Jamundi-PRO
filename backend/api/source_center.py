@@ -15,8 +15,6 @@ from api.auth import get_optional_user, institutional_access, log_audit, require
 from core.config import is_strong_secret
 from db.models import User
 from db.session import get_db
-from services.mindefensa_monitor import MindefensaMonitorService
-from services.policia_monitor import PoliceMonitorService
 from services.source_center_service import SOURCE_CONNECTORS, SourceCenterService
 
 
@@ -38,6 +36,18 @@ TRUSTED_GITHUB_WORKFLOWS = {
         "repository": "MoneyCm/monitor-valle",
         "workflow_ref": (
             "MoneyCm/monitor-valle/.github/workflows/extract_jamundi.yml@refs/heads/main"
+        ),
+    },
+    "POLICIA_NACIONAL": {
+        "repository": "MoneyCm/monitor-policia",
+        "workflow_ref": (
+            "MoneyCm/monitor-policia/.github/workflows/monitor.yml@refs/heads/main"
+        ),
+    },
+    "MINDEFENSA": {
+        "repository": "MoneyCm/monitor-mindefensa",
+        "workflow_ref": (
+            "MoneyCm/monitor-mindefensa/.github/workflows/monitor.yml@refs/heads/main"
         ),
     },
 }
@@ -205,42 +215,10 @@ async def check_source_connector(
     current_user: User = Depends(require_role(SOURCE_OPERATION_ROLES)),
 ):
     code = connector_code.strip().upper()
-    if code == "MINDEFENSA":
-        from db.models_mindefensa import MindefensaAsset
-
-        if db.query(MindefensaAsset).count() == 0:
-            MindefensaMonitorService.seed_initial_assets(db)
-        if dataset_code:
-            asset = db.query(MindefensaAsset).filter_by(dataset_code=dataset_code.strip()).first()
-            if asset is None:
-                raise HTTPException(status_code=404, detail="Archivo de fuente no registrado.")
-            result = await MindefensaMonitorService.check_asset(db, asset)
-        else:
-            result = await MindefensaMonitorService.check_all_assets(db)
-    elif code == "POLICIA_NACIONAL":
-        from db.models_policia import PoliceAsset
-
-        if db.query(PoliceAsset).count() == 0:
-            PoliceMonitorService.seed_initial_assets(db)
-        if dataset_code:
-            asset = db.query(PoliceAsset).filter_by(dataset_code=dataset_code.strip()).first()
-            if asset is None:
-                raise HTTPException(status_code=404, detail="Archivo de fuente no registrado.")
-            result = await PoliceMonitorService.check_asset(db, asset)
-        else:
-            result = await PoliceMonitorService.check_all_assets(db)
-    else:
-        raise HTTPException(
-            status_code=409,
-            detail="Esta fuente se actualiza mediante su monitor externo o una carga institucional.",
-        )
-    await log_audit(
-        db,
-        "SOURCE_CONNECTOR_CHECKED",
-        actor_id=str(current_user.id),
-        module="SOURCE_CENTER",
-        target={"connector_code": code, "dataset_code": dataset_code, "result": result},
-        level=2,
-        request=request,
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "Esta fuente se revisa mediante su monitor externo. "
+            "El Centro de fuentes recibe el estado automaticamente."
+        ),
     )
-    return {"result": result, "summary": SourceCenterService.summary(db)}

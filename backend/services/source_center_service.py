@@ -9,8 +9,6 @@ from sqlalchemy.orm import Session
 
 from db.models_hechos_seguridad import HechoSeguridad, IngestionRun
 from db.models_intelligence import NationalCrimeStats
-from db.models_mindefensa import MindefensaAsset
-from db.models_policia import PoliceAsset
 from db.models_source_center import SourceConnectorState
 from services.hechos_metrics import hechos_unicos_expr
 
@@ -33,58 +31,58 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
     "POLICIA_NACIONAL": {
         "name": "Policia Nacional",
         "institution": "Policia Nacional de Colombia",
-        "scope": "Archivos publicos filtrados para Jamundi",
-        "purpose": "Contraste de archivos publicos",
-        "update_mode": "AUTOMATIC",
-        "expected_frequency": "Diaria",
-        "source_url": "https://www.policia.gov.co/index.php/estadistica-delictiva-old",
-        "action_type": "CHECK",
-        "action_label": "Revisar fuente",
+        "scope": "Registros oficiales nacionales filtrados para Jamundi",
+        "purpose": "Contraste mensual oficial de la sabana semanal",
+        "update_mode": "AUTOMATIC_EXTERNAL",
+        "expected_frequency": "Revision diaria; publicacion mensual",
+        "source_url": "https://chat.policia.gov.co/estadistica-delictiva",
+        "action_type": "OPEN",
+        "action_label": "Abrir fuente oficial",
         "dataset_code": None,
-        "fresh_days": 35,
-        "lagged_days": 75,
+        "fresh_days": 55,
+        "lagged_days": 90,
     },
     "MINDEFENSA": {
         "name": "Ministerio de Defensa",
         "institution": "Ministerio de Defensa Nacional",
-        "scope": "Estadistica nacional filtrada para Jamundi",
-        "purpose": "Contraste institucional",
-        "update_mode": "AUTOMATIC",
-        "expected_frequency": "Diaria",
+        "scope": "Series nacionales historicas filtradas para Jamundi",
+        "purpose": "Respaldo historico de Policia Nacional",
+        "update_mode": "AUTOMATIC_EXTERNAL",
+        "expected_frequency": "Revision diaria segun cambios",
         "source_url": "https://www.mindefensa.gov.co/defensa-y-seguridad/datos-y-cifras/informacion-estadistica",
-        "action_type": "CHECK",
-        "action_label": "Revisar fuente",
+        "action_type": "OPEN",
+        "action_label": "Abrir fuente oficial",
         "dataset_code": None,
-        "fresh_days": 35,
-        "lagged_days": 75,
+        "fresh_days": 55,
+        "lagged_days": 90,
     },
     "SIEDCO_PUBLICO": {
         "name": "SIEDCO publico",
         "institution": "Policia Nacional de Colombia",
         "scope": "Portal publico filtrado para Jamundi",
-        "purpose": "Contraste estadistico",
+        "purpose": "Validacion mensual del contraste oficial",
         "update_mode": "AUTOMATIC_EXTERNAL",
-        "expected_frequency": "Cada 12 horas",
+        "expected_frequency": "Mensual y bajo demanda",
         "source_url": "https://portalsiedco.policia.gov.co:4443/extensions/PortalPublico/index.html#/home",
         "action_type": "OPEN",
         "action_label": "Abrir fuente",
         "dataset_code": None,
-        "fresh_days": 35,
-        "lagged_days": 75,
+        "fresh_days": 55,
+        "lagged_days": 90,
     },
     "OBSERVATORIO_VALLE": {
         "name": "Observatorio del Valle",
         "institution": "Observatorio del Delito del Valle",
         "scope": "Contexto territorial de Jamundi",
-        "purpose": "Contexto territorial",
+        "purpose": "Analisis regional para el cierre mensual",
         "update_mode": "AUTOMATIC_EXTERNAL",
-        "expected_frequency": "Diaria",
+        "expected_frequency": "Semanal",
         "source_url": "https://www.observatoriodeldelitovalle.co/",
         "action_type": "OPEN",
         "action_label": "Abrir fuente",
         "dataset_code": None,
-        "fresh_days": 35,
-        "lagged_days": 75,
+        "fresh_days": 10,
+        "lagged_days": 24,
     },
 }
 
@@ -354,8 +352,8 @@ class SourceCenterService:
         states = cls._state_map(db)
         connectors = [
             cls._local_police(db, states.get("POLICIA_JAMUNDI")),
-            cls._asset_connector(db, "POLICIA_NACIONAL", PoliceAsset, states.get("POLICIA_NACIONAL")),
-            cls._asset_connector(db, "MINDEFENSA", MindefensaAsset, states.get("MINDEFENSA")),
+            cls._apply_state(cls._base("POLICIA_NACIONAL"), states.get("POLICIA_NACIONAL")),
+            cls._apply_state(cls._base("MINDEFENSA"), states.get("MINDEFENSA")),
             cls._apply_state(cls._base("SIEDCO_PUBLICO"), states.get("SIEDCO_PUBLICO")),
             cls._apply_state(cls._base("OBSERVATORIO_VALLE"), states.get("OBSERVATORIO_VALLE")),
         ]
