@@ -10,11 +10,13 @@ from sqlalchemy.orm import Session
 from db.models import User
 from db.models_institutional import InstitutionalAgentFinding, InstitutionalAgentRun, InstitutionalDataBatch, InstitutionalIndicator
 from db.session import get_db
-from api.auth import get_current_user
+from api.auth import require_role
 from services.institutional_agent_service import InstitutionalAgentService
 
 router = APIRouter()
 PERIOD_PATTERN = re.compile(r"^20\d{2}-(0[1-9]|1[0-2])$")
+OPERATIONS_ROLES = ["SOURCE_UPLOADER", "STEWARD", "DATA_OWNER", "FUNC_ADMIN", "TI_ADMIN"]
+REVIEW_ROLES = ["STEWARD", "DATA_OWNER", "FUNC_ADMIN", "TI_ADMIN"]
 
 def _validate_temporal_metadata(period: str, cutoff: date):
     if cutoff > date.today():
@@ -68,7 +70,11 @@ def _public_record(batch: InstitutionalDataBatch, indicator: InstitutionalIndica
 
 
 @router.post("/batches", status_code=201)
-def create_batch(payload: BatchInput, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_batch(
+    payload: BatchInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(OPERATIONS_ROLES)),
+):
     reporting_basis = payload.reporting_basis.strip().upper()
     canonical_entity = InstitutionalAgentService.canonical_entity(payload.reporting_entity)
     _validate_temporal_metadata(payload.period, payload.cutoff_date.date())
@@ -124,7 +130,12 @@ def create_batch(payload: BatchInput, db: Session = Depends(get_db), current_use
 
 
 @router.post("/batches/{batch_id}/approve")
-def approve_batch(batch_id: str, notes: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def approve_batch(
+    batch_id: str,
+    notes: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(REVIEW_ROLES)),
+):
     batch = db.query(InstitutionalDataBatch).filter_by(id=batch_id).first()
     if not batch:
         raise HTTPException(status_code=404, detail="Carga no encontrada.")
@@ -165,7 +176,7 @@ def approve_batch(batch_id: str, notes: Optional[str] = None, db: Session = Depe
 async def agent_detect(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(OPERATIONS_ROLES)),
 ):
     content = await file.read()
     if not content:
@@ -185,7 +196,7 @@ async def agent_ingest(
     version: int = Form(1),
     use_cloud_ocr: bool = Form(False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(OPERATIONS_ROLES)),
 ):
     reporting_basis = reporting_basis.strip().upper()
     program = program.strip().upper()
@@ -231,7 +242,7 @@ async def agent_ingest(
 def agent_run_detail(
     run_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(OPERATIONS_ROLES)),
 ):
     run = db.query(InstitutionalAgentRun).filter_by(id=run_id).first()
     if not run:
@@ -273,7 +284,7 @@ def resolve_finding(
     finding_id: str,
     payload: FindingResolution,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(REVIEW_ROLES)),
 ):
     finding = db.query(InstitutionalAgentFinding).filter_by(id=finding_id).first()
     if not finding:
@@ -290,7 +301,12 @@ def resolve_finding(
     return {"id": str(finding.id), "resolved": True, "run_status": run.status if run else None}
 
 @router.post("/batches/{batch_id}/reject")
-def reject_batch(batch_id: str, notes: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def reject_batch(
+    batch_id: str,
+    notes: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(REVIEW_ROLES)),
+):
     batch = db.query(InstitutionalDataBatch).filter_by(id=batch_id).first()
     if not batch:
         raise HTTPException(status_code=404, detail="Carga no encontrada.")
@@ -319,7 +335,10 @@ def public_indicators(program: Optional[str] = None, reporting_entity: Optional[
 
 
 @router.get("/batches")
-def list_batches(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_batches(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(OPERATIONS_ROLES)),
+):
     batches = db.query(InstitutionalDataBatch).order_by(InstitutionalDataBatch.created_at.desc()).all()
     items = []
     for batch in batches:

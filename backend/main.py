@@ -9,8 +9,9 @@ import uvicorn
 import logging
 import traceback
 import os
-from datetime import datetime
+import uuid
 from dotenv import load_dotenv
+from core.config import get_cors_origins
 
 # Cargar variables de entorno desde .env (Solo para local)
 load_dotenv()
@@ -89,28 +90,23 @@ async def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, HTTPException):
         return await http_exception_handler(request, exc)
     
-    print(f"CRITICAL ERROR: {str(exc)}")
-    logger.error(f"Error fatal: {str(exc)}")
-    error_trace = traceback.format_exc()
-    logger.error(error_trace)
-    
-    # Escribir a un archivo para que yo pueda leerlo
-    with open("fatal_errors.log", "a", encoding="utf-8") as f:
-        f.write(f"\n--- {datetime.now()} ---\n")
-        f.write(f"URL: {request.url}\n")
-        f.write(error_trace)
-        f.write("\n" + "="*50 + "\n")
+    incident_id = uuid.uuid4().hex[:12]
+    logger.exception(
+        "Error no controlado [%s] en %s %s",
+        incident_id,
+        request.method,
+        request.url.path,
+    )
 
     return JSONResponse(
         status_code=500,
-        content={"detail": "Error interno del servidor", "error": str(exc)},
-        headers={"Access-Control-Allow-Origin": "*"} # Forzar CORS en errores
+        content={"detail": "Error interno del servidor", "incident_id": incident_id},
     )
 
 # Configuración CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_cors_origins(),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -2,9 +2,22 @@
 
 **Fecha de auditoria:** 12 de agosto de 2026
 
-**Estado:** propuesta de arquitectura; no autoriza eliminaciones ni cambios de datos
+**Estado:** hoja de ruta aprobada; Fase 0 en ejecucion
 
 **Decision central:** el SISC sera el sistema institucional de registro, calidad, gobierno y publicacion. La IA sera una herramienta asistiva sobre datos aprobados, no la fuente oficial ni quien aprueba decisiones.
+
+## Estado de ejecucion
+
+**Completado el 12 de agosto de 2026:**
+
+- la generacion publica de SISC en cifras produce solo una vista previa; guardar un borrador exige sesion y rol autorizado;
+- el historial de publicaciones, analitica interna, expedientes, calidad y aprobaciones institucionales quedaron protegidos por nivel o rol;
+- el disparador automatico de reportes falla cerrado y acepta solamente una sesion autorizada o una llave de servicio;
+- CORS usa origenes explicitos, las claves inseguras dejaron de tener valores predeterminados conocidos y los errores publicos ya no exponen excepciones internas;
+- los formularios ciudadanos y el chat tienen limites de entrada, y los contratos criticos cuentan con pruebas de autorizacion;
+- la eliminacion completa de la bodega quedo limitada a `TI_ADMIN`, exige una frase de confirmacion y genera auditoria de nivel restringido.
+
+**Pendiente para cerrar la Fase 0:** telemetria de uso sin datos personales, propietario formal por fuente/publicacion y decision sobre cookies seguras para la sesion web.
 
 ## 1. Hallazgos del inventario
 

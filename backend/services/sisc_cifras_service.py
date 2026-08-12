@@ -353,7 +353,7 @@ class SiscCifrasService:
         source_codes: Optional[Sequence[str]],
         max_insights: int,
         created_by: Optional[str],
-        save_history: bool = True,
+        save_history: bool = False,
     ) -> Dict[str, Any]:
         start, end = cls.period_bounds(edition_type, period_start, period_end)
         prev_start, prev_end, comparison_label, resolved_comparison_mode = cls.comparison_bounds(
@@ -397,12 +397,17 @@ class SiscCifrasService:
             "governance": {
                 "public_only": True,
                 "human_review_required": True,
+                "history_saved": False,
                 "privacy_note": "Solo se usan indicadores agregados y clasificados como PUBLICO.",
             },
         }
 
         if save_history:
+            publication_id = uuid4()
+            publication["id"] = str(publication_id)
+            publication["governance"]["history_saved"] = True
             row = SiscCifrasPublication(
+                id=publication_id,
                 title=publication["title"],
                 edition_type=edition_type,
                 period_start=start,
@@ -414,7 +419,6 @@ class SiscCifrasService:
             db.add(row)
             db.commit()
             db.refresh(row)
-            publication["id"] = str(row.id)
 
         return publication
 
@@ -461,6 +465,7 @@ class SiscCifrasService:
             "governance": {
                 "public_only": True,
                 "human_review_required": True,
+                "history_saved": False,
                 "privacy_note": "Modo degradado sin datos. No publicar esta pieza.",
             },
         }

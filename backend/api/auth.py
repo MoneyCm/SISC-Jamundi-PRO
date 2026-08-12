@@ -95,20 +95,11 @@ async def get_optional_user(
     request: Request,
     db: Session = Depends(get_db),
 ) -> Optional[User]:
-    """
-    Intenta obtener el usuario desde:
-    - Authorization: Bearer <token>
-    - ?token=<token> (para descargas tokenizadas si las usas)
-    """
-    token = None
+    """Obtiene una sesion opcional solo desde Authorization: Bearer."""
     auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header.split(" ", 1)[1]
-    else:
-        token = request.query_params.get("token")
-
-    if not token:
+    if not auth_header or not auth_header.startswith("Bearer "):
         return None
+    token = auth_header.split(" ", 1)[1]
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

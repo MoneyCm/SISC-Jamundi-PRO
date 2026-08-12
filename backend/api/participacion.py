@@ -2,21 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.models import get_db, Proposal, SafetyFront, SecureReport, User
 from api.auth import require_role
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, date, time
+import logging
 import uuid
 
 router = APIRouter()
+logger = logging.getLogger("sisc_api")
 
 # --- Proposals ---
 
 class ProposalCreate(BaseModel):
-    title: str
-    description: str
-    category: str
-    barrio: str
-    author_name: Optional[str] = None
+    title: str = Field(min_length=3, max_length=140)
+    description: str = Field(min_length=10, max_length=3000)
+    category: str = Field(min_length=2, max_length=80)
+    barrio: str = Field(min_length=2, max_length=120)
+    author_name: Optional[str] = Field(default=None, max_length=120)
 
 class ProposalPublicResponse(BaseModel):
     id: uuid.UUID
@@ -71,10 +73,10 @@ def get_proposals(db: Session = Depends(get_db)):
 # --- Safety Fronts (Frentes de Seguridad) ---
 
 class SafetyFrontCreate(BaseModel):
-    name: str
-    barrio: str
-    leader_name: str
-    contact_phone: str
+    name: str = Field(min_length=3, max_length=140)
+    barrio: str = Field(min_length=2, max_length=120)
+    leader_name: str = Field(min_length=3, max_length=120)
+    contact_phone: str = Field(min_length=7, max_length=30)
 
 class SafetyFrontPublicResponse(BaseModel):
     id: uuid.UUID
@@ -124,14 +126,14 @@ def get_safety_fronts(db: Session = Depends(get_db)):
 # --- Secure Reports (Reporte Seguro) ---
 
 class SecureReportCreate(BaseModel):
-    tipo: str
-    barrio: str
-    fecha: str
-    hora: str
-    descripcion: str
+    tipo: str = Field(min_length=2, max_length=100)
+    barrio: str = Field(min_length=2, max_length=120)
+    fecha: str = Field(min_length=10, max_length=10)
+    hora: str = Field(min_length=5, max_length=5)
+    descripcion: str = Field(min_length=10, max_length=4000)
     es_anonimo: bool
-    nombre: Optional[str] = None
-    contacto: Optional[str] = None
+    nombre: Optional[str] = Field(default=None, max_length=120)
+    contacto: Optional[str] = Field(default=None, max_length=160)
 
 class SecureReportResponse(BaseModel):
     id: uuid.UUID
@@ -169,7 +171,8 @@ def create_secure_report(report: SecureReportCreate, db: Session = Depends(get_d
         return db_report
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Error al crear reporte: {str(e)}")
+        logger.exception("No se pudo crear el reporte ciudadano seguro")
+        raise HTTPException(status_code=400, detail="No se pudo crear el reporte. Revise los datos enviados.")
 
 
 @router.get("/admin/bandeja", response_model=dict)

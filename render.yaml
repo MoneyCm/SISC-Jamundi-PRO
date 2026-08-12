@@ -17,6 +17,14 @@ services:
         value: 3.11.9
       - key: PORT
         value: 10000
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SISC_REPORT_TRIGGER_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://sisc-frontend.onrender.com
       - key: AI_PROVIDER
         value: GEMINI
       - key: GEMINI_API_KEY

@@ -6,6 +6,8 @@ from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicat
 from services.institutional_agent_service import InstitutionalAgentService
 from services.hechos_metrics import hechos_unicos_expr
 from sqlalchemy import Integer, cast, func
+from pydantic import BaseModel, Field
+from typing import List
 import os
 import re
 import httpx
@@ -70,6 +72,18 @@ NON_PUBLIC_TERRITORY_VALUES = {
     "NO REGISTRA",
     "N/A",
 }
+
+
+class CitizenChatMessage(BaseModel):
+    sender: str = Field(default="", max_length=20)
+    text: str = Field(default="", max_length=1000)
+
+
+class CitizenChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+    history: List[CitizenChatMessage] = Field(default_factory=list, max_length=8)
+
+
 NON_PUBLIC_TERRITORY_PATTERNS = (
     "PENDIENTE",
     "POR ASIGNAR",
@@ -674,8 +688,7 @@ async def get_ai_insights(db: Session = Depends(get_db)):
         print(f"Error con IA ({AI_PROVIDER}): {e}")
         return {
             "insight": f"El analista del SISC ({AI_PROVIDER}) estÃ¡ saturado. Reintentando en breve...",
-            "status": "error",
-            "detail": str(e)
+            "status": "error"
         }
 
 from services.alert_engine import AlertEngine
@@ -701,13 +714,14 @@ async def get_ai_alerts(db: Session = Depends(get_db)):
         print(f"Error en SAT: {e}")
         raise HTTPException(status_code=500, detail="Error al generar alertas del sistema.")
 @router.post("/chat_ciudadano")
-async def citizen_chat(data: dict, db: Session = Depends(get_db)):
+async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
     """
     Chatbot pÃºblico para ciudadanos: Proporciona informaciÃ³n sobre rutas y convivencia.
     Ahora incluye contexto de datos reales para responder preguntas estadÃ­sticas bÃ¡sicas.
     """
-    user_message = data.get("message", "")
-    conversation_text = _conversation_text(data)
+    payload = data.model_dump()
+    user_message = data.message.strip()
+    conversation_text = _conversation_text(payload)
     if not user_message:
         return {"response": "Hola, Â¿en quÃ© puedo ayudarte?"}
 

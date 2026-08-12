@@ -222,7 +222,7 @@ const App = () => {
         case 'sisc-cifras':
           return <>
             <PublicPortalHeader currentPage="sisc-cifras" onNavigate={navigatePublic} onLoginClick={() => setAppMode('login')} />
-            <SiscCifras />
+            <SiscCifras publicMode />
           </>;
         case 'public-measures':
           return <PublicMeasures onBack={() => navigatePublic('hub')} />;
@@ -236,8 +236,6 @@ const App = () => {
           return <SecureReporting onBack={() => navigatePublic('hub')} />;
         case 'participation':
           return <CommunityParticipation onBack={() => navigatePublic('hub')} />;
-        case 'intelligence':
-          return <IntelligenceModule />;
         case 'educational':
           return <div className="p-20 text-center">Módulo Educativo en Desarrollo</div>;
         case 'pqr':
@@ -264,7 +262,7 @@ const App = () => {
       case 'reports':
         return <ReportsPage />;
       case 'data':
-        return <DataPage />;
+        return <DataPage userRoles={userRoles} />;
       case 'monitoring': // Added new case for monitoring (MinDefensa)
         return <MindefensaMonitor onIngest={handleIngestDataset} />;
       case 'police_monitor': // New case for Police assets monitor

@@ -850,7 +850,7 @@ const SlidePreview = ({ slide, publication }) => {
   );
 };
 
-const SiscCifras = () => {
+const SiscCifras = ({ publicMode = false }) => {
   const [edition, setEdition] = useState('weekly');
   const [comparisonMode, setComparisonMode] = useState('auto');
   const [periodStart, setPeriodStart] = useState(sevenDaysAgoIso());
@@ -893,7 +893,7 @@ const SiscCifras = () => {
           comparison_mode: comparisonMode,
           source_codes: selectedSources,
           max_insights: 5,
-          save_history: true,
+          save_history: !publicMode,
         }),
       });
       if (!response.ok) throw new Error(await responseError(response, 'No se pudo generar SISC en cifras.'));
@@ -1172,7 +1172,7 @@ const SiscCifras = () => {
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado</p>
-                  <p className="mt-2 flex items-center gap-2 text-lg font-black text-emerald-700"><CheckCircle2 size={20} /> Borrador</p>
+                  <p className="mt-2 flex items-center gap-2 text-lg font-black text-emerald-700"><CheckCircle2 size={20} /> {publication.governance?.history_saved ? 'Borrador guardado' : 'Vista previa'}</p>
                 </div>
               </section>
 

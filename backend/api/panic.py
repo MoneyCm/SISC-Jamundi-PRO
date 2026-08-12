@@ -112,7 +112,7 @@ async def create_panic_alert(
         print(f"CRITICAL ERROR EN PANIC: {str(e)}")
         print(traceback.format_exc())
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error procesando alerta: {str(e)}")
+        raise HTTPException(status_code=500, detail="No se pudo procesar la alerta.")
 
 @router.get("/history")
 def get_panic_history(

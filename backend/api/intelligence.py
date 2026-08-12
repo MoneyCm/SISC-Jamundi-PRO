@@ -5,7 +5,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from db.models import get_db
-from api.auth import get_current_user, get_optional_user, log_audit, require_role, institutional_access
+from api.auth import get_optional_user, log_audit, require_role, institutional_access
 from db.models import User
 from db.models_intelligence import (
     NationalCrimeStats,
@@ -27,12 +27,14 @@ from services.report_automation_service import ReportAutomationService
 from services.alerts_rnmc import generate_rnmc_alerts
 from services.alerts_prioritizer import compute_action_score, get_scoring_config
 from services.ai_prioritizer import build_ai_rationale
+from core.config import is_strong_secret
 try:
     from weasyprint import HTML, CSS
 except Exception as e:
     print(f"[AVISO] WeasyPrint no disponible en inteligencia: {e}")
 import logging
 import hashlib
+import hmac
 import json
 import os
 from datetime import datetime
@@ -43,9 +45,31 @@ from uuid import UUID
 
 router = APIRouter(tags=["Intelligence"])
 logger = logging.getLogger("sisc_api")
+REPORT_TRIGGER_ROLES = {"TI_ADMIN", "FUNC_ADMIN", "ANALYST"}
+
+
+def _authorize_report_trigger(request: Request, user: Optional[User]) -> str:
+    role_codes = {role.code for role in (user.roles or [])} if user else set()
+    if role_codes.intersection(REPORT_TRIGGER_ROLES):
+        return "USER"
+
+    expected_key = os.getenv("SISC_REPORT_TRIGGER_KEY", "").strip()
+    if not is_strong_secret(expected_key):
+        raise HTTPException(
+            status_code=503,
+            detail="La automatizacion de reportes no esta configurada.",
+        )
+
+    provided_key = request.headers.get("X-API-KEY", "")
+    if not provided_key or not hmac.compare_digest(provided_key, expected_key):
+        raise HTTPException(status_code=403, detail="Acceso denegado.")
+    return "SERVICE"
 
 @router.get("/executive-brief")
-async def get_executive_brief(db: Session = Depends(get_db)):
+async def get_executive_brief(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     """
     Retorna un resumen ejecutivo ágil con IA y fechas de corte para Jamundí.
     """
@@ -267,7 +291,7 @@ async def upload_intelligence_file(
         log_entry.fecha_fin = datetime.utcnow()
         db.commit()
         logger.error(f"Fallo crítico en ingestión: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="No se pudo procesar el archivo de inteligencia.")
 
 @router.post("/ingest")
 async def trigger_ingestion(
@@ -298,7 +322,8 @@ async def get_crime_comparison(
     anio: int = None,
     semana: int = None,
     mes: int = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Retorna comparativo automático (WoW/MoM y YoY) para una fuente.
@@ -318,7 +343,8 @@ async def get_crime_comparison(
 async def get_crime_ytd(
     source_id: str = "SEM_POLICIA",
     anio: int = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Retorna comparativo YTD (Year-To-Date) para una fuente.
@@ -331,7 +357,8 @@ async def get_crime_accumulated(
     source_id: str = "SEM_POLICIA",
     start_mm_dd: str = "01-01",
     end_mm_dd: str = "12-31",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Acumulado de un periodo específico para todos los años disponibles.
@@ -456,7 +483,8 @@ async def get_rnmc_backlog(
     localidad: str = None,
     page: int = 1,
     page_size: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Lista medidas filtrables (backlog) para la UI operativa.
@@ -469,7 +497,8 @@ async def get_rnmc_backlog(
 async def get_rnmc_history(
     source_id: str = "INSPECCION_MEDIDAS_RNMC",
     event_fingerprint: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Retorna el historial de cambios de estado para una medida específica.
@@ -494,17 +523,29 @@ class TriggerReportRequest(BaseModel):
 async def trigger_auto_reports(
     req: TriggerReportRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """
     Dispara la generación de reportes automáticos (Protegido por API Key).
     Incluye soporte para periodos específicos (ej. 2026-W08).
     """
-    api_key = request.headers.get("X-API-KEY")
-    expected_key = os.getenv("SISC_REPORT_TRIGGER_KEY")
-    
-    if expected_key and api_key != expected_key:
-        raise HTTPException(status_code=403, detail="Acceso denegado: API Key inválida o no configurada")
+    authorization_mode = _authorize_report_trigger(request, current_user)
+    trusted_actor = current_user.username if current_user else "SYSTEM_CRON"
+    await log_audit(
+        db,
+        "AUTOMATED_REPORT_TRIGGERED",
+        actor_id=str(current_user.id) if current_user else None,
+        module="REPORTS",
+        target={
+            "type": req.type,
+            "source_id": req.source_id,
+            "period": req.period,
+            "mode": authorization_mode,
+        },
+        level=2,
+        request=request,
+    )
 
     # Parsing de periodo (opcional)
     anio, valor = None, None
@@ -537,11 +578,11 @@ async def trigger_auto_reports(
     else:
         if req.type in ["all", "weekly"]:
             results["weekly"] = ReportAutomationService.run_weekly_report(
-                db, req.source_id, forces=req.force, forced_by=req.forced_by, forced_reason=req.forced_reason
+                db, req.source_id, forces=req.force, forced_by=trusted_actor, forced_reason=req.forced_reason
             )
         if req.type in ["all", "monthly"]:
             results["monthly"] = ReportAutomationService.run_monthly_report(
-                db, req.source_id, forces=req.force, forced_by=req.forced_by, forced_reason=req.forced_reason
+                db, req.source_id, forces=req.force, forced_by=trusted_actor, forced_reason=req.forced_reason
             )
         
     return {"status": "success", "executed": {k: v.id if v else None for k, v in results.items()}, "source": req.source_id}
@@ -550,7 +591,8 @@ async def trigger_auto_reports(
 async def get_report_history(
     type: str = None,
     source_id: str = "SEM_POLICIA",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
 ):
     from db.models_intelligence import ReportRun
     query = db.query(ReportRun).filter(ReportRun.source_id == source_id)
@@ -571,7 +613,7 @@ async def list_alerts(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(institutional_access)
 ):
     """
     Lista las alertas del muro de inteligencia, ordenadas por score (Fase 3).
@@ -693,7 +735,7 @@ async def export_alerts_excel(
     to_date: Optional[str] = Query(None, alias="to"),
     limit: int = 500,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Genera y retorna un XLSX en streaming con el ranking de alertas.
@@ -825,7 +867,7 @@ async def export_alerts_csv(
     to_date: Optional[str] = Query(None, alias="to"),
     limit: int = 500,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Exportación rápida en CSV del ranking de alertas.
@@ -1204,7 +1246,7 @@ async def prioritize_alerts(
     ai: bool = True,
     bg_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(institutional_access)
 ):
     """
     Fase 3: Ejecuta el scoring de prioridad para todas las alertas OPEN de una fuente.
@@ -1233,7 +1275,7 @@ async def prioritize_alerts(
 async def create_alerts_snapshot(
     req: AlertsSnapshotRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Crea un snapshot inmutable del ranking de alertas (sin PII) y lo persiste en DB.
@@ -1281,7 +1323,7 @@ async def create_alerts_snapshot(
 async def get_alert_detail(
     alert_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(institutional_access)
 ):
     alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == alert_id).first()
     if not alert:
@@ -1292,7 +1334,7 @@ async def get_alert_detail(
 async def acknowledge_alert(
     alert_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(institutional_access)
 ):
     alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == alert_id).first()
     if not alert:
@@ -1306,7 +1348,7 @@ async def acknowledge_alert(
 async def dismiss_alert(
     alert_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(institutional_access)
 ):
     alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == alert_id).first()
     if not alert:
@@ -1319,7 +1361,7 @@ async def dismiss_alert(
 @router.post("/alerts/rnmc/generate")
 async def trigger_rnmc_alerts(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) # Solo usuarios autenticados
+    current_user: User = Depends(institutional_access)
 ):
     """
     Genera alertas manualmente para el módulo RNMC.
@@ -1333,7 +1375,7 @@ async def export_alerts_pdf(
     req: AlertsPdfExportRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Genera un PDF ejecutivo on-demand para el ranking de alertas.
@@ -1422,7 +1464,7 @@ async def export_alerts_pdf(
 
 @router.get("/alerts/scoring-config")
 async def get_alerts_scoring_config(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(institutional_access),
 ):
     """
     Devuelve la configuración actual de scoring (pesos y umbrales) para transparencia en UI.
@@ -1432,7 +1474,8 @@ async def get_alerts_scoring_config(
 @router.get("/reports/{report_run_id}")
 async def get_report_detail(
     report_run_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
 ):
     report = db.query(ReportRun).filter(ReportRun.id == report_run_id).first()
     if not report:
@@ -1444,7 +1487,7 @@ async def generate_report_pdf(
     report_run_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(institutional_access)
 ):
     """
     Genera PDF si no existe y devuelve metadatos + enlace seguro.
@@ -1576,7 +1619,11 @@ async def notify_report_results(
     return result
 
 @router.get("/ingest/status/{log_id}")
-async def get_ingestion_status(log_id: int, db: Session = Depends(get_db)):
+async def get_ingestion_status(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     """
     Retorna el estado de una tarea de ingesta en background.
     """
@@ -1779,7 +1826,10 @@ def run_ingestion_process(log_id: int):
         db_bg.close()
 
 @router.get("/executive-brief")
-async def get_executive_brief(db: Session = Depends(get_db)):
+async def get_executive_brief(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     """
     Retorna un resumen ejecutivo ágil con IA y fechas de corte para Jamundí.
     """
@@ -1805,7 +1855,12 @@ async def get_executive_brief(db: Session = Depends(get_db)):
     }
 
 @router.get("/stats")
-async def get_national_stats(municipio: str = "JAMUNDI", anio: int = 2025, db: Session = Depends(get_db)):
+async def get_national_stats(
+    municipio: str = "JAMUNDI",
+    anio: int = 2025,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     """
     Retorna estadísticas comparativas reales basadas en los datos cargados.
     """
@@ -1909,7 +1964,10 @@ async def get_national_stats(municipio: str = "JAMUNDI", anio: int = 2025, db: S
     }
 
 @router.get("/municipios")
-async def get_available_municipios(db: Session = Depends(get_db)):
+async def get_available_municipios(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     """
     Retorna la lista de municipios que tienen datos cargados en el sistema.
     """
@@ -1927,7 +1985,10 @@ async def get_available_municipios(db: Session = Depends(get_db)):
     ]
 
 @router.get("/years")
-async def get_available_years(db: Session = Depends(get_db)):
+async def get_available_years(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     """
     Retorna la lista de años únicos que tienen datos cargados en el sistema.
     """
@@ -2062,11 +2123,11 @@ async def get_intelligence_insights(
             return {"insight": insight_text, "provider": AI_PROVIDER}
         except Exception as e:
             logger.error(f"Error generando insights de inteligencia (API IA): {e}")
-            return {"insight": "Análisis estratégico no disponible temporalmente debido a un error de conexión con el motor de IA o al alcanzar el límite de la cuota gratuita.", "error": str(e)}
+            return {"insight": "Análisis estratégico no disponible temporalmente debido a un error de conexión con el motor de IA o al alcanzar el límite de la cuota gratuita."}
 
     except Exception as general_err:
         logger.error(f"Error estructurando datos locales para insights: {general_err}")
-        return {"insight": "Error interno al preparar los datos estratégicos. Por favor verifique la conexión a la base de datos.", "error": str(general_err)}
+        return {"insight": "Error interno al preparar los datos estratégicos. Por favor verifique la conexión a la base de datos."}
 
 @router.get("/public/rnmc-history")
 def public_rnmc_history():

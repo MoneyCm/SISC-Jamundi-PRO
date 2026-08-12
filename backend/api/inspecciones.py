@@ -6,16 +6,17 @@ from services.inspeccion_service import InspeccionService
 from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion
 from sqlalchemy import func, text
 
-from api.auth import get_current_user
+from api.auth import institutional_access, require_role
 from db.models import User
 
 router = APIRouter()
+INSPECTIONS_UPLOAD_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
 
 @router.post("/upload")
 async def upload_inspecciones(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(INSPECTIONS_UPLOAD_ROLES)),
 ):
     """Carga y procesa el archivo Excel de Medidas Gestionadas."""
     if not file.filename.endswith(('.xlsx', '.xls')):
@@ -33,7 +34,7 @@ def get_expedientes(
     limit: int = 100,
     localidad: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(institutional_access),
 ):
     # Usar query cruda para extraer lat/lng de PostGIS
     sql = text("""
@@ -59,7 +60,11 @@ def get_expedientes(
     return {"total": total, "items": items}
 
 @router.get("/expedientes/{numero}")
-def get_expediente_detail(numero: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_expediente_detail(
+    numero: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     exp = db.query(InspeccionExpediente).filter_by(numero_expediente=numero).first()
     if not exp:
         raise HTTPException(status_code=404, detail="Expediente no encontrado")
@@ -80,7 +85,10 @@ def get_expediente_detail(numero: str, db: Session = Depends(get_db), current_us
     }
 
 @router.get("/geojson")
-def get_inspecciones_geojson(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_inspecciones_geojson(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     """Retorna los expedientes georreferenciados en formato GeoJSON."""
     sql = text("""
         SELECT id, numero_expediente, localidad, 
@@ -112,7 +120,10 @@ def get_inspecciones_geojson(db: Session = Depends(get_db), current_user: User =
     }
 
 @router.get("/stats/summary")
-def get_inspecciones_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_inspecciones_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
     # KPIs rápidos
     total_exp = db.query(InspeccionExpediente).count()
     total_med = db.query(InspeccionMedida).count()

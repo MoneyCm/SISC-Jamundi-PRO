@@ -9,7 +9,7 @@ import { API_BASE_URL } from '../utils/apiConfig';
 const API_URL = `${API_BASE_URL}/analitica/estadisticas/resumen`;
 const INGESTA_URL = `${API_BASE_URL}/ingesta/upload`;
 
-const DataPage = () => {
+const DataPage = ({ userRoles = [] }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -27,6 +27,7 @@ const DataPage = () => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const canClearDatabase = userRoles.includes('TI_ADMIN');
 
     // Fetch data on mount
     useEffect(() => {
@@ -86,7 +87,10 @@ const DataPage = () => {
     };
 
     const handleClearDatabase = async () => {
-        if (!confirm('¿Estás seguro de que deseas eliminar TODOS los incidentes? Esta acción no se puede deshacer.')) return;
+        const confirmation = window.prompt(
+            'Esta accion elimina TODOS los incidentes y no se puede deshacer. Escribe: ELIMINAR TODOS LOS EVENTOS'
+        );
+        if (confirmation !== 'ELIMINAR TODOS LOS EVENTOS') return;
 
         try {
             const token = localStorage.getItem('token');
@@ -97,7 +101,10 @@ const DataPage = () => {
             }
             const res = await fetch(`${API_BASE_URL}/ingesta/clear`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'X-SISC-CONFIRM': confirmation,
+                }
             });
             if (res.ok) {
                 alert('Base de datos limpiada correctamente.');
@@ -267,13 +274,15 @@ const DataPage = () => {
                     <p className="text-slate-500 text-sm font-medium italic">Gestión de Trazabilidad y Datos - Oficina del Observatorio</p>
                 </div>
                 <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-                    <button
-                        onClick={handleClearDatabase}
-                        className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-red-50 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-100 transition-colors border border-red-100 text-xs font-bold uppercase tracking-wider"
-                    >
-                        <Trash2 size={18} />
-                        <span>Limpiar</span>
-                    </button>
+                    {canClearDatabase && (
+                        <button
+                            onClick={handleClearDatabase}
+                            className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-red-50 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-100 transition-colors border border-red-100 text-xs font-bold uppercase tracking-wider"
+                        >
+                            <Trash2 size={18} />
+                            <span>Limpiar</span>
+                        </button>
+                    )}
                     <label className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-all cursor-pointer shadow-md active:scale-95 text-xs font-bold uppercase tracking-wider">
                         <Upload size={18} />
                         <span>Sincronizar SIEDCO (Excel)</span>

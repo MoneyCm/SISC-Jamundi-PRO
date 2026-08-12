@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Respons
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from db.models import get_db, User
-from api.auth import get_current_user
+from api.auth import require_role
 from services import dq_service
 from db import crud_dq
 from uuid import UUID
@@ -10,13 +10,14 @@ import io
 import json
 
 router = APIRouter()
+DQ_ROLES = ["STEWARD", "FUNC_ADMIN", "TI_ADMIN"]
 
 @router.post("/run")
 async def run_data_quality(
     file: UploadFile = File(...),
     source_name: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(DQ_ROLES)),
 ):
     # Leer el archivo
     content = await file.read()
@@ -46,7 +47,7 @@ def get_reports(
     skip: int = 0, 
     limit: int = 50, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(DQ_ROLES)),
 ):
     return crud_dq.list_dq_reports(db, skip=skip, limit=limit)
 
@@ -54,7 +55,7 @@ def get_reports(
 def get_report(
     report_id: UUID, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(DQ_ROLES)),
 ):
     report = crud_dq.get_dq_report(db, report_id)
     if not report:
@@ -69,7 +70,7 @@ def get_issues(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(DQ_ROLES)),
 ):
     return crud_dq.list_dq_issues(db, report_id, severity, field, skip, limit)
 
@@ -77,7 +78,7 @@ def get_issues(
 def download_json(
     report_id: UUID, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(DQ_ROLES)),
 ):
     report = crud_dq.get_dq_report(db, report_id)
     if not report:
@@ -93,7 +94,7 @@ def download_json(
 def download_excel(
     report_id: UUID, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(DQ_ROLES)),
 ):
     report = crud_dq.get_dq_report(db, report_id)
     if not report:

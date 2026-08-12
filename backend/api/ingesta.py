@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, UploadFile, File, Depends, Header, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from db.models import get_db, Event, EventType, User
@@ -15,7 +15,7 @@ from datetime import datetime
 
 logger = logging.getLogger("sisc_api")
 
-from api.auth import admin_only, analyst_or_admin, ingestion_operator, log_audit, get_current_user
+from api.auth import admin_only, analyst_or_admin, ingestion_operator, log_audit, get_current_user, require_role
 
 router = APIRouter()
 
@@ -115,7 +115,8 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error fatal procesando el archivo: {str(e)}")
+        logger.exception("Error fatal procesando el archivo de ingesta")
+        raise HTTPException(status_code=500, detail="No se pudo procesar el archivo.")
 
 @router.post("/bulk", dependencies=[Depends(analyst_or_admin)])
 async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
@@ -241,12 +242,30 @@ async def bulk_upload(data: List[dict], db: Session = Depends(get_db)):
         "report": report
     }
 
-@router.delete("/clear", dependencies=[Depends(analyst_or_admin)])
-def clear_all_events(db: Session = Depends(get_db)):
-    """Elimina todos los eventos de la base de datos"""
+@router.delete("/clear")
+async def clear_all_events(
+    request: Request,
+    confirmation: str = Header(default="", alias="X-SISC-CONFIRM"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["TI_ADMIN"])),
+):
+    """Elimina todos los eventos tras una confirmacion reforzada y auditada."""
+    if confirmation != "ELIMINAR TODOS LOS EVENTOS":
+        raise HTTPException(status_code=400, detail="La confirmacion reforzada no coincide.")
+
+    deleted_count = db.query(Event).count()
     db.query(Event).delete()
     db.commit()
-    return {"message": "Base de datos de eventos limpiada correctamente"}
+    await log_audit(
+        db,
+        "EVENT_STORE_CLEARED",
+        actor_id=str(current_user.id),
+        module="INGESTA",
+        target={"deleted_count": deleted_count},
+        level=3,
+        request=request,
+    )
+    return {"message": "Base de datos de eventos limpiada correctamente", "deleted_count": deleted_count}
 
 @router.delete("/{event_id}", dependencies=[Depends(analyst_or_admin)])
 def delete_event(event_id: uuid.UUID, db: Session = Depends(get_db)):
@@ -648,7 +667,8 @@ async def upload_with_gate(
         
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error procesando ingesta: {str(e)}")
+        logger.exception("Error procesando la ingesta con control de calidad")
+        raise HTTPException(status_code=500, detail="No se pudo completar la ingesta.")
 
 @router.get("/policia/history")
 def list_sabana_history(

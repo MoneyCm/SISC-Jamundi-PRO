@@ -22,7 +22,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
 
         { id: 'dq', label: 'Calidad (DQ)', icon: ShieldCheck, category: 'OPERACIONES', show: isSteward },
         { id: 'ingesta_universal', label: 'Ingesta Universal', icon: LayoutDashboard, category: 'OPERACIONES', show: isUploader || isSteward },
-        { id: 'institutional_agents', label: 'Agentes institucionales', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward },
+        { id: 'institutional_agents', label: 'Agentes institucionales', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward || isDataOwner },
 
         { id: 'stats', label: 'Estadísticas', icon: BarChart2, category: 'ESTRATEGIA', show: true },
         { id: 'map', label: 'Mapa Interactivo', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },

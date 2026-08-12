@@ -4,6 +4,8 @@ import os
 import logging
 from datetime import datetime
 
+from core.config import is_strong_secret
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cron_reports")
 
@@ -12,11 +14,14 @@ API_BASE = os.getenv("API_URL", "http://localhost:8000")
 API_KEY = os.getenv("SISC_REPORT_TRIGGER_KEY")
 
 def run_trigger(args):
+    if not is_strong_secret(API_KEY):
+        raise RuntimeError("SISC_REPORT_TRIGGER_KEY debe estar configurada para ejecutar reportes automaticos.")
+
     url = f"{API_BASE}/api/intelligence/reports/trigger"
-    params = {
+    payload = {
         "type": args.type,
         "source_id": args.source_id,
-        "force": str(args.force).lower(),
+        "force": args.force,
         "forced_by": args.forced_by,
         "forced_reason": args.forced_reason
     }
@@ -27,7 +32,7 @@ def run_trigger(args):
     
     logger.info(f"Enviando trigger a {url} para tipo='{args.type}'...")
     try:
-        resp = requests.post(url, params=params, headers=headers, timeout=60)
+        resp = requests.post(url, json=payload, headers=headers, timeout=60)
         if resp.status_code == 200:
             logger.info(f"SUCCESS: {resp.json()}")
         else:

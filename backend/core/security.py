@@ -2,11 +2,30 @@ from datetime import datetime, timedelta
 from typing import Optional, Union, Any
 from jose import jwt
 import os
+import logging
+import secrets
 import bcrypt
 from passlib.context import CryptContext
 
+from core.config import is_strong_secret
+
 # Configuración
-SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_key_for_development")
+logger = logging.getLogger("sisc_api")
+
+
+def _load_secret_key() -> str:
+    configured = os.getenv("SECRET_KEY", "").strip()
+    if is_strong_secret(configured):
+        return configured
+
+    logger.warning(
+        "SECRET_KEY no esta configurada o es debil. Se usara una clave efimera; "
+        "las sesiones se invalidaran al reiniciar el proceso."
+    )
+    return secrets.token_urlsafe(64)
+
+
+SECRET_KEY = _load_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 día para desarrollo
 
