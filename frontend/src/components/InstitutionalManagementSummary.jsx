@@ -145,7 +145,7 @@ const InstitutionalManagementSummary = ({
                 <div className="m-5 flex items-start gap-3 border border-red-100 bg-red-50 p-4 text-sm text-red-800">
                     <AlertTriangle size={18} className="shrink-0" />
                     <div className="flex-1"><p className="font-bold">No fue posible consultar estas fuentes.</p><p className="mt-1 text-xs">{error}</p></div>
-                    {onRetry && <button onClick={onRetry} title="Reintentar" className="p-2"><RefreshCw size={16} /></button>}
+                    {onRetry && <button onClick={onRetry} className="inline-flex shrink-0 items-center gap-1.5 px-2 py-1 font-black"><RefreshCw size={15} />Reintentar</button>}
                 </div>
             ) : (
                 <div className="grid xl:grid-cols-2 xl:divide-x divide-slate-200">

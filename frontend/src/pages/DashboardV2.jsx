@@ -45,6 +45,7 @@ const METRIC_DEFINITIONS = [
 
 const parseIso = (value) => new Date(`${value}T00:00:00`);
 const toIso = (value) => value.toISOString().slice(0, 10);
+const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
 const monthRangeFromCutoff = (value) => {
     const cutoff = parseIso(value);
@@ -206,11 +207,29 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 period_end: selectedRange.end,
                 comparison_mode: mode,
             });
-            const summary = await apiJson(`/sisc-cifras/operational-summary?${query.toString()}`);
+            const endpoint = `/sisc-cifras/operational-summary?${query.toString()}`;
+            let summary;
+            let lastError;
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+                try {
+                    summary = await apiJson(endpoint);
+                    break;
+                } catch (requestError) {
+                    lastError = requestError;
+                    const serviceIsUpdating = [404, 502, 503, 504].includes(requestError.status);
+                    if (!serviceIsUpdating || attempt === 2) throw requestError;
+                    await wait(1800 * (attempt + 1));
+                    if (requestId !== managementRequestIdRef.current) return;
+                }
+            }
+            if (!summary) throw lastError || new Error('La fuente no entregó una respuesta válida.');
             if (requestId === managementRequestIdRef.current) setManagementSummary(summary);
         } catch (requestError) {
             if (requestId === managementRequestIdRef.current) {
-                setManagementError(requestError.message || 'No fue posible consultar Inspecciones y Comisarías.');
+                const serviceIsUpdating = [404, 502, 503, 504].includes(requestError.status);
+                setManagementError(serviceIsUpdating
+                    ? 'El servicio de fuentes se está actualizando. Reintente en unos segundos.'
+                    : requestError.message || 'No fue posible consultar Inspecciones y Comisarías.');
             }
         } finally {
             if (requestId === managementRequestIdRef.current) setManagementLoading(false);
