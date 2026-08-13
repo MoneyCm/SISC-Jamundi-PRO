@@ -5,8 +5,9 @@ import CitizenPortalHome from './pages/CitizenPortalHome';
 import PublicPortalHeader from './components/public/PublicPortalHeader';
 import SiscAIChatbot from './components/SiscAIChatbot';
 import { loadPublicDashboard } from './utils/publicDashboardCache';
+import { apiJson, clearStoredSession, SESSION_EXPIRED_EVENT } from './utils/apiClient';
 
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Dashboard = lazy(() => import('./pages/DashboardV2'));
 const MapPage = lazy(() => import('./pages/MapPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const DataPage = lazy(() => import('./pages/DataPage'));
@@ -33,7 +34,7 @@ const SiscCifras = lazy(() => import('./pages/SiscCifras'));
 const RegionalContext = lazy(() => import('./pages/RegionalContext'));
 const RNMCModule = lazy(() => import('./pages/RNMCModule'));
 const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
-const UsersManagement = lazy(() => import('./pages/UsersManagement'));
+const UsersManagement = lazy(() => import('./pages/UsersManagementV2'));
 const AccessRequests = lazy(() => import('./pages/AccessRequests'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
 const InspeccionesModule = lazy(() => import('./pages/InspeccionesModule'));
@@ -61,7 +62,9 @@ const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [userRoles, setUserRoles] = useState([]);
   const [dataLevel, setDataLevel] = useState(1);
+  const [currentUser, setCurrentUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [sessionNotice, setSessionNotice] = useState('');
   const [appMode, setAppMode] = useState('loading'); // Nuevo estado inicial
   const [activePage, setActivePage] = useState('dashboard');
   const [publicActivePage, setPublicActivePage] = useState(() => {
@@ -94,27 +97,52 @@ const App = () => {
   };
 
   useEffect(() => {
-    const initApp = () => {
+    let cancelled = false;
+    const initApp = async () => {
       const storedToken = localStorage.getItem('token');
       if (storedToken) {
         try {
-          const roles = JSON.parse(localStorage.getItem('userRoles') || '[]');
-          const dl = parseInt(localStorage.getItem('dataLevel') || '1');
+          const profile = await apiJson('/auth/me');
+          if (cancelled) return;
+          const roles = Array.isArray(profile.roles) ? profile.roles : [];
+          const dl = Number(profile.data_level_max) || 1;
           setToken(storedToken);
           setUserRoles(roles);
           setDataLevel(dl);
+          setCurrentUser(profile);
           setIsAuthenticated(true);
           setAppMode('authenticated');
-        } catch (e) {
-          localStorage.clear();
-          setAppMode('public');
+          localStorage.setItem('userRoles', JSON.stringify(roles));
+          localStorage.setItem('dataLevel', dl.toString());
+        } catch {
+          clearStoredSession();
+          if (cancelled) return;
+          setSessionNotice('La sesión terminó. Ingrese nuevamente para continuar.');
+          setAppMode('login');
         }
       } else {
         setAppMode('public');
       }
-      setIsLoading(false);
+      if (!cancelled) setIsLoading(false);
     };
     initApp();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      clearStoredSession();
+      setToken(null);
+      setUserRoles([]);
+      setDataLevel(1);
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+      setSessionNotice('La sesión terminó. Ingrese nuevamente para continuar.');
+      setAppMode('login');
+      setActivePage('dashboard');
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, []);
 
   useEffect(() => {
@@ -147,11 +175,13 @@ const App = () => {
     document.querySelector('link[rel="canonical"]')?.setAttribute('href', canonicalUrl.toString());
   }, [appMode, publicActivePage]);
 
-  const handleLoginSuccess = (newToken, roles, dl) => {
+  const handleLoginSuccess = (newToken, roles, dl, profile = null) => {
     setToken(newToken);
     setUserRoles(roles || []);
     setDataLevel(dl || 1);
+    setCurrentUser(profile);
     setIsAuthenticated(true);
+    setSessionNotice('');
     setAppMode('authenticated');
     setActivePage('dashboard');
     localStorage.setItem('token', newToken);
@@ -160,10 +190,12 @@ const App = () => {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
+    clearStoredSession();
     setToken(null);
     setIsAuthenticated(false);
     setUserRoles([]);
+    setDataLevel(1);
+    setCurrentUser(null);
     setAppMode('public');
     navigatePublic('hub');
     setActivePage('dashboard');
@@ -186,6 +218,7 @@ const App = () => {
         <LoginPage
           onLoginSuccess={handleLoginSuccess}
           onBackClick={() => setAppMode('public')}
+          notice={sessionNotice}
         />
       </Suspense>
     );
@@ -251,7 +284,7 @@ const App = () => {
       case 'dashboard':
         return <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;
       case 'users':
-        return <UsersManagement />;
+        return <UsersManagement userRoles={userRoles} currentUser={currentUser} />;
       case 'access_requests':
         return <AccessRequests userRoles={userRoles} />;
       case 'audit':
@@ -297,7 +330,7 @@ const App = () => {
           label={selectedDataset?.label || "Secuestro"}
         />;
       default:
-        return <Dashboard />;
+        return <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;
     }
   };
 
@@ -324,6 +357,7 @@ const App = () => {
       isPublic={isPublic}
       userRoles={userRoles}
       dataLevel={dataLevel}
+      currentUser={currentUser}
     >
       <div className="animate-fade-in h-full">
         <Suspense fallback={<PageLoading />}>{renderContent()}</Suspense>

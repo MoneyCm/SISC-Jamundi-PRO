@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Lock, User, Eye, EyeOff, Loader, ArrowLeft } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import { clearStoredSession } from '../utils/apiClient';
 
-const LoginPage = ({ onLoginSuccess, onBackClick }) => {
+const LoginPage = ({ onLoginSuccess, onBackClick, notice = '' }) => {
     const [formData, setFormData] = useState({ username: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -52,9 +53,10 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
             }
 
             const profile = await profileRes.json();
-            onLoginSuccess(token, profile.roles, profile.data_level_max);
+            onLoginSuccess(token, profile.roles, profile.data_level_max, profile);
 
         } catch (err) {
+            clearStoredSession();
             setError(err.message);
         } finally {
             setLoading(false);
@@ -83,10 +85,10 @@ const LoginPage = ({ onLoginSuccess, onBackClick }) => {
                             <p className="text-slate-500 text-sm font-medium mt-4">Acceso exclusivo personal institucional</p>
                         </div>
 
-                        {error && (
+                        {(error || notice) && (
                             <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold mb-6 border border-red-100 flex items-center gap-3">
                                 <div className="w-1.5 h-1.5 bg-red-600 rounded-full"></div>
-                                {error}
+                                {error || notice}
                             </div>
                         )}
 

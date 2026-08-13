@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from datetime import datetime
 from typing import List, Optional
+import hashlib
 
 from core.security import verify_password, create_access_token, SECRET_KEY, ALGORITHM
 from db.models import get_db, User  # Role es opcional si lo usas en otro lado
@@ -17,6 +18,20 @@ router = APIRouter()
 # OJO: tokenUrl debe coincidir con la ruta real del login en tu app.
 # Como este router se monta en main.py con prefix="/api/auth", tokenUrl debe ser "api/auth/login"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+
+
+def user_session_version(user: User) -> str:
+    """Huella de seguridad: invalida tokens cuando cambian clave, estado, roles o nivel."""
+    role_codes = ",".join(sorted(role.code for role in (user.roles or [])))
+    expires_at = user.expires_at.isoformat() if user.expires_at else ""
+    raw = "|".join([
+        user.password_hash or "",
+        "1" if user.is_active else "0",
+        str(user.data_level_max or 1),
+        role_codes,
+        expires_at,
+    ])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 # ----------------------------
@@ -69,6 +84,7 @@ async def get_current_user(
         username: Optional[str] = payload.get("sub")
         roles: List[str] = payload.get("roles", [])
         data_level: int = payload.get("dl", 1)
+        session_version: Optional[str] = payload.get("uv")
 
         if not username:
             raise credentials_exception
@@ -79,6 +95,9 @@ async def get_current_user(
 
     user = db.query(User).filter(User.username == token_data.username).first()
     if user is None or not user.is_active:
+        raise credentials_exception
+
+    if not session_version or session_version != user_session_version(user):
         raise credentials_exception
 
     # Verificar expiración de cuenta (para N3)
@@ -109,6 +128,8 @@ async def get_optional_user(
 
         user = db.query(User).filter(User.username == username).first()
         if user and user.is_active:
+            if payload.get("uv") != user_session_version(user):
+                return None
             if user.expires_at and user.expires_at < datetime.utcnow():
                 return None
             return user
@@ -146,6 +167,7 @@ async def login(
     # Actualizar last_login
     user.last_login_at = datetime.utcnow()
     db.commit()
+    db.refresh(user)
 
     # Auditoría
     await log_audit(db, "LOGIN", actor_id=str(user.id), module="auth", request=request)
@@ -155,6 +177,7 @@ async def login(
             "sub": user.username,
             "roles": role_codes,
             "dl": user.data_level_max,
+            "uv": user_session_version(user),
         }
     )
     return {"access_token": access_token, "token_type": "bearer"}

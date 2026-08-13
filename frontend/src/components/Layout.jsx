@@ -2,7 +2,7 @@ import React from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
-const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userRoles, dataLevel }) => {
+const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userRoles, dataLevel, currentUser }) => {
     const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
     return (
@@ -27,7 +27,7 @@ const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userR
             />
 
             <div className="flex-1 flex flex-col min-w-0 h-full">
-                <Header onMenuClick={() => setSidebarOpen(true)} isPublic={isPublic} />
+                <Header onMenuClick={() => setSidebarOpen(true)} isPublic={isPublic} currentUser={currentUser} activePage={activePage} />
                 <main className={`flex-1 overflow-y-auto ${isPublic ? 'p-0' : 'p-4 md:p-8'}`}>
                     {children}
                 </main>

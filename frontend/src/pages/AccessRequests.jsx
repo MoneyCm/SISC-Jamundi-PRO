@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, CheckCircle2, XCircle, Info, Calendar, ShieldCheck, User, ShieldAlert, FileText } from 'lucide-react';
-import { API_BASE_URL } from '../utils/apiConfig';
+import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
 
 const AccessRequests = ({ userRoles = [] }) => {
     const [requests, setRequests] = useState([]);
@@ -9,14 +9,12 @@ const AccessRequests = ({ userRoles = [] }) => {
 
     const fetchRequests = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/users/access-requests/pending`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            const data = await res.json();
-            setRequests(data);
+            const data = await apiJson('/users/access-requests/pending');
+            const safeData = Array.isArray(data) ? data : [];
+            setRequests(safeData);
             setStats({
-                pending: data.length,
-                high_level: data.filter(r => r.requested_data_level === 3).length
+                pending: safeData.length,
+                high_level: safeData.filter(r => r.requested_data_level === 3).length
             });
         } catch (err) {
             console.error(err);
@@ -29,21 +27,22 @@ const AccessRequests = ({ userRoles = [] }) => {
 
     const handleApprove = async (id) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/users/access-requests/${id}/approve`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await apiFetch(`/users/access-requests/${id}/approve`, { method: 'POST' });
             if (res.ok) fetchRequests();
             else {
-                const err = await res.json();
-                alert(err.detail || "Error en aprobación");
+                alert(await readApiError(res, 'No fue posible aprobar la solicitud.'));
             }
         } catch (err) { console.error(err); }
     };
 
     const handleReject = async (id) => {
-        // Implementar en backend si es necesario, por ahora solo marcamos como REJECTED
-        alert("Función de rechazo en desarrollo");
+        try {
+            const res = await apiFetch(`/users/access-requests/${id}/reject`, { method: 'POST' });
+            if (res.ok) fetchRequests();
+            else alert(await readApiError(res, 'No fue posible rechazar la solicitud.'));
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     return (

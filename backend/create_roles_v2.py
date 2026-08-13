@@ -42,10 +42,11 @@ def init_db():
             role_map[r_data["code"]] = role
 
         # 2. Crear Administrador Inicial
+        configured_admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
         admin_data = {
             "username": "admin_sisc",
             "email": "admin@jamundi.gov.co",
-            "password": os.getenv("ADMIN_PASSWORD", "admin_password"), 
+            "password": configured_admin_password,
             "full_name": "Administrador de Sistema SISC",
             "role_codes": ["TI_ADMIN", "FUNC_ADMIN", "DATA_OWNER"],
             "data_level_max": 3
@@ -59,6 +60,11 @@ def init_db():
         ).first()
         
         if not admin_user:
+            if len(configured_admin_password) < 12:
+                raise RuntimeError(
+                    "ADMIN_PASSWORD debe configurarse con al menos 12 caracteres "
+                    "para crear el administrador inicial."
+                )
             print(f"[NUEVO] Creando superusuario: {admin_data['username']}")
             hashed_pwd = get_password_hash(admin_data["password"])
             admin_user = User(
@@ -71,26 +77,16 @@ def init_db():
             )
             db.add(admin_user)
             db.flush()
-        else:
-            print(f"[EXISTE] Superusuario encontrado (ID: {admin_user.id}). Asegurando credenciales...")
-            # Forzar username a admin_sisc si era diferente (Migración)
-            if admin_user.username != admin_data["username"]:
-                print(f"[ACTUALIZAR] Migrando username: {admin_user.username} -> {admin_data['username']}")
-                admin_user.username = admin_data["username"]
-            
-            # Asegurar contraseña correcta (admin_password)
-            admin_user.password_hash = get_password_hash(admin_data["password"])
-            admin_user.is_active = True
-            db.flush()
-            
-        # Asignar roles (común para creación y update)
-        current_role_codes = [r.code for r in admin_user.roles]
-        for code in admin_data["role_codes"]:
-            if code not in current_role_codes:
+            for code in admin_data["role_codes"]:
                 role = role_map.get(code)
                 if role:
                     admin_user.roles.append(role)
                     print(f"[ASIGNADO] Rol {code} asignado a {admin_user.username}")
+        else:
+            print(
+                f"[EXISTE] Superusuario encontrado (ID: {admin_user.id}). "
+                "Se conservan su clave, estado y roles actuales."
+            )
         
         db.commit()
 

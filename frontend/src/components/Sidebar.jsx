@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, Settings, ChevronRight, X, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -8,6 +8,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
     const isUploader = userRoles.includes('SOURCE_UPLOADER') || isAdmin;
     const isSteward = userRoles.includes('STEWARD') || isAdmin;
     const isDataOwner = userRoles.includes('DATA_OWNER') || isAdmin;
+    const canApproveAccess = userRoles.includes('FUNC_ADMIN') || userRoles.includes('DATA_OWNER') || userRoles.includes('TI_ADMIN');
 
     const allItems = [
         { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, category: 'HOME', show: true },
@@ -16,6 +17,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'sisc_cifras', label: 'SISC en cifras', icon: Newspaper, category: 'SALIDA', show: isAnalyst || isDirective },
 
         { id: 'users', label: 'Gestión Usuarios', icon: ShieldAlert, category: 'ADMINISTRACIÓN', show: isAdmin },
+        { id: 'access_requests', label: 'Solicitudes de acceso', icon: ClipboardCheck, category: 'ADMINISTRACIÓN', show: canApproveAccess },
 
         { id: 'ingesta_universal', label: 'Ingesta Universal', icon: LayoutDashboard, category: 'OPERACIONES', show: isUploader || isSteward },
         { id: 'institutional_agents', label: 'Agentes institucionales', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward || isDataOwner },
@@ -108,10 +110,6 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
             </nav>
 
             <div className="p-4 border-t border-slate-800/50 relative z-10 space-y-2">
-                <button className="flex items-center space-x-3 text-white/70 hover:text-white hover:bg-white/10 px-4 py-3 rounded-xl transition-all w-full group">
-                    <Settings size={20} className="group-hover:rotate-90 transition-transform duration-500" />
-                    <span className="font-medium">Configuración</span>
-                </button>
                 <button
                     onClick={onLogout}
                     className="flex items-center space-x-3 text-red-300 hover:text-white hover:bg-red-500/20 px-4 py-3 rounded-xl transition-all w-full group"

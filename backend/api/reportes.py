@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from db.models import get_db, Event
+from db.models import get_db, Event, User
 import io
 import os
 from datetime import datetime, date
@@ -18,6 +18,7 @@ from api.ia import call_gemini, call_mistral, AI_PROVIDER
 from db.models_hechos_seguridad import HechoSeguridad
 from services.hechos_metrics import hechos_unicos_expr
 from db.models import EventType
+from api.auth import require_role
 
 router = APIRouter()
 
@@ -33,20 +34,10 @@ async def generar_boletin_pdf(
     fuente: str = Query("MINDEFENSA"),
     fecha_inicio: date = Query(None),
     fecha_fin: date = Query(None),
-    token: str = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ANALYST", "DIRECTIVE", "FUNC_ADMIN"])),
 ):
-    # 1. Seguridad Local/Prod
-    is_local = os.getenv("PORT") == "8000" or "localhost" in str(os.getenv("DATABASE_URL", ""))
-    if not is_local:
-        if token:
-            try:
-                from core.security import decode_access_token
-                decode_access_token(token)
-            except: raise HTTPException(status_code=401, detail="Sesión inválida")
-        else: raise HTTPException(status_code=401)
-
-    # 2. Fechas y Fuente
+    # Fechas y fuente
     if not fecha_inicio: fecha_inicio = date(datetime.now().year, 1, 1)
     if not fecha_fin: fecha_fin = date.today()
 
@@ -283,18 +274,25 @@ async def generar_boletin_pdf(
     )
 @router.get("/generar-boletin-ejecutivo")
 async def generar_boletin_ejecutivo(
-    token: str = Query(None),
-    db: Session = Depends(get_db)
+    fecha_inicio: date = Query(None),
+    fecha_fin: date = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ANALYST", "DIRECTIVE", "FUNC_ADMIN"])),
 ):
     """
     Genera el Boletín Estratégico de la Secretaría de Seguridad con IA.
     """
     # 1. Periodos (Año Actual vs Año Anterior)
-    ahora = datetime.now()
-    inicio_act = date(ahora.year, 1, 1)
-    fin_act = ahora.date()
-    inicio_prev = date(ahora.year - 1, 1, 1)
-    fin_prev = date(ahora.year - 1, ahora.month, ahora.day)
+    fin_act = fecha_fin or date.today()
+    inicio_act = fecha_inicio or date(fin_act.year, 1, 1)
+    if inicio_act > fin_act:
+        raise HTTPException(status_code=400, detail="La fecha inicial no puede ser posterior a la fecha final.")
+    try:
+        inicio_prev = inicio_act.replace(year=inicio_act.year - 1)
+        fin_prev = fin_act.replace(year=fin_act.year - 1)
+    except ValueError:
+        inicio_prev = inicio_act.replace(year=inicio_act.year - 1, day=28)
+        fin_prev = fin_act.replace(year=fin_act.year - 1, day=28)
 
     # 2. Obtener Datos Deduplicados (SAT Logic)
     # Categorías a reportar
@@ -311,7 +309,7 @@ async def generar_boletin_ejecutivo(
 
     prompt_exec = f"""
     Como analista de la Secretaría de Seguridad de Jamundí, resume el panorama de seguridad actual:
-    - Incidentes Totales {ahora.year}: {total_act} (Variación: {var_total:.1f}% vs {ahora.year-1})
+    - Incidentes totales entre {inicio_act.isoformat()} y {fin_act.isoformat()}: {total_act} (Variación: {var_total:.1f}% frente al mismo periodo de {fin_act.year-1})
     - Homicidios: {stats_act.get('HOMICIDIO', 0)}
     - Hurtos: {stats_act.get('HURTO', 0)}
     SÉ BREVE Y ESTRATÉGICO. Máximo 50 palabras. Tono institucional.
@@ -344,25 +342,6 @@ async def generar_boletin_ejecutivo(
     # Resumen Ejecutivo IA
     content.append(Paragraph("PERSPECTIVA ESTRATÉGICA (IA)", ParagraphStyle('H', parent=styles['Heading2'], fontSize=12, textColor=AZUL_VIBRANTE)))
     content.append(Paragraph(insight_exec, insight_style))
-    if monthly_data or zone_data or neighborhood_data:
-        content.append(PageBreak())
-        content.append(Paragraph("DATOS DESTACADOS DEL PERIODO", ParagraphStyle('DetailTitle', parent=styles['Heading2'], fontSize=14, textColor=AZUL_OSCURO, spaceAfter=10)))
-        content.append(Paragraph("Estas tablas amplian el resumen con datos agregados. Para descargar el conjunto completo y reutilizable, use Datos abiertos CSV en el tablero ciudadano.", ParagraphStyle('DetailIntro', parent=styles['Normal'], fontSize=9.5, leading=13, textColor=AZUL_ESTRATEGICO, spaceAfter=12)))
-        month_names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-        def public_table(rows, title, color):
-            table = Table(rows, colWidths=[9*cm, 4*cm])
-            table.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), color), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('ALIGN', (1,0), (-1,-1), 'CENTER'), ('GRID', (0,0), (-1,-1), 0.4, BORDE_SUTIL), ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GRIS_PREMIUM]), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('TOPPADDING', (0,0), (-1,-1), 7), ('BOTTOMPADDING', (0,0), (-1,-1), 7)]))
-            content.append(Paragraph(title, ParagraphStyle(f'{title}Style', parent=styles['Heading2'], fontSize=11, textColor=AZUL_OSCURO, spaceAfter=6)))
-            content.append(table)
-            content.append(Spacer(1, 16))
-        if monthly_data:
-            public_table([["MES", "CASOS UNICOS"]] + [[month_names[int(item.month) - 1], str(item.total)] for item in monthly_data], "TENDENCIA MENSUAL", AZUL_OSCURO)
-        if zone_data:
-            public_table([["ZONA", "CASOS UNICOS"]] + [[str(item.name), str(item.total)] for item in zone_data], "DISTRIBUCION POR ZONA", AZUL_ESTRATEGICO)
-        if neighborhood_data:
-            public_table([["BARRIO PUBLICADO", "CASOS UNICOS"]] + [[str(item.name), str(item.total)] for item in neighborhood_data], "BARRIOS CON DATOS AGREGADOS", AZUL_VIBRANTE)
-            content.append(Paragraph("Solo se incluyen barrios con al menos 3 casos agregados. No se publican direcciones ni registros individuales.", ParagraphStyle('NeighborhoodNote', parent=styles['Normal'], fontSize=8.5, leading=11, textColor=colors.HexColor("#64748b"), spaceBefore=2)))
-
     content.append(Spacer(1, 20))
 
     # Tabla Comparativa Unificada
@@ -389,7 +368,17 @@ async def generar_boletin_ejecutivo(
 
     # Hotspots Territoriales
     content.append(Paragraph("MAPA DE CALOR: ZONAS DE ATENCIÓN", ParagraphStyle('H', parent=styles['Heading2'], fontSize=12)))
-    top_barrios = db.query(HechoSeguridad.barrio_normalizado, hechos_unicos_expr()).filter(HechoSeguridad.fecha_evento >= inicio_act).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).limit(5).all()
+    top_barrios = db.query(HechoSeguridad.barrio_normalizado, hechos_unicos_expr()).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+        HechoSeguridad.fecha_evento >= inicio_act,
+        HechoSeguridad.fecha_evento <= fin_act,
+        HechoSeguridad.barrio_normalizado.isnot(None),
+        HechoSeguridad.barrio_normalizado != "",
+        ~func.upper(HechoSeguridad.barrio_normalizado).like("%PENDIENTE%"),
+        ~func.upper(HechoSeguridad.barrio_normalizado).like("%POR ASIGNAR%"),
+        ~func.upper(HechoSeguridad.barrio_normalizado).like("%NO APLICA%"),
+        ~func.upper(HechoSeguridad.barrio_normalizado).like("%NAN%"),
+    ).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).limit(5).all()
 
     b_data = [["BARRIO / ZONA", "INCIDENTES"]]
     for b_name, b_count in top_barrios:

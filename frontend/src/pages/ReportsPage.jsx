@@ -21,7 +21,7 @@ const ReportsPage = () => {
             if (window.location.hostname === 'localhost' && !baseUrl.startsWith('http')) {
                 baseUrl = 'http://localhost:8000/api';
             }
-            const url = `${baseUrl}/reportes/generar-boletin?fuente=${fuente}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&token=${token}`;
+            const url = `${baseUrl}/reportes/generar-boletin?fuente=${fuente}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
 
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }

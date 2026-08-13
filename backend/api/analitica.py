@@ -19,7 +19,7 @@ import os
 from datetime import date, timedelta
 from typing import Optional, List
 
-from api.auth import get_current_user, get_optional_user, log_audit
+from api.auth import get_current_user, get_optional_user, institutional_access, log_audit
 
 router = APIRouter()
 
@@ -711,7 +711,7 @@ def get_tendencia_delictiva(
     categories: Optional[List[str]] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """Tendencia mensual de delitos desde hechos_seguridad."""
+    """Tendencia por día, semana o mes desde la sábana policial consolidada."""
     MESES_ES = {
         "Jan": "Ene", "Feb": "Feb", "Mar": "Mar", "Apr": "Abr",
         "May": "May", "Jun": "Jun", "Jul": "Jul", "Aug": "Ago",
@@ -728,6 +728,13 @@ def get_tendencia_delictiva(
             intervalo = "week"
 
     homicidio_vals = tuple(CONDUCTA_KEYS['HOMICIDIO'])
+    hurto_vals = tuple({
+        value
+        for key in ('HURTO_PERSONAS', 'HURTO_VEHICULOS', 'HURTO_COMERCIO', 'HURTO_RESIDENCIAS')
+        for value in CONDUCTA_KEYS[key]
+    })
+    vif_vals = tuple(CONDUCTA_KEYS['VIF'])
+    lesiones_vals = tuple(CONDUCTA_KEYS['LESIONES'])
 
     snapshot_id = None
     source_table = "hechos_seguridad"
@@ -735,15 +742,21 @@ def get_tendencia_delictiva(
 
     query_str = f"""
         SELECT
-            TO_CHAR(date_trunc('{intervalo}', fecha_evento), 'Mon YYYY') as etiqueta,
+            date_trunc('{intervalo}', fecha_evento) as full_date,
             COUNT(DISTINCT {identity_expr}) FILTER (WHERE conducta_estandar IN :hom_vals) as homicidios,
-            COUNT(DISTINCT {identity_expr}) FILTER (WHERE conducta_estandar NOT IN :hom_vals) as otros,
-            date_trunc('{intervalo}', fecha_evento) as full_date
+            COUNT(DISTINCT {identity_expr}) FILTER (WHERE conducta_estandar IN :hurto_vals) as hurtos,
+            COUNT(DISTINCT {identity_expr}) FILTER (WHERE conducta_estandar IN :vif_vals) as vif,
+            COUNT(DISTINCT {identity_expr}) FILTER (WHERE conducta_estandar IN :lesiones_vals) as lesiones
         FROM {source_table}
         WHERE 1=1
         AND fuente_codigo = 'POLICIA_SEMANAL'
     """
-    params = {"hom_vals": homicidio_vals}
+    params = {
+        "hom_vals": homicidio_vals,
+        "hurto_vals": hurto_vals,
+        "vif_vals": vif_vals,
+        "lesiones_vals": lesiones_vals,
+    }
 
     if snapshot_id:
         query_str += " AND ingestion_id = :snapshot_id"
@@ -756,12 +769,17 @@ def get_tendencia_delictiva(
         query_str += " AND fecha_evento <= :end_date"
         params["end_date"] = end_date
 
-    query_str += " GROUP BY 1, 4 ORDER BY 4 DESC"
+    query_str += " GROUP BY 1 ORDER BY 1 DESC"
 
     if not start_date:
         query_str += " LIMIT 12"
 
-    statement = text(query_str).bindparams(bindparam("hom_vals", expanding=True))
+    statement = text(query_str).bindparams(
+        bindparam("hom_vals", expanding=True),
+        bindparam("hurto_vals", expanding=True),
+        bindparam("vif_vals", expanding=True),
+        bindparam("lesiones_vals", expanding=True),
+    )
     results = db.execute(statement, params).fetchall()
 
     def translate_label(label):
@@ -769,8 +787,23 @@ def get_tendencia_delictiva(
             label = label.replace(en, es)
         return label
 
+    def format_label(value):
+        if intervalo == "day":
+            label = value.strftime("%d %b")
+        elif intervalo == "week":
+            label = f"Sem {value.strftime('%d %b')}"
+        else:
+            label = value.strftime("%b %Y")
+        return translate_label(label)
+
     trend_data = [
-        {"name": translate_label(r.etiqueta), "homicidios": r.homicidios, "hurtos": r.otros}
+        {
+            "name": format_label(r.full_date),
+            "homicidios": r.homicidios,
+            "hurtos": r.hurtos,
+            "vif": r.vif,
+            "lesiones": r.lesiones,
+        }
         for r in results
     ]
     trend_data.reverse()
@@ -832,7 +865,7 @@ def get_top_barrios(
     return [{"name": r.barrio or "Desconocido", "delitos": r.total} for r in results]
 
 
-@router.get("/estadisticas/resumen")
+@router.get("/estadisticas/resumen", dependencies=[Depends(institutional_access)])
 def get_resumen_estadistico(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,

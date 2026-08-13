@@ -7,7 +7,7 @@ from services.institutional_agent_service import InstitutionalAgentService
 from services.hechos_metrics import hechos_unicos_expr
 from sqlalchemy import Integer, cast, func
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import os
 import re
 import httpx
@@ -32,7 +32,8 @@ ia_cache = {
     "insight": None,
     "timestamp": 0,
     "last_total": 0,
-    "provider": None
+    "provider": None,
+    "period": None,
 }
 
 
@@ -574,7 +575,11 @@ async def call_mistral(contexto):
             raise
 
 @router.get("/insights", dependencies=[Depends(institutional_access)])
-async def get_ai_insights(db: Session = Depends(get_db)):
+async def get_ai_insights(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+):
     """
     Genera un anÃ¡lisis narrativo basado en los datos actuales usando el proveedor configurado.
     """
@@ -584,7 +589,19 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     if AI_PROVIDER == "MISTRAL" and not MISTRAL_API_KEY:
         return {"insight": "Falta MISTRAL_API_KEY", "status": "error"}
 
-    total = db.query(Event).count()
+    latest_date = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+    ).scalar()
+    period_end = end_date or latest_date or date.today()
+    period_start = start_date or date(period_end.year, 1, 1)
+    if period_start > period_end:
+        raise HTTPException(status_code=400, detail="La fecha inicial no puede ser posterior a la fecha final.")
+
+    total = db.query(hechos_unicos_expr()).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+        HechoSeguridad.fecha_evento >= period_start,
+        HechoSeguridad.fecha_evento <= period_end,
+    ).scalar() or 0
     if total == 0:
         return {
             "insight": "El sistema se encuentra a la espera de nuevos datos para generar la Perspectiva de Seguridad.",
@@ -595,26 +612,31 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     # Cache Check
     import time
     ahora = time.time()
-    if ia_cache["insight"] and (ahora - ia_cache["timestamp"] < 1800) and (ia_cache["last_total"] == total) and (ia_cache["provider"] == AI_PROVIDER):
+    period_key = f"{period_start.isoformat()}:{period_end.isoformat()}"
+    if ia_cache["insight"] and (ahora - ia_cache["timestamp"] < 1800) and (ia_cache["last_total"] == total) and (ia_cache["provider"] == AI_PROVIDER) and (ia_cache["period"] == period_key):
         return {
             "insight": ia_cache["insight"],
             "status": "success",
             "provider": AI_PROVIDER,
+            "periodo": {"inicio": period_start.isoformat(), "fin": period_end.isoformat()},
             "cached": True
         }
 
     # EstadÃ­sticas para el INSIGHT (AÃ±o Actual 2026) - AGREGACIÃ“N DEDUPLICADA
-    current_year = datetime.now().year
+    current_year = period_end.year
 
     # 1. Obtener conteos diarios de HOMICIDIOS de ambas fuentes para el aÃ±o actual
     hom_mod_daily = db.query(HechoSeguridad.fecha_evento, hechos_unicos_expr()).filter(
-        func.extract('year', HechoSeguridad.fecha_evento) == current_year,
-        HechoSeguridad.categoria_delito == "HOMICIDIO"
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+        HechoSeguridad.fecha_evento >= period_start,
+        HechoSeguridad.fecha_evento <= period_end,
+        HechoSeguridad.conducta_estandar.in_(HOMICIDE_ALIASES),
     ).group_by(HechoSeguridad.fecha_evento).all()
 
     hom_leg_daily = db.query(Event.occurrence_date, func.count(Event.id)).join(EventType).filter(
-        func.extract('year', Event.occurrence_date) == current_year,
-        EventType.category == "HOMICIDIO"
+        Event.occurrence_date >= period_start,
+        Event.occurrence_date <= period_end,
+        EventType.category == "HOMICIDIO",
     ).group_by(Event.occurrence_date).all()
 
     # Unificar por fecha (DEDUPLICACIÃ“N POR DÃA)
@@ -622,17 +644,22 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     for d, c in hom_leg_daily: daily_hom[d] = c
     # Priorizar fuente Policial (Sobrescribe si hay dato el mismo dÃ­a)
     for d, c in hom_mod_daily: daily_hom[d] = c
-    homicidios_2026 = sum(daily_hom.values())
+    homicidios_periodo = sum(daily_hom.values())
 
     # 2. Conteo de Incidentes Totales (AproximaciÃ³n por mayor fuente)
-    total_legacy = db.query(Event).filter(func.extract('year', Event.occurrence_date) == current_year).count()
-    total_moderno = db.query(hechos_unicos_expr()).filter(func.extract('year', HechoSeguridad.fecha_evento) == current_year).scalar() or 0
-    total_real_2026 = total_moderno if total_moderno > 0 else total_legacy
+    total_legacy = db.query(Event).filter(
+        Event.occurrence_date >= period_start,
+        Event.occurrence_date <= period_end,
+    ).count()
+    total_moderno = total
+    total_real_periodo = total_moderno if total_moderno > 0 else total_legacy
 
     # 3. Barrios (Priorizar la base mÃ¡s poblada)
     if total_moderno > 0:
         top_barrio_2026 = db.query(HechoSeguridad.barrio_normalizado, hechos_unicos_expr()).filter(
-            func.extract('year', HechoSeguridad.fecha_evento) == current_year,
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+            HechoSeguridad.fecha_evento >= period_start,
+            HechoSeguridad.fecha_evento <= period_end,
             HechoSeguridad.barrio_normalizado.isnot(None),
             HechoSeguridad.barrio_normalizado != "",
             func.upper(func.trim(HechoSeguridad.barrio_normalizado)).notin_(NON_PUBLIC_TERRITORY_VALUES),
@@ -643,7 +670,8 @@ async def get_ai_insights(db: Session = Depends(get_db)):
         ).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).first()
     else:
         top_barrio_2026 = db.query(Event.barrio, func.count(Event.id)).filter(
-            func.extract('year', Event.occurrence_date) == current_year,
+            Event.occurrence_date >= period_start,
+            Event.occurrence_date <= period_end,
             Event.barrio.isnot(None),
             Event.barrio != "",
             func.upper(func.trim(Event.barrio)).notin_(NON_PUBLIC_TERRITORY_VALUES),
@@ -655,6 +683,10 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     if top_barrio_2026 and not _is_public_territory_name(top_barrio_2026[0]):
         top_barrio_2026 = None
 
+    # Compatibilidad con la plantilla histórica; el contexto se reemplaza abajo.
+    total_real_2026 = total_real_periodo
+    homicidios_2026 = homicidios_periodo
+
     contexto = f"""
     Eres el analista experto del Sistema de InformaciÃ³n para la Seguridad y Convivencia (SISC) de JamundÃ­.
     Analiza estos datos del AÃ‘O ACTUAL {current_year} (Cifras Consolidadas y Sin Duplicados):
@@ -664,6 +696,15 @@ async def get_ai_insights(db: Session = Depends(get_db)):
 
     IMPORTANTE: Has detectado un traslape de fuentes y has priorizado la informaciÃ³n de la PolicÃ­a por su actualizaciÃ³n.
     Responde en espaÃ±ol, tono institucional firme. MÃ¡ximo 60 palabras.
+    """
+    contexto = f"""
+    Eres analista del Sistema de Información para la Seguridad y Convivencia de Jamundí.
+    Resume únicamente los datos consolidados entre {period_start.isoformat()} y {period_end.isoformat()}:
+    - Registros únicos: {total_real_periodo}
+    - Homicidios: {homicidios_periodo}
+    - Mayor concentración territorial publicable: {top_barrio_2026[0] if top_barrio_2026 else 'sin dato clasificable'} ({top_barrio_2026[1] if top_barrio_2026 else 0} registros).
+    No presentes predicciones ni causalidades. Indica que se trata de una lectura descriptiva.
+    Responde en español, con tono institucional claro y máximo 60 palabras.
     """
 
     try:
@@ -677,11 +718,13 @@ async def get_ai_insights(db: Session = Depends(get_db)):
         ia_cache["timestamp"] = ahora
         ia_cache["last_total"] = total
         ia_cache["provider"] = AI_PROVIDER
+        ia_cache["period"] = period_key
 
         return {
             "insight": insight_text,
             "status": "success",
             "provider": AI_PROVIDER,
+            "periodo": {"inicio": period_start.isoformat(), "fin": period_end.isoformat()},
             "cached": False
         }
     except Exception as e:
