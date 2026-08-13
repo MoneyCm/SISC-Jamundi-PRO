@@ -166,7 +166,7 @@ const InstitutionalManagementSummary = ({
                                 </div>
                                 <IndicatorRows indicators={inspectionMeasures} limit={3} />
                             </>
-                        ) : <SourceUnavailable source={inspectionSource} />}
+                        ) : <SourceUnavailable source={inspectionSource} onUseCutoff={onUseCutoff} />}
 
                         <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                             <p className="text-[10px] leading-4 text-slate-500">Describe gestión institucional; no equivale a hechos delictivos.</p>

@@ -208,15 +208,33 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 comparison_mode: mode,
             });
             const endpoint = `/sisc-cifras/operational-summary?${query.toString()}`;
+            const fallbackPayload = {
+                edition_type: 'monthly',
+                period_start: selectedRange.start,
+                period_end: selectedRange.end,
+                comparison_mode: mode === 'previous_year' ? 'year_over_year' : mode,
+                source_codes: ['INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'],
+                max_insights: 5,
+                save_history: false,
+            };
             let summary;
             let lastError;
             for (let attempt = 0; attempt < 3; attempt += 1) {
                 try {
-                    summary = await apiJson(endpoint);
+                    try {
+                        summary = await apiJson(endpoint);
+                    } catch (requestError) {
+                        if (requestError.status !== 404) throw requestError;
+                        summary = await apiJson('/sisc-cifras/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(fallbackPayload),
+                        });
+                    }
                     break;
                 } catch (requestError) {
                     lastError = requestError;
-                    const serviceIsUpdating = [404, 502, 503, 504].includes(requestError.status);
+                    const serviceIsUpdating = [502, 503, 504].includes(requestError.status);
                     if (!serviceIsUpdating || attempt === 2) throw requestError;
                     await wait(1800 * (attempt + 1));
                     if (requestId !== managementRequestIdRef.current) return;
@@ -226,7 +244,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             if (requestId === managementRequestIdRef.current) setManagementSummary(summary);
         } catch (requestError) {
             if (requestId === managementRequestIdRef.current) {
-                const serviceIsUpdating = [404, 502, 503, 504].includes(requestError.status);
+                const serviceIsUpdating = [502, 503, 504].includes(requestError.status);
                 setManagementError(serviceIsUpdating
                     ? 'El servicio de fuentes se está actualizando. Reintente en unos segundos.'
                     : requestError.message || 'No fue posible consultar Inspecciones y Comisarías.');
