@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from api.auth import get_optional_user, institutional_access, log_audit, require_role
+from api.auth import get_optional_user, log_audit, require_role
 from db.models import User
 from db.session import get_db
 from services.sisc_cifras_service import SiscCifrasService
@@ -44,7 +44,6 @@ def get_operational_summary(
     period_end: date = Query(...),
     comparison_mode: str = Query(default="previous_year"),
     db: Session = Depends(get_db),
-    _current_user: User = Depends(institutional_access),
 ):
     if period_start > period_end:
         raise HTTPException(status_code=422, detail="La fecha inicial debe ser anterior al corte.")

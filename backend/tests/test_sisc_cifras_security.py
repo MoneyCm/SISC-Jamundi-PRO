@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -52,6 +53,25 @@ def test_public_generation_is_preview_only_by_default(monkeypatch):
     assert result["governance"]["history_saved"] is False
     assert generate.call_args.kwargs["save_history"] is False
     assert generate.call_args.kwargs["created_by"] is None
+
+
+def test_operational_summary_is_public_read_only(monkeypatch):
+    expected = {
+        "period": {"start": "2026-07-01", "end": "2026-07-31"},
+        "governance": {"public_only": True},
+    }
+    summary = MagicMock(return_value=expected)
+    monkeypatch.setattr(sisc_cifras.SiscCifrasService, "operational_summary", summary)
+
+    result = sisc_cifras.get_operational_summary(
+        period_start=date(2026, 7, 1),
+        period_end=date(2026, 7, 31),
+        comparison_mode="previous_year",
+        db=MagicMock(),
+    )
+
+    assert result == expected
+    summary.assert_called_once()
 
 
 def test_anonymous_user_cannot_save_publication(monkeypatch):
