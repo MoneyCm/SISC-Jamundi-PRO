@@ -25,10 +25,25 @@ class InspeccionService:
         return text.upper().strip()
 
     def parse_date(self, val) -> Optional[datetime]:
-        if pd.isna(val): return None
-        if isinstance(val, (datetime, date)): return pd.to_datetime(val)
-        try: return pd.to_datetime(str(val), dayfirst=True)
-        except: return None
+        if pd.isna(val):
+            return None
+        if isinstance(val, datetime):
+            return val
+        if isinstance(val, date):
+            return datetime.combine(val, datetime.min.time())
+        if isinstance(val, (int, float)) and 1 <= float(val) <= 100000:
+            parsed = pd.to_datetime(float(val), unit="D", origin="1899-12-30", errors="coerce")
+        else:
+            text_value = str(val).strip()
+            if len(text_value) >= 10 and text_value[4:5] == "-" and text_value[7:8] == "-":
+                try:
+                    return datetime.fromisoformat(text_value.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+            parsed = pd.to_datetime(text_value, dayfirst=True, errors="coerce")
+        if pd.isna(parsed):
+            return None
+        return parsed.to_pydatetime() if hasattr(parsed, "to_pydatetime") else parsed
 
     def to_float(self, v):
         if pd.isna(v): return 0.0
@@ -59,11 +74,21 @@ class InspeccionService:
         if df.empty:
             return {"status": "ERROR", "message": "No se encontraron registros de Jamundí o el archivo está vacío."}
 
-        stats = {"inserted": 0, "updated": 0, "skipped": 0, "errors": 0}
+        stats = {"inserted": 0, "updated": 0, "skipped": 0, "errors": 0, "invalid_dates": 0, "future_dates": 0}
         
         for _, row_raw in df.iterrows():
             row = row_raw.to_dict()
             try:
+                fecha_actuacion = self.parse_date(row.get('FECHA_ACTUACION'))
+                if not fecha_actuacion:
+                    stats["errors"] += 1
+                    stats["invalid_dates"] += 1
+                    continue
+                if fecha_actuacion.date() > date.today():
+                    stats["errors"] += 1
+                    stats["future_dates"] += 1
+                    continue
+
                 # 1. Gestionar Expediente
                 nro_exp = str(row.get('EXPEDIENTE', '')).strip()
                 if not nro_exp or nro_exp.lower() == 'nan':
@@ -126,7 +151,7 @@ class InspeccionService:
                 if not existing_act:
                     actuacion = InspeccionActuacion(
                         medida_id=medida.id,
-                        fecha_actuacion=self.parse_date(row.get('FECHA_ACTUACION')) or datetime.now(),
+                        fecha_actuacion=fecha_actuacion,
                         id_registrador=str(row.get('ID_REGISTRA', '')),
                         funcionario=str(row.get('FUNCIONARIO', '')),
                         anotacion=str(row.get('ANOTACION', '')),

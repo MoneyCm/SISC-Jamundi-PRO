@@ -303,7 +303,15 @@ def _run_frame(
     date_field = config.get("date_field")
     parsed_dates = None
     if date_field and date_field in prepared.columns:
-        parsed_dates = pd.to_datetime(prepared[date_field], errors="coerce")
+        raw_dates = prepared[date_field]
+        parsed_dates = pd.to_datetime(raw_dates, errors="coerce", dayfirst=True)
+        iso_mask = raw_dates.astype(str).str.match(r"^\d{4}-\d{1,2}-\d{1,2}")
+        if iso_mask.any():
+            parsed_dates.loc[iso_mask] = pd.to_datetime(
+                raw_dates.loc[iso_mask],
+                errors="coerce",
+                yearfirst=True,
+            )
         invalid_dates = parsed_dates.isna() & ~_blank_mask(prepared[date_field])
         _append_issue(
             issues,

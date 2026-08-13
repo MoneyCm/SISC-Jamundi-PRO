@@ -195,7 +195,7 @@ class SiscCifrasService:
             "name": "Inspecciones de Policia / RNMC",
             "domain": "CONVIVENCIA",
             "dependency": "Inspecciones de Policia",
-            "periodicity": "Segun disponibilidad",
+            "periodicity": "Semanal",
             "coverage": "Jamundi",
             "unit": "actuaciones registradas",
         },
@@ -235,6 +235,17 @@ class SiscCifrasService:
         return previous_start, previous_end
 
     @staticmethod
+    def previous_month_bounds(start: date, end: date) -> Tuple[date, date]:
+        previous_month_end = start - timedelta(days=1)
+        previous_month_start = previous_month_end.replace(day=1)
+        current_period_is_full_month = (end + timedelta(days=1)).month != end.month
+        if current_period_is_full_month:
+            return previous_month_start, previous_month_end
+
+        comparison_day = min(end.day, previous_month_end.day)
+        return previous_month_start, previous_month_end.replace(day=comparison_day)
+
+    @staticmethod
     def year_over_year_bounds(start: date, end: date) -> Tuple[date, date]:
         try:
             return start.replace(year=start.year - 1), end.replace(year=end.year - 1)
@@ -250,7 +261,10 @@ class SiscCifrasService:
             selected = "previous_period" if edition_type == "monthly" else "year_over_year"
 
         if selected in ("previous_period", "previous", "periodo_anterior"):
-            compare_start, compare_end = cls.previous_bounds(start, end)
+            if edition_type == "monthly" and start.day == 1:
+                compare_start, compare_end = cls.previous_month_bounds(start, end)
+            else:
+                compare_start, compare_end = cls.previous_bounds(start, end)
             return compare_start, compare_end, "periodo anterior comparable", "previous_period"
 
         compare_start, compare_end = cls.year_over_year_bounds(start, end)
@@ -275,7 +289,11 @@ class SiscCifrasService:
                 **meta,
                 "code": code,
                 "last_cutoff_date": None,
+                "reported_cutoff_date": None,
                 "available_records": 0,
+                "future_records": 0,
+                "excluded_test_records": 0,
+                "exclusion_note": None,
                 "quality_status": "INCOMPLETO",
                 "publication_level": "PUBLICO",
                 "available_indicators": cls.available_indicator_codes(code),
@@ -289,19 +307,50 @@ class SiscCifrasService:
         if not cls.database_available(db):
             return cls.fallback_source_registry()
 
+        today = date.today()
+        tomorrow = datetime.combine(today + timedelta(days=1), datetime.min.time())
         registry = []
         for code, meta in cls.SOURCE_CATALOG.items():
             row = {**meta, "code": code}
+            reported_cutoff = None
+            future_records = 0
+            excluded_test_records = 0
             if code == "POLICIA_SEMANAL":
-                cutoff = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
+                reported_cutoff = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
                     HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
                 ).scalar()
+                cutoff = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
+                    HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+                    HechoSeguridad.fecha_evento <= today,
+                ).scalar()
                 total = db.query(HechoSeguridad.id).filter(
-                    HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+                    HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+                    HechoSeguridad.fecha_evento <= today,
+                ).count()
+                future_records = db.query(HechoSeguridad.id).filter(
+                    HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+                    HechoSeguridad.fecha_evento > today,
                 ).count()
             elif code == "INSPECCIONES_RNMC":
-                cutoff = db.query(func.max(InspeccionActuacion.fecha_actuacion)).scalar()
-                total = db.query(InspeccionActuacion.id).count()
+                public_filters = cls.inspection_public_filters()
+                reported_cutoff = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(
+                    *public_filters,
+                ).scalar()
+                cutoff = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(
+                    *public_filters,
+                    InspeccionActuacion.fecha_actuacion < tomorrow,
+                ).scalar()
+                total = db.query(InspeccionActuacion.id).filter(
+                    *public_filters,
+                    InspeccionActuacion.fecha_actuacion < tomorrow,
+                ).count()
+                future_records = db.query(InspeccionActuacion.id).filter(
+                    *public_filters,
+                    InspeccionActuacion.fecha_actuacion >= tomorrow,
+                ).count()
+                excluded_test_records = db.query(InspeccionActuacion.id).filter(
+                    ~public_filters[0] | ~public_filters[1],
+                ).count()
             elif code == "COMISARIAS_FAMILIA":
                 cutoff = db.query(func.max(InstitutionalDataBatch.cutoff_date)).filter(
                     InstitutionalDataBatch.program == "COMISARIAS",
@@ -316,22 +365,231 @@ class SiscCifrasService:
                     InstitutionalIndicator.is_public.is_(True),
                     InstitutionalIndicator.value >= InstitutionalIndicator.privacy_threshold,
                 ).count()
+                reported_cutoff = cutoff
             else:
                 cutoff = None
                 total = 0
 
             quality = "VALIDADO" if total > 0 and cutoff else "INCOMPLETO"
+            status_note = None
+            exclusion_note = None
+            if future_records:
+                quality = "PRELIMINAR"
+                status_note = (
+                    f"Se excluyeron {future_records} registros con fecha futura. "
+                    "La fuente requiere correccion antes de publicar."
+                )
+            elif excluded_test_records:
+                exclusion_note = f"Se excluyeron {excluded_test_records} registros identificados como prueba."
             row.update(
                 {
-                    "last_cutoff_date": cutoff.date().isoformat() if hasattr(cutoff, "date") else cutoff.isoformat() if cutoff else None,
+                    "last_cutoff_date": cls.iso_date(cutoff),
+                    "reported_cutoff_date": cls.iso_date(reported_cutoff),
                     "available_records": total,
+                    "future_records": future_records,
+                    "excluded_test_records": excluded_test_records,
                     "quality_status": quality,
                     "publication_level": "PUBLICO",
                     "available_indicators": cls.available_indicator_codes(code),
+                    "status_note": status_note,
+                    "exclusion_note": exclusion_note,
                 }
             )
             registry.append(row)
         return registry
+
+    @staticmethod
+    def iso_date(value: Optional[Any]) -> Optional[str]:
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value.date().isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        return str(value)
+
+    @staticmethod
+    def inspection_public_filters() -> List[Any]:
+        source_filename = func.lower(func.coalesce(InspeccionActuacion.fuente_archivo, ""))
+        return [
+            ~source_filename.like("%test%"),
+            ~source_filename.like("%prueba%"),
+        ]
+
+    @staticmethod
+    def coverage_status(period_records: int, cutoff: Optional[date], start: date, end: date) -> str:
+        if period_records <= 0:
+            if cutoff and cutoff < start:
+                return "stale"
+            return "missing"
+        if not cutoff or cutoff < end:
+            return "partial"
+        return "aligned"
+
+    @staticmethod
+    def latest_batches_by_entity(
+        batches: Sequence[InstitutionalDataBatch],
+    ) -> List[InstitutionalDataBatch]:
+        latest: Dict[str, InstitutionalDataBatch] = {}
+        for batch in batches:
+            entity_key = (batch.reporting_entity or "").strip().upper()
+            current = latest.get(entity_key)
+            if current is None or batch.version > current.version:
+                latest[entity_key] = batch
+        return [latest[key] for key in sorted(latest)]
+
+    @classmethod
+    def publication_sources(
+        cls,
+        db: Session,
+        *,
+        edition_type: str,
+        start: date,
+        end: date,
+        prev_start: date,
+        prev_end: date,
+        source_codes: Sequence[str],
+    ) -> List[Dict[str, Any]]:
+        registry = {item["code"]: item for item in cls.source_registry(db)}
+        today = date.today()
+        tomorrow = datetime.combine(today + timedelta(days=1), datetime.min.time())
+        result: List[Dict[str, Any]] = []
+
+        for code in source_codes:
+            source = dict(registry.get(code, {**cls.SOURCE_CATALOG.get(code, {}), "code": code}))
+            source.update(
+                {
+                    "requested_period": {"start": start.isoformat(), "end": end.isoformat()},
+                    "period_records": 0,
+                    "comparison_records": 0,
+                    "coverage_status": "missing",
+                    "included": False,
+                    "comparable": False,
+                    "publishable": False,
+                }
+            )
+
+            if code == "COMISARIAS_FAMILIA":
+                if edition_type != "monthly":
+                    source.update(
+                        {
+                            "coverage_status": "not_applicable",
+                            "status_note": "Fuente mensual; se incorpora unicamente en el boletin mensual.",
+                        }
+                    )
+                    result.append(source)
+                    continue
+
+                target_period = end.strftime("%Y-%m")
+                previous_period = prev_end.strftime("%Y-%m")
+                batches = cls.latest_batches_by_entity(
+                    db.query(InstitutionalDataBatch).filter(
+                        InstitutionalDataBatch.program == "COMISARIAS",
+                        InstitutionalDataBatch.validation_status == "APPROVED",
+                        InstitutionalDataBatch.period == target_period,
+                        InstitutionalDataBatch.cutoff_date >= start,
+                        InstitutionalDataBatch.cutoff_date <= end,
+                    ).order_by(InstitutionalDataBatch.reporting_entity.asc(), InstitutionalDataBatch.version.desc()).all()
+                )
+                previous_batches = cls.latest_batches_by_entity(
+                    db.query(InstitutionalDataBatch).filter(
+                        InstitutionalDataBatch.program == "COMISARIAS",
+                        InstitutionalDataBatch.validation_status == "APPROVED",
+                        InstitutionalDataBatch.period == previous_period,
+                        InstitutionalDataBatch.cutoff_date >= prev_start,
+                        InstitutionalDataBatch.cutoff_date <= prev_end,
+                    ).order_by(InstitutionalDataBatch.reporting_entity.asc(), InstitutionalDataBatch.version.desc()).all()
+                )
+
+                if batches:
+                    public_items = [
+                        item for batch in batches for item in batch.indicators
+                        if item.is_public and float(item.value) >= item.privacy_threshold
+                    ]
+                    previous_public_items = [
+                        item for batch in previous_batches for item in batch.indicators
+                        if item.is_public and float(item.value) >= item.privacy_threshold
+                    ]
+                    source.update(
+                        {
+                            "period_records": len(public_items),
+                            "comparison_records": len(previous_public_items),
+                            "coverage_status": "aligned" if public_items else "missing",
+                            "included": bool(public_items),
+                            "comparable": bool(previous_public_items),
+                            "publishable": bool(public_items) and source.get("quality_status") == "VALIDADO",
+                            "period_label": target_period,
+                            "reporting_basis": sorted({batch.reporting_basis for batch in batches}),
+                            "reporting_entities": sorted({batch.reporting_entity for batch in batches}),
+                            "status_note": None if public_items else "El corte existe, pero no contiene indicadores publicables.",
+                        }
+                    )
+                else:
+                    cutoff_text = source.get("last_cutoff_date")
+                    cutoff = date.fromisoformat(cutoff_text) if cutoff_text else None
+                    source["coverage_status"] = "stale" if cutoff and cutoff < start else "missing"
+                    source["status_note"] = (
+                        f"No hay un corte aprobado de Comisarias para {target_period}."
+                        + (f" Ultimo corte disponible: {cutoff.isoformat()}." if cutoff else "")
+                    )
+                result.append(source)
+                continue
+
+            if code == "POLICIA_SEMANAL":
+                period_records = db.query(hechos_unicos_expr()).filter(
+                    HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+                    HechoSeguridad.fecha_evento >= start,
+                    HechoSeguridad.fecha_evento <= min(end, today),
+                ).scalar() or 0
+                comparison_records = db.query(hechos_unicos_expr()).filter(
+                    HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+                    HechoSeguridad.fecha_evento >= prev_start,
+                    HechoSeguridad.fecha_evento <= prev_end,
+                ).scalar() or 0
+            elif code == "INSPECCIONES_RNMC":
+                period_records = db.query(InspeccionActuacion.id).filter(
+                    *cls.inspection_public_filters(),
+                    InspeccionActuacion.fecha_actuacion >= datetime.combine(start, datetime.min.time()),
+                    InspeccionActuacion.fecha_actuacion < min(
+                        datetime.combine(end + timedelta(days=1), datetime.min.time()),
+                        tomorrow,
+                    ),
+                ).count()
+                comparison_records = db.query(InspeccionActuacion.id).filter(
+                    *cls.inspection_public_filters(),
+                    InspeccionActuacion.fecha_actuacion >= datetime.combine(prev_start, datetime.min.time()),
+                    InspeccionActuacion.fecha_actuacion < datetime.combine(prev_end + timedelta(days=1), datetime.min.time()),
+                ).count()
+            else:
+                result.append(source)
+                continue
+
+            cutoff_text = source.get("last_cutoff_date")
+            cutoff = date.fromisoformat(cutoff_text) if cutoff_text else None
+            status = cls.coverage_status(int(period_records), cutoff, start, end)
+            quality = source.get("quality_status", "INCOMPLETO")
+            note = source.get("status_note")
+            if not note:
+                if status == "partial":
+                    note = f"Cobertura disponible hasta {cutoff.isoformat() if cutoff else 'un corte no informado'}."
+                elif status == "stale":
+                    note = f"El ultimo corte disponible es anterior al periodo solicitado ({cutoff.isoformat()})."
+                elif status == "missing":
+                    note = "No hay registros para el periodo solicitado."
+
+            source.update(
+                {
+                    "period_records": int(period_records),
+                    "comparison_records": int(comparison_records),
+                    "coverage_status": status,
+                    "included": int(period_records) > 0,
+                    "comparable": int(comparison_records) > 0,
+                    "publishable": int(period_records) > 0 and status == "aligned" and quality == "VALIDADO",
+                    "status_note": note,
+                }
+            )
+            result.append(source)
+        return result
 
     @staticmethod
     def available_indicator_codes(source_code: str) -> List[str]:
@@ -373,10 +631,33 @@ class SiscCifrasService:
                 created_by=created_by,
             )
 
-        indicators = cls.collect_indicators(db, start, end, prev_start, prev_end, selected_sources)
+        sources = cls.publication_sources(
+            db,
+            edition_type=edition_type,
+            start=start,
+            end=end,
+            prev_start=prev_start,
+            prev_end=prev_end,
+            source_codes=selected_sources,
+        )
+        included_sources = [source["code"] for source in sources if source.get("included")]
+        indicators = cls.collect_indicators(
+            db,
+            start,
+            end,
+            prev_start,
+            prev_end,
+            included_sources,
+            edition_type=edition_type,
+        )
         insights = cls.select_insights(indicators, max_insights=max_insights, comparison_label=comparison_label)
         slides = cls.build_slides(indicators, insights, start, end)
-        sources = [s for s in cls.source_registry(db) if s["code"] in selected_sources]
+        applicable_sources = [source for source in sources if source.get("coverage_status") != "not_applicable"]
+        review_blockers = [
+            source.get("status_note") or f"{source.get('name', source['code'])} requiere revision."
+            for source in applicable_sources
+            if not source.get("publishable")
+        ]
 
         publication = {
             "id": str(uuid4()),
@@ -397,8 +678,11 @@ class SiscCifrasService:
             "governance": {
                 "public_only": True,
                 "human_review_required": True,
+                "publication_ready": bool(indicators) and not review_blockers,
                 "history_saved": False,
+                "review_blockers": review_blockers,
                 "privacy_note": "Solo se usan indicadores agregados y clasificados como PUBLICO.",
+                "aggregation_note": "Los dominios se presentan por separado y sus valores no se suman entre si.",
             },
         }
 
@@ -423,6 +707,82 @@ class SiscCifrasService:
         return publication
 
     @classmethod
+    def operational_summary(
+        cls,
+        db: Session,
+        *,
+        period_start: date,
+        period_end: date,
+        comparison_mode: str,
+    ) -> Dict[str, Any]:
+        """Return the public multi-source contract without building publication assets."""
+        start, end = cls.period_bounds("monthly", period_start, period_end)
+        prev_start, prev_end, comparison_label, resolved_comparison_mode = cls.comparison_bounds(
+            "monthly", comparison_mode, start, end
+        )
+        selected_sources = ["INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"]
+
+        if not cls.database_available(db):
+            fallback = cls.fallback_publication(
+                edition_type="monthly",
+                start=start,
+                end=end,
+                prev_start=prev_start,
+                prev_end=prev_end,
+                comparison_label=comparison_label,
+                comparison_mode=resolved_comparison_mode,
+                selected_sources=selected_sources,
+                created_by=None,
+            )
+            return {
+                "period": fallback["period"],
+                "comparison_period": fallback["comparison_period"],
+                "comparison_label": fallback["comparison_label"],
+                "comparison_mode": fallback["comparison_mode"],
+                "generated_at": fallback["generated_at"],
+                "sources": fallback["sources"],
+                "indicators": [],
+                "governance": fallback["governance"],
+            }
+
+        sources = cls.publication_sources(
+            db,
+            edition_type="monthly",
+            start=start,
+            end=end,
+            prev_start=prev_start,
+            prev_end=prev_end,
+            source_codes=selected_sources,
+        )
+        included_sources = [source["code"] for source in sources if source.get("included")]
+        indicators = cls.collect_indicators(
+            db,
+            start,
+            end,
+            prev_start,
+            prev_end,
+            included_sources,
+            edition_type="monthly",
+        )
+
+        return {
+            "period": {"start": start.isoformat(), "end": end.isoformat()},
+            "comparison_period": {"start": prev_start.isoformat(), "end": prev_end.isoformat()},
+            "comparison_label": comparison_label,
+            "comparison_mode": resolved_comparison_mode,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "sources": sources,
+            "indicators": [asdict(indicator) for indicator in indicators],
+            "governance": {
+                "public_only": True,
+                "aggregation_note": (
+                    "Inspecciones y Comisarias conservan cortes independientes. "
+                    "Sus valores no se suman entre si ni con los hechos de seguridad."
+                ),
+            },
+        }
+
+    @classmethod
     def fallback_publication(
         cls,
         *,
@@ -436,7 +796,24 @@ class SiscCifrasService:
         selected_sources: Sequence[str],
         created_by: Optional[str],
     ) -> Dict[str, Any]:
-        sources = [s for s in cls.fallback_source_registry() if s["code"] in selected_sources]
+        sources = []
+        for registry_source in cls.fallback_source_registry():
+            if registry_source["code"] not in selected_sources:
+                continue
+            source = dict(registry_source)
+            source.update(
+                {
+                    "requested_period": {"start": start.isoformat(), "end": end.isoformat()},
+                    "period_records": 0,
+                    "comparison_records": 0,
+                    "coverage_status": "missing",
+                    "included": False,
+                    "comparable": False,
+                    "publishable": False,
+                    "status_note": "La base de datos no esta disponible para validar esta fuente.",
+                }
+            )
+            sources.append(source)
         return {
             "id": str(uuid4()),
             "title": "SISC EN CIFRAS",
@@ -465,8 +842,11 @@ class SiscCifrasService:
             "governance": {
                 "public_only": True,
                 "human_review_required": True,
+                "publication_ready": False,
                 "history_saved": False,
+                "review_blockers": ["La base de datos no esta disponible."],
                 "privacy_note": "Modo degradado sin datos. No publicar esta pieza.",
+                "aggregation_note": "Los dominios se presentan por separado y sus valores no se suman entre si.",
             },
         }
 
@@ -479,6 +859,7 @@ class SiscCifrasService:
         prev_start: date,
         prev_end: date,
         source_codes: Sequence[str],
+        edition_type: str = "weekly",
     ) -> List[Indicator]:
         indicators: List[Indicator] = []
         if "POLICIA_SEMANAL" in source_codes:
@@ -486,7 +867,7 @@ class SiscCifrasService:
         if "INSPECCIONES_RNMC" in source_codes:
             indicators.extend(cls.inspection_indicators(db, start, end, prev_start, prev_end))
         if "COMISARIAS_FAMILIA" in source_codes:
-            indicators.extend(cls.family_indicators(db, start, end, prev_start, prev_end))
+            indicators.extend(cls.family_indicators(db, start, end, prev_start, prev_end, edition_type=edition_type))
         return indicators
 
     @staticmethod
@@ -602,14 +983,25 @@ class SiscCifrasService:
 
     @classmethod
     def inspection_indicators(cls, db: Session, start: date, end: date, prev_start: date, prev_end: date) -> List[Indicator]:
+        tomorrow = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
         start_dt = datetime.combine(start, datetime.min.time())
-        end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
+        end_dt = min(datetime.combine(end + timedelta(days=1), datetime.min.time()), tomorrow)
         prev_start_dt = datetime.combine(prev_start, datetime.min.time())
         prev_end_dt = datetime.combine(prev_end + timedelta(days=1), datetime.min.time())
 
-        base_filter = [InspeccionActuacion.fecha_actuacion >= start_dt, InspeccionActuacion.fecha_actuacion < end_dt]
-        prev_filter = [InspeccionActuacion.fecha_actuacion >= prev_start_dt, InspeccionActuacion.fecha_actuacion < prev_end_dt]
-        cutoff = db.query(func.max(InspeccionActuacion.fecha_actuacion)).scalar()
+        base_filter = [
+            *cls.inspection_public_filters(),
+            InspeccionActuacion.fecha_actuacion >= start_dt,
+            InspeccionActuacion.fecha_actuacion < end_dt,
+            InspeccionActuacion.fecha_actuacion < tomorrow,
+        ]
+        prev_filter = [
+            *cls.inspection_public_filters(),
+            InspeccionActuacion.fecha_actuacion >= prev_start_dt,
+            InspeccionActuacion.fecha_actuacion < prev_end_dt,
+            InspeccionActuacion.fecha_actuacion < tomorrow,
+        ]
+        cutoff = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(*base_filter).scalar()
         total = db.query(InspeccionActuacion.id).filter(*base_filter).count()
         prev_total = db.query(InspeccionActuacion.id).filter(*prev_filter).count()
 
@@ -635,6 +1027,13 @@ class SiscCifrasService:
             InspeccionMedida.nombre_medida,
             func.count(InspeccionActuacion.id).label("total"),
         ).join(InspeccionActuacion).filter(*base_filter).group_by(InspeccionMedida.nombre_medida).order_by(desc("total")).limit(10).all()
+        previous_measures = {
+            name or "SIN ESPECIFICAR": value
+            for name, value in db.query(
+                InspeccionMedida.nombre_medida,
+                func.count(InspeccionActuacion.id).label("total"),
+            ).join(InspeccionActuacion).filter(*prev_filter).group_by(InspeccionMedida.nombre_medida).all()
+        }
 
         for name, value in top_medidas:
             clean_name = name or "SIN ESPECIFICAR"
@@ -660,7 +1059,7 @@ class SiscCifrasService:
                     unit="actuaciones registradas",
                     start=start,
                     end=end,
-                    comparison_value=None,
+                    comparison_value=previous_measures.get(clean_name),
                     cutoff=cutoff,
                     priority=0.65,
                     metadata=metadata or None,
@@ -715,80 +1114,99 @@ class SiscCifrasService:
         return indicators
 
     @classmethod
-    def family_indicators(cls, db: Session, start: date, end: date, prev_start: date, prev_end: date) -> List[Indicator]:
-        latest_batch = db.query(InstitutionalDataBatch).filter(
-            InstitutionalDataBatch.program == "COMISARIAS",
-            InstitutionalDataBatch.validation_status == "APPROVED",
-            InstitutionalDataBatch.cutoff_date <= end,
-        ).order_by(InstitutionalDataBatch.cutoff_date.desc(), InstitutionalDataBatch.version.desc()).first()
-        if not latest_batch:
+    def family_indicators(
+        cls,
+        db: Session,
+        start: date,
+        end: date,
+        prev_start: date,
+        prev_end: date,
+        *,
+        edition_type: str = "monthly",
+    ) -> List[Indicator]:
+        if edition_type != "monthly":
             return []
 
-        previous_batch = db.query(InstitutionalDataBatch).filter(
-            InstitutionalDataBatch.program == "COMISARIAS",
-            InstitutionalDataBatch.validation_status == "APPROVED",
-            InstitutionalDataBatch.cutoff_date <= prev_end,
-        ).order_by(InstitutionalDataBatch.cutoff_date.desc(), InstitutionalDataBatch.version.desc()).first()
+        target_period = end.strftime("%Y-%m")
+        previous_period = prev_end.strftime("%Y-%m")
+        latest_batches = cls.latest_batches_by_entity(
+            db.query(InstitutionalDataBatch).filter(
+                InstitutionalDataBatch.program == "COMISARIAS",
+                InstitutionalDataBatch.validation_status == "APPROVED",
+                InstitutionalDataBatch.period == target_period,
+                InstitutionalDataBatch.cutoff_date >= start,
+                InstitutionalDataBatch.cutoff_date <= end,
+            ).order_by(InstitutionalDataBatch.reporting_entity.asc(), InstitutionalDataBatch.version.desc()).all()
+        )
+        if not latest_batches:
+            return []
 
-        previous_values = {}
-        if previous_batch:
-            previous_values = {
-                item.indicator: float(item.value)
+        previous_batches = cls.latest_batches_by_entity(
+            db.query(InstitutionalDataBatch).filter(
+                InstitutionalDataBatch.program == "COMISARIAS",
+                InstitutionalDataBatch.validation_status == "APPROVED",
+                InstitutionalDataBatch.period == previous_period,
+                InstitutionalDataBatch.cutoff_date >= prev_start,
+                InstitutionalDataBatch.cutoff_date <= prev_end,
+            ).order_by(InstitutionalDataBatch.reporting_entity.asc(), InstitutionalDataBatch.version.desc()).all()
+        )
+
+        previous_values: Dict[Tuple[str, str], float] = {}
+        for previous_batch in previous_batches:
+            previous_values.update({
+                (previous_batch.reporting_entity, item.indicator): float(item.value)
                 for item in previous_batch.indicators
                 if item.is_public and float(item.value) >= item.privacy_threshold
-            }
+            })
 
         public_items = [
-            item for item in latest_batch.indicators
+            (batch, item)
+            for batch in latest_batches
+            for item in batch.indicators
             if item.is_public and float(item.value) >= item.privacy_threshold
         ]
         if not public_items:
             return []
 
-        total_value = sum(float(item.value) for item in public_items)
-        previous_total = sum(previous_values.values()) if previous_values else None
-        indicators = [
-            cls.indicator(
-                source="Comisarias de Familia",
-                source_code="COMISARIAS_FAMILIA",
-                domain="FAMILIA Y PROTECCION",
-                category="Atencion institucional",
-                code="familia.total_publicable",
-                name="Registros agregados publicables",
-                value=total_value,
-                unit="registros agregados",
-                start=start,
-                end=end,
-                comparison_value=previous_total,
-                cutoff=latest_batch.cutoff_date,
-                priority=0.9,
-                metadata={
-                    "period": latest_batch.period,
-                    "reporting_entity": latest_batch.reporting_entity,
-                    "privacy_threshold_applied": True,
-                },
-            )
-        ]
+        def family_priority(item: InstitutionalIndicator) -> float:
+            name = item.indicator.upper()
+            if "VIOLENCIA INTRAFAMILIAR" in name:
+                return 0.95
+            if "MEDIDAS DE PROTECCION URGENTES" in name:
+                return 0.9
+            if "RESTABLECIMIENTO DE DERECHOS" in name:
+                return 0.86
+            if "VIOLENCIA" in name or "PROTECCION" in name:
+                return 0.82
+            return 0.7
 
-        for item in sorted(public_items, key=lambda value: float(value.value), reverse=True)[:5]:
+        indicators: List[Indicator] = []
+        ordered_items = sorted(
+            public_items,
+            key=lambda pair: (family_priority(pair[1]), float(pair[1].value)),
+            reverse=True,
+        )[:6]
+        for batch, item in ordered_items:
+            priority = family_priority(item)
             indicators.append(
                 cls.indicator(
                     source="Comisarias de Familia",
                     source_code="COMISARIAS_FAMILIA",
                     domain="FAMILIA Y PROTECCION",
                     category=item.category or "Indicador agregado",
-                    code=f"familia.indicador.{item.indicator[:48]}",
+                    code=f"familia.indicador.{batch.reporting_entity[:20]}.{item.indicator[:32]}",
                     name=item.indicator,
                     value=float(item.value),
                     unit=item.unit,
                     start=start,
                     end=end,
-                    comparison_value=previous_values.get(item.indicator),
-                    cutoff=latest_batch.cutoff_date,
-                    priority=0.72,
+                    comparison_value=previous_values.get((batch.reporting_entity, item.indicator)),
+                    cutoff=batch.cutoff_date,
+                    priority=priority,
                     metadata={
-                        "period": latest_batch.period,
-                        "reporting_entity": latest_batch.reporting_entity,
+                        "period": batch.period,
+                        "reporting_entity": batch.reporting_entity,
+                        "reporting_basis": batch.reporting_basis,
                         "privacy_threshold": item.privacy_threshold,
                         "privacy_threshold_applied": True,
                     },

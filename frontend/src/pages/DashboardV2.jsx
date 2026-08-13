@@ -21,6 +21,7 @@ import {
     Users,
 } from 'lucide-react';
 import DashboardFilters from '../components/DashboardFiltersV2';
+import InstitutionalManagementSummary from '../components/InstitutionalManagementSummary';
 import MapComponent from '../components/Map/MapComponent';
 import {
     AIAnalysisPanel,
@@ -44,6 +45,14 @@ const METRIC_DEFINITIONS = [
 
 const parseIso = (value) => new Date(`${value}T00:00:00`);
 const toIso = (value) => value.toISOString().slice(0, 10);
+
+const monthRangeFromCutoff = (value) => {
+    const cutoff = parseIso(value);
+    return {
+        start: toIso(new Date(cutoff.getFullYear(), cutoff.getMonth(), 1)),
+        end: toIso(new Date(cutoff.getFullYear(), cutoff.getMonth() + 1, 0)),
+    };
+};
 
 const shiftYear = (value) => {
     const source = parseIso(value);
@@ -113,12 +122,16 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const [aiInsight, setAiInsight] = useState('');
     const [aiProvider, setAiProvider] = useState('');
     const [inbox, setInbox] = useState(null);
+    const [managementSummary, setManagementSummary] = useState(null);
+    const [managementLoading, setManagementLoading] = useState(true);
+    const [managementError, setManagementError] = useState('');
     const [loading, setLoading] = useState(true);
     const [extrasLoading, setExtrasLoading] = useState(true);
     const [error, setError] = useState('');
     const [exportOpen, setExportOpen] = useState(false);
     const [exporting, setExporting] = useState('');
     const requestIdRef = useRef(0);
+    const managementRequestIdRef = useRef(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -181,6 +194,32 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     }, [isInstitutional]);
 
     useEffect(() => { loadDashboard(range, comparisonMode); }, [range, comparisonMode, loadDashboard]);
+
+    const loadManagementSummary = useCallback(async (selectedRange, mode) => {
+        if (!isInstitutional || !selectedRange?.start || !selectedRange?.end) return;
+        const requestId = ++managementRequestIdRef.current;
+        setManagementLoading(true);
+        setManagementError('');
+        try {
+            const query = new URLSearchParams({
+                period_start: selectedRange.start,
+                period_end: selectedRange.end,
+                comparison_mode: mode,
+            });
+            const summary = await apiJson(`/sisc-cifras/operational-summary?${query.toString()}`);
+            if (requestId === managementRequestIdRef.current) setManagementSummary(summary);
+        } catch (requestError) {
+            if (requestId === managementRequestIdRef.current) {
+                setManagementError(requestError.message || 'No fue posible consultar Inspecciones y Comisarías.');
+            }
+        } finally {
+            if (requestId === managementRequestIdRef.current) setManagementLoading(false);
+        }
+    }, [isInstitutional]);
+
+    useEffect(() => {
+        loadManagementSummary(range, comparisonMode);
+    }, [range, comparisonMode, loadManagementSummary]);
 
     useEffect(() => {
         if (!isInstitutional || !range) {
@@ -288,6 +327,17 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 className="text-lg font-black text-slate-900">Indicadores prioritarios</h3><p className="text-xs text-slate-500">Comparación con el {comparisonLabel}: {referenceRange ? `${formatDate(referenceRange.start)} – ${formatDate(referenceRange.end)}` : ''}.</p></div>{loading && <span className="text-xs font-bold text-primary inline-flex items-center gap-2"><LoaderCircle size={15} className="animate-spin" />Actualizando</span>}</div>
             <section className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3">{metrics.map((metric) => <MetricCard key={metric.key} metric={metric} />)}</section>
+
+            {isInstitutional && (
+                <InstitutionalManagementSummary
+                    summary={managementSummary}
+                    loading={managementLoading}
+                    error={managementError}
+                    onRetry={() => loadManagementSummary(range, comparisonMode)}
+                    onNavigate={onNavigate}
+                    onUseCutoff={(cutoff) => setRange(monthRangeFromCutoff(cutoff))}
+                />
+            )}
 
             {isInstitutional ? (
                 <section className="grid xl:grid-cols-2 gap-4">
