@@ -12,6 +12,8 @@ from db.models_institutional import InstitutionalAgentFinding, InstitutionalAgen
 from db.session import get_db
 from api.auth import require_role
 from services.institutional_agent_service import InstitutionalAgentService
+from services import dq_service
+from db import crud_dq
 
 router = APIRouter()
 PERIOD_PATTERN = re.compile(r"^20\d{2}-(0[1-9]|1[0-2])$")
@@ -235,7 +237,21 @@ async def agent_ingest(
         content, file.filename or "archivo_sin_nombre", program, reporting_entity,
         period, cutoff_date, reporting_basis, version, str(current_user.id), use_cloud_ocr
     )
-    return agent_run_detail(str(run.id), db, current_user)
+    quality_report = dq_service.report_from_findings(
+        file.filename or "archivo_sin_nombre",
+        source_name=f"INSTITUTIONAL_{program}",
+        findings=run.findings,
+        rows_total=len(run.batch.indicators) if run.batch else 0,
+    )
+    db_quality_report = crud_dq.create_dq_report(db, quality_report)
+    detail = agent_run_detail(str(run.id), db, current_user)
+    detail["quality"] = {
+        "report_id": str(db_quality_report.id),
+        "semaforo": quality_report.get("semaforo"),
+        "score": quality_report.get("score_overall"),
+        "issues_count": len(quality_report.get("issues", [])),
+    }
+    return detail
 
 
 @router.get("/agent-runs/{run_id}")

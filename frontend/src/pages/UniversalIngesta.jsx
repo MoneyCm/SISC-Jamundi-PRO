@@ -130,6 +130,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                     report_id: runId,
                     ingestion_id: runId,
                     stats,
+                    quality: run.resumen?.dq,
                 });
                 await loadSabanaHistory();
                 return;
@@ -453,7 +454,7 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                                         }}
                                         className="px-8 py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-700 transition-all flex items-center gap-2 shadow-xl shadow-red-200 active:scale-95"
                                     >
-                                        <FileSearch size={16} /> Auditoría
+                                        <FileSearch size={16} /> Ver detalle
                                     </button>
                                 )}                                {safeDatasetCode !== 'POLICIA_SEMANAL' && (
                                     <button
@@ -481,6 +482,14 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full">
+                        {reportInfo.quality && (
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                                <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Calidad automatica</div>
+                                <div className={`text-xl font-black ${reportInfo.quality.semaforo === 'VERDE' ? 'text-emerald-600' : reportInfo.quality.semaforo === 'AMARILLO' ? 'text-amber-600' : 'text-red-600'}`}>
+                                    {reportInfo.quality.semaforo}
+                                </div>
+                            </div>
+                        )}
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
                             <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
                                 {reportInfo.pending ? 'Estado' : (reportInfo.stats ? 'Aprobados' : 'Registros')}

@@ -8,6 +8,8 @@ from sqlalchemy import func, text
 
 from api.auth import institutional_access, require_role
 from db.models import User
+from db import crud_dq
+from services import dq_service
 
 router = APIRouter()
 INSPECTIONS_UPLOAD_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
@@ -23,9 +25,32 @@ async def upload_inspecciones(
         raise HTTPException(status_code=400, detail="Formato de archivo no soportado. Use Excel.")
     
     content = await file.read()
+    quality_report = dq_service.run_dq(
+        content,
+        file.filename or "archivo_sin_nombre",
+        source_name="INSPECCIONES_POLICIA",
+        profile="INSPECCIONES",
+    )
+    db_quality_report = crud_dq.create_dq_report(db, quality_report)
+    if quality_report.get("semaforo") == "ROJO":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "La carga de Inspecciones fue bloqueada por errores criticos de calidad.",
+                "report_id": str(db_quality_report.id),
+                "semaforo": "ROJO",
+                "issues_count": len(quality_report.get("issues", [])),
+            },
+        )
+
     service = InspeccionService(db)
     result = await service.ingest_excel(content, file.filename)
-    
+    result["quality"] = {
+        "report_id": str(db_quality_report.id),
+        "semaforo": quality_report.get("semaforo"),
+        "score": quality_report.get("score_overall"),
+        "issues_count": len(quality_report.get("issues", [])),
+    }
     return result
 
 @router.get("/expedientes")

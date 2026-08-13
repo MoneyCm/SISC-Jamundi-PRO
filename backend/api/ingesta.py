@@ -16,6 +16,8 @@ from datetime import datetime
 logger = logging.getLogger("sisc_api")
 
 from api.auth import admin_only, analyst_or_admin, ingestion_operator, log_audit, get_current_user, require_role
+from db import crud_dq
+from services import dq_service
 
 router = APIRouter()
 
@@ -26,6 +28,24 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
     Reporta Ã©xitos y fallos individuales por fila.
     """
     contents = await file.read()
+
+    quality_report = dq_service.run_dq(
+        contents,
+        file.filename or "archivo_sin_nombre",
+        source_name="EVENTOS_GEO_MANUAL",
+        profile="EVENTOS_GEO",
+    )
+    db_quality_report = crud_dq.create_dq_report(db, quality_report)
+    if quality_report.get("semaforo") == "ROJO":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "La carga fue bloqueada por errores criticos de calidad.",
+                "report_id": str(db_quality_report.id),
+                "semaforo": "ROJO",
+                "issues_count": len(quality_report.get("issues", [])),
+            },
+        )
     
     try:
         if file.filename.endswith('.csv'):
@@ -108,7 +128,12 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
         return {
             "status": "success" if report["error_count"] == 0 else "partial_success",
             "message": f"Carga completada: {report['success_count']} Ã©xitos, {report['error_count']} errores.",
-            "report": report
+            "report": report,
+            "quality": {
+                "report_id": str(db_quality_report.id),
+                "semaforo": quality_report.get("semaforo"),
+                "score": quality_report.get("score_overall"),
+            },
         }
 
     except HTTPException:
@@ -475,9 +500,6 @@ async def police_weekly_explorer(
         },
     }
 # --- GATE DE INGESTA NUEVO ---
-from services import dq_service
-from db import crud_dq
-
 @router.post("/gate/{dataset_code}")
 async def upload_with_gate(
     dataset_code: str,
@@ -498,11 +520,45 @@ async def upload_with_gate(
     """
     dataset_code = dataset_code.upper()
     contents = await file.read()
+
+    if not contents:
+        raise HTTPException(status_code=400, detail="El archivo esta vacio.")
     
     # Procesador especializado para Policia Jamundi. En Render se ejecuta en segundo plano
     # para evitar que la conexion HTTP quede leyendo hasta agotar timeout.
     if dataset_code == "POLICIA_SEMANAL":
         from db.models_hechos_seguridad import IngestionRun, SabanaSnapshotRow
+
+        quality_report = dq_service.run_dq(
+            contents,
+            file.filename or "archivo_sin_nombre",
+            source_name="POLICIA_SEMANAL",
+            profile="POLICIA_SEMANAL",
+        )
+        db_quality_report = crud_dq.create_dq_report(db, quality_report)
+        if quality_report.get("semaforo") == "ROJO":
+            await log_audit(
+                db,
+                "POLICIA_SEMANAL_DQ_BLOCKED",
+                actor_id=str(current_user.id),
+                module="INGESTA",
+                target={
+                    "filename": file.filename,
+                    "dq_report_id": str(db_quality_report.id),
+                    "issues": len(quality_report.get("issues", [])),
+                },
+                level=2,
+                request=request,
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "La sabana fue bloqueada por errores criticos de calidad.",
+                    "report_id": str(db_quality_report.id),
+                    "semaforo": "ROJO",
+                    "issues_count": len(quality_report.get("issues", [])),
+                },
+            )
 
         file_hash = hashlib.sha256(contents).hexdigest()
         existing_run = db.query(IngestionRun).filter(
@@ -520,6 +576,11 @@ async def upload_with_gate(
                     "message": "Este archivo ya fue procesado anteriormente.",
                     "ingestion_id": str(existing_run.id),
                     "report_id": str(existing_run.id),
+                    "quality": {
+                        "report_id": str(db_quality_report.id),
+                        "semaforo": quality_report.get("semaforo"),
+                        "score": quality_report.get("score_overall"),
+                    },
                 }
             if has_snapshot and existing_run.status == "COMPLETED":
                 run = IngestionRun(
@@ -545,6 +606,16 @@ async def upload_with_gate(
             )
             db.add(run)
 
+        run.resumen = {
+            **(run.resumen or {}),
+            "dq": {
+                "report_id": str(db_quality_report.id),
+                "semaforo": quality_report.get("semaforo"),
+                "score": quality_report.get("score_overall"),
+                "issues_count": len(quality_report.get("issues", [])),
+            },
+        }
+
         db.commit()
         db.refresh(run)
         await log_audit(
@@ -562,6 +633,11 @@ async def upload_with_gate(
             "message": "La base policial quedo en procesamiento. Puedes seguir el avance con el ID de proceso.",
             "report_id": str(run.id),
             "ingestion_id": str(run.id),
+            "quality": {
+                "report_id": str(db_quality_report.id),
+                "semaforo": quality_report.get("semaforo"),
+                "score": quality_report.get("score_overall"),
+            },
         }
 
     # Resto de fuentes (MinDefensa / SIEDCO)
@@ -662,7 +738,12 @@ async def upload_with_gate(
             "status": "success",
             "message": f"Ingesta completada: {success_count} registros cargados.",
             "report_id": db_report.id,
-            "ingestion_id": ingestion_id
+            "ingestion_id": ingestion_id,
+            "quality": {
+                "report_id": str(db_report.id),
+                "semaforo": report_data.get("semaforo"),
+                "score": report_data.get("score_overall"),
+            },
         }
         
     except Exception as e:

@@ -1,5 +1,4 @@
 ﻿import pandas as pd
-import io
 import hashlib
 import uuid
 import logging
@@ -15,6 +14,7 @@ from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIs
 from db.models import EventType, Event
 from services.geocoding_service import GeocodingService
 from services.hechos_metrics import canonical_hecho_key
+from services.file_reader import smart_read_file
 from services.sabana_history import build_coverage, claim_snapshot_record, normalize_source_id, snapshot_hecho_key, stable_record_key
 
 logger = logging.getLogger("sisc_policia_processor")
@@ -230,7 +230,7 @@ class PoliciaJamundiProcessor:
         self.db.commit()
 
         try:
-            df = pd.read_excel(io.BytesIO(contents))
+            df = smart_read_file(contents)
             run = self.db.query(IngestionRun).filter(IngestionRun.id == run.id).first()
             run.total_filas = len(df)
             self.db.flush()
@@ -472,6 +472,7 @@ class PoliciaJamundiProcessor:
             run.status = "COMPLETED"
             run.fecha_fin = datetime.utcnow()
             run.resumen = {
+                **(run.resumen or {}),
                 "top_conductas": df[mapping.get("conducta_original")].value_counts().head(5).to_dict() if "conducta_original" in mapping else {},
                 "snapshot": {
                     "filas": stats["filas_snapshot"],

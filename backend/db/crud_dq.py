@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from db.models_dq import DqReport, DqIssue
 from typing import List, Optional, Dict, Any
@@ -5,7 +6,22 @@ from uuid import UUID
 
 from datetime import datetime
 
+
+def _sync_issue_sequence(db: Session) -> None:
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return
+
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext('sisc_dq_issues_sequence'))"))
+    db.execute(text("""
+        SELECT setval(
+            pg_get_serial_sequence('dq_issues', 'id'),
+            GREATEST(COALESCE((SELECT MAX(id) FROM dq_issues), 0) + 1, 1),
+            false
+        )
+    """))
+
 def create_dq_report(db: Session, report_data: Dict[str, Any]) -> DqReport:
+    _sync_issue_sequence(db)
     # Extraer datos especiales
     issues_data = report_data.get("issues", [])
     samples_data = report_data.get("samples", {})

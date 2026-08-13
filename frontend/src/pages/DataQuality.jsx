@@ -80,9 +80,13 @@ const DataQuality = ({ initialReportId }) => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await response.json();
-            setReports(data);
+            if (!response.ok) {
+                throw new Error(response.status === 401 ? 'La sesión expiró. Inicia sesión nuevamente para consultar las auditorías.' : (data.detail || 'No se pudo cargar el historial.'));
+            }
+            setReports(Array.isArray(data) ? data : []);
         } catch (err) {
-            console.error("Error fetching history:", err);
+            setReports([]);
+            setError(err.message);
         }
     };
 
@@ -145,9 +149,11 @@ const DataQuality = ({ initialReportId }) => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await response.json();
-            setIssues(data);
+            if (!response.ok) throw new Error(data.detail || 'No se pudieron cargar los hallazgos.');
+            setIssues(Array.isArray(data) ? data : []);
         } catch (err) {
-            console.error(err);
+            setIssues([]);
+            setError(err.message);
         } finally {
             setLoadingIssues(false);
         }
@@ -166,6 +172,7 @@ const DataQuality = ({ initialReportId }) => {
             const response = await fetch(`${API_BASE_URL}/dq/report/${report.id}/${format}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!response.ok) throw new Error('No se pudo descargar la auditoría.');
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -175,7 +182,7 @@ const DataQuality = ({ initialReportId }) => {
             a.click();
             a.remove();
         } catch (err) {
-            console.error(err);
+            setError(err.message);
         }
     };
 
@@ -193,6 +200,9 @@ const DataQuality = ({ initialReportId }) => {
         if (score >= 0.5) return 'text-amber-500';
         return 'text-red-500';
     };
+
+    const scorePercent = (score) => Math.round((Number(score) || 0) * 100);
+    const reportYear = (value) => value ? new Date(value).getFullYear() : 'N/D';
 
     return (
         <div className="flex h-[calc(100vh-120px)] gap-6 overflow-hidden">
@@ -220,7 +230,8 @@ const DataQuality = ({ initialReportId }) => {
                                         {h.semaforo}
                                     </span>
                                 </div>
-                                <div className="text-xs font-bold text-slate-700 mb-1">{Math.round(h.score_overall * 100)}% Calidad</div>
+                                <div className="text-xs font-bold text-slate-700 mb-1">{scorePercent(h.score_overall)}% Calidad</div>
+                                <div className="text-[9px] text-indigo-600 font-black uppercase truncate mb-1">{h.source_name || 'Auditoria manual'}</div>
                                 <div className="text-[9px] text-slate-400 font-medium">
                                     {new Date(h.created_at).toLocaleString()}
                                 </div>
@@ -237,14 +248,15 @@ const DataQuality = ({ initialReportId }) => {
                         <input
                             type="file"
                             className="absolute inset-0 opacity-0 cursor-pointer"
-                            accept=".xlsx,.xls"
+                            accept=".xlsx,.xls,.csv"
                             onChange={handleFileUpload}
                         />
                         <div className="p-6 bg-slate-100 rounded-full mb-6 group-hover:bg-indigo-600 transition-all group-hover:scale-110">
                             <Upload className="h-10 w-10 text-slate-400 group-hover:text-white" />
                         </div>
-                        <h2 className="text-2xl font-black text-slate-800 mb-2">Auditar Calidad de Datos</h2>
-                        <p className="text-slate-500 font-medium max-w-sm">Suba el archivo de registros para ejecutar reglas de esquema, validación y consistencia.</p>
+                        <div className="mb-4 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">Control automatico activo</div>
+                        <h2 className="text-2xl font-black text-slate-800 mb-2">Centro de Calidad de Datos</h2>
+                        <p className="text-slate-500 font-medium max-w-md">Historial consolidado de las validaciones ejecutadas en cada carga institucional.</p>
 
                         {error && (
                             <div className="mt-8 p-4 bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-3 max-w-md mx-auto">
@@ -281,6 +293,7 @@ const DataQuality = ({ initialReportId }) => {
                                     <p className="text-slate-400 text-sm font-bold flex items-center gap-2">
                                         <Calendar size={14} /> {new Date().toLocaleDateString()} • {(report.rows_total || 0).toLocaleString()} registros auditados
                                     </p>
+                                    <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-indigo-600">{report.source_name || 'Auditoria manual'} · {report.profile || 'Perfil general'}</p>
                                 </div>
                             </div>
                             <div className="flex gap-3">
@@ -299,7 +312,7 @@ const DataQuality = ({ initialReportId }) => {
                                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 -mr-12 -mt-12 rounded-full group-hover:scale-110 transition-transform" />
                                 <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 relative">Score Global</div>
                                 <div className={`text-5xl font-black relative ${getScoreColor(report.score_overall || 0)}`}>
-                                    {Math.round((report.score_overall || 0) * 100)}%
+                                    {scorePercent(report.score_overall)}%
                                 </div>
                             </Card>
 
@@ -322,8 +335,8 @@ const DataQuality = ({ initialReportId }) => {
                             <Card className="p-6">
                                 <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Rango Temporal</div>
                                 <div className="mt-auto space-y-1">
-                                    <div className="text-xs font-black text-slate-700 flex justify-between">DESDE <span>{new Date(report.min_date).getFullYear()}</span></div>
-                                    <div className="text-xs font-black text-slate-700 flex justify-between">HASTA <span>{new Date(report.max_date).getFullYear()}</span></div>
+                                    <div className="text-xs font-black text-slate-700 flex justify-between">DESDE <span>{reportYear(report.min_date)}</span></div>
+                                    <div className="text-xs font-black text-slate-700 flex justify-between">HASTA <span>{reportYear(report.max_date)}</span></div>
                                 </div>
                             </Card>
                         </div>
@@ -375,12 +388,12 @@ const DataQuality = ({ initialReportId }) => {
                                                             <div className="text-xs font-black uppercase text-slate-700">{dim.label}</div>
                                                             <div className="text-[10px] font-medium text-slate-400">{dim.desc}</div>
                                                         </div>
-                                                        <div className={`text-xl font-black ${getScoreColor(dim.score)}`}>{Math.round(dim.score * 100)}%</div>
+                                                        <div className={`text-xl font-black ${getScoreColor(Number(dim.score) || 0)}`}>{scorePercent(dim.score)}%</div>
                                                     </div>
                                                     <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
                                                         <div
-                                                            className={`h-full rounded-full transition-all duration-1000 ${dim.score > 0.8 ? 'bg-emerald-500' : dim.score > 0.5 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                                            style={{ width: `${dim.score * 100}%` }}
+                                                            className={`h-full rounded-full transition-all duration-1000 ${(Number(dim.score) || 0) > 0.8 ? 'bg-emerald-500' : (Number(dim.score) || 0) > 0.5 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                                            style={{ width: `${scorePercent(dim.score)}%` }}
                                                         />
                                                     </div>
                                                 </div>

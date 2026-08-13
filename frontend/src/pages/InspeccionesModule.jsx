@@ -90,14 +90,23 @@ const InspeccionesModule = () => {
             const result = await res.json();
             
             if (res.ok) {
+                const quality = result.quality;
+                const qualityLabel = quality?.semaforo ? ` Calidad ${quality.semaforo.toLowerCase()}.` : '';
                 setUploadStatus({ 
-                    text: `Éxito: ${result.inserted} nuevos, ${result.skipped} ignorados.`, 
-                    type: "success" 
+                    text: `Carga terminada: ${result.inserted} nuevos, ${result.skipped} ignorados.${qualityLabel}`,
+                    type: quality?.semaforo === 'AMARILLO' ? "warning" : "success",
+                    quality,
                 });
                 fetchExpedientes();
                 fetchStats();
             } else {
-                setUploadStatus({ text: `Error: ${result.detail}`, type: "error" });
+                const detail = result.detail;
+                const message = typeof detail === 'object' ? detail?.message : detail;
+                setUploadStatus({
+                    text: message || 'No fue posible procesar el archivo.',
+                    type: "error",
+                    quality: typeof detail === 'object' ? detail : null,
+                });
             }
         } catch (err) {
             setUploadStatus({ text: "Error de conexión", type: "error" });
@@ -144,12 +153,15 @@ const InspeccionesModule = () => {
             {uploadStatus && (
                 <div className={`p-6 rounded-[2rem] border-2 flex items-center justify-between ${
                     uploadStatus.type === 'error' ? 'bg-red-50 border-red-100 text-red-700' : 
-                    uploadStatus.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 
+                    uploadStatus.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
+                    uploadStatus.type === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-700' :
                     'bg-indigo-50 border-indigo-100 text-indigo-700'
                 }`}>
                     <div className="flex items-center gap-4">
                         {uploadStatus.type === 'info' && <Loader2 className="animate-spin" />}
                         {uploadStatus.type === 'success' && <CheckCircle2 />}
+                        {uploadStatus.type === 'warning' && <AlertCircle />}
+                        {uploadStatus.type === 'error' && <AlertCircle />}
                         <p className="font-black text-sm uppercase tracking-widest">{uploadStatus.text}</p>
                     </div>
                     <button onClick={() => setUploadStatus(null)}><X size={20} /></button>

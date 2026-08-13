@@ -27,6 +27,8 @@ from services.report_automation_service import ReportAutomationService
 from services.alerts_rnmc import generate_rnmc_alerts
 from services.alerts_prioritizer import compute_action_score, get_scoring_config
 from services.ai_prioritizer import build_ai_rationale
+from services import dq_service
+from db import crud_dq
 from core.config import is_strong_secret
 try:
     from weasyprint import HTML, CSS
@@ -130,6 +132,33 @@ async def upload_intelligence_file(
         processor = NationalStatsProcessor()
         # Consumir generator para validar y obtener source_id
         all_records = list(processor.process_excel(contents, file.filename))
+
+        detected_source_id = all_records[0].get("source_id", "GENERIC_CRIME") if all_records else "FUENTE_NO_DETECTADA"
+        quality_report = dq_service.run_records_dq(
+            all_records,
+            file.filename or "archivo_sin_nombre",
+            source_name=f"INTELLIGENCE_{detected_source_id}",
+        )
+        db_quality_report = crud_dq.create_dq_report(db, quality_report)
+        if quality_report.get("semaforo") == "ROJO":
+            log_entry.estado = "FAILED"
+            log_entry.errores = "Carga bloqueada por control automatico de calidad."
+            log_entry.fecha_fin = datetime.utcnow()
+            log_entry.detalles = {
+                "filename": file.filename,
+                "dq_report_id": str(db_quality_report.id),
+                "semaforo": "ROJO",
+            }
+            db.commit()
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "El archivo fue bloqueado por errores criticos de calidad.",
+                    "report_id": str(db_quality_report.id),
+                    "semaforo": "ROJO",
+                    "issues_count": len(quality_report.get("issues", [])),
+                },
+            )
         
         if not all_records:
             return {
@@ -158,7 +187,12 @@ async def upload_intelligence_file(
                 "inserted_count": 0,
                 "updated_count": 0,
                 "skipped_count": existing_file.records_count,
-                "periodo": existing_file.periodo_detectado
+                "periodo": existing_file.periodo_detectado,
+                "quality": {
+                    "report_id": str(db_quality_report.id),
+                    "semaforo": quality_report.get("semaforo"),
+                    "score": quality_report.get("score_overall"),
+                },
             }
 
         # 1. Detectar Periodo y Distribución
@@ -181,6 +215,8 @@ async def upload_intelligence_file(
                 alertas.append(f"Atención: Año detectado fuera de rango normal: {a}")
 
         count = 0
+        res = {}
+        rnmc_processed = False
         from sqlalchemy.dialects.postgresql import insert
         
         # 2. Transacción Atómica
@@ -203,6 +239,9 @@ async def upload_intelligence_file(
                     db.execute(stmt)
                     count += 1
                 elif source_id == "INSPECCION_MEDIDAS_RNMC":
+                    if rnmc_processed:
+                        continue
+                    rnmc_processed = True
                     # RNMC usa su propio ingestor para lógica de fingerprints específica
                     ingestor = RNMCIngestor(db)
                     res = ingestor.process_file(contents, file.filename)
@@ -211,6 +250,7 @@ async def upload_intelligence_file(
                     updated = int(res.get("updated", 0))
                     total = int(res.get("total", 0))
                     count = inserted + updated
+                    break
                 else:
                     stmt = insert(NationalCrimeStats).values(record_dict)
                     stmt = stmt.on_conflict_do_update(
@@ -250,7 +290,9 @@ async def upload_intelligence_file(
                 "filename": file.filename,
                 "periodo": periodo_str,
                 "distribucion": distribucion_anio,
-                "alertas": alertas
+                "alertas": alertas,
+                "dq_report_id": str(db_quality_report.id),
+                "dq_semaforo": quality_report.get("semaforo"),
             }
 
         db.commit()
@@ -264,7 +306,13 @@ async def upload_intelligence_file(
             "periodo_detectado": periodo_str,
             "anios_incluidos": anos,
             "distribucion_anio": distribucion_anio,
-            "alertas": alertas
+            "alertas": alertas,
+            "quality": {
+                "report_id": str(db_quality_report.id),
+                "semaforo": quality_report.get("semaforo"),
+                "score": quality_report.get("score_overall"),
+                "issues_count": len(quality_report.get("issues", [])),
+            },
         }
 
         # En el caso RNMC, propagar detalles extras del ingestor (detect sheet, etc.)
@@ -284,6 +332,8 @@ async def upload_intelligence_file(
 
         return base_response
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         log_entry.estado = "FAILED"
