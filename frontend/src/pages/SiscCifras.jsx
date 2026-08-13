@@ -4,6 +4,7 @@ import {
   Loader2, MessageCircle, RefreshCw, ShieldCheck, Sparkles, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import { suggestedSiscCifrasPeriod } from '../utils/siscCifrasPeriod';
 
 const EDITIONS = [
   { id: 'weekly', label: 'Semanal' },
@@ -20,7 +21,6 @@ const COMPARISON_MODES = [
 ];
 
 const DEFAULT_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'];
-const CORE_PERIOD_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC'];
 const DOMAIN_COLORS = {
   SEGURIDAD: '#281FD0',
   CONVIVENCIA: '#3A30F1',
@@ -64,20 +64,6 @@ const sevenDaysAgoIso = () => {
   const d = new Date();
   d.setDate(d.getDate() - 6);
   return d.toISOString().slice(0, 10);
-};
-
-const suggestedPeriod = (sources = [], edition = 'weekly') => {
-  const coreCutoffs = CORE_PERIOD_SOURCES
-    .map((code) => sources.find((source) => source.code === code)?.last_cutoff_date)
-    .filter(Boolean)
-    .sort();
-  const allCutoffs = sources.map((source) => source.last_cutoff_date).filter(Boolean).sort();
-  const endIso = coreCutoffs[0] || allCutoffs.at(-1) || todayIso();
-  const end = new Date(`${endIso}T12:00:00`);
-  const start = new Date(end);
-  if (edition === 'monthly') start.setDate(1);
-  else start.setDate(start.getDate() - 6);
-  return { start: start.toISOString().slice(0, 10), end: endIso };
 };
 
 const authHeaders = () => {
@@ -914,7 +900,7 @@ const SiscCifras = ({ publicMode = false }) => {
   };
 
   const applySuggestedPeriod = (nextEdition = edition) => {
-    const suggested = suggestedPeriod(sources, nextEdition);
+    const suggested = suggestedSiscCifrasPeriod(sources, nextEdition);
     setPeriodStart(suggested.start);
     setPeriodEnd(suggested.end);
   };
@@ -1026,7 +1012,10 @@ const SiscCifras = ({ publicMode = false }) => {
     setPeriodSuggested(true);
   }, [sources, periodSuggested, edition]);
 
-  const recommendedPeriod = useMemo(() => suggestedPeriod(sources, edition), [sources, edition]);
+  const recommendedPeriod = useMemo(
+    () => suggestedSiscCifrasPeriod(sources, edition),
+    [sources, edition]
+  );
 
   return (
     <div className="min-h-screen bg-[#F2F4F7]">
