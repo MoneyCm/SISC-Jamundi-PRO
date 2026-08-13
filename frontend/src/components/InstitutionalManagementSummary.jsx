@@ -164,6 +164,12 @@ const InstitutionalManagementSummary = ({
                                     <div><p className="text-4xl font-black tabular-nums text-slate-950">{formatNumber(inspectionTotal.value)}</p><p className="mt-1 text-sm font-bold text-slate-700">Actuaciones registradas</p></div>
                                     <div className="text-left sm:text-right"><p className="text-[10px] font-bold uppercase text-slate-500">Comparación</p><p className="mt-1 text-xs font-black text-slate-700">{comparisonText(inspectionTotal)}</p></div>
                                 </div>
+                                {inspectionSource?.coverage_status === 'partial' && (
+                                    <div className="mt-4 flex items-start gap-2 border-l-4 border-amber-400 bg-amber-50/70 px-3 py-2.5 text-xs leading-5 text-amber-950">
+                                        <CalendarClock size={16} className="mt-0.5 shrink-0" />
+                                        <p><span className="font-black">Lectura parcial:</span> incluye registros entre {formatDate(summary?.period?.start)} y {formatDate(inspectionSource.last_cutoff_date)}. No representa el cierre completo del mes.</p>
+                                    </div>
+                                )}
                                 <IndicatorRows indicators={inspectionMeasures} limit={3} />
                             </>
                         ) : <SourceUnavailable source={inspectionSource} onUseCutoff={onUseCutoff} />}
@@ -189,7 +195,7 @@ const InstitutionalManagementSummary = ({
 
                         <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                             <p className="text-[10px] leading-4 text-slate-500">Cifras agregadas y aprobadas; no muestra personas ni expedientes.</p>
-                            {onNavigate && <button onClick={() => onNavigate('sources')} className="shrink-0 text-xs font-black text-primary">Ver fuente</button>}
+                            {onNavigate && <button onClick={() => onNavigate('institutional_agents')} className="shrink-0 text-xs font-black text-primary">Gestionar corte</button>}
                         </div>
                     </article>
                 </div>
