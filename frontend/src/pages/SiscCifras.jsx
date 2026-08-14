@@ -4,11 +4,16 @@ import {
   Loader2, MessageCircle, RefreshCw, ShieldCheck, Sparkles, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
-import { suggestedSiscCifrasPeriod } from '../utils/siscCifrasPeriod';
+import { institutionalSiscCifrasPeriods, suggestedSiscCifrasPeriod } from '../utils/siscCifrasPeriod';
 
-const EDITIONS = [
+const QUICK_EDITIONS = [
   { id: 'weekly', label: 'Semanal' },
   { id: 'monthly', label: 'Mensual' },
+  { id: 'semester', label: '6 meses' },
+  { id: 'annual', label: 'Anual' },
+];
+
+const FOCUS_EDITIONS = [
   { id: 'security', label: 'Seguridad' },
   { id: 'convivencia', label: 'Convivencia' },
   { id: 'territory', label: 'Territorio' },
@@ -423,7 +428,11 @@ const publicInsightText = (text = '', label = 'mismo periodo del ano anterior') 
 const editionLabel = (publication) => {
   const type = publication?.edition_type;
   if (type === 'monthly') return 'BOLETIN MENSUAL';
+  if (type === 'semester') return 'BOLETIN SEMESTRAL';
   if (type === 'annual') return 'BOLETIN ANUAL';
+  if (type === 'security') return 'SEGURIDAD';
+  if (type === 'convivencia') return 'CONVIVENCIA';
+  if (type === 'territory') return 'TERRITORIO';
   return 'BOLETIN SEMANAL';
 };
 
@@ -849,9 +858,15 @@ const SiscCifras = ({ publicMode = false }) => {
   const [error, setError] = useState(null);
   const [shareStatus, setShareStatus] = useState(null);
   const [periodSuggested, setPeriodSuggested] = useState(false);
+  const [institutionalPeriod, setInstitutionalPeriod] = useState('');
 
   const publicSources = useMemo(
     () => sources.filter((source) => source.publication_level === 'PUBLICO'),
+    [sources]
+  );
+
+  const institutionalPeriods = useMemo(
+    () => institutionalSiscCifrasPeriods(sources),
     [sources]
   );
 
@@ -903,6 +918,15 @@ const SiscCifras = ({ publicMode = false }) => {
     const suggested = suggestedSiscCifrasPeriod(sources, nextEdition);
     setPeriodStart(suggested.start);
     setPeriodEnd(suggested.end);
+  };
+
+  const applyInstitutionalPeriod = (periodId) => {
+    const selected = institutionalPeriods.find((item) => item.id === periodId);
+    setInstitutionalPeriod(periodId);
+    if (!selected) return;
+    setEdition(selected.edition);
+    setPeriodStart(selected.start);
+    setPeriodEnd(selected.end);
   };
 
   const downloadJson = () => {
@@ -1059,11 +1083,12 @@ const SiscCifras = ({ publicMode = false }) => {
               <h2 className="text-sm font-black uppercase tracking-wide">Modo rapido</h2>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {EDITIONS.map((item) => (
+              {QUICK_EDITIONS.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => {
                     setEdition(item.id);
+                    setInstitutionalPeriod('');
                     applySuggestedPeriod(item.id);
                   }}
                   className={`rounded-md px-3 py-2 text-xs font-black uppercase transition ${edition === item.id ? 'bg-[#281FD0] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
@@ -1072,6 +1097,36 @@ const SiscCifras = ({ publicMode = false }) => {
                 </button>
               ))}
             </div>
+            <div className="mt-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Enfoque</p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {FOCUS_EDITIONS.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setEdition(item.id);
+                      setInstitutionalPeriod('');
+                      applySuggestedPeriod(item.id);
+                    }}
+                    className={`rounded-md px-2 py-2 text-[10px] font-black uppercase transition ${edition === item.id ? 'bg-[#281FD0] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="mt-4 block text-[10px] font-black uppercase tracking-widest text-slate-500">
+              Cierre institucional
+              <select
+                aria-label="Cierre institucional"
+                value={institutionalPeriod}
+                onChange={(event) => applyInstitutionalPeriod(event.target.value)}
+                className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-slate-800 outline-none focus:border-[#281FD0]"
+              >
+                <option value="">Seleccionar periodo cerrado</option>
+                {institutionalPeriods.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </label>
             <div className="mt-5 grid grid-cols-2 gap-3">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                 Inicio
