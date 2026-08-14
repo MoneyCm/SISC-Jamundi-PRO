@@ -28,11 +28,13 @@ from services.alerts_rnmc import generate_rnmc_alerts
 from services.alerts_prioritizer import compute_action_score, get_scoring_config
 from services.ai_prioritizer import build_ai_rationale
 from services.national_context_service import (
+    comparable_reference_rate,
     comparable_national_rate,
     municipality_code_for_name,
     municipality_name_for_code,
     national_benchmark_guard,
     normalize_municipality_code,
+    population_peer_codes,
     year_over_year,
 )
 from services import dq_service
@@ -1974,6 +1976,7 @@ async def get_national_stats(
         (normalize_municipality_code(row.codigo_dane) for row in local_code_rows if normalize_municipality_code(row.codigo_dane)),
         None,
     ) or municipality_code_for_name(municipio, anio)
+    territorial_peer_codes = population_peer_codes(local_code, anio)
 
     national_rows = db.query(
         NationalCrimeStats.tipo_delito,
@@ -1998,6 +2001,8 @@ async def get_national_stats(
     ).distinct().all()
     coverage_codes_by_type = {}
     national_totals_by_type = {}
+    territorial_totals_by_type = {}
+    territorial_codes_by_type = {}
     cutoffs_by_type = {}
     all_source_codes = set()
     for national_row in national_rows:
@@ -2008,6 +2013,11 @@ async def get_national_stats(
         national_totals_by_type[national_row.tipo_delito] = (
             national_totals_by_type.get(national_row.tipo_delito, 0) + int(national_row.total)
         )
+        if source_code in territorial_peer_codes:
+            territorial_totals_by_type[national_row.tipo_delito] = (
+                territorial_totals_by_type.get(national_row.tipo_delito, 0) + int(national_row.total)
+            )
+            territorial_codes_by_type.setdefault(national_row.tipo_delito, set()).add(source_code)
         all_source_codes.add(source_code)
     for cutoff_row in cutoff_rows:
         cutoffs_by_type.setdefault(cutoff_row.tipo_delito, set()).add(cutoff_row.fecha_corte_mindefensa)
@@ -2029,6 +2039,15 @@ async def get_national_stats(
             covered_codes=coverage_codes_by_type.get(row.tipo_delito, set()),
             cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
         )
+        territorial_benchmark = comparable_reference_rate(
+            year=anio,
+            local_code=local_code,
+            local_total=local_total,
+            reference_total=territorial_totals_by_type.get(row.tipo_delito, 0),
+            expected_codes=territorial_peer_codes,
+            covered_codes=territorial_codes_by_type.get(row.tipo_delito, set()),
+            cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
+        )
 
         result_data.append({
             "delito": row.tipo_delito,
@@ -2037,6 +2056,7 @@ async def get_national_stats(
             "yoy_var": yoy_var,
             "yoy_pct": yoy_pct,
             "rate_per_100k": national_benchmark["local_rate_per_100k"],
+            "territorial_benchmark": territorial_benchmark,
             "national_benchmark": national_benchmark,
         })
 
@@ -2059,6 +2079,11 @@ async def get_national_stats(
         population_code=local_code,
     )
     available_benchmarks = [item["national_benchmark"] for item in result_data if item["national_benchmark"]["available"]]
+    available_territorial_benchmarks = [
+        item["territorial_benchmark"]
+        for item in result_data
+        if item["territorial_benchmark"]["available"]
+    ]
     national_context["coverage"] = {
         "conductas_evaluated": len(result_data),
         "conductas_with_complete_coverage": len(available_benchmarks),
@@ -2072,6 +2097,17 @@ async def get_national_stats(
             "title": "Referencia nacional verificable",
             "reason": "La tasa nacional se muestra solo en las conductas con cobertura municipal completa para el mismo ano y corte.",
         })
+    national_context["territorial_reference"] = {
+        "available": bool(available_territorial_benchmarks),
+        "title": "Municipios de referencia poblacional de Valle del Cauca y Cauca",
+        "reason": (
+            "Incluye municipios con una poblacion entre 50% y 200% de la poblacion "
+            "DANE del municipio consultado; se publica solo con cobertura y corte completos."
+        ),
+        "expected_municipalities": len(territorial_peer_codes),
+        "conductas_evaluated": len(result_data),
+        "conductas_with_complete_coverage": len(available_territorial_benchmarks),
+    }
 
     fp_data = db.query(
         NationalCrimeStats.accion,

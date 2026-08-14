@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, TrendingUp, Upload, Activity, BarChart2, Clock, ArrowUpRight, Brain, ShieldAlert, Download } from "lucide-react";
+import { Loader2, TrendingUp, Upload, Activity, BarChart2, Clock, ArrowUpRight, Brain, Download } from "lucide-react";
 import {
     BarChart,
     Bar,
@@ -353,13 +353,15 @@ const IntelligenceModule = () => {
         ...item,
         name: monthNames[item.mes - 1] || item.mes
     }));
+    const selectedMunicipioNombre = municipios.find(m => m.id === selectedMunicipio)?.nombre || selectedMunicipio;
+    const territorialReference = stats.context?.territorial_reference;
 
     return (
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Contexto histórico de seguridad</h1>
-                    <p className="text-slate-500 mt-1">Serie histórica MinDefensa: tendencia local y comparación anual verificable.</p>
+                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Contexto nacional y regional</h1>
+                    <p className="text-slate-500 mt-1">Serie histórica MinDefensa: variación anual local y referencias comparables verificadas.</p>
                 </div>
                 <div className="flex gap-2">
                     {canManage && (
@@ -434,20 +436,26 @@ const IntelligenceModule = () => {
                 </div>
             )}
 
-            <Card className="border-amber-200 bg-amber-50/70">
+            <Card className="border-slate-200 bg-white">
                 <CardContent className="p-5">
                     <div className="flex items-start gap-3">
-                        <ShieldAlert className="h-5 w-5 mt-0.5 text-amber-700 flex-shrink-0" />
+                        <BarChart2 className="h-5 w-5 mt-0.5 text-indigo-700 flex-shrink-0" />
                         <div className="min-w-0">
-                            <p className="font-semibold text-slate-800">
-                                {stats.context?.title || 'Referencia nacional pendiente de homologación'}
-                            </p>
+                            <p className="font-semibold text-slate-800">Lectura prioritaria: variación anual de {selectedMunicipioNombre}</p>
                             <p className="mt-1 text-sm text-slate-600">
-                                {stats.context?.reason || 'La comparación nacional se mantiene desactivada hasta contar con una tasa equivalente y cobertura verificable.'}
+                                Cada indicador se compara primero con el mismo municipio en {selectedYear - 1}. Las referencias territoriales y nacionales son complementarias y se muestran únicamente cuando el periodo, el corte y la cobertura son equivalentes.
                             </p>
-                            <p className="mt-2 text-xs text-slate-500">
-                                Esta vista muestra conteos locales y variación frente al mismo municipio en el año anterior.
-                                {stats.context?.cutoff ? ` Corte disponible: ${stats.context.cutoff}.` : ''}
+                            {territorialReference && (
+                                <p className={`mt-2 text-xs font-medium ${territorialReference.available ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                    {territorialReference.available
+                                        ? `${territorialReference.title}: disponible en ${territorialReference.conductas_with_complete_coverage} de ${territorialReference.conductas_evaluated} conductas.`
+                                        : `${territorialReference.title}: pendiente de cobertura verificable.`}
+                                </p>
+                            )}
+                            <p className="mt-1 text-xs text-slate-500">
+                                {stats.context?.available
+                                    ? 'Referencia nacional disponible solo para las conductas que cumplen validación completa.'
+                                    : (stats.context?.reason || 'La referencia nacional permanece sin publicar hasta verificar una tasa equivalente y cobertura completa.')}
                             </p>
                             {stats.context?.population?.municipality_total && (
                                 <p className="mt-1 text-xs text-slate-500">
@@ -614,6 +622,16 @@ const IntelligenceModule = () => {
                                 </p>
                                 {item.rate_per_100k != null && (
                                     <p className="text-[10px] text-slate-500">Tasa local DANE: {item.rate_per_100k} por 100.000 hab.</p>
+                                )}
+                                {item.territorial_benchmark?.available && (
+                                    <p className="text-[10px] font-bold text-emerald-700">
+                                        Referencia territorial: {item.territorial_benchmark.reference_rate_per_100k} por 100.000 hab.
+                                    </p>
+                                )}
+                                {item.territorial_benchmark && !item.territorial_benchmark.available && (
+                                    <p className="text-[10px] text-slate-400">
+                                        Referencia territorial pendiente: {item.territorial_benchmark.coverage.observed_municipalities}/{item.territorial_benchmark.coverage.expected_municipalities} municipios con cobertura verificable.
+                                    </p>
                                 )}
                                 {item.national_benchmark?.available && (
                                     <p className="text-[10px] font-bold text-indigo-700">

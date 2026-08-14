@@ -23,6 +23,7 @@ NATIONAL_BENCHMARK_REQUIREMENTS = [
     "cobertura completa de municipios para la misma conducta y ano",
     "misma definicion de conducta, periodo y corte",
 ]
+REFERENCE_DEPARTMENTS = ("76", "19")  # Valle del Cauca y Cauca
 
 
 def normalize_municipality_code(value: object) -> Optional[str]:
@@ -107,6 +108,32 @@ def municipality_name_for_code(code: object, year: Optional[int] = None) -> Opti
     return candidates[0][1] if candidates else None
 
 
+def population_peer_codes(
+    code: object,
+    year: int,
+    *,
+    department_codes: tuple[str, ...] = REFERENCE_DEPARTMENTS,
+    lower_population_ratio: float = 0.5,
+    upper_population_ratio: float = 2.0,
+) -> set[str]:
+    """Return nearby municipalities with a transparent, comparable population range."""
+    target_code = normalize_municipality_code(code)
+    target_population = population_for(target_code, year)
+    if not target_code or not target_population:
+        return set()
+
+    population, _ = _population_reference()
+    return {
+        candidate_code
+        for candidate_code in municipality_codes_for_year(year)
+        if candidate_code != target_code
+        and candidate_code[:2] in department_codes
+        and lower_population_ratio
+        <= (population[(candidate_code, year)] / target_population)
+        <= upper_population_ratio
+    }
+
+
 def rate_per_100k(count: int, population: Optional[int]) -> Optional[float]:
     if population is None or population <= 0:
         return None
@@ -164,7 +191,36 @@ def comparable_national_rate(
     cutoffs: Iterable[date] = (),
 ) -> dict:
     """Calculate comparable rates only for a complete DANE municipal coverage."""
-    expected_codes = municipality_codes_for_year(year)
+    result = comparable_reference_rate(
+        year=year,
+        local_code=local_code,
+        local_total=local_total,
+        reference_total=national_total,
+        expected_codes=municipality_codes_for_year(year),
+        covered_codes=covered_codes,
+        cutoffs=cutoffs,
+    )
+    result["national_population"] = result["reference_population"]
+    result["national_rate_per_100k"] = result["reference_rate_per_100k"]
+    return result
+
+
+def comparable_reference_rate(
+    *,
+    year: int,
+    local_code: object,
+    local_total: int,
+    reference_total: int,
+    expected_codes: Iterable[object],
+    covered_codes: Iterable[object],
+    cutoffs: Iterable[date] = (),
+) -> dict:
+    """Calculate a rate only when all reference municipalities share one cutoff."""
+    expected_codes = {
+        code for raw_code in expected_codes
+        if (code := normalize_municipality_code(raw_code)) is not None
+        and population_for(code, year) is not None
+    }
     observed_codes = {
         code for raw_code in covered_codes
         if (code := normalize_municipality_code(raw_code)) in expected_codes
@@ -181,7 +237,8 @@ def comparable_national_rate(
         "year": year,
         "local_population": local_population,
         "local_rate_per_100k": local_rate,
-        "national_rate_per_100k": None,
+        "reference_population": None,
+        "reference_rate_per_100k": None,
         "coverage": {
             "expected_municipalities": len(expected_codes),
             "observed_municipalities": len(observed_codes),
@@ -194,7 +251,7 @@ def comparable_national_rate(
         "reason": None,
     }
     if not expected_codes:
-        result["reason"] = "No hay universo poblacional DANE para el ano consultado."
+        result["reason"] = "No hay municipios de referencia con poblacion DANE para el ano consultado."
         return result
     if local_population is None:
         result["reason"] = "No hay poblacion DANE homologada para el municipio consultado."
@@ -206,11 +263,12 @@ def comparable_national_rate(
         result["reason"] = "La fuente no tiene un corte unico verificable para esta conducta."
         return result
 
-    national_population = sum(population_for(code, year) or 0 for code in expected_codes)
+    reference_population = sum(population_for(code, year) or 0 for code in expected_codes)
+    reference_rate = rate_per_100k(reference_total, reference_population)
     result.update({
         "available": True,
-        "national_population": national_population,
-        "national_rate_per_100k": rate_per_100k(national_total, national_population),
-        "rate_difference_per_100k": round(local_rate - rate_per_100k(national_total, national_population), 2),
+        "reference_population": reference_population,
+        "reference_rate_per_100k": reference_rate,
+        "rate_difference_per_100k": round(local_rate - reference_rate, 2),
     })
     return result
