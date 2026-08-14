@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import DashboardFilters from '../components/DashboardFiltersV2';
 import InstitutionalManagementSummary from '../components/InstitutionalManagementSummary';
-import MapComponent from '../components/Map/MapComponent';
+import TerritoryMap from '../components/Map/TerritoryMap';
 import {
     AIAnalysisPanel,
     AlertsPanel,
@@ -117,7 +117,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const [trend, setTrend] = useState([]);
     const [distribution, setDistribution] = useState([]);
     const [recent, setRecent] = useState([]);
-    const [mapData, setMapData] = useState([]);
+    const [mapData, setMapData] = useState(null);
     const [alerts, setAlerts] = useState([]);
     const [alertsUpdatedAt, setAlertsUpdatedAt] = useState(null);
     const [aiInsight, setAiInsight] = useState('');
@@ -175,10 +175,10 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             if (isInstitutional) {
                 baseRequests.push(
                     apiJson(`/analitica/estadisticas/resumen?${query}`),
-                    apiJson(`/analitica/eventos/geojson?${query}`),
+                    apiJson(`/analitica/public/dashboard?${query}&period_mode=custom&comparison=none&include_map=true&min_location_count=3`),
                 );
             }
-            const [current, previous, trendRows, distributionRows, recentRows = [], geoJson = {}] = await Promise.all(baseRequests);
+            const [current, previous, trendRows, distributionRows, recentRows = [], territorialDashboard = {}] = await Promise.all(baseRequests);
             if (requestId !== requestIdRef.current) return;
             if (current?.error_fallback) throw new Error('La fuente respondió sin indicadores válidos.');
             setCurrentKpis(current || {});
@@ -186,7 +186,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             setTrend(Array.isArray(trendRows) ? trendRows : []);
             setDistribution(Array.isArray(distributionRows) ? distributionRows : []);
             setRecent(Array.isArray(recentRows) ? recentRows.slice(0, 8).map((item) => ({ id: item.id, type: item.tipo, location: item.barrio, time: item.fecha })) : []);
-            setMapData(Array.isArray(geoJson?.features) ? geoJson.features : []);
+            setMapData(territorialDashboard?.map || null);
         } catch (requestError) {
             if (requestId === requestIdRef.current) setError(requestError.message || 'No fue posible actualizar el tablero.');
         } finally {
@@ -391,8 +391,8 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             {isInstitutional && (
                 <section className="grid xl:grid-cols-3 gap-4">
                     <article className="xl:col-span-2 bg-white border border-slate-200 rounded-lg overflow-hidden h-[480px] flex flex-col">
-                        <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-3"><div><h3 className="font-black text-slate-900">Mapa de registros georreferenciados</h3><p className="text-xs text-slate-500">Ubicaciones disponibles para el periodo seleccionado.</p></div><MapPinned size={20} className="text-primary" /></div>
-                        <div className="flex-1 min-h-0"><MapComponent incidents={mapData} /></div>
+                        <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-3"><div><h3 className="font-black text-slate-900">Mapa territorial agregado</h3><p className="text-xs text-slate-500">Concentracion por territorio oficial para el periodo seleccionado.</p></div><MapPinned size={20} className="text-primary" /></div>
+                        <div className="flex-1 min-h-0"><TerritoryMap map={mapData} /></div>
                     </article>
                     <RecentRecords data={recent} onOpen={() => onNavigate?.('data')} />
                 </section>
