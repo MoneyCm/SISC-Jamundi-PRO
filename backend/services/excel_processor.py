@@ -302,6 +302,135 @@ class NationalStatsProcessor:
         except Exception as e:
             logger.error(f"Error general procesando Excel {filename}: {e}")
 
+    def process_reference_excel(
+        self,
+        file_content: bytes,
+        filename: str,
+        source_cutoff: date | None = None,
+    ) -> Generator[Dict, None, None]:
+        """Build privacy-preserving municipal aggregates for verified comparisons.
+
+        This path intentionally keeps all coded municipalities, unlike the local
+        operational path above. It never stores individual-level dimensions.
+        """
+        try:
+            import re
+
+            raw = pd.read_excel(io.BytesIO(file_content), header=None, nrows=20)
+            if raw.empty:
+                logger.error(f"Reference file {filename} is empty.")
+                return
+
+            header_idx = -1
+            indicators = ["MUNICIPIO", "MPIO", "COD_MUNI", "CVE_MUNI", "LUGAR"]
+            for idx, row in raw.iterrows():
+                values = [str(value).upper().strip() for value in row.values if pd.notna(value)]
+                if any(any(indicator in value for indicator in indicators) for value in values):
+                    header_idx = idx
+                    break
+            if header_idx == -1:
+                logger.error(f"No reference header was found in {filename}.")
+                return
+
+            reference_columns = [
+                "MUNICIPIO", "MPIO", "LUGAR", "DEPARTAMENTO", "DTO", "COD_MUNI",
+                "CVE_MUNI", "CODIGO_MUNICIPIO", "FECHA", "ANIO", "AÑO", "CANTIDAD",
+                "TOTAL", "VICTIMAS", "NUMERO_CASOS",
+            ]
+
+            def is_reference_column(column_name):
+                normalized = str(column_name).upper().strip()
+                return any(candidate in normalized for candidate in reference_columns)
+
+            frame = pd.read_excel(
+                io.BytesIO(file_content),
+                header=header_idx,
+                usecols=is_reference_column,
+            )
+            frame.columns = [
+                str(column).upper().strip().replace(" ", "_")
+                if not pd.isna(column) else ""
+                for column in frame.columns
+            ]
+            columns = frame.columns.tolist()
+            municipality_column = next(
+                (column for column in columns if any(value in column for value in ["MUNICIPIO", "MPIO", "LUGAR"])),
+                None,
+            )
+            department_column = next(
+                (column for column in columns if any(value in column for value in ["DEPARTAMENTO", "DEPTO", "DTO"])),
+                None,
+            )
+            code_column = next(
+                (column for column in columns if any(value in column for value in ["COD_MUNI", "CVE_MUNI", "CODIGO_MUNICIPIO"])),
+                None,
+            )
+            date_column = next(
+                (column for column in columns if any(value in column for value in ["FECHA_HECHO", "FECHA", "ANIO", "AÑO"])),
+                None,
+            )
+            quantity_column = next(
+                (column for column in columns if any(value in column for value in ["CANTIDAD", "TOTAL", "VICTIMAS", "NUMERO_CASOS"])),
+                None,
+            )
+            if not code_column:
+                logger.error(f"Reference file {filename} has no DANE municipality code column.")
+                return
+
+            inferred_year = self._extract_year_from_filename(filename)
+            crime_type = self._infer_crime_type(filename)
+            aggregates = {}
+            latest_period = None
+
+            for _, row in frame.iterrows():
+                raw_code = row[code_column]
+                if pd.isna(raw_code):
+                    continue
+                digits = re.sub(r"\D", "", str(raw_code).replace(".0", ""))
+                if not digits:
+                    continue
+                municipality_code = digits.zfill(5)
+
+                event_date = self._parse_date_openpyxl(row[date_column]) if date_column and not pd.isna(row[date_column]) else None
+                event_date = event_date or date(inferred_year, 1, 1)
+                latest_period = max(latest_period, event_date) if latest_period else event_date
+
+                try:
+                    quantity = float(row[quantity_column]) if quantity_column and not pd.isna(row[quantity_column]) else 1.0
+                except (TypeError, ValueError):
+                    quantity = 1.0
+                if quantity < 0:
+                    continue
+
+                municipality = str(row[municipality_column]).strip() if municipality_column and not pd.isna(row[municipality_column]) else municipality_code
+                department = str(row[department_column]).strip() if department_column and not pd.isna(row[department_column]) else "NO INFORMADO"
+                key = (municipality_code, municipality, department, event_date.year, event_date.month)
+                aggregates[key] = aggregates.get(key, 0.0) + quantity
+
+            cutoff = source_cutoff or latest_period
+            for (municipality_code, municipality, department, year, month), quantity in aggregates.items():
+                fingerprint_source = f"MINDEFENSA_REFERENCE|{crime_type}|{municipality_code}|{year}|{month}"
+                fingerprint = hashlib.sha256(fingerprint_source.encode()).hexdigest()
+                yield {
+                    "source_id": "MINDEFENSA_REFERENCE",
+                    "departamento": department or "NO INFORMADO",
+                    "municipio": municipality,
+                    "municipio_normalizado": self.normalize_text(municipality),
+                    "codigo_dane": municipality_code,
+                    "fecha_hecho": date(year, month, 1),
+                    "fecha_corte_mindefensa": cutoff,
+                    "anio": year,
+                    "mes": month,
+                    "tipo_delito": crime_type,
+                    "cantidad": int(round(quantity)),
+                    "fuente_archivo": filename,
+                    "event_fingerprint": fingerprint,
+                    "hash_registro": fingerprint,
+                    "fecha_ingesta": datetime.utcnow(),
+                }
+        except Exception as error:
+            logger.error(f"Error processing reference file {filename}: {error}")
+
     def _extract_year_from_filename(self, filename: str) -> int:
         import re
         match = re.search(r'20\d{2}', filename)

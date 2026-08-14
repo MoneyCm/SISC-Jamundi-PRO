@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, UploadFile, File, Request, Query
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, UploadFile, File, Form, Request, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -49,7 +49,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import datetime
+from datetime import date, datetime
 from io import BytesIO
 from api.ia import call_gemini, call_mistral, AI_PROVIDER, GEMINI_API_KEY, MISTRAL_API_KEY
 from sqlalchemy import text, func, desc
@@ -352,6 +352,143 @@ async def upload_intelligence_file(
         db.commit()
         logger.error(f"Fallo crítico en ingestión: {e}")
         raise HTTPException(status_code=500, detail="No se pudo procesar el archivo de inteligencia.")
+
+@router.post("/reference-upload")
+async def upload_reference_file(
+    request: Request,
+    file: UploadFile = File(...),
+    source_cutoff: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["SOURCE_UPLOADER", "TI_ADMIN"])),
+):
+    """Load aggregated nationwide reference data without altering local reports."""
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls).")
+
+    parsed_cutoff = None
+    if source_cutoff:
+        try:
+            parsed_cutoff = date.fromisoformat(source_cutoff)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail="source_cutoff debe usar formato YYYY-MM-DD.") from error
+
+    log_entry = IngestionLog(
+        estado="IN_PROGRESS",
+        registros_insertados=0,
+        detalles={"filename": file.filename, "scope": "MINDEFENSA_REFERENCE"},
+    )
+    db.add(log_entry)
+    db.commit()
+    db.refresh(log_entry)
+
+    try:
+        import uuid
+        from sqlalchemy.dialects.postgresql import insert
+
+        contents = await file.read()
+        file_hash = hashlib.sha256(contents).hexdigest()
+        source_id = "MINDEFENSA_REFERENCE"
+        existing_file = db.query(IngestionFile).filter(
+            IngestionFile.file_hash == file_hash,
+            IngestionFile.source_type == source_id,
+        ).first()
+        if existing_file:
+            return {
+                "ingestion_id": str(existing_file.ingestion_id),
+                "status": "UNCHANGED",
+                "message": "Archivo de referencia ya procesado.",
+                "records": existing_file.records_count,
+            }
+
+        processor = NationalStatsProcessor()
+        records = list(processor.process_reference_excel(contents, file.filename, parsed_cutoff))
+        if not records:
+            raise HTTPException(
+                status_code=422,
+                detail="El archivo no contiene municipios con codigo DANE para referencia territorial.",
+            )
+
+        period_dates = [record["fecha_hecho"] for record in records]
+        years = sorted({record["anio"] for record in records})
+        resolved_cutoff = records[0].get("fecha_corte_mindefensa")
+        ingestion_id = uuid.uuid4()
+
+        with db.begin_nested():
+            for record in records:
+                statement = insert(NationalCrimeStats).values(record)
+                statement = statement.on_conflict_do_update(
+                    index_elements=["source_id", "event_fingerprint"],
+                    set_={
+                        "cantidad": statement.excluded.cantidad,
+                        "fecha_corte_mindefensa": statement.excluded.fecha_corte_mindefensa,
+                        "fuente_archivo": statement.excluded.fuente_archivo,
+                        "fecha_ingesta": statement.excluded.fecha_ingesta,
+                    },
+                )
+                db.execute(statement)
+
+            db.add(IngestionFile(
+                ingestion_id=ingestion_id,
+                filename=file.filename,
+                source_type=source_id,
+                file_hash=file_hash,
+                inserted_count=len(records),
+                updated_count=0,
+                skipped_count=0,
+                records_count=len(records),
+                periodo_detectado=f"{min(period_dates)} a {max(period_dates)}",
+                periodo_detectado_min=min(period_dates),
+                periodo_detectado_max=max(period_dates),
+                anios_incluidos=years,
+                semanas_incluidas=[],
+                status="COMPLETED",
+            ))
+            log_entry.estado = "COMPLETED"
+            log_entry.registros_insertados = len(records)
+            log_entry.fecha_fin = datetime.utcnow()
+            log_entry.detalles = {
+                "ingestion_id": str(ingestion_id),
+                "filename": file.filename,
+                "scope": source_id,
+                "municipalities": len({record["codigo_dane"] for record in records}),
+                "years": years,
+                "source_cutoff": resolved_cutoff.isoformat() if resolved_cutoff else None,
+            }
+
+        db.commit()
+        await log_audit(
+            db,
+            "REFERENCE_DATA_INGESTED",
+            actor_id=str(current_user.id),
+            module="INTELLIGENCE",
+            target={"filename": file.filename, "records": len(records), "source_cutoff": str(resolved_cutoff)},
+            level=2,
+            request=request,
+        )
+        return {
+            "ingestion_id": str(ingestion_id),
+            "status": "COMPLETED",
+            "source_id": source_id,
+            "records": len(records),
+            "municipalities": len({record["codigo_dane"] for record in records}),
+            "years": years,
+            "source_cutoff": resolved_cutoff.isoformat() if resolved_cutoff else None,
+        }
+    except HTTPException:
+        db.rollback()
+        log_entry.estado = "FAILED"
+        log_entry.fecha_fin = datetime.utcnow()
+        db.commit()
+        raise
+    except Exception as error:
+        db.rollback()
+        log_entry.estado = "FAILED"
+        log_entry.errores = str(error)
+        log_entry.fecha_fin = datetime.utcnow()
+        db.commit()
+        logger.exception("Reference data ingestion failed")
+        raise HTTPException(status_code=500, detail="No se pudo procesar el archivo de referencia territorial.") from error
+
 
 @router.post("/ingest")
 async def trigger_ingestion(
@@ -1930,9 +2067,15 @@ async def get_national_stats(
     processor = NationalStatsProcessor()
     target_municipio = processor.normalize_text(municipio)
 
-    # This view is historical MinDefensa context. Do not mix it with local
-    # operational uploads or other source families.
-    mindefensa_source = NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+    # Prefer the complete municipal reference dataset when it exists. Legacy
+    # Jamundi-only MinDefensa records remain a historical fallback.
+    reference_source = NationalCrimeStats.source_id == "MINDEFENSA_REFERENCE"
+    has_reference_data = db.query(NationalCrimeStats.id).filter(
+        reference_source,
+        NationalCrimeStats.municipio_normalizado == target_municipio,
+        NationalCrimeStats.anio == anio,
+    ).first() is not None
+    mindefensa_source = reference_source if has_reference_data else NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
     
     # 2. Obtener datos locales (Jamundí o el seleccionado)
     local_data = db.query(
@@ -2108,6 +2251,7 @@ async def get_national_stats(
         "conductas_evaluated": len(result_data),
         "conductas_with_complete_coverage": len(available_territorial_benchmarks),
     }
+    national_context["dataset_scope"] = "NATIONAL_REFERENCE" if has_reference_data else "JAMUNDI_HISTORICAL_FALLBACK"
 
     fp_data = db.query(
         NationalCrimeStats.accion,
@@ -2257,7 +2401,13 @@ async def get_intelligence_insights(
         # 1. Obtener los mismos datos que /stats para dar contexto a la IA
         processor = NationalStatsProcessor()
         target_municipio = processor.normalize_text(municipio)
-        mindefensa_source = NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+        reference_source = NationalCrimeStats.source_id == "MINDEFENSA_REFERENCE"
+        has_reference_data = db.query(NationalCrimeStats.id).filter(
+            reference_source,
+            NationalCrimeStats.municipio_normalizado == target_municipio,
+            NationalCrimeStats.anio == anio,
+        ).first() is not None
+        mindefensa_source = reference_source if has_reference_data else NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
         
         local_data = db.query(
             NationalCrimeStats.tipo_delito,

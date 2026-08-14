@@ -16,6 +16,16 @@ La sabana semanal es la fuente operativa principal. Policia/SIEDCO se usan para
 el contraste mensual oficial, Valle para el contexto regional y MinDefensa como
 respaldo historico. Las cifras de fuentes distintas nunca se suman entre si.
 
+## Referencia territorial y nacional
+
+El monitor de MinDefensa conserva su flujo local de Jamundi para el boletin y
+las notificaciones. La carga de referencia es un proceso separado y manual:
+desde GitHub Actions se ejecuta con `force_download=true` y
+`sync_reference=true`. Esta carga envia al SISC solo agregados por conducta,
+municipio, ano y mes con codigo DANE y fecha de corte; no envia barrios ni datos
+personales. El comparador regional o nacional solo se activa cuando cada
+conducta tiene cobertura municipal completa y un corte unico verificable.
+
 Los monitores diarios consultan primero los metadatos remotos disponibles
 (fecha, tamano, ETag o huella). Solo descargan, procesan y notifican cuando el
 estado remoto cambia. La sabana
