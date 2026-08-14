@@ -126,8 +126,8 @@ const slideFilename = (idx, slide, publication, extension = 'png') => {
 const carouselFilename = (publication) =>
   `sisc-en-cifras-carrusel-${publicationPeriodSlug(publication)}-${publication.id}.zip`;
 
-const tiktokScriptFilename = (publication) =>
-  `sisc-en-cifras-guion-gemini-tiktok-${publicationPeriodSlug(publication)}.txt`;
+const videoScriptFilename = (publication) =>
+  `sisc-en-cifras-guion-video-${publicationPeriodSlug(publication)}.txt`;
 
 const textEncoder = new TextEncoder();
 const crcTable = Array.from({ length: 256 }, (_, index) => {
@@ -311,7 +311,7 @@ const buildTikTokPrompt = (publication) => {
   const dataLines = insightLines.length ? insightLines : indicatorLines;
 
   return [
-    'Crea un video vertical 9:16 para TikTok de 20 a 25 segundos, en espanol de Colombia, para la Alcaldia de Jamundi.',
+    'Crea un video vertical breve 9:16 para TikTok, Reels o Estado de WhatsApp, de 20 a 25 segundos, en espanol de Colombia, para la Alcaldia de Jamundi.',
     'Tema: SISC en cifras. Debe informar con claridad, sin sensacionalismo y con diseno institucional azul, amarillo y blanco.',
     '',
     'DATOS VERIFICADOS. Usa exclusivamente estos datos; no inventes ni redondees cifras:',
@@ -1089,7 +1089,7 @@ const SiscCifras = ({ publicMode = false }) => {
     const prompt = buildTikTokPrompt(publication);
     try {
       await navigator.clipboard.writeText(prompt);
-      setShareStatus('Guion para Gemini copiado. Pegalo en Gemini para crear el video de TikTok.');
+      setShareStatus('Guion de video copiado. Pegalo en Gemini para crear la pieza vertical.');
     } catch (_) {
       setShareStatus('No fue posible copiar automaticamente. Selecciona el guion y copialo desde la pantalla.');
     }
@@ -1097,8 +1097,8 @@ const SiscCifras = ({ publicMode = false }) => {
 
   const downloadTikTokPrompt = () => {
     if (!ensureCurrentPublication()) return;
-    downloadBlob(buildTikTokPrompt(publication), tiktokScriptFilename(publication), 'text/plain;charset=utf-8');
-    setShareStatus('Guion para Gemini descargado en formato TXT.');
+    downloadBlob(buildTikTokPrompt(publication), videoScriptFilename(publication), 'text/plain;charset=utf-8');
+    setShareStatus('Guion de video descargado en formato TXT.');
   };
 
   const shareWhatsappCarousel = async () => {
@@ -1374,10 +1374,10 @@ const SiscCifras = ({ publicMode = false }) => {
                         <MessageCircle size={15} /> Compartir
                       </button>
                       <button onClick={copyTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-40">
-                        <Video size={15} /> Copiar para Gemini
+                        <Video size={15} /> Copiar guion de video
                       </button>
                       <button onClick={downloadTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-                        <Download size={15} /> Guion TXT
+                        <Download size={15} /> Guion video TXT
                       </button>
                     </div>
                     {shareStatus && (
@@ -1393,7 +1393,7 @@ const SiscCifras = ({ publicMode = false }) => {
                   <section className="rounded-lg border border-slate-200 bg-white p-5">
                     <div className="mb-4 flex items-center gap-2">
                       <Video size={18} className="text-[#281FD0]" />
-                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Guion para Gemini y TikTok</h2>
+                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Guion para video breve</h2>
                     </div>
                     <textarea
                       readOnly
