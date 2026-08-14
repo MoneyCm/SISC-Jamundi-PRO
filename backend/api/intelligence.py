@@ -27,7 +27,13 @@ from services.report_automation_service import ReportAutomationService
 from services.alerts_rnmc import generate_rnmc_alerts
 from services.alerts_prioritizer import compute_action_score, get_scoring_config
 from services.ai_prioritizer import build_ai_rationale
-from services.national_context_service import national_benchmark_guard, year_over_year
+from services.national_context_service import (
+    comparable_national_rate,
+    municipality_code_for_name,
+    national_benchmark_guard,
+    normalize_municipality_code,
+    year_over_year,
+)
 from services import dq_service
 from db import crud_dq
 from core.config import is_strong_secret
@@ -1957,6 +1963,54 @@ async def get_national_stats(
     ).group_by(NationalCrimeStats.tipo_delito).all()
     yoy_dict = {row.tipo_delito: int(row.total) for row in yoy_data}
 
+    local_code_rows = db.query(NationalCrimeStats.codigo_dane).filter(
+        mindefensa_source,
+        NationalCrimeStats.municipio_normalizado == target_municipio,
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.codigo_dane.isnot(None),
+    ).distinct().all()
+    local_code = next(
+        (normalize_municipality_code(row.codigo_dane) for row in local_code_rows if normalize_municipality_code(row.codigo_dane)),
+        None,
+    ) or municipality_code_for_name(municipio, anio)
+
+    national_rows = db.query(
+        NationalCrimeStats.tipo_delito,
+        NationalCrimeStats.codigo_dane,
+        func.sum(NationalCrimeStats.cantidad).label("total"),
+    ).filter(
+        mindefensa_source,
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.codigo_dane.isnot(None),
+        ~NationalCrimeStats.municipio_normalizado.like("TOTAL%"),
+    ).group_by(
+        NationalCrimeStats.tipo_delito,
+        NationalCrimeStats.codigo_dane,
+    ).all()
+    cutoff_rows = db.query(
+        NationalCrimeStats.tipo_delito,
+        NationalCrimeStats.fecha_corte_mindefensa,
+    ).filter(
+        mindefensa_source,
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.fecha_corte_mindefensa.isnot(None),
+    ).distinct().all()
+    coverage_codes_by_type = {}
+    national_totals_by_type = {}
+    cutoffs_by_type = {}
+    all_source_codes = set()
+    for national_row in national_rows:
+        source_code = normalize_municipality_code(national_row.codigo_dane)
+        if not source_code:
+            continue
+        coverage_codes_by_type.setdefault(national_row.tipo_delito, set()).add(source_code)
+        national_totals_by_type[national_row.tipo_delito] = (
+            national_totals_by_type.get(national_row.tipo_delito, 0) + int(national_row.total)
+        )
+        all_source_codes.add(source_code)
+    for cutoff_row in cutoff_rows:
+        cutoffs_by_type.setdefault(cutoff_row.tipo_delito, set()).add(cutoff_row.fecha_corte_mindefensa)
+
     # Formatear respuesta con comparativas
     result_data = []
     for row in local_data:
@@ -1966,13 +2020,23 @@ async def get_national_stats(
         # Variación YoY
         yoy_var = local_total - yoy_total
         yoy_pct = year_over_year(local_total, yoy_total)
+        national_benchmark = comparable_national_rate(
+            year=anio,
+            local_code=local_code,
+            local_total=local_total,
+            national_total=national_totals_by_type.get(row.tipo_delito, 0),
+            covered_codes=coverage_codes_by_type.get(row.tipo_delito, set()),
+            cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
+        )
 
         result_data.append({
             "delito": row.tipo_delito,
             "local": local_total,
             "yoy_total": yoy_total,
             "yoy_var": yoy_var,
-            "yoy_pct": yoy_pct
+            "yoy_pct": yoy_pct,
+            "rate_per_100k": national_benchmark["local_rate_per_100k"],
+            "national_benchmark": national_benchmark,
         })
 
     # 5. Datos específicos y trazabilidad de fuente
@@ -1986,17 +2050,27 @@ async def get_national_stats(
     ).group_by(NationalCrimeStats.source_id).all()
     source_ids = [row.source_id for row in source_rows]
     source_cutoffs = [row.cutoff or row.latest_period for row in source_rows if row.cutoff or row.latest_period]
-    municipalities_loaded = db.query(
-        func.count(func.distinct(NationalCrimeStats.municipio_normalizado))
-    ).filter(
-        mindefensa_source,
-        NationalCrimeStats.anio == anio,
-    ).scalar() or 0
     national_context = national_benchmark_guard(
         source_ids,
         max(source_cutoffs) if source_cutoffs else None,
-        int(municipalities_loaded),
+        len(all_source_codes),
+        year=anio,
+        population_code=local_code,
     )
+    available_benchmarks = [item["national_benchmark"] for item in result_data if item["national_benchmark"]["available"]]
+    national_context["coverage"] = {
+        "conductas_evaluated": len(result_data),
+        "conductas_with_complete_coverage": len(available_benchmarks),
+        "required_municipalities": national_context["population"]["national_universe"],
+        "observed_municipalities": len(all_source_codes),
+    }
+    if available_benchmarks:
+        national_context.update({
+            "available": True,
+            "status": "COMPARABLE_RATES_AVAILABLE",
+            "title": "Referencia nacional verificable",
+            "reason": "La tasa nacional se muestra solo en las conductas con cobertura municipal completa para el mismo ano y corte.",
+        })
 
     fp_data = db.query(
         NationalCrimeStats.accion,

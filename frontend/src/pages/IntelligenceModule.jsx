@@ -449,6 +449,12 @@ const IntelligenceModule = () => {
                                 Esta vista muestra conteos locales y variación frente al mismo municipio en el año anterior.
                                 {stats.context?.cutoff ? ` Corte disponible: ${stats.context.cutoff}.` : ''}
                             </p>
+                            {stats.context?.population?.municipality_total && (
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Población de referencia DANE {stats.context.population.year}: {Number(stats.context.population.municipality_total).toLocaleString('es-CO')} habitantes.
+                                    {stats.context.coverage && ` Municipios con registros codificados: ${stats.context.coverage.observed_municipalities || 0} de ${stats.context.coverage.required_municipalities || 0}.`}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </CardContent>
@@ -606,6 +612,19 @@ const IntelligenceModule = () => {
                                         ? `Sin base comparable en ${selectedYear - 1}`
                                         : `${item.yoy_pct > 0 ? '+' : ''}${item.yoy_pct}% frente a ${selectedYear - 1}`}
                                 </p>
+                                {item.rate_per_100k != null && (
+                                    <p className="text-[10px] text-slate-500">Tasa local DANE: {item.rate_per_100k} por 100.000 hab.</p>
+                                )}
+                                {item.national_benchmark?.available && (
+                                    <p className="text-[10px] font-bold text-indigo-700">
+                                        Referencia nacional: {item.national_benchmark.national_rate_per_100k} por 100.000 hab.
+                                    </p>
+                                )}
+                                {item.national_benchmark && !item.national_benchmark.available && (
+                                    <p className="text-[10px] text-slate-400">
+                                        Referencia nacional pendiente: {item.national_benchmark.coverage.observed_municipalities}/{item.national_benchmark.coverage.expected_municipalities} municipios con cobertura verificable.
+                                    </p>
+                                )}
                             </div>
                         </CardContent>
                     </Card>

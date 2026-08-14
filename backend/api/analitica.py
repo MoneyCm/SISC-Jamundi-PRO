@@ -15,6 +15,7 @@ from services.hechos_metrics import (
     registros_expr,
     victimas_identificables_expr,
 )
+from services.national_context_service import population_for, rate_per_100k
 import os
 from datetime import date, timedelta
 from typing import Optional, List
@@ -23,8 +24,14 @@ from api.auth import get_current_user, get_optional_user, institutional_access, 
 
 router = APIRouter()
 
-POBLACION_JAMUNDI = 180942
+JAMUNDI_DANE_CODE = "76364"
 PUBLIC_MAP_MIN_LOCATION_COUNT = int(os.getenv("SISC_PUBLIC_MIN_LOCATION_COUNT", "3"))
+
+
+def _jamundi_population(reference_date: Optional[date]) -> Optional[int]:
+    """Return the official DANE projection for the year used by the metric."""
+    reference_year = (reference_date or date.today()).year
+    return population_for(JAMUNDI_DANE_CODE, reference_year)
 
 # Mapeo unificado: conducta_estandar en BD -> clave interna
 CONDUCTA_KEYS = {
@@ -340,7 +347,8 @@ def get_public_dashboard(
         {filter_sql}
     """)
     homicidios = db.execute(hom_stmt, base_params).first().total or 0
-    tasa_homicidios = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
+    population = _jamundi_population(period_end)
+    tasa_homicidios = rate_per_100k(homicidios, population)
 
     monthly = db.execute(text(f"""
         SELECT TO_CHAR(date_trunc('month', {source['date_col']}), 'YYYY-MM') AS bucket,
@@ -576,7 +584,9 @@ def get_public_dashboard(
             "comparison_label": comparison_label,
             "comparison_start": previous_start.isoformat() if previous_start else None,
             "comparison_end": previous_end.isoformat() if previous_end else None,
-            "population": POBLACION_JAMUNDI,
+            "population": population,
+            "population_source": "DANE - Proyecciones municipales CNPV 2018",
+            "population_year": period_end.year,
             "privacy": "Publicación agregada. No incluye nombres, identificadores, teléfonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
             "methodology": "Cada sábana oficial se valida y se conserva como evidencia. La publicación ciudadana usa una base maestra consolidada: las entregas más recientes actualizan hechos ya existentes y las entregas históricas completan hechos distintos. El mapa solo ubica territorios con polígono oficial verificado, mediante un punto interior de ese polígono; los demás se conservan en las tablas sin ubicación cartográfica.",
             "last_ingestion": {
@@ -670,7 +680,8 @@ def get_dashboard_kpis(
         secuestro     = _hechos_count(db, CONDUCTA_KEYS['SECUESTRO'],        start_date, end_date)
         trafico       = _hechos_count(db, CONDUCTA_KEYS['TRAFICO'],          start_date, end_date)
 
-        tasa_homicidios = round((homicidios / POBLACION_JAMUNDI) * 100000, 2)
+        population = _jamundi_population(end_date)
+        tasa_homicidios = rate_per_100k(homicidios, population)
 
         return {
             "total_incidentes":  total,
@@ -690,7 +701,7 @@ def get_dashboard_kpis(
             "vif":               vif,
             "secuestro":         secuestro,
             "trafico":           trafico,
-            "poblacion":         POBLACION_JAMUNDI,
+            "poblacion":         population,
             "fuente":            "SABANA_SNAPSHOT" if snapshot_id else "POLICIA_SEMANAL",
             "base_conteo":       "ULTIMA_ENTREGA_SEMANAL" if snapshot_id else "CONSOLIDADO_LEGACY",
             "snapshot_id":       str(snapshot_id) if snapshot_id else None,
@@ -928,17 +939,18 @@ def get_tasa_homicidios(
 ):
     """Tasa de homicidios por cada 100k habitantes."""
     conteo = _hechos_count(db, CONDUCTA_KEYS['HOMICIDIO'], start_date, end_date)
-    tasa = (conteo / POBLACION_JAMUNDI) * 100000
+    population = _jamundi_population(end_date)
+    tasa = rate_per_100k(conteo, population)
 
     return {
         "categoria":          "HOMICIDIO",
         "total_eventos":      conteo,
-        "tasa_por_100k":      round(tasa, 2),
+        "tasa_por_100k":      tasa,
         "periodo": {
             "inicio": start_date if start_date else "Histórico",
             "fin":    end_date if end_date else "Actual"
         },
-        "poblacion_referencia": POBLACION_JAMUNDI
+        "poblacion_referencia": population
     }
 
 

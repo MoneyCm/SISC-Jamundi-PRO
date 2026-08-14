@@ -3,6 +3,7 @@ from datetime import date
 from api.analitica import (
     _comparison_period,
     _is_publishable_location,
+    _jamundi_population,
     _public_conducta_label,
     _resolve_public_period,
 )
@@ -38,3 +39,8 @@ def test_last_30_days_uses_latest_available_cutoff():
     assert start == date(2026, 7, 2)
     assert end == date(2026, 7, 31)
     assert year == 2026
+
+
+def test_public_dashboard_uses_the_dane_projection_for_the_metric_year():
+    assert _jamundi_population(date(2025, 7, 31)) == 193630
+    assert _jamundi_population(date(2026, 7, 31)) == 196875

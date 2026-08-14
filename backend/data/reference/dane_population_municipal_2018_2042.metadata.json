@@ -1,0 +1,16 @@
+{
+  "publisher": "Departamento Administrativo Nacional de Estadística (DANE)",
+  "dataset": "Municipal. Proyecciones de población por área geográfica, periodo 2018-2042",
+  "geography": "Municipal total",
+  "source_url": "https://www.dane.gov.co/files/censo2018/proyecciones-de-poblacion/Municipal/PPED-AreaMun-2018-2042_VP.xlsx",
+  "catalog_url": "https://www.dane.gov.co/index.php/estadisticas-por-tema/demografia-y-poblacion/proyecciones-de-poblacion",
+  "basis": "CNPV 2018",
+  "catalog_published_at": "2025-08-08",
+  "workbook_updated_at": "2025-07-30",
+  "source_sha256": "1ea83594ad308becff39934a3977c102919c25740f60439be95d797396d11283",
+  "derived_file": "dane_population_municipal_2018_2042.csv",
+  "derived_rows": 28075,
+  "municipalities": 1123,
+  "years": "2018-2042",
+  "license_note": "Referencia institucional derivada de una publicación oficial del DANE; conservar esta trazabilidad al actualizar el archivo."
+}
