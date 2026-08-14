@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BarChart3, CalendarDays, CheckCircle2, Copy, Download, FileJson, ImageDown, Layers,
-  Loader2, MessageCircle, RefreshCw, ShieldCheck, Sparkles, ToggleLeft, ToggleRight
+  Loader2, MessageCircle, RefreshCw, ShieldCheck, Sparkles, ToggleLeft, ToggleRight, Video
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { institutionalSiscCifrasPeriods, suggestedSiscCifrasPeriod } from '../utils/siscCifrasPeriod';
@@ -125,6 +125,9 @@ const slideFilename = (idx, slide, publication, extension = 'png') => {
 
 const carouselFilename = (publication) =>
   `sisc-en-cifras-carrusel-${publicationPeriodSlug(publication)}-${publication.id}.zip`;
+
+const tiktokScriptFilename = (publication) =>
+  `sisc-en-cifras-guion-gemini-tiktok-${publicationPeriodSlug(publication)}.txt`;
 
 const textEncoder = new TextEncoder();
 const crcTable = Array.from({ length: 256 }, (_, index) => {
@@ -273,6 +276,65 @@ const buildWhatsappText = (publication) => {
     `Fuentes: ${sourceLines.join(' | ') || 'SISC'}`,
     'Secretaria de Seguridad y Convivencia',
     'Cifras agregadas para informacion ciudadana.',
+  ].join('\n');
+};
+
+const buildTikTokPrompt = (publication) => {
+  if (!publication) return '';
+  const period = publication.period ? `${publication.period.start} al ${publication.period.end}` : 'periodo seleccionado';
+  const comparisonPeriod = publication.comparison_period
+    ? `${publication.comparison_period.start} al ${publication.comparison_period.end}`
+    : 'no disponible';
+  const label = comparisonLabel(publication);
+  const insightLines = (publication.insights || [])
+    .filter((insight) => publicFacingText(insight.title || insight.detail))
+    .slice(0, 3)
+    .map((insight) => {
+      const title = publicFacingText(insight.title);
+      const detail = publicInsightText(insight.detail, label);
+      return `- ${title}: ${insight.value_text || 'sin valor consolidado'}. ${detail}`;
+    });
+  const indicatorLines = (publication.indicators || [])
+    .filter((indicator) => isPublicIndicator(indicator))
+    .filter((indicator) => !indicator.geography || isPublicTerritoryName(indicator.geography))
+    .slice(0, 5)
+    .map((indicator) => {
+      const detail = indicatorPublicDetail(indicator);
+      const comparison = indicator.variation_percentage === null || indicator.variation_percentage === undefined
+        ? 'Sin comparacion disponible.'
+        : `${Number(indicator.variation_percentage) > 0 ? '+' : ''}${Number(indicator.variation_percentage).toFixed(1)}% frente al ${label}.`;
+      return `- ${indicatorDisplayName(indicator)}: ${fmt(indicator.value)} ${indicator.unit || 'registros'}. ${comparison}${detail ? ` Nota: ${detail}` : ''}`;
+    });
+  const sourceLines = (publication.sources || [])
+    .filter((source) => source.publication_level === 'PUBLICO' && source.included !== false)
+    .map((source) => `- ${source.name}: corte ${source.last_cutoff_date || 'sin corte informado'}.`);
+  const dataLines = insightLines.length ? insightLines : indicatorLines;
+
+  return [
+    'Crea un video vertical 9:16 para TikTok de 20 a 25 segundos, en espanol de Colombia, para la Alcaldia de Jamundi.',
+    'Tema: SISC en cifras. Debe informar con claridad, sin sensacionalismo y con diseno institucional azul, amarillo y blanco.',
+    '',
+    'DATOS VERIFICADOS. Usa exclusivamente estos datos; no inventes ni redondees cifras:',
+    `- Periodo analizado: ${period}.`,
+    `- Comparacion: ${label} (${comparisonPeriod}).`,
+    ...(dataLines.length ? dataLines : ['- No hay hallazgos publicables para este periodo.']),
+    '',
+    'FUENTES Y CORTES. Menciona las fuentes al cierre y no sumes sus valores entre si:',
+    ...(sourceLines.length ? sourceLines : ['- SISC | Secretaria de Seguridad y Convivencia.']),
+    '',
+    'GUION VISUAL:',
+    '0-3 s: titulo "SISC EN CIFRAS" y periodo en pantalla.',
+    '3-8 s: presenta la cifra principal con un numero grande y el indicador completo.',
+    '8-16 s: presenta hasta dos cambios relevantes, un dato por escena, indicando la base de comparacion.',
+    '16-21 s: explica en una frase sencilla lo que significa la cifra, sin atribuir causas que los datos no demuestran.',
+    '21-25 s: cierre "Consulta las cifras completas en el SISC Jamundi" y fuentes con fecha de corte.',
+    '',
+    'REGLAS OBLIGATORIAS:',
+    '- Usa texto grande, alto contraste, transiciones suaves y subtitulos sincronizados.',
+    '- No muestres victimas, personas identificables, escenas violentas ni ubicaciones sensibles.',
+    '- No conviertas comparendos, actuaciones de Inspecciones o atenciones de Comisarias en delitos.',
+    '- Si una fuente indica corte parcial o sin comparacion, dilo de forma visible y no hagas inferencias.',
+    '- No incluyas logos ajenos. Mantiene el tono institucional, claro y cercano.',
   ].join('\n');
 };
 
@@ -1021,6 +1083,24 @@ const SiscCifras = ({ publicMode = false }) => {
     }
   };
 
+  const copyTikTokPrompt = async () => {
+    if (!ensureCurrentPublication()) return;
+    setShareStatus(null);
+    const prompt = buildTikTokPrompt(publication);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setShareStatus('Guion para Gemini copiado. Pegalo en Gemini para crear el video de TikTok.');
+    } catch (_) {
+      setShareStatus('No fue posible copiar automaticamente. Selecciona el guion y copialo desde la pantalla.');
+    }
+  };
+
+  const downloadTikTokPrompt = () => {
+    if (!ensureCurrentPublication()) return;
+    downloadBlob(buildTikTokPrompt(publication), tiktokScriptFilename(publication), 'text/plain;charset=utf-8');
+    setShareStatus('Guion para Gemini descargado en formato TXT.');
+  };
+
   const shareWhatsappCarousel = async () => {
     if (!ensureCurrentPublication() || !publication?.slides?.length) return;
     setShareStatus(null);
@@ -1278,9 +1358,9 @@ const SiscCifras = ({ publicMode = false }) => {
                   <section className="rounded-lg border border-slate-200 bg-white p-5">
                     <div className="mb-4 flex items-center gap-2">
                       <MessageCircle size={18} className="text-emerald-600" />
-                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Publicacion para WhatsApp</h2>
+                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Publicacion y video</h2>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-4">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-3 text-xs font-black uppercase text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
                         <ImageDown size={15} /> ZIP carrusel
                       </button>
@@ -1293,6 +1373,12 @@ const SiscCifras = ({ publicMode = false }) => {
                       <button onClick={shareWhatsappCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-3 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">
                         <MessageCircle size={15} /> Compartir
                       </button>
+                      <button onClick={copyTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-40">
+                        <Video size={15} /> Copiar para Gemini
+                      </button>
+                      <button onClick={downloadTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+                        <Download size={15} /> Guion TXT
+                      </button>
                     </div>
                     {shareStatus && (
                       <p className="mt-3 rounded-md bg-emerald-50 p-3 text-xs font-bold text-emerald-800">{shareStatus}</p>
@@ -1301,6 +1387,18 @@ const SiscCifras = ({ publicMode = false }) => {
                       readOnly
                       value={buildWhatsappText(publication)}
                       className="mt-4 h-44 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-relaxed text-slate-700 outline-none"
+                    />
+                  </section>
+
+                  <section className="rounded-lg border border-slate-200 bg-white p-5">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Video size={18} className="text-[#281FD0]" />
+                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Guion para Gemini y TikTok</h2>
+                    </div>
+                    <textarea
+                      readOnly
+                      value={buildTikTokPrompt(publication)}
+                      className="h-80 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-relaxed text-slate-700 outline-none"
                     />
                   </section>
 
