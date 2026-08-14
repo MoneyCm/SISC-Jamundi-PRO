@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { institutionalSiscCifrasPeriods, suggestedSiscCifrasPeriod } from '../utils/siscCifrasPeriod';
+import { siscCifrasSelectionKey } from '../utils/siscCifrasPublication';
 
 const QUICK_EDITIONS = [
   { id: 'weekly', label: 'Semanal' },
@@ -106,15 +107,24 @@ const downloadBlob = (content, filename, type) => {
 };
 
 const blobToFile = (blob, filename) => new File([blob], filename, { type: blob.type });
-const slideFilename = (idx, slide, extension = 'png') => {
+const publicationPeriodSlug = (publication) => {
+  const start = publication?.period?.start || 'sin-inicio';
+  const end = publication?.period?.end || 'sin-corte';
+  return `${start}-a-${end}`;
+};
+
+const slideFilename = (idx, slide, publication, extension = 'png') => {
   const clean = String(slide?.title || `lamina-${idx + 1}`)
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-  return `sisc-en-cifras-${String(idx + 1).padStart(2, '0')}-${clean}.${extension}`;
+  return `sisc-en-cifras-${publicationPeriodSlug(publication)}-${String(idx + 1).padStart(2, '0')}-${clean}.${extension}`;
 };
+
+const carouselFilename = (publication) =>
+  `sisc-en-cifras-carrusel-${publicationPeriodSlug(publication)}-${publication.id}.zip`;
 
 const textEncoder = new TextEncoder();
 const crcTable = Array.from({ length: 256 }, (_, index) => {
@@ -853,6 +863,7 @@ const SiscCifras = ({ publicMode = false }) => {
   const [sources, setSources] = useState([]);
   const [selectedSources, setSelectedSources] = useState(DEFAULT_SOURCES);
   const [publication, setPublication] = useState(null);
+  const [publicationSelectionKey, setPublicationSelectionKey] = useState(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -870,6 +881,18 @@ const SiscCifras = ({ publicMode = false }) => {
     [sources]
   );
 
+  const currentSelectionKey = useMemo(() => siscCifrasSelectionKey({
+    edition,
+    periodStart,
+    periodEnd,
+    comparisonMode,
+    sourceCodes: selectedSources,
+  }), [edition, periodStart, periodEnd, comparisonMode, selectedSources]);
+
+  const publicationIsCurrent = Boolean(
+    publication && publicationSelectionKey === currentSelectionKey
+  );
+
   const fetchSources = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/sisc-cifras/sources`, { headers: authHeaders() });
@@ -883,23 +906,31 @@ const SiscCifras = ({ publicMode = false }) => {
   const generate = async () => {
     setLoading(true);
     setError(null);
+    const publicationRequest = {
+      edition_type: edition,
+      period_start: periodStart,
+      period_end: periodEnd,
+      comparison_mode: comparisonMode,
+      source_codes: selectedSources,
+      max_insights: 5,
+      save_history: !publicMode,
+    };
     try {
       const response = await fetch(`${API_BASE_URL}/sisc-cifras/generate`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({
-          edition_type: edition,
-          period_start: periodStart,
-          period_end: periodEnd,
-          comparison_mode: comparisonMode,
-          source_codes: selectedSources,
-          max_insights: 5,
-          save_history: !publicMode,
-        }),
+        body: JSON.stringify(publicationRequest),
       });
       if (!response.ok) throw new Error(await responseError(response, 'No se pudo generar SISC en cifras.'));
       const data = await response.json();
       setPublication(data);
+      setPublicationSelectionKey(siscCifrasSelectionKey({
+        edition,
+        periodStart,
+        periodEnd,
+        comparisonMode,
+        sourceCodes: selectedSources,
+      }));
       setActiveSlide(0);
     } catch (err) {
       setError(err.message);
@@ -929,30 +960,36 @@ const SiscCifras = ({ publicMode = false }) => {
     setPeriodEnd(selected.end);
   };
 
+  const ensureCurrentPublication = () => {
+    if (publicationIsCurrent) return true;
+    setShareStatus('La configuracion cambio. Genera de nuevo antes de descargar o compartir.');
+    return false;
+  };
+
   const downloadJson = () => {
-    if (!publication) return;
+    if (!ensureCurrentPublication()) return;
     downloadBlob(JSON.stringify(publication, null, 2), `sisc-en-cifras-${publication.id}.json`, 'application/json');
   };
 
   const downloadSvg = async () => {
-    if (!publication?.slides?.length) return;
+    if (!ensureCurrentPublication() || !publication?.slides?.length) return;
     const slide = publication.slides[activeSlide];
     const escudoDataUrl = await getEscudoDataUrl();
-    downloadBlob(slideToSvg(slide, publication, { escudoDataUrl }), slideFilename(activeSlide, slide, 'svg'), 'image/svg+xml');
+    downloadBlob(slideToSvg(slide, publication, { escudoDataUrl }), slideFilename(activeSlide, slide, publication, 'svg'), 'image/svg+xml');
   };
 
   const downloadPngCarousel = async () => {
-    if (!publication?.slides?.length) return;
+    if (!ensureCurrentPublication() || !publication?.slides?.length) return;
     setShareStatus(null);
     try {
       const escudoDataUrl = await getEscudoDataUrl();
       const files = [];
       for (const [idx, slide] of publication.slides.entries()) {
         const blob = await svgToPngBlob(slideToSvg(slide, publication, { escudoDataUrl }));
-        files.push({ name: slideFilename(idx, slide), blob });
+        files.push({ name: slideFilename(idx, slide, publication), blob });
       }
       const zip = await createZipBlob(files);
-      downloadBlob(zip, `sisc-en-cifras-carrusel-${publication.id}.zip`, 'application/zip');
+      downloadBlob(zip, carouselFilename(publication), 'application/zip');
       setShareStatus(`${publication.slides.length} PNG guardados en un ZIP. Extraelo y adjunta las imagenes en orden en WhatsApp.`);
     } catch (err) {
       setShareStatus(err.message);
@@ -960,7 +997,7 @@ const SiscCifras = ({ publicMode = false }) => {
   };
 
   const downloadSummaryImage = async () => {
-    if (!publication) return;
+    if (!ensureCurrentPublication()) return;
     setShareStatus(null);
     try {
       const escudoDataUrl = await getEscudoDataUrl();
@@ -973,7 +1010,7 @@ const SiscCifras = ({ publicMode = false }) => {
   };
 
   const copyWhatsappText = async () => {
-    if (!publication) return;
+    if (!ensureCurrentPublication()) return;
     setShareStatus(null);
     const text = buildWhatsappText(publication);
     try {
@@ -985,14 +1022,14 @@ const SiscCifras = ({ publicMode = false }) => {
   };
 
   const shareWhatsappCarousel = async () => {
-    if (!publication?.slides?.length) return;
+    if (!ensureCurrentPublication() || !publication?.slides?.length) return;
     setShareStatus(null);
     try {
       const escudoDataUrl = await getEscudoDataUrl();
       const files = [];
       for (const [idx, slide] of publication.slides.entries()) {
         const blob = await svgToPngBlob(slideToSvg(slide, publication, { escudoDataUrl }));
-        files.push(blobToFile(blob, slideFilename(idx, slide)));
+        files.push(blobToFile(blob, slideFilename(idx, slide, publication)));
       }
       const text = buildWhatsappText(publication);
       if (navigator.canShare?.({ files }) && navigator.share) {
@@ -1003,7 +1040,7 @@ const SiscCifras = ({ publicMode = false }) => {
         setShareStatus('Texto compartido. Descarga el ZIP del carrusel para adjuntar las imagenes.');
       } else {
         const zip = await createZipBlob(files.map((file) => ({ name: file.name, blob: file })));
-        downloadBlob(zip, `sisc-en-cifras-carrusel-${publication.id}.zip`, 'application/zip');
+        downloadBlob(zip, carouselFilename(publication), 'application/zip');
         await navigator.clipboard?.writeText(text);
         setShareStatus('Tu navegador no permite compartir directo. Descargue el ZIP y copie el texto.');
       }
@@ -1053,22 +1090,22 @@ const SiscCifras = ({ publicMode = false }) => {
             <button onClick={fetchSources} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50">
               <RefreshCw size={15} /> Fuentes
             </button>
-            <button onClick={downloadJson} disabled={!publication} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            <button onClick={downloadJson} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <FileJson size={15} /> JSON
             </button>
-            <button onClick={downloadSvg} disabled={!publication} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            <button onClick={downloadSvg} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <Download size={15} /> SVG
             </button>
-            <button onClick={downloadPngCarousel} disabled={!publication} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <ImageDown size={15} /> ZIP carrusel
             </button>
-            <button onClick={downloadSummaryImage} disabled={!publication} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            <button onClick={downloadSummaryImage} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <ImageDown size={15} /> Imagen resumen
             </button>
-            <button onClick={copyWhatsappText} disabled={!publication} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            <button onClick={copyWhatsappText} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <Copy size={15} /> Copiar texto
             </button>
-            <button onClick={shareWhatsappCarousel} disabled={!publication} className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:opacity-40">
+            <button onClick={shareWhatsappCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:opacity-40">
               <MessageCircle size={15} /> Compartir
             </button>
           </div>
@@ -1201,6 +1238,11 @@ const SiscCifras = ({ publicMode = false }) => {
             </section>
           ) : (
             <>
+              {!publicationIsCurrent && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
+                  La configuracion cambio. Genera SISC en cifras de nuevo antes de descargar o compartir.
+                </div>
+              )}
               <section className="grid gap-4 lg:grid-cols-4">
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hallazgos</p>
@@ -1239,16 +1281,16 @@ const SiscCifras = ({ publicMode = false }) => {
                       <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Publicacion para WhatsApp</h2>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-4">
-                      <button onClick={downloadPngCarousel} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-3 text-xs font-black uppercase text-white hover:bg-slate-700">
+                      <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-3 text-xs font-black uppercase text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
                         <ImageDown size={15} /> ZIP carrusel
                       </button>
-                      <button onClick={downloadSummaryImage} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 py-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8]">
+                      <button onClick={downloadSummaryImage} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 py-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:cursor-not-allowed disabled:opacity-40">
                         <ImageDown size={15} /> Imagen resumen
                       </button>
-                      <button onClick={copyWhatsappText} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-100 px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-200">
+                      <button onClick={copyWhatsappText} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-100 px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
                         <Copy size={15} /> Copiar texto
                       </button>
-                      <button onClick={shareWhatsappCarousel} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-3 text-xs font-black uppercase text-white hover:bg-emerald-700">
+                      <button onClick={shareWhatsappCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-3 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">
                         <MessageCircle size={15} /> Compartir
                       </button>
                     </div>
