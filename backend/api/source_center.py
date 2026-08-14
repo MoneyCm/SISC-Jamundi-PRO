@@ -167,6 +167,15 @@ async def _authorize_heartbeat(
     return "SERVICE"
 
 
+async def authorize_source_monitor(
+    request: Request,
+    user: Optional[User],
+    connector_code: str,
+) -> str:
+    """Authorize a trusted source monitor for a protected ingestion action."""
+    return await _authorize_heartbeat(request, user, connector_code)
+
+
 @router.get("")
 def get_source_center(
     db: Session = Depends(get_db),
@@ -189,7 +198,7 @@ async def source_heartbeat(
     quality = payload.quality_status.strip().upper()
     if status not in HEARTBEAT_STATUSES or quality not in HEARTBEAT_QUALITY:
         raise HTTPException(status_code=422, detail="Estado o calidad no permitidos.")
-    mode = await _authorize_heartbeat(request, current_user, code)
+    mode = await authorize_source_monitor(request, current_user, code)
     # Un error reciente no debe borrar el ultimo corte o exito conocido.
     data = payload.model_dump(exclude_none=True)
     data.update({"status": status, "quality_status": quality})

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from db.models import get_db
 from api.auth import get_optional_user, log_audit, require_role, institutional_access
+from api.source_center import authorize_source_monitor
 from db.models import User
 from db.models_intelligence import (
     NationalCrimeStats,
@@ -359,9 +360,10 @@ async def upload_reference_file(
     file: UploadFile = File(...),
     source_cutoff: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["SOURCE_UPLOADER", "TI_ADMIN"])),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Load aggregated nationwide reference data without altering local reports."""
+    authorization_mode = await authorize_source_monitor(request, current_user, "MINDEFENSA")
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls).")
 
@@ -459,9 +461,14 @@ async def upload_reference_file(
         await log_audit(
             db,
             "REFERENCE_DATA_INGESTED",
-            actor_id=str(current_user.id),
+            actor_id=str(current_user.id) if current_user else None,
             module="INTELLIGENCE",
-            target={"filename": file.filename, "records": len(records), "source_cutoff": str(resolved_cutoff)},
+            target={
+                "filename": file.filename,
+                "records": len(records),
+                "source_cutoff": str(resolved_cutoff),
+                "authorization_mode": authorization_mode,
+            },
             level=2,
             request=request,
         )
