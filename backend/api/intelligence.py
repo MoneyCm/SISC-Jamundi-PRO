@@ -27,6 +27,7 @@ from services.report_automation_service import ReportAutomationService
 from services.alerts_rnmc import generate_rnmc_alerts
 from services.alerts_prioritizer import compute_action_score, get_scoring_config
 from services.ai_prioritizer import build_ai_rationale
+from services.national_context_service import national_benchmark_guard, year_over_year
 from services import dq_service
 from db import crud_dq
 from core.config import is_strong_secret
@@ -1912,56 +1913,45 @@ async def get_national_stats(
     current_user: User = Depends(institutional_access),
 ):
     """
-    Retorna estadísticas comparativas reales basadas en los datos cargados.
+    Retorna contexto histórico local de MinDefensa con comparación anual equivalente.
     """
     from sqlalchemy import func
     
     # 1. Normalizar municipio
     processor = NationalStatsProcessor()
     target_municipio = processor.normalize_text(municipio)
+
+    # This view is historical MinDefensa context. Do not mix it with local
+    # operational uploads or other source families.
+    mindefensa_source = NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
     
     # 2. Obtener datos locales (Jamundí o el seleccionado)
     local_data = db.query(
         NationalCrimeStats.tipo_delito,
         func.sum(NationalCrimeStats.cantidad).label("total")
     ).filter(
+        mindefensa_source,
         NationalCrimeStats.municipio_normalizado == target_municipio,
         NationalCrimeStats.anio == anio
     ).group_by(NationalCrimeStats.tipo_delito).all()
 
-    # 3. Obtener promedios nacionales por delito para el mismo año
-    # Segundo: Obtener la suma nacional total por delito para el año actual
-    # Como agrupamos todos los demás en 'TOTAL_NACIONAL', el total son ~1122 municipios físicos reales en Colombia.
-    total_municipios_conocidos = 1122
-    
-    # Segundo: Obtener la suma nacional total por delito para el año actual
-    # IMPORTANTE: Excluir registros de resumen para no inflar el promedio
-    national_sums = db.query(
-        NationalCrimeStats.tipo_delito,
-        func.sum(NationalCrimeStats.cantidad).label("sum_total")
-    ).filter(
-        NationalCrimeStats.anio == anio,
-        ~NationalCrimeStats.municipio_normalizado.like("TOTAL%")
-    ).group_by(NationalCrimeStats.tipo_delito).all()
-    
-    # Convertir a dict de promedios "reales" (Suma / Población total de municipios)
-    avg_dict = {row.tipo_delito: (float(row.sum_total) / total_municipios_conocidos) for row in national_sums}
-    
-    # 4. Tendencia mensual local
+    # 3. Tendencia mensual local
     trend_data = db.query(
         NationalCrimeStats.mes,
         func.sum(NationalCrimeStats.cantidad).label("total")
     ).filter(
+        mindefensa_source,
         NationalCrimeStats.municipio_normalizado == target_municipio,
         NationalCrimeStats.anio == anio
     ).group_by(NationalCrimeStats.mes).order_by(NationalCrimeStats.mes).all()
 
-    # 5. LÓGICA DE COMPARATIVA (WoW / YoY)
+    # 4. LÓGICA DE COMPARATIVA (YoY)
     # Obtener totales del año anterior (mismo municipio)
     yoy_data = db.query(
         NationalCrimeStats.tipo_delito,
         func.sum(NationalCrimeStats.cantidad).label("total")
     ).filter(
+        mindefensa_source,
         NationalCrimeStats.municipio_normalizado == target_municipio,
         NationalCrimeStats.anio == anio - 1
     ).group_by(NationalCrimeStats.tipo_delito).all()
@@ -1975,23 +1965,45 @@ async def get_national_stats(
         
         # Variación YoY
         yoy_var = local_total - yoy_total
-        yoy_pct = round((yoy_var / yoy_total * 100), 1) if yoy_total > 0 else (100.0 if local_total > 0 else 0.0)
+        yoy_pct = year_over_year(local_total, yoy_total)
 
         result_data.append({
             "delito": row.tipo_delito,
             "local": local_total,
-            "nacional_avg": round(avg_dict.get(row.tipo_delito, 0), 2),
             "yoy_total": yoy_total,
             "yoy_var": yoy_var,
             "yoy_pct": yoy_pct
         })
 
-    # 6. Datos Específicos Fuerza Pública
+    # 5. Datos específicos y trazabilidad de fuente
+    source_rows = db.query(
+        NationalCrimeStats.source_id,
+        func.max(NationalCrimeStats.fecha_corte_mindefensa).label("cutoff"),
+        func.max(NationalCrimeStats.fecha_hecho).label("latest_period"),
+    ).filter(
+        mindefensa_source,
+        NationalCrimeStats.anio == anio,
+    ).group_by(NationalCrimeStats.source_id).all()
+    source_ids = [row.source_id for row in source_rows]
+    source_cutoffs = [row.cutoff or row.latest_period for row in source_rows if row.cutoff or row.latest_period]
+    municipalities_loaded = db.query(
+        func.count(func.distinct(NationalCrimeStats.municipio_normalizado))
+    ).filter(
+        mindefensa_source,
+        NationalCrimeStats.anio == anio,
+    ).scalar() or 0
+    national_context = national_benchmark_guard(
+        source_ids,
+        max(source_cutoffs) if source_cutoffs else None,
+        int(municipalities_loaded),
+    )
+
     fp_data = db.query(
         NationalCrimeStats.accion,
         NationalCrimeStats.institucion,
         func.sum(NationalCrimeStats.cantidad).label("total")
     ).filter(
+        mindefensa_source,
         NationalCrimeStats.municipio_normalizado == target_municipio,
         NationalCrimeStats.anio == anio,
         NationalCrimeStats.tipo_delito == "Afectación Fuerza Pública"
@@ -2010,7 +2022,8 @@ async def get_national_stats(
         "anio": anio,
         "summary": result_data,
         "trend": [{"mes": row.mes, "cantidad": int(row.total)} for row in trend_data],
-        "fuerza_publica": fuerza_publica_summary
+        "fuerza_publica": fuerza_publica_summary,
+        "context": national_context,
     }
 
 @router.get("/municipios")
@@ -2027,6 +2040,8 @@ async def get_available_municipios(
     municipios = db.query(
         NationalCrimeStats.municipio_normalizado,
         NationalCrimeStats.municipio
+    ).filter(
+        NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
     ).distinct().order_by(NationalCrimeStats.municipio).all()
     
     return [
@@ -2043,7 +2058,9 @@ async def get_available_years(
     Retorna la lista de años únicos que tienen datos cargados en el sistema.
     """
     from sqlalchemy import func
-    anios = db.query(NationalCrimeStats.anio).distinct().order_by(NationalCrimeStats.anio.desc()).all()
+    anios = db.query(NationalCrimeStats.anio).filter(
+        NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+    ).distinct().order_by(NationalCrimeStats.anio.desc()).all()
     return [a.anio for a in anios]
 
 @router.get("/territorial-context")
@@ -2099,7 +2116,7 @@ async def get_intelligence_insights(
     current_user: User = Depends(institutional_access)
 ):
     """
-    Genera un análisis comparativo narrativo usando IA basado en los datos de MinDefensa.
+    Genera una lectura narrativa prudente de la serie histórica local de MinDefensa.
     """
     await log_audit(
         db,
@@ -2116,51 +2133,54 @@ async def get_intelligence_insights(
         # 1. Obtener los mismos datos que /stats para dar contexto a la IA
         processor = NationalStatsProcessor()
         target_municipio = processor.normalize_text(municipio)
+        mindefensa_source = NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
         
         local_data = db.query(
             NationalCrimeStats.tipo_delito,
             func.sum(NationalCrimeStats.cantidad).label("total")
         ).filter(
+            mindefensa_source,
             NationalCrimeStats.municipio_normalizado == target_municipio,
             NationalCrimeStats.anio == anio
         ).group_by(NationalCrimeStats.tipo_delito).all()
 
         # Nueva Lógica Refinada
-        total_municipios_conocidos = 1122
         
-        national_sums = db.query(
+        # National raw-count averages are not used as a municipal benchmark.
+        yoy_data = db.query(
             NationalCrimeStats.tipo_delito,
-            func.sum(NationalCrimeStats.cantidad).label("sum_total")
+            func.sum(NationalCrimeStats.cantidad).label("total")
         ).filter(
-            NationalCrimeStats.anio == anio
+            mindefensa_source,
+            NationalCrimeStats.municipio_normalizado == target_municipio,
+            NationalCrimeStats.anio == anio - 1
         ).group_by(NationalCrimeStats.tipo_delito).all()
-        
-        avg_dict = {row.tipo_delito: (float(row.sum_total) / total_municipios_conocidos) for row in national_sums}
-        
-        # Construir resumen para la IA
+        yoy_dict = {row.tipo_delito: int(row.total) for row in yoy_data}
+
+        # Construir resumen local comparable para la IA.
         stats_summary = ""
         for row in local_data:
-            avg = avg_dict.get(row.tipo_delito, 0)
-            diff = ((row.total - avg) / avg * 100) if avg > 0 else 0
-            stats_summary += f"- {row.tipo_delito}: {row.total} casos (Promedio Nacional: {round(avg, 1)}, Dif: {round(diff, 1)}%)\n"
+            previous = yoy_dict.get(row.tipo_delito, 0)
+            variation = year_over_year(int(row.total), previous)
+            variation_text = f"{variation}% frente a {anio - 1}" if variation is not None else "sin base comparable en el ano anterior"
+            stats_summary += f"- {row.tipo_delito}: {row.total} casos; {variation_text}.\n"
 
         if not stats_summary:
             return {"insight": "No hay suficientes datos disponibles para generar un análisis estratégico en este momento."}
 
         contexto = f"""
-        Eres el Consultor Senior de Inteligencia Estratégica para el SISC Jamundí.
-        Analiza la comparativa del municipio de {municipio} (Año {anio}) frente al promedio nacional de Colombia:
-        
-        DATOS DE INCIDENCIA:
+        Eres un redactor tecnico del SISC Jamundi. Redacta una lectura descriptiva
+        de la serie historica local de {municipio} para el ano {anio}.
+
+        DATOS:
         {stats_summary}
-        
-        TAREA:
-        Escribe un análisis ejecutivo (máximo 80 palabras) que:
-        1. Identifique los desafíos críticos (donde el municipio está por encima del promedio).
-        2. Resalte aspectos positivos si los hay.
-        3. Use un tono técnico, estratégico y profesional orientado a la toma de decisiones.
-        4. Responde en español directo, sin introducciones innecesarias.
-        5. No uses Markdown, solo texto plano.
+
+        REGLAS OBLIGATORIAS:
+        1. Limitate a los conteos y variaciones entregados.
+        2. No compares con Colombia, no menciones un promedio nacional y no compares municipios.
+        3. No atribuyas causas, no califiques la situacion como critica y no recomiendes acciones operativas.
+        4. Indica cuando no existe una base comparable en el ano anterior.
+        5. Usa un tono tecnico, descriptivo y prudente, en maximo 70 palabras, sin Markdown.
         """
 
         try:

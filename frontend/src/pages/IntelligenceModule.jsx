@@ -37,7 +37,7 @@ const IntelligenceModule = () => {
     const [selectedMunicipio, setSelectedMunicipio] = useState("JAMUNDI");
     const [municipios, setMunicipios] = useState([]);
     const [availableYears, setAvailableYears] = useState([2026, 2025, 2024, 2023]);
-    const [stats, setStats] = useState({ summary: [], trend: [] });
+    const [stats, setStats] = useState({ summary: [], trend: [], context: null });
     const [insight, setInsight] = useState(null);
     const [insightLoading, setInsightLoading] = useState(false);
     const [activeProvider, setActiveProvider] = useState("Gemini Pro");
@@ -358,8 +358,8 @@ const IntelligenceModule = () => {
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Inteligencia Estratégica Nacional</h1>
-                    <p className="text-slate-500 mt-1">Comparativa estratégica con datos oficiales de MinDefensa</p>
+                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Contexto histórico de seguridad</h1>
+                    <p className="text-slate-500 mt-1">Serie histórica MinDefensa: tendencia local y comparación anual verificable.</p>
                 </div>
                 <div className="flex gap-2">
                     {canManage && (
@@ -434,6 +434,26 @@ const IntelligenceModule = () => {
                 </div>
             )}
 
+            <Card className="border-amber-200 bg-amber-50/70">
+                <CardContent className="p-5">
+                    <div className="flex items-start gap-3">
+                        <ShieldAlert className="h-5 w-5 mt-0.5 text-amber-700 flex-shrink-0" />
+                        <div className="min-w-0">
+                            <p className="font-semibold text-slate-800">
+                                {stats.context?.title || 'Referencia nacional pendiente de homologación'}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-600">
+                                {stats.context?.reason || 'La comparación nacional se mantiene desactivada hasta contar con una tasa equivalente y cobertura verificable.'}
+                            </p>
+                            <p className="mt-2 text-xs text-slate-500">
+                                Esta vista muestra conteos locales y variación frente al mismo municipio en el año anterior.
+                                {stats.context?.cutoff ? ` Corte disponible: ${stats.context.cutoff}.` : ''}
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* AI Insights Panel */}
             <Card className={`bg-gradient-to-br from-indigo-900 to-indigo-950 text-white border-none overflow-hidden relative transition-all duration-500 ${chatOpen ? 'h-[500px]' : ''}`}>
                 <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -445,7 +465,7 @@ const IntelligenceModule = () => {
                             <div className="bg-indigo-500 p-1.5 rounded-lg">
                                 <Brain className="h-5 w-5" />
                             </div>
-                            <h2 className="text-lg font-semibold">Perspectiva Estratégica Nacional</h2>
+                            <h2 className="text-lg font-semibold">Lectura asistida del periodo</h2>
                             {insightLoading && !chatOpen && <Loader2 className="h-4 w-4 animate-spin ml-2 text-indigo-300" />}
                         </div>
                         {chatOpen && (
@@ -467,7 +487,7 @@ const IntelligenceModule = () => {
                             <div className="mt-4 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <span className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold">
-                                        Análisis Procesado por {insightLoading ? "Motor IA" : activeProvider}
+                                        Redacción asistida por {insightLoading ? "Motor IA" : activeProvider}
                                     </span>
                                     {insight && (
                                         <button
@@ -479,7 +499,7 @@ const IntelligenceModule = () => {
                                         </button>
                                     )}
                                 </div>
-                                <span className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold">Datos MinDefensa Oficiales</span>
+                                <span className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold">Sin recomendaciones operativas</span>
                             </div>
                         </CardContent>
                     ) : (
@@ -571,22 +591,20 @@ const IntelligenceModule = () => {
                 {stats.summary?.map((item, idx) => (
                     <Card key={idx} className="hover:shadow-md transition-shadow">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-slate-600">{item.delito} (vs Nacional)</CardTitle>
-                            <TrendingUp className={`h-4 w-4 ${item.local > item.nacional_avg ? 'text-red-500' : 'text-emerald-500'}`} />
+                            <CardTitle className="text-sm font-medium text-slate-600">{item.delito}</CardTitle>
+                            <TrendingUp className={`h-4 w-4 ${item.yoy_pct == null ? 'text-slate-400' : item.yoy_pct > 2 ? 'text-red-500' : item.yoy_pct < -2 ? 'text-emerald-500' : 'text-slate-500'}`} />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-slate-800">
                                 {item.local}
-                                <span className="text-xs text-slate-400 font-normal ml-2">/ {item.nacional_avg} avg</span>
+                                <span className="text-xs text-slate-400 font-normal ml-2">casos registrados</span>
                             </div>
                             <div className="flex flex-col gap-1 mt-2">
-                                <p className={`text-[10px] flex items-center ${item.local > item.nacional_avg ? 'text-red-500' : 'text-emerald-500'}`}>
-                                    <TrendingUp className="mr-1 h-3 w-3" />
-                                    {item.nacional_avg > 0 ? (((item.local - item.nacional_avg) / item.nacional_avg) * 100).toFixed(1) : 0}% vs Nacional
-                                </p>
-                                <p className={`text-[10px] font-bold flex items-center ${item.yoy_pct > 2 ? 'text-red-600' : (item.yoy_pct < -2 ? 'text-emerald-600' : 'text-slate-500')}`}>
+                                <p className={`text-[10px] font-bold flex items-center ${item.yoy_pct == null ? 'text-slate-500' : item.yoy_pct > 2 ? 'text-red-600' : (item.yoy_pct < -2 ? 'text-emerald-600' : 'text-slate-500')}`}>
                                     <Activity className="mr-1 h-3 w-3" />
-                                    {item.yoy_pct > 0 ? `+${item.yoy_pct}%` : `${item.yoy_pct}%`} YoY (vs {selectedYear - 1})
+                                    {item.yoy_pct == null
+                                        ? `Sin base comparable en ${selectedYear - 1}`
+                                        : `${item.yoy_pct > 0 ? '+' : ''}${item.yoy_pct}% frente a ${selectedYear - 1}`}
                                 </p>
                             </div>
                         </CardContent>
@@ -647,7 +665,7 @@ const IntelligenceModule = () => {
                 <Card className="p-6">
                     <CardTitle className="text-lg text-slate-800 mb-6 flex items-center">
                         <BarChart2 className="mr-2 h-5 w-5 text-indigo-500" />
-                        Comparativa de Incidencias
+                        Comparación anual local
                     </CardTitle>
                     <div className="h-[300px] min-h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
@@ -660,8 +678,8 @@ const IntelligenceModule = () => {
                                     cursor={{ fill: '#f8fafc' }}
                                 />
                                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                                <Bar name={`${selectedMunicipio} (Local)`} dataKey="local" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
-                                <Bar name="Promedio Nacional" dataKey="nacional_avg" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={40} />
+                                <Bar name={`${selectedYear}`} dataKey="local" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={32} />
+                                <Bar name={`${selectedYear - 1}`} dataKey="yoy_total" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={32} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
