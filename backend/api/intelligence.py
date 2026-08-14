@@ -30,6 +30,7 @@ from services.ai_prioritizer import build_ai_rationale
 from services.national_context_service import (
     comparable_national_rate,
     municipality_code_for_name,
+    municipality_name_for_code,
     national_benchmark_guard,
     normalize_municipality_code,
     year_over_year,
@@ -2108,20 +2109,33 @@ async def get_available_municipios(
     """
     Retorna la lista de municipios que tienen datos cargados en el sistema.
     """
-    from sqlalchemy import func
-    
-    # Obtener municipios únicos y ordenados
     municipios = db.query(
+        NationalCrimeStats.codigo_dane,
         NationalCrimeStats.municipio_normalizado,
         NationalCrimeStats.municipio
     ).filter(
         NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
-    ).distinct().order_by(NationalCrimeStats.municipio).all()
-    
-    return [
-        {"id": m.municipio_normalizado, "nombre": m.municipio}
-        for m in municipios
-    ]
+    ).distinct().all()
+
+    # MinDefensa puede traer variantes de escritura para un mismo municipio.
+    # El codigo DANE mantiene una sola opcion y el nombre visible oficial.
+    processor = NationalStatsProcessor()
+    options_by_code = {}
+    for municipality in municipios:
+        code = normalize_municipality_code(municipality.codigo_dane)
+        if not code:
+            continue
+
+        official_name = municipality_name_for_code(code)
+        if not official_name:
+            continue
+
+        options_by_code[code] = {
+            "id": processor.normalize_text(official_name),
+            "nombre": official_name,
+        }
+
+    return sorted(options_by_code.values(), key=lambda option: option["nombre"])
 
 @router.get("/years")
 async def get_available_years(

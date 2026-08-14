@@ -87,6 +87,26 @@ def municipality_code_for_name(name: object, year: int) -> Optional[str]:
     return None
 
 
+def municipality_name_for_code(code: object, year: Optional[int] = None) -> Optional[str]:
+    """Return the official DANE municipality name for a municipality code."""
+    normalized_code = normalize_municipality_code(code)
+    if not normalized_code:
+        return None
+
+    _, names = _population_reference()
+    if year is not None:
+        name = names.get((normalized_code, int(year)))
+        if name:
+            return name
+
+    candidates = sorted(
+        (reference_year, name)
+        for (reference_code, reference_year), name in names.items()
+        if reference_code == normalized_code
+    )
+    return candidates[0][1] if candidates else None
+
+
 def rate_per_100k(count: int, population: Optional[int]) -> Optional[float]:
     if population is None or population <= 0:
         return None

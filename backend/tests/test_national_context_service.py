@@ -3,6 +3,7 @@ from datetime import date
 from services.national_context_service import (
     comparable_national_rate,
     municipality_codes_for_year,
+    municipality_name_for_code,
     national_benchmark_guard,
     population_for,
     year_over_year,
@@ -13,6 +14,11 @@ def test_dane_population_reference_contains_jamundi_and_the_full_municipal_unive
     assert population_for("76364", 2025) == 193630
     assert population_for("76364", 2026) == 196875
     assert len(municipality_codes_for_year(2025)) == 1122
+
+
+def test_dane_reference_returns_one_official_display_name_for_jamundi():
+    assert municipality_name_for_code("76364") == "Jamundí"
+    assert municipality_name_for_code("76364", 2025) == "Jamundí"
 
 
 def test_national_context_never_turns_partial_coverage_into_a_national_rate():
