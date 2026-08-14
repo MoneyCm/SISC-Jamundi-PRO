@@ -307,6 +307,7 @@ class NationalStatsProcessor:
         file_content: bytes,
         filename: str,
         source_cutoff: date | None = None,
+        minimum_year: int | None = None,
     ) -> Generator[Dict, None, None]:
         """Build privacy-preserving municipal aggregates for verified comparisons.
 
@@ -378,6 +379,10 @@ class NationalStatsProcessor:
                 return
 
             inferred_year = self._extract_year_from_filename(filename)
+            # The comparison view needs current, prior and current-year data.
+            # Keeping older nationwide detail would make every refresh needlessly
+            # expensive without improving the published comparison.
+            minimum_year = minimum_year if minimum_year is not None else date.today().year - 2
             crime_type = self._infer_crime_type(filename)
             aggregates = {}
             latest_period = None
@@ -393,6 +398,8 @@ class NationalStatsProcessor:
 
                 event_date = self._parse_date_openpyxl(row[date_column]) if date_column and not pd.isna(row[date_column]) else None
                 event_date = event_date or date(inferred_year, 1, 1)
+                if event_date.year < minimum_year:
+                    continue
                 latest_period = max(latest_period, event_date) if latest_period else event_date
 
                 try:

@@ -416,8 +416,12 @@ async def upload_reference_file(
         ingestion_id = uuid.uuid4()
 
         with db.begin_nested():
-            for record in records:
-                statement = insert(NationalCrimeStats).values(record)
+            # A countrywide monthly reference contains tens of thousands of
+            # aggregates per conduct. Batched upserts avoid one database round
+            # trip for every municipality-month.
+            for offset in range(0, len(records), 500):
+                batch = records[offset:offset + 500]
+                statement = insert(NationalCrimeStats).values(batch)
                 statement = statement.on_conflict_do_update(
                     index_elements=["source_id", "event_fingerprint"],
                     set_={
