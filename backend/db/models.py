@@ -6,7 +6,7 @@ from .session import Base, engine, SessionLocal, get_db
 
 def create_tables():
     try:
-        from db.models_intelligence import NationalCrimeStats, IngestionLog, TerritorialContext
+        from db.models_intelligence import NationalCrimeStats, NationalReferenceCoverage, IngestionLog, TerritorialContext
         from db.models_dq import DqReport, DqIssue
         from db.models_mindefensa import MindefensaAsset
         from db.models_policia import PoliceAsset

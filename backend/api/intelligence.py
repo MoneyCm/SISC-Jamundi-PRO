@@ -10,6 +10,7 @@ from api.source_center import authorize_source_monitor
 from db.models import User
 from db.models_intelligence import (
     NationalCrimeStats,
+    NationalReferenceCoverage,
     IngestionLog,
     TerritorialContext,
     IngestionFile,
@@ -59,6 +60,29 @@ from uuid import UUID
 router = APIRouter(tags=["Intelligence"])
 logger = logging.getLogger("sisc_api")
 REPORT_TRIGGER_ROLES = {"TI_ADMIN", "FUNC_ADMIN", "ANALYST"}
+COMPACT_REFERENCE_SOURCE = "MINDEFENSA_REFERENCE_COMPACT"
+
+
+class ReferenceAggregateRecord(BaseModel):
+    codigo_dane: str
+    municipio: str
+    departamento: str
+    anio: int
+    mes: int
+    cantidad: int
+
+
+class ReferenceCoveragePeriod(BaseModel):
+    anio: int
+    municipality_codes: List[str]
+
+
+class ReferenceAggregateUpload(BaseModel):
+    filename: str
+    tipo_delito: str
+    records: List[ReferenceAggregateRecord]
+    coverage: List[ReferenceCoveragePeriod]
+    source_cutoff: Optional[date] = None
 
 
 def _authorize_report_trigger(request: Request, user: Optional[User]) -> str:
@@ -499,6 +523,146 @@ async def upload_reference_file(
         db.commit()
         logger.exception("Reference data ingestion failed")
         raise HTTPException(status_code=500, detail="No se pudo procesar el archivo de referencia territorial.") from error
+
+
+@router.post("/reference-aggregate-upload")
+async def upload_reference_aggregates(
+    request: Request,
+    payload: ReferenceAggregateUpload,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Persist compact national and regional aggregates produced by the monitor.
+
+    Raw MinDefensa workbooks are large enough to exceed a public HTTP gateway.
+    The trusted monitor reads them, keeps the national total plus Valle/Cauca
+    municipal aggregates, and sends the verified municipal coverage separately.
+    """
+    authorization_mode = await authorize_source_monitor(request, current_user, "MINDEFENSA")
+    if not payload.records:
+        raise HTTPException(status_code=422, detail="La referencia agregada no contiene registros.")
+    if len(payload.records) > 30_000:
+        raise HTTPException(status_code=413, detail="La referencia agregada excede el limite operativo.")
+
+    log_entry = IngestionLog(
+        estado="IN_PROGRESS",
+        registros_insertados=0,
+        detalles={"filename": payload.filename, "scope": COMPACT_REFERENCE_SOURCE},
+    )
+    db.add(log_entry)
+    db.commit()
+    db.refresh(log_entry)
+
+    try:
+        from sqlalchemy.dialects.postgresql import insert
+
+        processor = NationalStatsProcessor()
+        records = []
+        for item in payload.records:
+            code = "NACIONAL" if item.codigo_dane.upper() == "NACIONAL" else normalize_municipality_code(item.codigo_dane)
+            if not code or not 1 <= item.mes <= 12 or item.anio < 2000 or item.cantidad < 0:
+                continue
+            fingerprint_source = f"{COMPACT_REFERENCE_SOURCE}|{payload.tipo_delito}|{code}|{item.anio}|{item.mes}"
+            fingerprint = hashlib.sha256(fingerprint_source.encode()).hexdigest()
+            records.append({
+                "source_id": COMPACT_REFERENCE_SOURCE,
+                "departamento": item.departamento.strip() or "NO INFORMADO",
+                "municipio": item.municipio.strip() or code,
+                "municipio_normalizado": processor.normalize_text(item.municipio or code),
+                "codigo_dane": code,
+                "fecha_hecho": date(item.anio, item.mes, 1),
+                "fecha_corte_mindefensa": payload.source_cutoff,
+                "anio": item.anio,
+                "mes": item.mes,
+                "tipo_delito": payload.tipo_delito,
+                "cantidad": int(item.cantidad),
+                "fuente_archivo": payload.filename,
+                "event_fingerprint": fingerprint,
+                "hash_registro": fingerprint,
+                "fecha_ingesta": datetime.utcnow(),
+            })
+        if not records:
+            raise HTTPException(status_code=422, detail="No hay registros agregados validos.")
+
+        coverage = []
+        for period in payload.coverage:
+            codes = sorted({code for raw_code in period.municipality_codes if (code := normalize_municipality_code(raw_code))})
+            if codes:
+                coverage.append({
+                    "source_id": COMPACT_REFERENCE_SOURCE,
+                    "tipo_delito": payload.tipo_delito,
+                    "anio": period.anio,
+                    "municipality_codes": codes,
+                    "fecha_corte_mindefensa": payload.source_cutoff,
+                    "fuente_archivo": payload.filename,
+                    "fecha_ingesta": datetime.utcnow(),
+                })
+
+        with db.begin_nested():
+            for offset in range(0, len(records), 500):
+                statement = insert(NationalCrimeStats).values(records[offset:offset + 500])
+                statement = statement.on_conflict_do_update(
+                    index_elements=["source_id", "event_fingerprint"],
+                    set_={
+                        "cantidad": statement.excluded.cantidad,
+                        "fecha_corte_mindefensa": statement.excluded.fecha_corte_mindefensa,
+                        "fuente_archivo": statement.excluded.fuente_archivo,
+                        "fecha_ingesta": statement.excluded.fecha_ingesta,
+                    },
+                )
+                db.execute(statement)
+            for item in coverage:
+                statement = insert(NationalReferenceCoverage).values(item)
+                statement = statement.on_conflict_do_update(
+                    index_elements=["source_id", "tipo_delito", "anio"],
+                    set_={
+                        "municipality_codes": statement.excluded.municipality_codes,
+                        "fecha_corte_mindefensa": statement.excluded.fecha_corte_mindefensa,
+                        "fuente_archivo": statement.excluded.fuente_archivo,
+                        "fecha_ingesta": statement.excluded.fecha_ingesta,
+                    },
+                )
+                db.execute(statement)
+            log_entry.estado = "COMPLETED"
+            log_entry.registros_insertados = len(records)
+            log_entry.fecha_fin = datetime.utcnow()
+            log_entry.detalles = {
+                "filename": payload.filename,
+                "scope": COMPACT_REFERENCE_SOURCE,
+                "records": len(records),
+                "coverage_years": sorted({item["anio"] for item in coverage}),
+                "authorization_mode": authorization_mode,
+            }
+        db.commit()
+        await log_audit(
+            db,
+            "REFERENCE_DATA_INGESTED",
+            actor_id=str(current_user.id) if current_user else None,
+            module="INTELLIGENCE",
+            target={"filename": payload.filename, "records": len(records), "mode": "COMPACT"},
+            level=2,
+            request=request,
+        )
+        return {
+            "status": "COMPLETED",
+            "source_id": COMPACT_REFERENCE_SOURCE,
+            "records": len(records),
+            "coverage_years": sorted({item["anio"] for item in coverage}),
+        }
+    except HTTPException:
+        db.rollback()
+        log_entry.estado = "FAILED"
+        log_entry.fecha_fin = datetime.utcnow()
+        db.commit()
+        raise
+    except Exception as error:
+        db.rollback()
+        log_entry.estado = "FAILED"
+        log_entry.errores = str(error)
+        log_entry.fecha_fin = datetime.utcnow()
+        db.commit()
+        logger.exception("Compact reference ingestion failed")
+        raise HTTPException(status_code=500, detail="No se pudo guardar la referencia territorial agregada.") from error
 
 
 @router.post("/ingest")
@@ -2078,15 +2242,30 @@ async def get_national_stats(
     processor = NationalStatsProcessor()
     target_municipio = processor.normalize_text(municipio)
 
-    # Prefer the complete municipal reference dataset when it exists. Legacy
-    # Jamundi-only MinDefensa records remain a historical fallback.
+    # Prefer compact aggregates from the trusted monitor. The legacy full-file
+    # route remains a fallback for historical data already ingested.
+    compact_source = NationalCrimeStats.source_id == COMPACT_REFERENCE_SOURCE
+    has_compact_reference = db.query(NationalCrimeStats.id).filter(
+        compact_source,
+        NationalCrimeStats.municipio_normalizado == target_municipio,
+        NationalCrimeStats.anio == anio,
+    ).first() is not None
     reference_source = NationalCrimeStats.source_id == "MINDEFENSA_REFERENCE"
     has_reference_data = db.query(NationalCrimeStats.id).filter(
         reference_source,
         NationalCrimeStats.municipio_normalizado == target_municipio,
         NationalCrimeStats.anio == anio,
     ).first() is not None
-    mindefensa_source = reference_source if has_reference_data else NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+    reference_source_id = (
+        COMPACT_REFERENCE_SOURCE if has_compact_reference
+        else "MINDEFENSA_REFERENCE" if has_reference_data
+        else None
+    )
+    mindefensa_source = (
+        NationalCrimeStats.source_id == reference_source_id
+        if reference_source_id else NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+    )
+    is_compact_reference = reference_source_id == COMPACT_REFERENCE_SOURCE
     
     # 2. Obtener datos locales (Jamundí o el seleccionado)
     local_data = db.query(
@@ -2132,49 +2311,93 @@ async def get_national_stats(
     ) or municipality_code_for_name(municipio, anio)
     territorial_peer_codes = population_peer_codes(local_code, anio)
 
-    national_rows = db.query(
-        NationalCrimeStats.tipo_delito,
-        NationalCrimeStats.codigo_dane,
-        func.sum(NationalCrimeStats.cantidad).label("total"),
-    ).filter(
-        mindefensa_source,
-        NationalCrimeStats.anio == anio,
-        NationalCrimeStats.codigo_dane.isnot(None),
-        ~NationalCrimeStats.municipio_normalizado.like("TOTAL%"),
-    ).group_by(
-        NationalCrimeStats.tipo_delito,
-        NationalCrimeStats.codigo_dane,
-    ).all()
-    cutoff_rows = db.query(
-        NationalCrimeStats.tipo_delito,
-        NationalCrimeStats.fecha_corte_mindefensa,
-    ).filter(
-        mindefensa_source,
-        NationalCrimeStats.anio == anio,
-        NationalCrimeStats.fecha_corte_mindefensa.isnot(None),
-    ).distinct().all()
     coverage_codes_by_type = {}
     national_totals_by_type = {}
     territorial_totals_by_type = {}
     territorial_codes_by_type = {}
     cutoffs_by_type = {}
     all_source_codes = set()
-    for national_row in national_rows:
-        source_code = normalize_municipality_code(national_row.codigo_dane)
-        if not source_code:
-            continue
-        coverage_codes_by_type.setdefault(national_row.tipo_delito, set()).add(source_code)
-        national_totals_by_type[national_row.tipo_delito] = (
-            national_totals_by_type.get(national_row.tipo_delito, 0) + int(national_row.total)
-        )
-        if source_code in territorial_peer_codes:
-            territorial_totals_by_type[national_row.tipo_delito] = (
-                territorial_totals_by_type.get(national_row.tipo_delito, 0) + int(national_row.total)
+    if is_compact_reference:
+        national_rows = db.query(
+            NationalCrimeStats.tipo_delito,
+            func.sum(NationalCrimeStats.cantidad).label("total"),
+        ).filter(
+            mindefensa_source,
+            NationalCrimeStats.anio == anio,
+            NationalCrimeStats.codigo_dane == "NACIONAL",
+        ).group_by(NationalCrimeStats.tipo_delito).all()
+        territorial_rows = db.query(
+            NationalCrimeStats.tipo_delito,
+            NationalCrimeStats.codigo_dane,
+            func.sum(NationalCrimeStats.cantidad).label("total"),
+        ).filter(
+            mindefensa_source,
+            NationalCrimeStats.anio == anio,
+            NationalCrimeStats.codigo_dane.in_(territorial_peer_codes),
+        ).group_by(NationalCrimeStats.tipo_delito, NationalCrimeStats.codigo_dane).all()
+        coverage_rows = db.query(NationalReferenceCoverage).filter(
+            NationalReferenceCoverage.source_id == COMPACT_REFERENCE_SOURCE,
+            NationalReferenceCoverage.anio == anio,
+        ).all()
+        for national_row in national_rows:
+            national_totals_by_type[national_row.tipo_delito] = int(national_row.total)
+        for territorial_row in territorial_rows:
+            code = normalize_municipality_code(territorial_row.codigo_dane)
+            if not code:
+                continue
+            territorial_totals_by_type[territorial_row.tipo_delito] = (
+                territorial_totals_by_type.get(territorial_row.tipo_delito, 0) + int(territorial_row.total)
             )
-            territorial_codes_by_type.setdefault(national_row.tipo_delito, set()).add(source_code)
-        all_source_codes.add(source_code)
-    for cutoff_row in cutoff_rows:
-        cutoffs_by_type.setdefault(cutoff_row.tipo_delito, set()).add(cutoff_row.fecha_corte_mindefensa)
+            territorial_codes_by_type.setdefault(territorial_row.tipo_delito, set()).add(code)
+        for coverage_row in coverage_rows:
+            codes = {
+                code for raw_code in (coverage_row.municipality_codes or [])
+                if (code := normalize_municipality_code(raw_code))
+            }
+            coverage_codes_by_type[coverage_row.tipo_delito] = codes
+            all_source_codes.update(codes)
+            if coverage_row.fecha_corte_mindefensa:
+                cutoffs_by_type.setdefault(coverage_row.tipo_delito, set()).add(
+                    coverage_row.fecha_corte_mindefensa
+                )
+    else:
+        national_rows = db.query(
+            NationalCrimeStats.tipo_delito,
+            NationalCrimeStats.codigo_dane,
+            func.sum(NationalCrimeStats.cantidad).label("total"),
+        ).filter(
+            mindefensa_source,
+            NationalCrimeStats.anio == anio,
+            NationalCrimeStats.codigo_dane.isnot(None),
+            ~NationalCrimeStats.municipio_normalizado.like("TOTAL%"),
+        ).group_by(
+            NationalCrimeStats.tipo_delito,
+            NationalCrimeStats.codigo_dane,
+        ).all()
+        cutoff_rows = db.query(
+            NationalCrimeStats.tipo_delito,
+            NationalCrimeStats.fecha_corte_mindefensa,
+        ).filter(
+            mindefensa_source,
+            NationalCrimeStats.anio == anio,
+            NationalCrimeStats.fecha_corte_mindefensa.isnot(None),
+        ).distinct().all()
+        for national_row in national_rows:
+            source_code = normalize_municipality_code(national_row.codigo_dane)
+            if not source_code:
+                continue
+            coverage_codes_by_type.setdefault(national_row.tipo_delito, set()).add(source_code)
+            national_totals_by_type[national_row.tipo_delito] = (
+                national_totals_by_type.get(national_row.tipo_delito, 0) + int(national_row.total)
+            )
+            if source_code in territorial_peer_codes:
+                territorial_totals_by_type[national_row.tipo_delito] = (
+                    territorial_totals_by_type.get(national_row.tipo_delito, 0) + int(national_row.total)
+                )
+                territorial_codes_by_type.setdefault(national_row.tipo_delito, set()).add(source_code)
+            all_source_codes.add(source_code)
+        for cutoff_row in cutoff_rows:
+            cutoffs_by_type.setdefault(cutoff_row.tipo_delito, set()).add(cutoff_row.fecha_corte_mindefensa)
 
     # Formatear respuesta con comparativas
     result_data = []
@@ -2262,7 +2485,7 @@ async def get_national_stats(
         "conductas_evaluated": len(result_data),
         "conductas_with_complete_coverage": len(available_territorial_benchmarks),
     }
-    national_context["dataset_scope"] = "NATIONAL_REFERENCE" if has_reference_data else "JAMUNDI_HISTORICAL_FALLBACK"
+    national_context["dataset_scope"] = "NATIONAL_REFERENCE" if (has_compact_reference or has_reference_data) else "JAMUNDI_HISTORICAL_FALLBACK"
 
     fp_data = db.query(
         NationalCrimeStats.accion,

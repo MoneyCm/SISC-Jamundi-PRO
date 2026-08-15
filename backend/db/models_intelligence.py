@@ -99,6 +99,25 @@ class NationalCrimeStats(Base):
         Index('idx_ncs_fecha_delito', 'fecha_hecho', 'tipo_delito'),
     )
 
+
+class NationalReferenceCoverage(Base):
+    """Verified municipal coverage accompanying compact national aggregates."""
+
+    __tablename__ = "national_reference_coverage"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_id = Column(String(50), nullable=False, index=True)
+    tipo_delito = Column(String(100), nullable=False, index=True)
+    anio = Column(Integer, nullable=False, index=True)
+    municipality_codes = Column(JSONB, nullable=False)
+    fecha_corte_mindefensa = Column(Date)
+    fuente_archivo = Column(String(255))
+    fecha_ingesta = Column(DateTime, default=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('source_id', 'tipo_delito', 'anio', name='uq_reference_coverage_scope'),
+    )
+
 class IngestionLog(Base):
     __tablename__ = "ingestion_logs"
 
