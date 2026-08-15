@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, TrendingUp, Activity, BarChart2, Clock, ArrowUpRight, Brain } from "lucide-react";
+import { Loader2, TrendingUp, Activity, BarChart2, Clock, ArrowUpRight, Brain, Globe2 } from "lucide-react";
 import {
     BarChart,
     Bar,
@@ -219,6 +219,7 @@ const IntelligenceModule = () => {
         }));
     const hasRegionalReference = rateComparisonData.some(item => item.regionalRate != null);
     const hasNationalReference = rateComparisonData.some(item => item.nationalRate != null);
+    const nationalComparableCount = rateComparisonData.filter(item => item.nationalRate != null).length;
 
     useEffect(() => {
         if (comparisonOptions.length > 0 && !comparisonOptions.some(item => item.delito === comparisonCrime)) {
@@ -556,11 +557,27 @@ const IntelligenceModule = () => {
                     <div className="mb-5 flex flex-col gap-1">
                         <CardTitle className="flex items-center text-lg text-slate-800">
                             <BarChart2 className="mr-2 h-5 w-5 text-indigo-600" />
-                            Brecha por tasa registrada
+                            {selectedMunicipioNombre} frente a la región y Colombia
                         </CardTitle>
                         <p className="text-sm text-slate-600">
-                            Comparación por 100.000 habitantes. Solo se muestran referencias con cobertura verificable para el periodo.
+                            Comparación por 100.000 habitantes. La referencia regional agrupa municipios comparables; la nacional usa el agregado oficial de Colombia.
                         </p>
+                    </div>
+                    <div className={`mb-5 flex items-start gap-3 border-l-4 px-4 py-3 ${hasNationalReference ? 'border-amber-400 bg-amber-50 text-amber-950' : 'border-slate-300 bg-slate-100 text-slate-700'}`}>
+                        <Globe2 className={`mt-0.5 h-5 w-5 flex-shrink-0 ${hasNationalReference ? 'text-amber-600' : 'text-slate-500'}`} />
+                        <div>
+                            <p className="font-semibold">Comparación con Colombia</p>
+                            <p className="mt-1 text-sm">
+                                {hasNationalReference
+                                    ? `Disponible en ${nationalComparableCount} de ${rateComparisonData.length} conductas. En la gráfica corresponde a la barra amarilla "Referencia nacional".`
+                                    : (stats.context?.reason || 'Aún no hay una tasa nacional con alcance, periodo y corte verificables.')}
+                            </p>
+                            {stats.context?.coverage && (
+                                <p className="mt-1 text-xs">
+                                    Corte nacional evaluado: {stats.context.cutoff || 'sin corte informado'}.
+                                </p>
+                            )}
+                        </div>
                     </div>
                     <div className="h-[360px] min-h-[360px] w-full">
                         <ResponsiveContainer width="100%" height="100%">

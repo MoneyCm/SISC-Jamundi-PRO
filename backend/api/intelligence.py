@@ -2323,6 +2323,7 @@ async def get_national_stats(
     territorial_codes_by_type = {}
     cutoffs_by_type = {}
     all_source_codes = set()
+    compact_coverage_types = set()
     if is_compact_reference:
         national_rows = db.query(
             NationalCrimeStats.tipo_delito,
@@ -2357,6 +2358,7 @@ async def get_national_stats(
             territorial_totals_by_code_by_type.setdefault(territorial_row.tipo_delito, {})[code] = int(territorial_row.total)
             territorial_codes_by_type.setdefault(territorial_row.tipo_delito, set()).add(code)
         for coverage_row in coverage_rows:
+            compact_coverage_types.add(coverage_row.tipo_delito)
             codes = {
                 code for raw_code in (coverage_row.municipality_codes or [])
                 if (code := normalize_municipality_code(raw_code))
@@ -2427,6 +2429,11 @@ async def get_national_stats(
             national_total=national_totals_by_type.get(row.tipo_delito, 0),
             covered_codes=coverage_codes_by_type.get(row.tipo_delito, set()),
             cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
+            official_scope_verified=(
+                is_compact_reference
+                and row.tipo_delito in compact_coverage_types
+                and row.tipo_delito in national_totals_by_type
+            ),
         )
         territorial_benchmark = comparable_reference_rate(
             year=anio,

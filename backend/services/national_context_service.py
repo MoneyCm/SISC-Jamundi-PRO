@@ -279,19 +279,39 @@ def comparable_national_rate(
     national_total: int,
     covered_codes: Iterable[object],
     cutoffs: Iterable[date] = (),
+    official_scope_verified: bool = False,
 ) -> dict:
-    """Calculate comparable rates only for a complete DANE municipal coverage."""
+    """Calculate a national rate from an official nationwide source.
+
+    Event workbooks omit municipalities with zero reported cases. A trusted
+    national aggregate therefore verifies scope at file level instead of
+    requiring one event row for every DANE municipality.
+    """
+    event_codes = {
+        code for raw_code in covered_codes
+        if (code := normalize_municipality_code(raw_code)) is not None
+    }
+    comparison_codes = municipality_codes_for_year(year) if official_scope_verified else event_codes
     result = comparable_reference_rate(
         year=year,
         local_code=local_code,
         local_total=local_total,
         reference_total=national_total,
         expected_codes=municipality_codes_for_year(year),
-        covered_codes=covered_codes,
+        covered_codes=comparison_codes,
         cutoffs=cutoffs,
     )
     result["national_population"] = result["reference_population"]
     result["national_rate_per_100k"] = result["reference_rate_per_100k"]
+    result["coverage"].update({
+        "official_scope_verified": official_scope_verified,
+        "municipalities_with_reported_cases": len(event_codes),
+        "verification_basis": (
+            "Archivo nacional oficial procesado de forma completa; los municipios ausentes se interpretan como cero casos."
+            if official_scope_verified
+            else "Cobertura inferida a partir de municipios con registros."
+        ),
+    })
     return result
 
 

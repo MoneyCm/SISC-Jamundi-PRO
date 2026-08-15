@@ -95,6 +95,24 @@ def test_complete_dane_coverage_enables_a_rate_comparison():
     assert complete["coverage"]["complete"] is True
 
 
+def test_official_national_scope_treats_absent_municipalities_as_zero_cases():
+    official = comparable_national_rate(
+        year=2025,
+        local_code="76364",
+        local_total=793,
+        national_total=100_000,
+        covered_codes=["76364", "76001"],
+        cutoffs=[date(2025, 12, 31)],
+        official_scope_verified=True,
+    )
+
+    assert official["available"] is True
+    assert official["coverage"]["complete"] is True
+    assert official["coverage"]["official_scope_verified"] is True
+    assert official["coverage"]["municipalities_with_reported_cases"] == 2
+    assert official["national_rate_per_100k"] is not None
+
+
 def test_complete_coverage_without_one_verified_cutoff_stays_blocked():
     inconsistent = comparable_national_rate(
         year=2025,
