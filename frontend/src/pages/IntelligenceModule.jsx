@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, TrendingUp, Activity, BarChart2, Clock, ArrowUpRight, Brain, Globe2 } from "lucide-react";
+import { Loader2, TrendingUp, Activity, BarChart2, Clock, ArrowUpRight, Brain, Globe2, Search, ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from "lucide-react";
 import {
     BarChart,
     Bar,
@@ -39,6 +39,14 @@ const IntelligenceModule = () => {
     const [insightLoading, setInsightLoading] = useState(false);
     const [activeProvider, setActiveProvider] = useState("Gemini Pro");
     const [comparisonCrime, setComparisonCrime] = useState("");
+    const [comparisonScope, setComparisonScope] = useState("regional");
+    const [nationalRanking, setNationalRanking] = useState(null);
+    const [nationalLoading, setNationalLoading] = useState(false);
+    const [nationalSearch, setNationalSearch] = useState("");
+    const [nationalDepartment, setNationalDepartment] = useState("");
+    const [nationalSort, setNationalSort] = useState("rate");
+    const [nationalSortDirection, setNationalSortDirection] = useState("desc");
+    const [nationalPage, setNationalPage] = useState(1);
 
     const [chatOpen, setChatOpen] = useState(false);
     const [messages, setMessages] = useState([]);
@@ -220,6 +228,46 @@ const IntelligenceModule = () => {
     const hasRegionalReference = rateComparisonData.some(item => item.regionalRate != null);
     const hasNationalReference = rateComparisonData.some(item => item.nationalRate != null);
     const nationalComparableCount = rateComparisonData.filter(item => item.nationalRate != null).length;
+
+    const fetchNationalRanking = async () => {
+        if (comparisonScope !== "national" || !selectedComparisonItem) return;
+        setNationalLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const params = new URLSearchParams({
+                municipio: selectedMunicipio,
+                anio: String(selectedYear),
+                delito: selectedComparisonItem.delito,
+                search: nationalSearch,
+                department: nationalDepartment,
+                sort_by: nationalSort,
+                sort_direction: nationalSortDirection,
+                page: String(nationalPage),
+                page_size: '25'
+            });
+            const response = await fetch(`${API_BASE_URL}/intelligence/national-ranking?${params.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            setNationalRanking(await response.json());
+        } catch (error) {
+            console.error("Error fetching national ranking:", error);
+            setNationalRanking({ available: false, reason: "No fue posible consultar la clasificación nacional.", rows: [] });
+        } finally {
+            setNationalLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (comparisonScope !== "national" || !selectedComparisonItem) return undefined;
+        const timer = window.setTimeout(fetchNationalRanking, 250);
+        return () => window.clearTimeout(timer);
+    }, [comparisonScope, selectedYear, selectedMunicipio, selectedComparisonItem?.delito, nationalSearch, nationalDepartment, nationalSort, nationalSortDirection, nationalPage]);
+
+    useEffect(() => {
+        setNationalRanking(null);
+        setNationalPage(1);
+    }, [selectedYear, selectedMunicipio, selectedComparisonItem?.delito]);
 
     useEffect(() => {
         if (comparisonOptions.length > 0 && !comparisonOptions.some(item => item.delito === comparisonCrime)) {
@@ -453,102 +501,203 @@ const IntelligenceModule = () => {
             </div>
 
             {territorialComparison && (
-                <section className="space-y-4" aria-labelledby="regional-comparison-title">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <section className="space-y-4" aria-labelledby="territorial-comparison-title">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                         <div>
                             <p className="text-xs font-bold uppercase text-indigo-700">Comparación territorial verificable</p>
-                            <h2 id="regional-comparison-title" className="mt-1 text-xl font-bold text-slate-900">
-                                ¿Cómo está {selectedMunicipioNombre} frente a municipios comparables?
+                            <h2 id="territorial-comparison-title" className="mt-1 text-xl font-bold text-slate-900">
+                                {comparisonScope === 'regional'
+                                    ? `¿Cómo está ${selectedMunicipioNombre} frente a municipios comparables?`
+                                    : `¿Qué posición ocupa ${selectedMunicipioNombre} en Colombia?`}
                             </h2>
                             <p className="mt-1 max-w-3xl text-sm text-slate-600">
-                                {selectedComparisonItem?.isAggregate
-                                    ? (selectedComparisonItem.hasMixedPeriods
-                                        ? 'Este agregado suma las conductas priorizadas visibles y conserva el cierre disponible de cada una. Es comparable entre municipios, pero no representa un único periodo calendario ni el total general de delitos.'
-                                        : 'Este agregado suma únicamente las conductas priorizadas visibles, con igual periodo y cobertura completa. No representa el total de delitos del municipio.')
-                                    : 'La tasa por 100.000 habitantes permite comparar municipios de distinto tamaño. El grupo incluye municipios de Valle del Cauca y Cauca con población entre 50% y 200% de la población del municipio seleccionado.'}
+                                {comparisonScope === 'regional'
+                                    ? (selectedComparisonItem?.isAggregate
+                                        ? 'El agregado resume las conductas priorizadas visibles. No representa el total general de delitos.'
+                                        : 'Compara municipios de Valle del Cauca y Cauca con población semejante mediante tasas por 100.000 habitantes.')
+                                    : 'Clasificación nacional por tasa registrada. Incluye los municipios sin casos reportados como cero y conserva una posición nacional estable aunque cambie el orden visible.'}
                             </p>
                         </div>
-                        <div className="w-full lg:w-72">
-                            <label htmlFor="regional-crime" className="mb-1 block text-xs font-semibold uppercase text-slate-500">Conducta</label>
-                            <select
-                                id="regional-crime"
-                                value={selectedComparisonItem?.delito || ""}
-                                onChange={(event) => setComparisonCrime(event.target.value)}
-                                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                {comparisonOptions.map(item => <option key={item.delito} value={item.delito}>{item.label || item.delito}</option>)}
-                            </select>
+                        <div className="flex w-full flex-col gap-3 sm:flex-row xl:w-auto xl:items-end">
+                            <div>
+                                <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Alcance</span>
+                                <div className="inline-flex h-10 rounded-md border border-slate-300 bg-slate-100 p-1" role="tablist" aria-label="Alcance de la comparación">
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={comparisonScope === 'regional'}
+                                        onClick={() => setComparisonScope('regional')}
+                                        className={`px-3 text-sm font-semibold ${comparisonScope === 'regional' ? 'rounded bg-white text-indigo-700 shadow-sm' : 'text-slate-600'}`}
+                                    >
+                                        Región comparable
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={comparisonScope === 'national'}
+                                        onClick={() => { setComparisonScope('national'); setNationalPage(1); }}
+                                        className={`px-3 text-sm font-semibold ${comparisonScope === 'national' ? 'rounded bg-white text-indigo-700 shadow-sm' : 'text-slate-600'}`}
+                                    >
+                                        Colombia
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="min-w-0 sm:w-72">
+                                <label htmlFor="comparison-crime" className="mb-1 block text-xs font-semibold uppercase text-slate-500">Conducta</label>
+                                <select
+                                    id="comparison-crime"
+                                    value={selectedComparisonItem?.delito || ""}
+                                    onChange={(event) => { setComparisonCrime(event.target.value); setNationalPage(1); }}
+                                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    {comparisonOptions.map(item => <option key={item.delito} value={item.delito}>{item.label || item.delito}</option>)}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                        <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
-                            {selectedComparisonItem?.hasMixedPeriods
-                                ? `Periodo: cortes disponibles por conducta en ${selectedYear}`
-                                : `Periodo: enero a ${monthNames[(selectedComparisonItem?.period_end_month || 12) - 1]} de ${selectedYear}`}
-                        </span>
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
-                            {territorialComparison.observed_municipalities} de {territorialComparison.expected_municipalities} municipios con dato verificable
-                        </span>
-                        {selectedComparisonItem?.isAggregate && (
-                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">
-                                {sourceComparisonOptions.length} conductas priorizadas sumadas
-                            </span>
-                        )}
-                        {selectedComparisonItem?.hasMixedPeriods && (
-                            <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">
-                                Cortes independientes
-                            </span>
-                        )}
-                        {territorialComparison.cutoff && (
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al: {territorialComparison.cutoff}</span>
-                        )}
-                    </div>
+                    {comparisonScope === 'regional' ? (
+                        <>
+                            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                                <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
+                                    {selectedComparisonItem?.hasMixedPeriods
+                                        ? `Periodo: cortes disponibles por conducta en ${selectedYear}`
+                                        : `Periodo: enero a ${monthNames[(selectedComparisonItem?.period_end_month || 12) - 1]} de ${selectedYear}`}
+                                </span>
+                                <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+                                    {territorialComparison.observed_municipalities} de {territorialComparison.expected_municipalities} municipios con dato verificable
+                                </span>
+                                {selectedComparisonItem?.isAggregate && <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">{sourceComparisonOptions.length} conductas priorizadas sumadas</span>}
+                                {selectedComparisonItem?.hasMixedPeriods && <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">Cortes independientes</span>}
+                                {territorialComparison.cutoff && <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al: {territorialComparison.cutoff}</span>}
+                            </div>
+                            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                <div className="max-h-[440px] overflow-auto">
+                                    <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                                        <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
+                                            <tr>
+                                                <th className="w-20 px-4 py-3 text-center">Posición</th>
+                                                <th className="px-4 py-3">Municipio</th>
+                                                <th className="px-4 py-3 text-right">{selectedComparisonItem?.isAggregate ? 'Registros priorizados' : 'Casos'}</th>
+                                                <th className="px-4 py-3 text-right">Población DANE</th>
+                                                <th className="px-4 py-3 text-right">Tasa por 100.000</th>
+                                                <th className="px-4 py-3 text-right">Diferencia de tasa vs {selectedMunicipioNombre}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {territorialComparison.rows.map(row => (
+                                                <tr key={row.codigo_dane} className={row.es_objetivo ? 'bg-indigo-50 font-bold text-indigo-950' : 'text-slate-700 hover:bg-slate-50'}>
+                                                    <td className="px-4 py-3 text-center">{row.posicion || '—'}</td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <span>{row.municipio}</span>
+                                                            {row.es_objetivo && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] uppercase text-white">Municipio objetivo</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right tabular-nums">{row.casos == null ? 'Sin dato' : Number(row.casos).toLocaleString('es-CO')}</td>
+                                                    <td className="px-4 py-3 text-right tabular-nums">{row.poblacion == null ? '—' : Number(row.poblacion).toLocaleString('es-CO')}</td>
+                                                    <td className="px-4 py-3 text-right font-bold tabular-nums">{row.tasa_por_100k == null ? '—' : Number(row.tasa_por_100k).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className={`px-4 py-3 text-right font-bold tabular-nums ${row.es_objetivo ? 'text-indigo-700' : row.diferencia_tasa_objetivo > 0 ? 'text-red-600' : row.diferencia_tasa_objetivo < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                                        {row.es_objetivo || row.diferencia_tasa_objetivo == null
+                                                            ? (row.es_objetivo ? 'Base' : 'No comparable')
+                                                            : `${row.diferencia_tasa_objetivo > 0 ? '+' : ''}${Number(row.diferencia_tasa_objetivo).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts.`}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                                    Fuente: MinDefensa. Población: proyecciones municipales DANE. La posición se calcula por tasa por 100.000 habitantes.
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {nationalRanking?.available && (
+                                <>
+                                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                                        <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
+                                            {nationalRanking.has_mixed_periods ? `Cortes disponibles por conducta en ${selectedYear}` : `Enero a ${monthNames[(nationalRanking.period_end_month || 12) - 1]} de ${selectedYear}`}
+                                        </span>
+                                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{nationalRanking.coverage.national_universe} municipios DANE</span>
+                                        {nationalRanking.has_mixed_periods && <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">Cortes independientes</span>}
+                                        {nationalRanking.cutoff && <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al: {nationalRanking.cutoff}</span>}
+                                    </div>
+                                    <div className="grid overflow-hidden rounded-lg border border-slate-200 bg-white sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-slate-200">
+                                        <div className="px-4 py-3"><p className="text-xs font-semibold uppercase text-slate-500">Posición nacional</p><p className="mt-1 text-2xl font-bold text-indigo-700">{nationalRanking.target.posicion_nacional} de {nationalRanking.coverage.national_universe}</p></div>
+                                        <div className="px-4 py-3"><p className="text-xs font-semibold uppercase text-slate-500">Tasa de {selectedMunicipioNombre}</p><p className="mt-1 text-2xl font-bold text-slate-900">{Number(nationalRanking.target.tasa_por_100k).toLocaleString('es-CO', { maximumFractionDigits: 2 })}</p></div>
+                                        <div className="px-4 py-3"><p className="text-xs font-semibold uppercase text-slate-500">Tasa Colombia</p><p className="mt-1 text-2xl font-bold text-amber-700">{Number(nationalRanking.national.rate_per_100k).toLocaleString('es-CO', { maximumFractionDigits: 2 })}</p></div>
+                                        <div className="px-4 py-3"><p className="text-xs font-semibold uppercase text-slate-500">Brecha frente al país</p><p className={`mt-1 text-2xl font-bold ${nationalRanking.target.difference_vs_national > 0 ? 'text-red-600' : 'text-emerald-700'}`}>{nationalRanking.target.difference_vs_national > 0 ? '+' : ''}{Number(nationalRanking.target.difference_vs_national).toLocaleString('es-CO', { maximumFractionDigits: 2 })} pts.</p></div>
+                                    </div>
+                                </>
+                            )}
 
-                    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                        <div className="max-h-[440px] overflow-auto">
-                            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-                                <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
-                                    <tr>
-                                        <th className="w-20 px-4 py-3 text-center">Posición</th>
-                                        <th className="px-4 py-3">Municipio</th>
-                                        <th className="px-4 py-3 text-right">{selectedComparisonItem?.isAggregate ? 'Registros priorizados' : 'Casos'}</th>
-                                        <th className="px-4 py-3 text-right">Población DANE</th>
-                                        <th className="px-4 py-3 text-right">Tasa por 100.000</th>
-                                        <th className="px-4 py-3 text-right">Diferencia de tasa vs {selectedMunicipioNombre}</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {territorialComparison.rows.map(row => (
-                                        <tr key={row.codigo_dane} className={row.es_objetivo ? 'bg-indigo-50 font-bold text-indigo-950' : 'text-slate-700 hover:bg-slate-50'}>
-                                            <td className="px-4 py-3 text-center">{row.posicion || '—'}</td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-2">
-                                                    <span>{row.municipio}</span>
-                                                    {row.es_objetivo && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] uppercase text-white">Municipio objetivo</span>}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-right tabular-nums">{row.casos == null ? 'Sin dato' : Number(row.casos).toLocaleString('es-CO')}</td>
-                                            <td className="px-4 py-3 text-right tabular-nums">{row.poblacion == null ? '—' : Number(row.poblacion).toLocaleString('es-CO')}</td>
-                                            <td className="px-4 py-3 text-right font-bold tabular-nums">{row.tasa_por_100k == null ? '—' : Number(row.tasa_por_100k).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                            <td className={`px-4 py-3 text-right font-bold tabular-nums ${row.es_objetivo ? 'text-indigo-700' : row.diferencia_tasa_objetivo > 0 ? 'text-red-600' : row.diferencia_tasa_objetivo < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                                {row.es_objetivo || row.diferencia_tasa_objetivo == null
-                                                    ? (row.es_objetivo ? 'Base' : 'No comparable')
-                                                    : `${row.diferencia_tasa_objetivo > 0 ? '+' : ''}${Number(row.diferencia_tasa_objetivo).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts.`}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                            Fuente: MinDefensa. Población: proyecciones municipales DANE. {selectedComparisonItem?.isAggregate
-                                ? (selectedComparisonItem.hasMixedPeriods
-                                    ? 'El agregado conserva el corte disponible de cada conducta; sirve para comparación territorial y no como total de un periodo calendario único.'
-                                    : 'El agregado suma las conductas priorizadas disponibles y no debe interpretarse como el total general de delitos.')
-                                : 'Una posición más alta indica una mayor tasa registrada para la conducta seleccionada; no representa por sí sola una evaluación integral de seguridad.'}
-                        </div>
-                    </div>
+                            <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_minmax(180px,0.7fr)_minmax(180px,0.7fr)_40px]">
+                                <label className="relative block">
+                                    <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Buscar municipio</span>
+                                    <Search className="absolute bottom-2.5 left-3 h-4 w-4 text-slate-400" />
+                                    <input value={nationalSearch} onChange={(event) => { setNationalSearch(event.target.value); setNationalPage(1); }} placeholder="Nombre o código DANE" className="h-10 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+                                </label>
+                                <label>
+                                    <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Departamento</span>
+                                    <select value={nationalDepartment} onChange={(event) => { setNationalDepartment(event.target.value); setNationalPage(1); }} className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                                        <option value="">Todos</option>
+                                        {(nationalRanking?.filters?.departments || []).map(name => <option key={name} value={name}>{name}</option>)}
+                                    </select>
+                                </label>
+                                <label>
+                                    <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Ordenar por</span>
+                                    <select value={nationalSort} onChange={(event) => { const value = event.target.value; setNationalSort(value); setNationalSortDirection(value === 'municipality' || value === 'position' ? 'asc' : 'desc'); setNationalPage(1); }} className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                                        <option value="rate">Tasa por 100.000</option>
+                                        <option value="position">Posición nacional</option>
+                                        <option value="cases">Casos registrados</option>
+                                        <option value="population">Población</option>
+                                        <option value="municipality">Municipio</option>
+                                    </select>
+                                </label>
+                                <button type="button" title={nationalSortDirection === 'desc' ? 'Cambiar a orden ascendente' : 'Cambiar a orden descendente'} onClick={() => { setNationalSortDirection(value => value === 'desc' ? 'asc' : 'desc'); setNationalPage(1); }} className="mt-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-100">
+                                    {nationalSortDirection === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                                </button>
+                            </div>
+
+                            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                {nationalLoading ? (
+                                    <div className="flex h-64 items-center justify-center text-slate-500"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Consultando clasificación nacional...</div>
+                                ) : !nationalRanking?.available ? (
+                                    <div className="px-6 py-14 text-center"><Globe2 className="mx-auto h-8 w-8 text-slate-400" /><p className="mt-3 font-semibold text-slate-800">Clasificación nacional pendiente</p><p className="mx-auto mt-1 max-w-xl text-sm text-slate-600">{nationalRanking?.reason || 'Aún no hay agregados municipales nacionales disponibles.'}</p></div>
+                                ) : (
+                                    <>
+                                        <div className="max-h-[520px] overflow-auto">
+                                            <table className="w-full min-w-[820px] border-collapse text-left text-sm">
+                                                <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600"><tr><th className="w-24 px-4 py-3 text-center">Posición nacional</th><th className="px-4 py-3">Municipio</th><th className="px-4 py-3">Departamento</th><th className="px-4 py-3 text-right">Casos</th><th className="px-4 py-3 text-right">Población DANE</th><th className="px-4 py-3 text-right">Tasa por 100.000</th></tr></thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {nationalRanking.rows.map(row => (
+                                                        <tr key={row.codigo_dane} className={row.es_objetivo ? 'bg-indigo-50 font-bold text-indigo-950' : 'text-slate-700 hover:bg-slate-50'}>
+                                                            <td className="px-4 py-3 text-center tabular-nums">{row.posicion_nacional}</td>
+                                                            <td className="px-4 py-3"><div className="flex items-center gap-2"><span>{row.municipio}</span>{row.es_objetivo && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] uppercase text-white">Municipio objetivo</span>}</div></td>
+                                                            <td className="px-4 py-3">{row.departamento}</td>
+                                                            <td className="px-4 py-3 text-right tabular-nums">{Number(row.casos).toLocaleString('es-CO')}</td>
+                                                            <td className="px-4 py-3 text-right tabular-nums">{Number(row.poblacion).toLocaleString('es-CO')}</td>
+                                                            <td className="px-4 py-3 text-right font-bold tabular-nums">{Number(row.tasa_por_100k).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+                                            <span>{nationalRanking.pagination.total_rows} municipios encontrados · Página {nationalRanking.pagination.page} de {nationalRanking.pagination.total_pages || 1}</span>
+                                            <div className="flex gap-2">
+                                                <button type="button" title="Página anterior" disabled={nationalRanking.pagination.page <= 1} onClick={() => setNationalPage(page => Math.max(1, page - 1))} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+                                                <button type="button" title="Página siguiente" disabled={nationalRanking.pagination.page >= nationalRanking.pagination.total_pages} onClick={() => setNationalPage(page => page + 1)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                                <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">Fuente: MinDefensa. Población: proyecciones municipales DANE. La posición nacional siempre se calcula por tasa registrada, no por cantidad absoluta.</div>
+                            </div>
+                        </>
+                    )}
                 </section>
             )}
 
@@ -598,7 +747,7 @@ const IntelligenceModule = () => {
                         </ResponsiveContainer>
                     </div>
                     <p className="mt-3 text-xs text-slate-500">
-                        Fuente de casos: MinDefensa. Denominadores: proyecciones municipales DANE. Consulte la tabla territorial para revisar cobertura, corte y municipios incluidos.
+                        Fuente de casos: MinDefensa. Denominadores: proyecciones municipales DANE. Use la tabla superior para explorar la región comparable o la clasificación nacional.
                     </p>
                 </Card>
             )}

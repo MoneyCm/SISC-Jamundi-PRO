@@ -47,12 +47,17 @@ def normalize_name(value: object) -> str:
 
 
 @lru_cache(maxsize=1)
-def _population_reference() -> tuple[dict[tuple[str, int], int], dict[tuple[str, int], str]]:
+def _population_reference() -> tuple[
+    dict[tuple[str, int], int],
+    dict[tuple[str, int], str],
+    dict[tuple[str, int], str],
+]:
     if not POPULATION_FILE.exists():
         raise FileNotFoundError(f"DANE population reference not found: {POPULATION_FILE}")
 
     population: dict[tuple[str, int], int] = {}
     municipality_names: dict[tuple[str, int], str] = {}
+    department_names: dict[tuple[str, int], str] = {}
     with POPULATION_FILE.open(encoding="utf-8", newline="") as stream:
         for row in csv.DictReader(stream):
             code = normalize_municipality_code(row.get("municipality_code"))
@@ -64,7 +69,8 @@ def _population_reference() -> tuple[dict[tuple[str, int], int], dict[tuple[str,
             if code and total > 0:
                 population[(code, year)] = total
                 municipality_names[(code, year)] = row.get("municipality", "")
-    return population, municipality_names
+                department_names[(code, year)] = row.get("department", "")
+    return population, municipality_names, department_names
 
 
 def population_for(code: object, year: int) -> Optional[int]:
@@ -75,12 +81,12 @@ def population_for(code: object, year: int) -> Optional[int]:
 
 
 def municipality_codes_for_year(year: int) -> set[str]:
-    population, _ = _population_reference()
+    population, _, _ = _population_reference()
     return {code for code, population_year in population if population_year == year}
 
 
 def municipality_code_for_name(name: object, year: int) -> Optional[str]:
-    _, names = _population_reference()
+    _, names, _ = _population_reference()
     target = normalize_name(name)
     for (code, population_year), municipality_name in names.items():
         if population_year == year and normalize_name(municipality_name) == target:
@@ -94,7 +100,7 @@ def municipality_name_for_code(code: object, year: Optional[int] = None) -> Opti
     if not normalized_code:
         return None
 
-    _, names = _population_reference()
+    _, names, _ = _population_reference()
     if year is not None:
         name = names.get((normalized_code, int(year)))
         if name:
@@ -122,7 +128,7 @@ def population_peer_codes(
     if not target_code or not target_population:
         return set()
 
-    population, _ = _population_reference()
+    population, _, _ = _population_reference()
     return {
         candidate_code
         for candidate_code in municipality_codes_for_year(year)
@@ -132,6 +138,40 @@ def population_peer_codes(
         <= (population[(candidate_code, year)] / target_population)
         <= upper_population_ratio
     }
+
+
+def national_municipal_ranking(
+    *,
+    year: int,
+    target_code: object,
+    totals_by_code: dict[object, int],
+) -> list[dict]:
+    """Rank the full DANE municipal universe by an equivalent registered rate."""
+    population, names, departments = _population_reference()
+    normalized_target = normalize_municipality_code(target_code)
+    normalized_totals = {
+        code: max(int(total), 0)
+        for raw_code, total in totals_by_code.items()
+        if (code := normalize_municipality_code(raw_code)) is not None
+    }
+    rows = []
+    for code in municipality_codes_for_year(year):
+        municipality_population = population.get((code, year))
+        cases = normalized_totals.get(code, 0)
+        rows.append({
+            "codigo_dane": code,
+            "departamento": departments.get((code, year), ""),
+            "municipio": names.get((code, year), code),
+            "casos": cases,
+            "poblacion": municipality_population,
+            "tasa_por_100k": rate_per_100k(cases, municipality_population),
+            "es_objetivo": code == normalized_target,
+        })
+
+    rows.sort(key=lambda row: (-(row["tasa_por_100k"] or 0), row["municipio"]))
+    for position, row in enumerate(rows, start=1):
+        row["posicion_nacional"] = position
+    return rows
 
 
 def rate_per_100k(count: int, population: Optional[int]) -> Optional[float]:

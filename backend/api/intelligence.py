@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, UploadFile, File, Form, Request, Query
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -34,10 +34,13 @@ from services.national_context_service import (
     comparable_national_rate,
     municipality_code_for_name,
     municipality_name_for_code,
+    national_municipal_ranking,
     named_territorial_comparison,
     national_benchmark_guard,
+    normalize_name,
     normalize_municipality_code,
     population_peer_codes,
+    rate_per_100k,
     year_over_year,
 )
 from services import dq_service
@@ -62,6 +65,16 @@ router = APIRouter(tags=["Intelligence"])
 logger = logging.getLogger("sisc_api")
 REPORT_TRIGGER_ROLES = {"TI_ADMIN", "FUNC_ADMIN", "ANALYST"}
 COMPACT_REFERENCE_SOURCE = "MINDEFENSA_REFERENCE_COMPACT"
+MUNICIPAL_REFERENCE_SOURCE = "MINDEFENSA_MUNICIPAL_TOTAL"
+PRIORITIZED_CRIME_TYPES = (
+    "Extorsion",
+    "Homicidio Intencional",
+    "Hurto Personas",
+    "Hurto Vehiculos",
+    "Lesiones Personales",
+    "Violencia Intrafamiliar",
+)
+PRIORITIZED_TOTAL_KEY = "TOTAL_CONDUCTAS_PRIORIZADAS"
 
 
 class ReferenceAggregateRecord(BaseModel):
@@ -78,11 +91,21 @@ class ReferenceCoveragePeriod(BaseModel):
     municipality_codes: List[str]
 
 
+class ReferenceMunicipalTotal(BaseModel):
+    codigo_dane: str
+    municipio: str
+    departamento: str
+    anio: int
+    period_end_month: int
+    cantidad: int
+
+
 class ReferenceAggregateUpload(BaseModel):
     filename: str
     tipo_delito: str
     records: List[ReferenceAggregateRecord]
     coverage: List[ReferenceCoveragePeriod]
+    municipal_totals: List[ReferenceMunicipalTotal] = Field(default_factory=list)
     source_cutoff: Optional[date] = None
 
 
@@ -542,7 +565,7 @@ async def upload_reference_aggregates(
     authorization_mode = await authorize_source_monitor(request, current_user, "MINDEFENSA")
     if not payload.records:
         raise HTTPException(status_code=422, detail="La referencia agregada no contiene registros.")
-    if len(payload.records) > 30_000:
+    if len(payload.records) > 30_000 or len(payload.municipal_totals) > 10_000:
         raise HTTPException(status_code=413, detail="La referencia agregada excede el limite operativo.")
 
     log_entry = IngestionLog(
@@ -582,6 +605,36 @@ async def upload_reference_aggregates(
                 "hash_registro": fingerprint,
                 "fecha_ingesta": datetime.utcnow(),
             })
+        for item in payload.municipal_totals:
+            code = normalize_municipality_code(item.codigo_dane)
+            if (
+                not code
+                or not 1 <= item.period_end_month <= 12
+                or item.anio < 2000
+                or item.cantidad < 0
+            ):
+                continue
+            fingerprint_source = (
+                f"{MUNICIPAL_REFERENCE_SOURCE}|{payload.tipo_delito}|{code}|{item.anio}"
+            )
+            fingerprint = hashlib.sha256(fingerprint_source.encode()).hexdigest()
+            records.append({
+                "source_id": MUNICIPAL_REFERENCE_SOURCE,
+                "departamento": item.departamento.strip() or "NO INFORMADO",
+                "municipio": item.municipio.strip() or code,
+                "municipio_normalizado": processor.normalize_text(item.municipio or code),
+                "codigo_dane": code,
+                "fecha_hecho": date(item.anio, item.period_end_month, 1),
+                "fecha_corte_mindefensa": payload.source_cutoff,
+                "anio": item.anio,
+                "mes": item.period_end_month,
+                "tipo_delito": payload.tipo_delito,
+                "cantidad": int(item.cantidad),
+                "fuente_archivo": payload.filename,
+                "event_fingerprint": fingerprint,
+                "hash_registro": fingerprint,
+                "fecha_ingesta": datetime.utcnow(),
+            })
         if not records:
             raise HTTPException(status_code=422, detail="No hay registros agregados validos.")
 
@@ -599,7 +652,17 @@ async def upload_reference_aggregates(
                     "fecha_ingesta": datetime.utcnow(),
                 })
 
+        municipal_years = {
+            record["anio"] for record in records
+            if record["source_id"] == MUNICIPAL_REFERENCE_SOURCE
+        }
         with db.begin_nested():
+            if municipal_years:
+                db.query(NationalCrimeStats).filter(
+                    NationalCrimeStats.source_id == MUNICIPAL_REFERENCE_SOURCE,
+                    NationalCrimeStats.tipo_delito == payload.tipo_delito,
+                    NationalCrimeStats.anio.in_(municipal_years),
+                ).delete(synchronize_session=False)
             for offset in range(0, len(records), 500):
                 statement = insert(NationalCrimeStats).values(records[offset:offset + 500])
                 statement = statement.on_conflict_do_update(
@@ -2264,7 +2327,10 @@ async def get_national_stats(
     )
     mindefensa_source = (
         NationalCrimeStats.source_id == reference_source_id
-        if reference_source_id else NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+        if reference_source_id else (
+            NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+            & (NationalCrimeStats.source_id != MUNICIPAL_REFERENCE_SOURCE)
+        )
     )
     is_compact_reference = reference_source_id == COMPACT_REFERENCE_SOURCE
     
@@ -2545,6 +2611,149 @@ async def get_national_stats(
         "context": national_context,
     }
 
+
+@router.get("/national-ranking")
+async def get_national_municipal_ranking(
+    municipio: str = "JAMUNDI",
+    anio: int = 2025,
+    delito: str = "Hurto Personas",
+    search: str = "",
+    department: str = "",
+    sort_by: str = "rate",
+    sort_direction: str = "desc",
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=10, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
+    """Return a searchable national municipal ranking using compact official totals."""
+    requested_types = list(PRIORITIZED_CRIME_TYPES) if delito == PRIORITIZED_TOTAL_KEY else [delito]
+    available_type_rows = db.query(NationalCrimeStats.tipo_delito).filter(
+        NationalCrimeStats.source_id == MUNICIPAL_REFERENCE_SOURCE,
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.tipo_delito.in_(requested_types),
+    ).distinct().all()
+    available_types = {row.tipo_delito for row in available_type_rows}
+    included_types = [crime_type for crime_type in requested_types if crime_type in available_types]
+
+    if not included_types:
+        return {
+            "available": False,
+            "reason": "El monitor aun no ha sincronizado los totales municipales nacionales para esta conducta y ano.",
+            "rows": [],
+            "pagination": {"page": 1, "page_size": page_size, "total_rows": 0, "total_pages": 0},
+            "filters": {"departments": []},
+        }
+
+    total_rows = db.query(
+        NationalCrimeStats.codigo_dane,
+        func.sum(NationalCrimeStats.cantidad).label("total"),
+    ).filter(
+        NationalCrimeStats.source_id == MUNICIPAL_REFERENCE_SOURCE,
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.tipo_delito.in_(included_types),
+    ).group_by(NationalCrimeStats.codigo_dane).all()
+    totals_by_code = {
+        code: int(row.total)
+        for row in total_rows
+        if (code := normalize_municipality_code(row.codigo_dane))
+    }
+
+    target_code = municipality_code_for_name(municipio, anio)
+    ranking = national_municipal_ranking(
+        year=anio,
+        target_code=target_code,
+        totals_by_code=totals_by_code,
+    )
+    departments = sorted({row["departamento"] for row in ranking if row["departamento"]})
+    target = next((row for row in ranking if row["es_objetivo"]), None)
+
+    national_total = sum(totals_by_code.values())
+    national_population = sum(int(row["poblacion"] or 0) for row in ranking)
+    national_rate = rate_per_100k(int(national_total), national_population)
+
+    period_rows = db.query(
+        NationalCrimeStats.tipo_delito,
+        func.max(NationalCrimeStats.mes).label("period_end_month"),
+        func.max(NationalCrimeStats.fecha_corte_mindefensa).label("cutoff"),
+    ).filter(
+        NationalCrimeStats.source_id == MUNICIPAL_REFERENCE_SOURCE,
+        NationalCrimeStats.anio == anio,
+        NationalCrimeStats.tipo_delito.in_(included_types),
+    ).group_by(NationalCrimeStats.tipo_delito).all()
+    period_months = {int(row.period_end_month) for row in period_rows if row.period_end_month}
+    cutoffs = {row.cutoff for row in period_rows if row.cutoff}
+
+    filtered_rows = ranking
+    if department:
+        filtered_rows = [row for row in filtered_rows if row["departamento"] == department]
+    normalized_search = normalize_name(search)
+    if normalized_search:
+        filtered_rows = [
+            row for row in filtered_rows
+            if normalized_search in normalize_name(row["municipio"])
+            or normalized_search in normalize_name(row["codigo_dane"])
+        ]
+
+    sort_keys = {
+        "position": lambda row: row["posicion_nacional"],
+        "municipality": lambda row: normalize_name(row["municipio"]),
+        "department": lambda row: normalize_name(row["departamento"]),
+        "cases": lambda row: row["casos"],
+        "population": lambda row: row["poblacion"] or 0,
+        "rate": lambda row: row["tasa_por_100k"] or 0,
+    }
+    selected_sort = sort_by if sort_by in sort_keys else "rate"
+    selected_direction = sort_direction if sort_direction in {"asc", "desc"} else "desc"
+    filtered_rows = sorted(
+        filtered_rows,
+        key=sort_keys[selected_sort],
+        reverse=selected_direction == "desc",
+    )
+    filtered_total = len(filtered_rows)
+    total_pages = (filtered_total + page_size - 1) // page_size if filtered_total else 0
+    current_page = min(page, total_pages or 1)
+    start = (current_page - 1) * page_size
+    paginated_rows = filtered_rows[start:start + page_size]
+
+    target_rate = target["tasa_por_100k"] if target else None
+    return {
+        "available": True,
+        "year": anio,
+        "delito": delito,
+        "included_conductas": included_types,
+        "requested_conductas": requested_types,
+        "has_mixed_periods": len(period_months) > 1,
+        "period_end_month": next(iter(period_months)) if len(period_months) == 1 else None,
+        "cutoff": max(cutoffs).isoformat() if cutoffs else None,
+        "coverage": {
+            "municipalities_with_reported_cases": len(totals_by_code),
+            "national_universe": len(ranking),
+            "official_scope_verified": True,
+        },
+        "national": {
+            "cases": int(national_total),
+            "population": national_population,
+            "rate_per_100k": national_rate,
+        },
+        "target": {
+            **(target or {}),
+            "difference_vs_national": (
+                round(target_rate - national_rate, 2)
+                if target_rate is not None and national_rate is not None else None
+            ),
+        },
+        "rows": paginated_rows,
+        "pagination": {
+            "page": current_page,
+            "page_size": page_size,
+            "total_rows": filtered_total,
+            "total_pages": total_pages,
+        },
+        "filters": {"departments": departments},
+        "sort": {"by": selected_sort, "direction": selected_direction},
+    }
+
 @router.get("/municipios")
 async def get_available_municipios(
     db: Session = Depends(get_db),
@@ -2558,7 +2767,8 @@ async def get_available_municipios(
         NationalCrimeStats.municipio_normalizado,
         NationalCrimeStats.municipio
     ).filter(
-        NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+        NationalCrimeStats.source_id.ilike("%MINDEFENSA%"),
+        NationalCrimeStats.source_id != MUNICIPAL_REFERENCE_SOURCE,
     ).distinct().all()
 
     # MinDefensa puede traer variantes de escritura para un mismo municipio.

@@ -5,6 +5,7 @@ from services.national_context_service import (
     comparable_national_rate,
     municipality_codes_for_year,
     municipality_name_for_code,
+    national_municipal_ranking,
     named_territorial_comparison,
     national_benchmark_guard,
     population_for,
@@ -151,3 +152,20 @@ def test_named_territorial_comparison_ranks_rates_and_highlights_target():
     assert target["municipio"].startswith("Jamund")
     assert target["posicion"] is not None
     assert all(row["tasa_por_100k"] is not None for row in comparison["rows"])
+
+
+def test_national_ranking_includes_zero_case_municipalities_and_fixed_positions():
+    ranking = national_municipal_ranking(
+        year=2025,
+        target_code="76364",
+        totals_by_code={"76364": 100, "76001": 800},
+    )
+
+    assert len(ranking) == 1122
+    target = next(row for row in ranking if row["es_objetivo"])
+    zero_case = next(row for row in ranking if row["codigo_dane"] == "05002")
+    assert target["municipio"].startswith("Jamund")
+    assert target["posicion_nacional"] > 0
+    assert zero_case["casos"] == 0
+    assert zero_case["tasa_por_100k"] == 0
+    assert ranking[0]["tasa_por_100k"] >= target["tasa_por_100k"]
