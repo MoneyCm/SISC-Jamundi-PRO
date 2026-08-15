@@ -461,7 +461,9 @@ const IntelligenceModule = () => {
                             </h2>
                             <p className="mt-1 max-w-3xl text-sm text-slate-600">
                                 {selectedComparisonItem?.isAggregate
-                                    ? 'Este agregado suma únicamente las conductas priorizadas visibles, con igual periodo y cobertura completa. No representa el total de delitos del municipio.'
+                                    ? (selectedComparisonItem.hasMixedPeriods
+                                        ? 'Este agregado suma las conductas priorizadas visibles y conserva el cierre disponible de cada una. Es comparable entre municipios, pero no representa un único periodo calendario ni el total general de delitos.'
+                                        : 'Este agregado suma únicamente las conductas priorizadas visibles, con igual periodo y cobertura completa. No representa el total de delitos del municipio.')
                                     : 'La tasa por 100.000 habitantes permite comparar municipios de distinto tamaño. El grupo incluye municipios de Valle del Cauca y Cauca con población entre 50% y 200% de la población del municipio seleccionado.'}
                             </p>
                         </div>
@@ -480,7 +482,9 @@ const IntelligenceModule = () => {
 
                     <div className="flex flex-wrap gap-2 text-xs font-semibold">
                         <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
-                            Periodo: enero a {monthNames[(selectedComparisonItem?.period_end_month || 12) - 1]} de {selectedYear}
+                            {selectedComparisonItem?.hasMixedPeriods
+                                ? `Periodo: cortes disponibles por conducta en ${selectedYear}`
+                                : `Periodo: enero a ${monthNames[(selectedComparisonItem?.period_end_month || 12) - 1]} de ${selectedYear}`}
                         </span>
                         <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
                             {territorialComparison.observed_municipalities} de {territorialComparison.expected_municipalities} municipios con dato verificable
@@ -488,6 +492,11 @@ const IntelligenceModule = () => {
                         {selectedComparisonItem?.isAggregate && (
                             <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">
                                 {sourceComparisonOptions.length} conductas priorizadas sumadas
+                            </span>
+                        )}
+                        {selectedComparisonItem?.hasMixedPeriods && (
+                            <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">
+                                Cortes independientes
                             </span>
                         )}
                         {territorialComparison.cutoff && (
@@ -533,7 +542,9 @@ const IntelligenceModule = () => {
                         </div>
                         <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                             Fuente: MinDefensa. Población: proyecciones municipales DANE. {selectedComparisonItem?.isAggregate
-                                ? 'El agregado suma las conductas priorizadas disponibles y no debe interpretarse como el total general de delitos.'
+                                ? (selectedComparisonItem.hasMixedPeriods
+                                    ? 'El agregado conserva el corte disponible de cada conducta; sirve para comparación territorial y no como total de un periodo calendario único.'
+                                    : 'El agregado suma las conductas priorizadas disponibles y no debe interpretarse como el total general de delitos.')
                                 : 'Una posición más alta indica una mayor tasa registrada para la conducta seleccionada; no representa por sí sola una evaluación integral de seguridad.'}
                         </div>
                     </div>

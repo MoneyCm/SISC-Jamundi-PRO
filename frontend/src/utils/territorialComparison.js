@@ -2,7 +2,7 @@ export const buildPrioritizedTotalComparison = (items) => {
     if (items.length < 2) return null;
 
     const periodMonths = new Set(items.map(item => item.period_end_month || 12));
-    if (periodMonths.size !== 1) return null;
+    const hasMixedPeriods = periodMonths.size !== 1;
 
     const rowMaps = items.map(item => new Map(
         item.territorial_comparison.rows.map(row => [row.codigo_dane || row.municipio, row])
@@ -41,7 +41,12 @@ export const buildPrioritizedTotalComparison = (items) => {
         delito: 'TOTAL_CONDUCTAS_PRIORIZADAS',
         label: `Total de conductas priorizadas (${items.length})`,
         isAggregate: true,
-        period_end_month: [...periodMonths][0],
+        hasMixedPeriods,
+        period_end_month: hasMixedPeriods ? null : [...periodMonths][0],
+        periodsByConducta: items.map(item => ({
+            delito: item.delito,
+            period_end_month: item.period_end_month || 12
+        })),
         territorial_comparison: {
             rows,
             observed_municipalities: rows.length,

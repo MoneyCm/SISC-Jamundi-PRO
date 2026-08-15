@@ -47,11 +47,16 @@ test('sums comparable prioritized conductas and recalculates municipal rates', (
     );
 });
 
-test('does not aggregate conductas with different period coverage', () => {
+test('marks independent cutoffs when prioritized conductas end in different months', () => {
     const result = buildPrioritizedTotalComparison([
         comparison('Hurto Personas', 12, [jamundi(10), palmira(30)]),
         comparison('Lesiones Personales', 6, [jamundi(20), palmira(10)])
     ]);
 
-    assert.equal(result, null);
+    assert.equal(result.hasMixedPeriods, true);
+    assert.equal(result.period_end_month, null);
+    assert.deepEqual(result.periodsByConducta, [
+        { delito: 'Hurto Personas', period_end_month: 12 },
+        { delito: 'Lesiones Personales', period_end_month: 6 }
+    ]);
 });
