@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Zap, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -24,7 +24,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
 
         { id: 'stats', label: 'Estadísticas', icon: BarChart2, category: 'ESTRATEGIA', show: true },
         { id: 'map', label: 'Mapa territorial', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
-        { id: 'intelligence', label: 'Análisis IA', icon: Zap, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        { id: 'intelligence', label: 'Contexto comparado', icon: Globe2, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'alerts', label: 'Alertas Tempranas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'inspecciones', label: 'Inspecciones MIP', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
 

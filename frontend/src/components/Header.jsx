@@ -68,7 +68,7 @@ const PAGE_LABELS = {
     reports: 'Reportes',
     stats: 'Estadísticas',
     map: 'Mapa institucional',
-    intelligence: 'Análisis asistido por IA',
+    intelligence: 'Contexto comparado',
     alerts: 'Alertas estadísticas',
 };
 

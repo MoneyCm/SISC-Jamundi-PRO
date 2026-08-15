@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, TrendingUp, Upload, Activity, BarChart2, Clock, ArrowUpRight, Brain, Download } from "lucide-react";
+import { Loader2, TrendingUp, Activity, BarChart2, Clock, ArrowUpRight, Brain } from "lucide-react";
 import {
     BarChart,
     Bar,
@@ -8,9 +8,7 @@ import {
     CartesianGrid,
     Tooltip,
     Legend,
-    ResponsiveContainer,
-    LineChart,
-    Line
+    ResponsiveContainer
 } from 'recharts';
 
 import { API_BASE_URL } from '../utils/apiConfig';
@@ -31,8 +29,6 @@ const Button = ({ children, variant = "default", className, ...props }) => {
 
 const IntelligenceModule = () => {
     const [loading, setLoading] = useState(false);
-    const [uploading, setUploading] = useState(false);
-    const [ingestStatus, setIngestStatus] = useState(null);
     const [selectedYear, setSelectedYear] = useState(2025);
     const [selectedMunicipio, setSelectedMunicipio] = useState("JAMUNDI");
     const [municipios, setMunicipios] = useState([]);
@@ -48,23 +44,6 @@ const IntelligenceModule = () => {
     const [input, setInput] = useState('');
     const [chatLoading, setChatLoading] = useState(false);
     const scrollRef = useRef(null);
-
-    const [canManage, setCanManage] = useState(false);
-
-    // Ayudante para decodificar JWT sin dependencias externas
-    const decodeToken = (token) => {
-        if (!token) return null;
-        try {
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-            return JSON.parse(jsonPayload);
-        } catch (e) {
-            return null;
-        }
-    };
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -106,8 +85,6 @@ const IntelligenceModule = () => {
             setChatLoading(false);
         }
     };
-
-    const fileInputRef = useRef(null);
 
     const fetchStats = async () => {
         setLoading(true);
@@ -202,15 +179,6 @@ const IntelligenceModule = () => {
     };
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        const payload = decodeToken(token);
-        if (payload) {
-            const role = payload.role;
-            const allowedRoles = ["Administrador (Observatorio)", "Analista Institucional"];
-            setCanManage(allowedRoles.includes(role));
-        } else {
-            setCanManage(false);
-        }
         fetchMunicipios();
         fetchYears();
     }, []);
@@ -220,145 +188,30 @@ const IntelligenceModule = () => {
         fetchStats();
     }, [selectedMunicipio, selectedYear]);
 
-    const downloadBoletin = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const url = `${API_BASE_URL}/reportes/generar-boletin?anio=${selectedYear}`;
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const html = await response.text();
-                const blob = new Blob([html], { type: 'text/html' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `Boletin_SISC_${selectedYear}.html`;
-                link.click();
-            }
-        } catch (error) {
-            console.error("Error downloading bulletin:", error);
-        }
-    };
-
     useEffect(() => {
         if (stats.summary && stats.summary.length > 0) {
             fetchInsight();
         }
     }, [stats.summary]);
 
-    const handleAutoIngest = async () => {
-        setUploading(true);
-        setIngestStatus({ text: "Iniciando sincronización con fuentes oficiales (MinDefensa/Policía)...", type: "info", progress: 0 });
-
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/intelligence/ingest`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setIngestStatus({ text: "Sincronización iniciada en segundo plano. Esto tardará unos minutos...", type: "info", progress: 0 });
-
-                // Poll for status
-                const logId = data.log_id;
-                if (logId) {
-                    const checkInterval = setInterval(async () => {
-                        try {
-                            const statusRes = await fetch(`${API_BASE_URL}/intelligence/ingest/status/${logId}`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            if (statusRes.ok) {
-                                const statusData = await statusRes.json();
-                                if (statusData.estado === 'SUCCESS') {
-                                    clearInterval(checkInterval);
-                                    setUploading(false);
-                                    setIngestStatus({ text: `Finalizado: Se ingestaron ${statusData.registros_insertados} registros desde ${statusData.archivos_procesados} archivos.`, type: "success" });
-                                    fetchStats(); // recargar datos
-                                } else if (statusData.estado === 'ERROR') {
-                                    clearInterval(checkInterval);
-                                    setUploading(false);
-                                    setIngestStatus({ text: `Error en sincronización: ${statusData.errores}`, type: "error" });
-                                } else {
-                                    // Sigue en progreso
-                                    const progress = statusData.detalles?.progress || 0;
-                                    setIngestStatus({
-                                        text: `Sincronizando... Descargados ${statusData.detalles?.processed_files || 0} de ${statusData.detalles?.found_files || '?'} archivos oficiales.`,
-                                        type: "info",
-                                        progress: progress
-                                    });
-                                }
-                            }
-                        } catch (e) {
-                            console.error("Error polling status", e);
-                        }
-                    }, 5000); // Check every 5 seconds
-                } else {
-                    setUploading(false);
-                }
-            } else if (response.status === 401) {
-                setIngestStatus({ text: "Tu sesión ha expirado. Por favor, cierra sesión e ingresa nuevamente para sincronizar datos.", type: "error" });
-                setUploading(false);
-            } else {
-                setIngestStatus({ text: "Error al iniciar la sincronización. Verifica tus permisos.", type: "error" });
-                setUploading(false);
-            }
-        } catch (error) {
-            console.error("Error in auto ingest:", error);
-            setIngestStatus({ text: "Error de conexión con el servidor al iniciar sincronización. Revise la consola del servidor.", type: "error" });
-            setUploading(false);
-        }
-    };
-
-    const handleFileChange = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        setUploading(true);
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const token = localStorage.getItem('token');
-            const url = `${API_BASE_URL}/intelligence/upload`;
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                setIngestStatus({ text: `Éxito: ${data.message} (${data.records_inserted} registros)`, type: "success" });
-                fetchStats();
-            } else if (response.status === 401) {
-                setIngestStatus({ text: "Error de autenticación: Tu sesión ha expirado. Por favor, re-inicia sesión.", type: "error" });
-            } else {
-                setIngestStatus({ text: `Error: ${data.detail || 'Fallo en la carga. Verifique el formato del archivo.'}`, type: "error" });
-            }
-        } catch (error) {
-            console.error("Error uploading file:", error);
-            setIngestStatus({ text: "Error de conexión al cargar el archivo.", type: "error" });
-        } finally {
-            setUploading(false);
-            event.target.value = null;
-        }
-    };
-
     const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-    const trendData = (stats.trend || []).map(item => ({
-        ...item,
-        name: monthNames[item.mes - 1] || item.mes
-    }));
     const selectedMunicipioNombre = municipios.find(m => m.id === selectedMunicipio)?.nombre || selectedMunicipio;
     const territorialReference = stats.context?.territorial_reference;
     const comparisonOptions = (stats.summary || []).filter(item => item.territorial_comparison?.rows?.length > 1);
     const selectedComparisonItem = comparisonOptions.find(item => item.delito === comparisonCrime) || comparisonOptions[0];
     const territorialComparison = selectedComparisonItem?.territorial_comparison;
+    const rateComparisonData = (stats.summary || [])
+        .filter(item => item.rate_per_100k != null)
+        .map(item => ({
+            delito: item.delito,
+            localRate: item.rate_per_100k,
+            regionalRate: item.territorial_benchmark?.available
+                ? item.territorial_benchmark.reference_rate_per_100k
+                : null,
+            nationalRate: item.national_benchmark?.available
+                ? item.national_benchmark.national_rate_per_100k
+                : null
+        }));
 
     useEffect(() => {
         if (comparisonOptions.length > 0 && !comparisonOptions.some(item => item.delito === comparisonCrime)) {
@@ -368,92 +221,19 @@ const IntelligenceModule = () => {
 
     return (
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Contexto nacional y regional</h1>
-                    <p className="text-slate-500 mt-1">Serie histórica MinDefensa: variación anual local y referencias comparables verificadas.</p>
-                </div>
-                <div className="flex gap-2">
-                    {canManage && (
-                        <>
-                            <Button
-                                variant="outline"
-                                onClick={downloadBoletin}
-                                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                            >
-                                <Download className="mr-2 h-4 w-4" />
-                                Descargar Boletín YoY
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={handleAutoIngest}
-                                disabled={uploading}
-                                className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                            >
-                                {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}
-                                Sincronizar con la Web
-                            </Button>
-                            <Button
-                                variant="default"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={uploading}
-                                className="bg-indigo-600 hover:bg-indigo-700 shadow-lg border-none"
-                            >
-                                {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                                Cargar Excel Manual
-                            </Button>
-                        </>
-                    )}
-                </div>
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".xlsx,.xls" />
+            <div>
+                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Contexto comparado</h1>
+                <p className="text-slate-500 mt-1">Referencia mensual e histórica de MinDefensa para ubicar a Jamundí frente a municipios comparables y al país.</p>
             </div>
-
-            {ingestStatus && (
-                <div className={`border-l-4 p-4 rounded-md animate-in fade-in slide-in-from-top-4 duration-300 ${ingestStatus.type === 'error' ? 'bg-red-50 border-red-500' :
-                    ingestStatus.type === 'success' ? 'bg-emerald-50 border-emerald-500' :
-                        'bg-blue-50 border-blue-500'
-                    }`}>
-                    <div className="flex">
-                        <div className="flex-shrink-0">
-                            {ingestStatus.type === 'error' ? <Activity className="h-5 w-5 text-red-400" /> :
-                                ingestStatus.type === 'success' ? <Activity className="h-5 w-5 text-emerald-400" /> :
-                                    <Activity className="h-5 w-5 text-blue-400 animate-pulse" />}
-                        </div>
-                        <div className="ml-3 w-full">
-                            <p className={`text-sm ${ingestStatus.type === 'error' ? 'text-red-700' :
-                                ingestStatus.type === 'success' ? 'text-emerald-700' :
-                                    'text-blue-700'
-                                }`}>{ingestStatus.text}</p>
-
-                            {ingestStatus.progress !== undefined && ingestStatus.type === 'info' && (
-                                <div className="mt-3">
-                                    <div className="w-full bg-blue-200 rounded-full h-2.5 dark:bg-blue-300 overflow-hidden relative">
-                                        <div
-                                            className="bg-blue-600 h-2.5 rounded-full transition-all duration-1000 ease-in-out relative z-10"
-                                            style={{ width: `${Math.max(ingestStatus.progress, 3)}%` }}
-                                        >
-                                            {ingestStatus.progress < 100 && (
-                                                <div className="absolute top-0 left-0 right-0 bottom-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <p className="text-xs text-blue-500 mt-1 italic animate-pulse">Analizando cientos de miles de registros (esto tomará varios minutos por archivo)...</p>
-                                </div>
-                            )}
-                        </div>
-                        <button onClick={() => setIngestStatus(null)} className="ml-auto flex-shrink-0 text-slate-400 hover:text-slate-600">×</button>
-                    </div>
-                </div>
-            )}
 
             <Card className="border-slate-200 bg-white">
                 <CardContent className="p-5">
                     <div className="flex items-start gap-3">
                         <BarChart2 className="h-5 w-5 mt-0.5 text-indigo-700 flex-shrink-0" />
                         <div className="min-w-0">
-                            <p className="font-semibold text-slate-800">Lectura prioritaria: variación anual de {selectedMunicipioNombre}</p>
+                            <p className="font-semibold text-slate-800">Lectura comparada de {selectedMunicipioNombre}</p>
                             <p className="mt-1 text-sm text-slate-600">
-                                Cada indicador se compara primero con el mismo municipio en {selectedYear - 1}. Las referencias territoriales y nacionales son complementarias y se muestran únicamente cuando el periodo, el corte y la cobertura son equivalentes.
+                                MinDefensa se usa como referencia mensual e histórica. Para decisiones operativas semanales consulte la Sábana SIEDCO en el Resumen operativo. Las comparaciones se publican únicamente cuando el periodo, el corte y la cobertura son equivalentes.
                             </p>
                             {territorialReference && (
                                 <p className={`mt-2 text-xs font-medium ${territorialReference.available ? 'text-emerald-700' : 'text-slate-500'}`}>
@@ -489,7 +269,7 @@ const IntelligenceModule = () => {
                             <div className="bg-indigo-500 p-1.5 rounded-lg">
                                 <Brain className="h-5 w-5" />
                             </div>
-                            <h2 className="text-lg font-semibold">Lectura asistida del periodo</h2>
+                            <h2 className="text-lg font-semibold">Lectura comparada del periodo</h2>
                             {insightLoading && !chatOpen && <Loader2 className="h-4 w-4 animate-spin ml-2 text-indigo-300" />}
                         </div>
                         {chatOpen && (
@@ -531,7 +311,7 @@ const IntelligenceModule = () => {
                             <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 scrollbar-thin scrollbar-thumb-indigo-700">
                                 <div className="flex justify-start">
                                     <div className="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed bg-white/5 text-indigo-100 border border-white/10 rounded-bl-none italic">
-                                        Hola analista. Estoy listo para profundizar en los datos estratégicos de MinDefensa para {municipios.find(m => m.id === selectedMunicipio)?.nombre || selectedMunicipio}. ¿Qué deseas saber?
+                                        Hola analista. Estoy listo para profundizar en las brechas regionales, nacionales e históricas de {municipios.find(m => m.id === selectedMunicipio)?.nombre || selectedMunicipio}. ¿Qué deseas comparar?
                                     </div>
                                 </div>
                                 {messages.map(msg => (
@@ -555,7 +335,7 @@ const IntelligenceModule = () => {
                                         type="text"
                                         value={input}
                                         onChange={(e) => setInput(e.target.value)}
-                                        placeholder="Pregunta sobre los datos nacionales..."
+                                        placeholder="Pregunta sobre el contexto comparado..."
                                         className="w-full bg-indigo-950/80 border border-indigo-800 text-white rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all pr-10 placeholder-indigo-400"
                                         disabled={chatLoading}
                                     />
@@ -659,12 +439,11 @@ const IntelligenceModule = () => {
                 ))}
                 {(!stats.summary || stats.summary.length === 0) && !loading && (
                     <Card className="col-span-3 p-10 text-center text-slate-400 border-dashed border-2">
-                        No se encontraron registros para los filtros seleccionados. Intenta cargar un archivo Excel.
+                        No hay datos comparables para el municipio y año seleccionados. Revise la cobertura en el Centro de fuentes.
                     </Card>
                 )}
             </div>
 
-            {/* Nueva Sección: Afectación Fuerza Pública */}
             {territorialComparison && (
                 <section className="space-y-4" aria-labelledby="regional-comparison-title">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -745,106 +524,40 @@ const IntelligenceModule = () => {
                 </section>
             )}
 
-            {stats.fuerza_publica && stats.fuerza_publica.length > 0 && (
-                <div className="mb-8">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="h-8 w-1 bg-indigo-600 rounded-full"></div>
-                        <h2 className="font-black text-slate-800 tracking-tight uppercase text-sm">Afectación a la Fuerza Pública</h2>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {/* Agrupar por Acción (Herido/Asesinado) */}
-                        {['HERIDO', 'ASESINADO'].map(accion => {
-                            const total = stats.fuerza_publica
-                                .filter(item => item.accion === accion)
-                                .reduce((acc, curr) => acc + curr.total, 0);
-
-                            if (total === 0) return null;
-
-                            return (
-                                <Card key={accion} className="relative overflow-hidden group hover:shadow-lg transition-all border-none shadow-sm bg-white">
-                                    <div className={`absolute top-0 left-0 w-full h-1 ${accion === 'ASESINADO' ? 'bg-red-600' : 'bg-orange-400'}`}></div>
-                                    <CardContent className="pt-6">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{accion}</p>
-                                            <ShieldAlert className={accion === 'ASESINADO' ? 'text-red-500' : 'text-orange-500'} size={16} />
-                                        </div>
-                                        <div className="text-3xl font-black text-slate-800 mb-1">{total}</div>
-                                        <div className="space-y-1 mt-3 pt-3 border-t border-slate-50">
-                                            {stats.fuerza_publica
-                                                .filter(item => item.accion === accion)
-                                                .map((item, idx) => (
-                                                    <div key={idx} className="flex justify-between text-[10px] font-bold">
-                                                        <span className="text-slate-500">{item.institucion}</span>
-                                                        <span className="text-slate-800">{item.total}</span>
-                                                    </div>
-                                                ))}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* Gráficas Principales */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
+            {rateComparisonData.length > 0 && (
                 <Card className="p-6">
-                    <CardTitle className="text-lg text-slate-800 mb-6 flex items-center">
-                        <BarChart2 className="mr-2 h-5 w-5 text-indigo-500" />
-                        Comparación anual local
-                    </CardTitle>
-                    <div className="h-[300px] min-h-[300px] w-full">
+                    <div className="mb-5 flex flex-col gap-1">
+                        <CardTitle className="flex items-center text-lg text-slate-800">
+                            <BarChart2 className="mr-2 h-5 w-5 text-indigo-600" />
+                            Brecha por tasa registrada
+                        </CardTitle>
+                        <p className="text-sm text-slate-600">
+                            Comparación por 100.000 habitantes. Una barra ausente significa que la referencia no cumple todavía la cobertura requerida.
+                        </p>
+                    </div>
+                    <div className="h-[360px] min-h-[360px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.summary || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="delito" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} interval={0} angle={-15} textAnchor="end" />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                            <BarChart data={rateComparisonData} margin={{ top: 12, right: 24, left: 10, bottom: 55 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="delito" axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 11 }} interval={0} angle={-18} textAnchor="end" />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
                                 <Tooltip
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    formatter={(value) => value == null ? 'Sin dato verificable' : `${Number(value).toLocaleString('es-CO', { maximumFractionDigits: 2 })} por 100.000`}
+                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                     cursor={{ fill: '#f8fafc' }}
                                 />
-                                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                                <Bar name={`${selectedYear}`} dataKey="local" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={32} />
-                                <Bar name={`${selectedYear - 1}`} dataKey="yoy_total" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={32} />
+                                <Legend iconType="circle" wrapperStyle={{ paddingTop: '14px' }} />
+                                <Bar name={selectedMunicipioNombre} dataKey="localRate" fill="#4338ca" radius={[3, 3, 0, 0]} maxBarSize={30} />
+                                <Bar name="Referencia regional" dataKey="regionalRate" fill="#0f766e" radius={[3, 3, 0, 0]} maxBarSize={30} />
+                                <Bar name="Referencia nacional" dataKey="nationalRate" fill="#eab308" radius={[3, 3, 0, 0]} maxBarSize={30} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
+                    <p className="mt-3 text-xs text-slate-500">
+                        Fuente de casos: MinDefensa. Denominadores: proyecciones municipales DANE. Consulte la tabla territorial para revisar cobertura, corte y municipios incluidos.
+                    </p>
                 </Card>
-
-                <Card className="p-6">
-                    <CardTitle className="text-lg text-slate-800 mb-6 flex items-center">
-                        <TrendingUp className="mr-2 h-5 w-5 text-emerald-500" />
-                        Tendencia Mensual {selectedYear}
-                    </CardTitle>
-                    <div className="h-[300px] min-h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={trendData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="cantidad"
-                                    stroke="#10b981"
-                                    strokeWidth={3}
-                                    dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
-                                    activeDot={{ r: 6, strokeWidth: 0 }}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                </Card>
-            </div>
-
-            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl text-center">
-                <p className="text-emerald-600 text-sm font-medium">
-                    Analítica estratégica activada utilizando Recharts v3.
-                </p>
-            </div>
+            )}
         </div>
     );
 };
