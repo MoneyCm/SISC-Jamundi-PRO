@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 
 import { API_BASE_URL } from '../utils/apiConfig';
+import { buildPrioritizedTotalComparison } from '../utils/territorialComparison';
 
 const Card = ({ children, className }) => <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>{children}</div>;
 const CardHeader = ({ children, className }) => <div className={`p-6 pb-2 ${className}`}>{children}</div>;
@@ -197,7 +198,11 @@ const IntelligenceModule = () => {
     const monthNames = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
     const selectedMunicipioNombre = municipios.find(m => m.id === selectedMunicipio)?.nombre || selectedMunicipio;
     const territorialReference = stats.context?.territorial_reference;
-    const comparisonOptions = (stats.summary || []).filter(item => item.territorial_comparison?.rows?.length > 1);
+    const sourceComparisonOptions = (stats.summary || []).filter(item => item.territorial_comparison?.rows?.length > 1);
+    const prioritizedTotalComparison = buildPrioritizedTotalComparison(sourceComparisonOptions);
+    const comparisonOptions = prioritizedTotalComparison
+        ? [prioritizedTotalComparison, ...sourceComparisonOptions]
+        : sourceComparisonOptions;
     const selectedComparisonItem = comparisonOptions.find(item => item.delito === comparisonCrime) || comparisonOptions[0];
     const territorialComparison = selectedComparisonItem?.territorial_comparison;
     const rateComparisonData = (stats.summary || [])
@@ -455,7 +460,9 @@ const IntelligenceModule = () => {
                                 ¿Cómo está {selectedMunicipioNombre} frente a municipios comparables?
                             </h2>
                             <p className="mt-1 max-w-3xl text-sm text-slate-600">
-                                La tasa por 100.000 habitantes permite comparar municipios de distinto tamaño. El grupo incluye municipios de Valle del Cauca y Cauca con población entre 50% y 200% de la población del municipio seleccionado.
+                                {selectedComparisonItem?.isAggregate
+                                    ? 'Este agregado suma únicamente las conductas priorizadas visibles, con igual periodo y cobertura completa. No representa el total de delitos del municipio.'
+                                    : 'La tasa por 100.000 habitantes permite comparar municipios de distinto tamaño. El grupo incluye municipios de Valle del Cauca y Cauca con población entre 50% y 200% de la población del municipio seleccionado.'}
                             </p>
                         </div>
                         <div className="w-full lg:w-72">
@@ -466,7 +473,7 @@ const IntelligenceModule = () => {
                                 onChange={(event) => setComparisonCrime(event.target.value)}
                                 className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
                             >
-                                {comparisonOptions.map(item => <option key={item.delito} value={item.delito}>{item.delito}</option>)}
+                                {comparisonOptions.map(item => <option key={item.delito} value={item.delito}>{item.label || item.delito}</option>)}
                             </select>
                         </div>
                     </div>
@@ -478,6 +485,11 @@ const IntelligenceModule = () => {
                         <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
                             {territorialComparison.observed_municipalities} de {territorialComparison.expected_municipalities} municipios con dato verificable
                         </span>
+                        {selectedComparisonItem?.isAggregate && (
+                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">
+                                {sourceComparisonOptions.length} conductas priorizadas sumadas
+                            </span>
+                        )}
                         {territorialComparison.cutoff && (
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al: {territorialComparison.cutoff}</span>
                         )}
@@ -490,7 +502,7 @@ const IntelligenceModule = () => {
                                     <tr>
                                         <th className="w-20 px-4 py-3 text-center">Posición</th>
                                         <th className="px-4 py-3">Municipio</th>
-                                        <th className="px-4 py-3 text-right">Casos</th>
+                                        <th className="px-4 py-3 text-right">{selectedComparisonItem?.isAggregate ? 'Registros priorizados' : 'Casos'}</th>
                                         <th className="px-4 py-3 text-right">Población DANE</th>
                                         <th className="px-4 py-3 text-right">Tasa por 100.000</th>
                                         <th className="px-4 py-3 text-right">Diferencia de tasa vs {selectedMunicipioNombre}</th>
@@ -520,7 +532,9 @@ const IntelligenceModule = () => {
                             </table>
                         </div>
                         <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                            Fuente: MinDefensa. Población: proyecciones municipales DANE. Una posición más alta indica una mayor tasa registrada para la conducta seleccionada; no representa por sí sola una evaluación integral de seguridad.
+                            Fuente: MinDefensa. Población: proyecciones municipales DANE. {selectedComparisonItem?.isAggregate
+                                ? 'El agregado suma las conductas priorizadas disponibles y no debe interpretarse como el total general de delitos.'
+                                : 'Una posición más alta indica una mayor tasa registrada para la conducta seleccionada; no representa por sí sola una evaluación integral de seguridad.'}
                         </div>
                     </div>
                 </section>
