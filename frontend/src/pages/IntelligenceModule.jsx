@@ -194,7 +194,7 @@ const IntelligenceModule = () => {
         }
     }, [stats.summary]);
 
-    const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const monthNames = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
     const selectedMunicipioNombre = municipios.find(m => m.id === selectedMunicipio)?.nombre || selectedMunicipio;
     const territorialReference = stats.context?.territorial_reference;
     const comparisonOptions = (stats.summary || []).filter(item => item.territorial_comparison?.rows?.length > 1);
@@ -212,6 +212,8 @@ const IntelligenceModule = () => {
                 ? item.national_benchmark.national_rate_per_100k
                 : null
         }));
+    const hasRegionalReference = rateComparisonData.some(item => item.regionalRate != null);
+    const hasNationalReference = rateComparisonData.some(item => item.nationalRate != null);
 
     useEffect(() => {
         if (comparisonOptions.length > 0 && !comparisonOptions.some(item => item.delito === comparisonCrime)) {
@@ -477,7 +479,7 @@ const IntelligenceModule = () => {
                             {territorialComparison.observed_municipalities} de {territorialComparison.expected_municipalities} municipios con dato verificable
                         </span>
                         {territorialComparison.cutoff && (
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Corte de fuente: {territorialComparison.cutoff}</span>
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al: {territorialComparison.cutoff}</span>
                         )}
                     </div>
 
@@ -491,7 +493,7 @@ const IntelligenceModule = () => {
                                         <th className="px-4 py-3 text-right">Casos</th>
                                         <th className="px-4 py-3 text-right">Población DANE</th>
                                         <th className="px-4 py-3 text-right">Tasa por 100.000</th>
-                                        <th className="px-4 py-3 text-right">Frente a {selectedMunicipioNombre}</th>
+                                        <th className="px-4 py-3 text-right">Diferencia de tasa vs {selectedMunicipioNombre}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -510,7 +512,7 @@ const IntelligenceModule = () => {
                                             <td className={`px-4 py-3 text-right font-bold tabular-nums ${row.es_objetivo ? 'text-indigo-700' : row.diferencia_tasa_objetivo > 0 ? 'text-red-600' : row.diferencia_tasa_objetivo < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
                                                 {row.es_objetivo || row.diferencia_tasa_objetivo == null
                                                     ? (row.es_objetivo ? 'Base' : 'No comparable')
-                                                    : `${row.diferencia_tasa_objetivo > 0 ? '+' : ''}${Number(row.diferencia_tasa_objetivo).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                    : `${row.diferencia_tasa_objetivo > 0 ? '+' : ''}${Number(row.diferencia_tasa_objetivo).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts.`}
                                             </td>
                                         </tr>
                                     ))}
@@ -532,7 +534,7 @@ const IntelligenceModule = () => {
                             Brecha por tasa registrada
                         </CardTitle>
                         <p className="text-sm text-slate-600">
-                            Comparación por 100.000 habitantes. Una barra ausente significa que la referencia no cumple todavía la cobertura requerida.
+                            Comparación por 100.000 habitantes. Solo se muestran referencias con cobertura verificable para el periodo.
                         </p>
                     </div>
                     <div className="h-[360px] min-h-[360px] w-full">
@@ -548,8 +550,8 @@ const IntelligenceModule = () => {
                                 />
                                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '14px' }} />
                                 <Bar name={selectedMunicipioNombre} dataKey="localRate" fill="#4338ca" radius={[3, 3, 0, 0]} maxBarSize={30} />
-                                <Bar name="Referencia regional" dataKey="regionalRate" fill="#0f766e" radius={[3, 3, 0, 0]} maxBarSize={30} />
-                                <Bar name="Referencia nacional" dataKey="nationalRate" fill="#eab308" radius={[3, 3, 0, 0]} maxBarSize={30} />
+                                {hasRegionalReference && <Bar name="Referencia regional" dataKey="regionalRate" fill="#0f766e" radius={[3, 3, 0, 0]} maxBarSize={30} />}
+                                {hasNationalReference && <Bar name="Referencia nacional" dataKey="nationalRate" fill="#eab308" radius={[3, 3, 0, 0]} maxBarSize={30} />}
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
