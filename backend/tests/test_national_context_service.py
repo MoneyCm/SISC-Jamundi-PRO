@@ -5,6 +5,7 @@ from services.national_context_service import (
     comparable_national_rate,
     municipality_codes_for_year,
     municipality_name_for_code,
+    named_territorial_comparison,
     national_benchmark_guard,
     population_for,
     population_peer_codes,
@@ -112,3 +113,23 @@ def test_complete_coverage_without_one_verified_cutoff_stays_blocked():
 def test_year_over_year_requires_a_real_reference_period():
     assert year_over_year(12, 10) == 20.0
     assert year_over_year(12, 0) is None
+
+
+def test_named_territorial_comparison_ranks_rates_and_highlights_target():
+    comparison = named_territorial_comparison(
+        year=2026,
+        target_code="76364",
+        target_total=100,
+        expected_codes={"76001", "76109"},
+        totals_by_code={"76001": 800, "76109": 50},
+        covered_codes={"76001", "76109"},
+        cutoffs=[date(2026, 7, 23)],
+    )
+
+    assert comparison["available"] is True
+    assert comparison["cutoff"] == "2026-07-23"
+    assert comparison["observed_municipalities"] == 2
+    target = next(row for row in comparison["rows"] if row["es_objetivo"])
+    assert target["municipio"].startswith("Jamund")
+    assert target["posicion"] is not None
+    assert all(row["tasa_por_100k"] is not None for row in comparison["rows"])

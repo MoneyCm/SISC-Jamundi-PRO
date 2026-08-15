@@ -147,6 +147,96 @@ def year_over_year(current: int, reference: int) -> Optional[float]:
     return round(((current - reference) / reference) * 100, 1)
 
 
+def named_territorial_comparison(
+    *,
+    year: int,
+    target_code: object,
+    target_total: int,
+    expected_codes: Iterable[object],
+    totals_by_code: dict[object, int],
+    covered_codes: Iterable[object],
+    cutoffs: Iterable[date] = (),
+) -> dict:
+    """Build an auditable municipal ranking using equivalent DANE rates."""
+    normalized_target = normalize_municipality_code(target_code)
+    normalized_expected = {
+        code for raw_code in expected_codes
+        if (code := normalize_municipality_code(raw_code)) is not None
+        and code != normalized_target
+        and population_for(code, year) is not None
+    }
+    normalized_covered = {
+        code for raw_code in covered_codes
+        if (code := normalize_municipality_code(raw_code)) in normalized_expected
+    }
+    normalized_totals = {
+        code: max(int(total), 0)
+        for raw_code, total in totals_by_code.items()
+        if (code := normalize_municipality_code(raw_code)) is not None
+    }
+    cutoff_values = {cutoff for cutoff in cutoffs if cutoff is not None}
+    comparable_cutoff = next(iter(cutoff_values)) if len(cutoff_values) == 1 else None
+    target_population = population_for(normalized_target, year)
+    target_rate = rate_per_100k(target_total, target_population)
+
+    rows = [{
+        "codigo_dane": normalized_target,
+        "municipio": municipality_name_for_code(normalized_target, year) or str(normalized_target or "Municipio objetivo"),
+        "casos": max(int(target_total), 0),
+        "poblacion": target_population,
+        "tasa_por_100k": target_rate,
+        "diferencia_tasa_objetivo": 0.0 if target_rate is not None else None,
+        "diferencia_porcentual_objetivo": 0.0 if target_rate is not None else None,
+        "es_objetivo": True,
+        "disponible": target_rate is not None,
+    }]
+    for code in normalized_expected:
+        population = population_for(code, year)
+        available = code in normalized_covered and code in normalized_totals and population is not None
+        total = normalized_totals.get(code) if available else None
+        rate = rate_per_100k(total, population) if total is not None else None
+        rate_difference = round(rate - target_rate, 2) if rate is not None and target_rate is not None else None
+        relative_difference = (
+            round((rate_difference / target_rate) * 100, 1)
+            if rate_difference is not None and target_rate and target_rate > 0 else None
+        )
+        rows.append({
+            "codigo_dane": code,
+            "municipio": municipality_name_for_code(code, year) or code,
+            "casos": total,
+            "poblacion": population,
+            "tasa_por_100k": rate,
+            "diferencia_tasa_objetivo": rate_difference,
+            "diferencia_porcentual_objetivo": relative_difference,
+            "es_objetivo": False,
+            "disponible": available and rate is not None,
+        })
+
+    ranked_rows = sorted(
+        (row for row in rows if row["disponible"]),
+        key=lambda row: (-row["tasa_por_100k"], row["municipio"]),
+    )
+    rank_by_code = {row["codigo_dane"]: rank for rank, row in enumerate(ranked_rows, start=1)}
+    for row in rows:
+        row["posicion"] = rank_by_code.get(row["codigo_dane"])
+    rows.sort(key=lambda row: (row["posicion"] is None, row["posicion"] or 9999, row["municipio"]))
+
+    return {
+        "available": bool(target_rate is not None and len(ranked_rows) > 1 and comparable_cutoff),
+        "year": year,
+        "cutoff": comparable_cutoff.isoformat() if comparable_cutoff else None,
+        "target_code": normalized_target,
+        "expected_municipalities": len(normalized_expected),
+        "observed_municipalities": len(normalized_covered),
+        "coverage_complete": normalized_expected <= normalized_covered and bool(normalized_expected),
+        "rows": rows,
+        "methodology": (
+            "Municipios de Valle del Cauca y Cauca con poblacion entre 50% y 200% "
+            "de la poblacion del municipio objetivo; tasas por 100.000 habitantes con poblacion DANE."
+        ),
+    }
+
+
 def national_benchmark_guard(
     source_ids: Iterable[str],
     cutoff: Optional[date],

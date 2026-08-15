@@ -34,6 +34,7 @@ from services.national_context_service import (
     comparable_national_rate,
     municipality_code_for_name,
     municipality_name_for_code,
+    named_territorial_comparison,
     national_benchmark_guard,
     normalize_municipality_code,
     population_peer_codes,
@@ -2270,7 +2271,8 @@ async def get_national_stats(
     # 2. Obtener datos locales (Jamundí o el seleccionado)
     local_data = db.query(
         NationalCrimeStats.tipo_delito,
-        func.sum(NationalCrimeStats.cantidad).label("total")
+        func.sum(NationalCrimeStats.cantidad).label("total"),
+        func.max(NationalCrimeStats.mes).label("period_end_month"),
     ).filter(
         mindefensa_source,
         NationalCrimeStats.municipio_normalizado == target_municipio,
@@ -2291,13 +2293,16 @@ async def get_national_stats(
     # Obtener totales del año anterior (mismo municipio)
     yoy_data = db.query(
         NationalCrimeStats.tipo_delito,
+        NationalCrimeStats.mes,
         func.sum(NationalCrimeStats.cantidad).label("total")
     ).filter(
         mindefensa_source,
         NationalCrimeStats.municipio_normalizado == target_municipio,
         NationalCrimeStats.anio == anio - 1
-    ).group_by(NationalCrimeStats.tipo_delito).all()
-    yoy_dict = {row.tipo_delito: int(row.total) for row in yoy_data}
+    ).group_by(NationalCrimeStats.tipo_delito, NationalCrimeStats.mes).all()
+    yoy_monthly = {}
+    for yoy_row in yoy_data:
+        yoy_monthly.setdefault(yoy_row.tipo_delito, {})[int(yoy_row.mes)] = int(yoy_row.total)
 
     local_code_rows = db.query(NationalCrimeStats.codigo_dane).filter(
         mindefensa_source,
@@ -2314,6 +2319,7 @@ async def get_national_stats(
     coverage_codes_by_type = {}
     national_totals_by_type = {}
     territorial_totals_by_type = {}
+    territorial_totals_by_code_by_type = {}
     territorial_codes_by_type = {}
     cutoffs_by_type = {}
     all_source_codes = set()
@@ -2348,6 +2354,7 @@ async def get_national_stats(
             territorial_totals_by_type[territorial_row.tipo_delito] = (
                 territorial_totals_by_type.get(territorial_row.tipo_delito, 0) + int(territorial_row.total)
             )
+            territorial_totals_by_code_by_type.setdefault(territorial_row.tipo_delito, {})[code] = int(territorial_row.total)
             territorial_codes_by_type.setdefault(territorial_row.tipo_delito, set()).add(code)
         for coverage_row in coverage_rows:
             codes = {
@@ -2395,6 +2402,7 @@ async def get_national_stats(
                     territorial_totals_by_type.get(national_row.tipo_delito, 0) + int(national_row.total)
                 )
                 territorial_codes_by_type.setdefault(national_row.tipo_delito, set()).add(source_code)
+                territorial_totals_by_code_by_type.setdefault(national_row.tipo_delito, {})[source_code] = int(national_row.total)
             all_source_codes.add(source_code)
         for cutoff_row in cutoff_rows:
             cutoffs_by_type.setdefault(cutoff_row.tipo_delito, set()).add(cutoff_row.fecha_corte_mindefensa)
@@ -2403,7 +2411,11 @@ async def get_national_stats(
     result_data = []
     for row in local_data:
         local_total = int(row.total)
-        yoy_total = yoy_dict.get(row.tipo_delito, 0)
+        period_end_month = int(row.period_end_month or 12)
+        yoy_total = sum(
+            total for month, total in yoy_monthly.get(row.tipo_delito, {}).items()
+            if month <= period_end_month
+        )
         
         # Variación YoY
         yoy_var = local_total - yoy_total
@@ -2425,6 +2437,15 @@ async def get_national_stats(
             covered_codes=territorial_codes_by_type.get(row.tipo_delito, set()),
             cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
         )
+        territorial_comparison = named_territorial_comparison(
+            year=anio,
+            target_code=local_code,
+            target_total=local_total,
+            expected_codes=territorial_peer_codes,
+            totals_by_code=territorial_totals_by_code_by_type.get(row.tipo_delito, {}),
+            covered_codes=territorial_codes_by_type.get(row.tipo_delito, set()),
+            cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
+        )
 
         result_data.append({
             "delito": row.tipo_delito,
@@ -2432,8 +2453,10 @@ async def get_national_stats(
             "yoy_total": yoy_total,
             "yoy_var": yoy_var,
             "yoy_pct": yoy_pct,
+            "period_end_month": period_end_month,
             "rate_per_100k": national_benchmark["local_rate_per_100k"],
             "territorial_benchmark": territorial_benchmark,
+            "territorial_comparison": territorial_comparison,
             "national_benchmark": national_benchmark,
         })
 

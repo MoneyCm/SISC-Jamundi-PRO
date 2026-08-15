@@ -41,6 +41,7 @@ const IntelligenceModule = () => {
     const [insight, setInsight] = useState(null);
     const [insightLoading, setInsightLoading] = useState(false);
     const [activeProvider, setActiveProvider] = useState("Gemini Pro");
+    const [comparisonCrime, setComparisonCrime] = useState("");
 
     const [chatOpen, setChatOpen] = useState(false);
     const [messages, setMessages] = useState([]);
@@ -355,6 +356,15 @@ const IntelligenceModule = () => {
     }));
     const selectedMunicipioNombre = municipios.find(m => m.id === selectedMunicipio)?.nombre || selectedMunicipio;
     const territorialReference = stats.context?.territorial_reference;
+    const comparisonOptions = (stats.summary || []).filter(item => item.territorial_comparison?.rows?.length > 1);
+    const selectedComparisonItem = comparisonOptions.find(item => item.delito === comparisonCrime) || comparisonOptions[0];
+    const territorialComparison = selectedComparisonItem?.territorial_comparison;
+
+    useEffect(() => {
+        if (comparisonOptions.length > 0 && !comparisonOptions.some(item => item.delito === comparisonCrime)) {
+            setComparisonCrime(comparisonOptions[0].delito);
+        }
+    }, [stats.summary, comparisonCrime]);
 
     return (
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
@@ -655,6 +665,86 @@ const IntelligenceModule = () => {
             </div>
 
             {/* Nueva Sección: Afectación Fuerza Pública */}
+            {territorialComparison && (
+                <section className="space-y-4" aria-labelledby="regional-comparison-title">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <p className="text-xs font-bold uppercase text-indigo-700">Comparación territorial verificable</p>
+                            <h2 id="regional-comparison-title" className="mt-1 text-xl font-bold text-slate-900">
+                                ¿Cómo está {selectedMunicipioNombre} frente a municipios comparables?
+                            </h2>
+                            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+                                La tasa por 100.000 habitantes permite comparar municipios de distinto tamaño. El grupo incluye municipios de Valle del Cauca y Cauca con población entre 50% y 200% de la población del municipio seleccionado.
+                            </p>
+                        </div>
+                        <div className="w-full lg:w-72">
+                            <label htmlFor="regional-crime" className="mb-1 block text-xs font-semibold uppercase text-slate-500">Conducta</label>
+                            <select
+                                id="regional-crime"
+                                value={selectedComparisonItem?.delito || ""}
+                                onChange={(event) => setComparisonCrime(event.target.value)}
+                                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                                {comparisonOptions.map(item => <option key={item.delito} value={item.delito}>{item.delito}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                        <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
+                            Periodo: enero a {monthNames[(selectedComparisonItem?.period_end_month || 12) - 1]} de {selectedYear}
+                        </span>
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+                            {territorialComparison.observed_municipalities} de {territorialComparison.expected_municipalities} municipios con dato verificable
+                        </span>
+                        {territorialComparison.cutoff && (
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Corte de fuente: {territorialComparison.cutoff}</span>
+                        )}
+                    </div>
+
+                    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                        <div className="max-h-[440px] overflow-auto">
+                            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                                <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
+                                    <tr>
+                                        <th className="w-20 px-4 py-3 text-center">Posición</th>
+                                        <th className="px-4 py-3">Municipio</th>
+                                        <th className="px-4 py-3 text-right">Casos</th>
+                                        <th className="px-4 py-3 text-right">Población DANE</th>
+                                        <th className="px-4 py-3 text-right">Tasa por 100.000</th>
+                                        <th className="px-4 py-3 text-right">Frente a {selectedMunicipioNombre}</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {territorialComparison.rows.map(row => (
+                                        <tr key={row.codigo_dane} className={row.es_objetivo ? 'bg-indigo-50 font-bold text-indigo-950' : 'text-slate-700 hover:bg-slate-50'}>
+                                            <td className="px-4 py-3 text-center">{row.posicion || '—'}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span>{row.municipio}</span>
+                                                    {row.es_objetivo && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] uppercase text-white">Municipio objetivo</span>}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-right tabular-nums">{row.casos == null ? 'Sin dato' : Number(row.casos).toLocaleString('es-CO')}</td>
+                                            <td className="px-4 py-3 text-right tabular-nums">{row.poblacion == null ? '—' : Number(row.poblacion).toLocaleString('es-CO')}</td>
+                                            <td className="px-4 py-3 text-right font-bold tabular-nums">{row.tasa_por_100k == null ? '—' : Number(row.tasa_por_100k).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className={`px-4 py-3 text-right font-bold tabular-nums ${row.es_objetivo ? 'text-indigo-700' : row.diferencia_tasa_objetivo > 0 ? 'text-red-600' : row.diferencia_tasa_objetivo < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                                {row.es_objetivo || row.diferencia_tasa_objetivo == null
+                                                    ? (row.es_objetivo ? 'Base' : 'No comparable')
+                                                    : `${row.diferencia_tasa_objetivo > 0 ? '+' : ''}${Number(row.diferencia_tasa_objetivo).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                            Fuente: MinDefensa. Población: proyecciones municipales DANE. Una posición más alta indica una mayor tasa registrada para la conducta seleccionada; no representa por sí sola una evaluación integral de seguridad.
+                        </div>
+                    </div>
+                </section>
+            )}
+
             {stats.fuerza_publica && stats.fuerza_publica.length > 0 && (
                 <div className="mb-8">
                     <div className="flex items-center gap-3 mb-4">
