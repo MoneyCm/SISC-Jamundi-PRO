@@ -1,8 +1,10 @@
+import os
+import secrets
 from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -16,6 +18,7 @@ from services.sisc_cifras_pdf import build_sisc_cifras_pdf
 
 router = APIRouter()
 PUBLICATION_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
+PUBLIC_SOURCE_CODES = ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"]
 
 
 class GenerateSiscCifrasRequest(BaseModel):
@@ -33,6 +36,20 @@ def _can_save_publication(user: Optional[User]) -> bool:
         return False
     role_codes = {role.code for role in (user.roles or [])}
     return bool(role_codes.intersection(PUBLICATION_ROLES))
+
+
+def _require_automatic_publication_token(token: Optional[str]) -> None:
+    expected = os.getenv("SISC_AUTO_PUBLICATION_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La publicacion automatica no esta configurada en el servidor.",
+        )
+    if not token or not secrets.compare_digest(token, expected):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La plataforma solicitante no esta autorizada para publicar.",
+        )
 
 
 @router.get("/sources")
@@ -125,6 +142,76 @@ def generate_sisc_cifras_pdf(
         max_insights=payload.max_insights,
         save_history=False,
     )
+
+
+@router.post("/publications/public/generate")
+def generate_and_publish_public_sisc_cifras(
+    payload: GenerateSiscCifrasRequest,
+    x_publication_token: Optional[str] = Header(default=None, alias="X-Publication-Token"),
+    db: Session = Depends(get_db),
+):
+    """Genera y publica datos agregados desde una aplicacion institucional confiable."""
+    _require_automatic_publication_token(x_publication_token)
+    selected_sources = [
+        code for code in (payload.source_codes or PUBLIC_SOURCE_CODES)
+        if code in PUBLIC_SOURCE_CODES
+    ]
+    if not selected_sources:
+        raise HTTPException(status_code=422, detail="No se seleccionaron fuentes publicables.")
+
+    publication = SiscCifrasService.generate_publication(
+        db,
+        edition_type=payload.edition_type,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        comparison_mode=payload.comparison_mode,
+        source_codes=selected_sources,
+        max_insights=payload.max_insights,
+        created_by="PLATAFORMA_SEGURIDAD",
+        save_history=True,
+    )
+    publication_id = publication.get("id")
+    if not publication_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No fue posible guardar el boletin en el repositorio central.",
+        )
+
+    row = db.query(SiscCifrasPublication).filter(
+        SiscCifrasPublication.id == UUID(str(publication_id)),
+    ).first()
+    if not row:
+        raise HTTPException(status_code=500, detail="El boletin generado no pudo recuperarse.")
+
+    previous_rows = db.query(SiscCifrasPublication).filter(
+        SiscCifrasPublication.id != row.id,
+        SiscCifrasPublication.edition_type == row.edition_type,
+        SiscCifrasPublication.period_start == row.period_start,
+        SiscCifrasPublication.period_end == row.period_end,
+        SiscCifrasPublication.status == "PUBLISHED",
+    ).all()
+    for previous in previous_rows:
+        previous.status = "SUPERSEDED"
+        previous_snapshot = dict(previous.publication_json or {})
+        previous_snapshot["status"] = "SUPERSEDED"
+        previous.publication_json = previous_snapshot
+
+    snapshot = dict(publication)
+    governance = dict(snapshot.get("governance") or {})
+    governance["human_review_required"] = False
+    governance["automatic_publication"] = True
+    governance["publication_note"] = (
+        "Publicacion automatica de indicadores agregados y anonimizados; "
+        "las advertencias de cobertura se conservan para su correcta interpretacion."
+    )
+    snapshot["governance"] = governance
+    snapshot["status"] = "PUBLISHED"
+    snapshot["published_at"] = date.today().isoformat()
+    snapshot["published_by"] = "PLATAFORMA_SEGURIDAD"
+    row.status = "PUBLISHED"
+    row.publication_json = snapshot
+    db.commit()
+    return snapshot
     period = publication.get("period") or {}
     filename = f"SISC_en_Cifras_{period.get('start', 'periodo')}_{period.get('end', 'corte')}.pdf"
     return Response(
