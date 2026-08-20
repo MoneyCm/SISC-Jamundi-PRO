@@ -2,6 +2,7 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,7 @@ from api.auth import get_optional_user, log_audit, require_role
 from db.models import User
 from db.session import get_db
 from services.sisc_cifras_service import SiscCifrasService
+from services.sisc_cifras_pdf import build_sisc_cifras_pdf
 
 router = APIRouter()
 PUBLICATION_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
@@ -104,6 +106,30 @@ async def generate_sisc_cifras(
             request=request,
         )
     return publication
+
+
+@router.post("/generate-pdf")
+def generate_sisc_cifras_pdf(
+    payload: GenerateSiscCifrasRequest,
+    db: Session = Depends(get_db),
+):
+    publication = SiscCifrasService.generate_publication(
+        db,
+        edition_type=payload.edition_type,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        comparison_mode=payload.comparison_mode,
+        source_codes=payload.source_codes,
+        max_insights=payload.max_insights,
+        save_history=False,
+    )
+    period = publication.get("period") or {}
+    filename = f"SISC_en_Cifras_{period.get('start', 'periodo')}_{period.get('end', 'corte')}.pdf"
+    return Response(
+        content=build_sisc_cifras_pdf(publication),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @router.get("/publications")

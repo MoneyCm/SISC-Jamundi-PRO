@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  BarChart3, CalendarDays, CheckCircle2, Copy, Download, FileJson, ImageDown, Layers,
-  Loader2, MessageCircle, RefreshCw, ShieldCheck, Sparkles, ToggleLeft, ToggleRight, Video
+  BarChart3, CalendarDays, CheckCircle2, Copy, Download, FileJson, FileText, ImageDown, Layers,
+  Loader2, MessageCircle, Printer, RefreshCw, ShieldCheck, Sparkles, ToggleLeft, ToggleRight, Video
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { institutionalSiscCifrasPeriods, suggestedSiscCifrasPeriod } from '../utils/siscCifrasPeriod';
@@ -930,6 +930,8 @@ const SiscCifras = ({ publicMode = false }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [shareStatus, setShareStatus] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [periodSuggested, setPeriodSuggested] = useState(false);
   const [institutionalPeriod, setInstitutionalPeriod] = useState('');
 
@@ -965,10 +967,7 @@ const SiscCifras = ({ publicMode = false }) => {
     }
   };
 
-  const generate = async () => {
-    setLoading(true);
-    setError(null);
-    const publicationRequest = {
+  const publicationRequest = () => ({
       edition_type: edition,
       period_start: periodStart,
       period_end: periodEnd,
@@ -976,12 +975,16 @@ const SiscCifras = ({ publicMode = false }) => {
       source_codes: selectedSources,
       max_insights: 5,
       save_history: !publicMode,
-    };
+    });
+
+  const generate = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const response = await fetch(`${API_BASE_URL}/sisc-cifras/generate`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify(publicationRequest),
+        body: JSON.stringify(publicationRequest()),
       });
       if (!response.ok) throw new Error(await responseError(response, 'No se pudo generar SISC en cifras.'));
       const data = await response.json();
@@ -1026,6 +1029,43 @@ const SiscCifras = ({ publicMode = false }) => {
     if (publicationIsCurrent) return true;
     setShareStatus('La configuracion cambio. Genera de nuevo antes de descargar o compartir.');
     return false;
+  };
+
+  const requestPdf = async (download = false) => {
+    if (!ensureCurrentPublication()) return null;
+    setPdfLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/sisc-cifras/generate-pdf`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(publicationRequest()),
+      });
+      if (!response.ok) throw new Error(await responseError(response, 'No se pudo generar el PDF del boletin.'));
+      const blob = await response.blob();
+      if (download) {
+        downloadBlob(blob, `SISC_en_Cifras_${periodStart}_${periodEnd}.pdf`, 'application/pdf');
+        setShareStatus('PDF descargado.');
+        return null;
+      }
+      const nextUrl = URL.createObjectURL(blob);
+      setPdfUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return nextUrl;
+      });
+      setShareStatus('Vista previa del PDF lista.');
+      return nextUrl;
+    } catch (err) {
+      setError(err.message);
+      return null;
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const printPdf = async () => {
+    const url = pdfUrl || await requestPdf(false);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const downloadJson = () => {
@@ -1172,6 +1212,12 @@ const SiscCifras = ({ publicMode = false }) => {
             </button>
             <button onClick={downloadJson} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <FileJson size={15} /> JSON
+            </button>
+            <button onClick={() => requestPdf(false)} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center gap-2 rounded-md bg-[#281FD0] px-3 py-2 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:opacity-40">
+              {pdfLoading ? <Loader2 className="animate-spin" size={15} /> : <FileText size={15} />} Ver PDF
+            </button>
+            <button onClick={() => requestPdf(true)} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              <Download size={15} /> PDF
             </button>
             <button onClick={downloadSvg} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <Download size={15} /> SVG
@@ -1364,6 +1410,15 @@ const SiscCifras = ({ publicMode = false }) => {
                       <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-3 text-xs font-black uppercase text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
                         <ImageDown size={15} /> ZIP carrusel
                       </button>
+                      <button onClick={() => requestPdf(false)} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 py-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:cursor-not-allowed disabled:opacity-40">
+                        {pdfLoading ? <Loader2 className="animate-spin" size={15} /> : <FileText size={15} />} Ver PDF
+                      </button>
+                      <button onClick={() => requestPdf(true)} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+                        <Download size={15} /> Descargar PDF
+                      </button>
+                      <button onClick={printPdf} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-100 px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
+                        <Printer size={15} /> Imprimir PDF
+                      </button>
                       <button onClick={downloadSummaryImage} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 py-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:cursor-not-allowed disabled:opacity-40">
                         <ImageDown size={15} /> Imagen resumen
                       </button>
@@ -1382,6 +1437,15 @@ const SiscCifras = ({ publicMode = false }) => {
                     </div>
                     {shareStatus && (
                       <p className="mt-3 rounded-md bg-emerald-50 p-3 text-xs font-bold text-emerald-800">{shareStatus}</p>
+                    )}
+                    {pdfUrl && (
+                      <div className="mt-4 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Vista previa del boletin PDF</p>
+                          <button onClick={printPdf} className="inline-flex items-center gap-1 text-xs font-black text-[#281FD0] hover:text-[#1f18a8]"><Printer size={14} /> Imprimir</button>
+                        </div>
+                        <iframe title="Vista previa del boletin SISC" src={pdfUrl} className="h-[680px] w-full bg-white" />
+                      </div>
                     )}
                     <textarea
                       readOnly
