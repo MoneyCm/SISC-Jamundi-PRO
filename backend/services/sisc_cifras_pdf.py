@@ -1,194 +1,358 @@
+from datetime import date
 from html import escape
 from io import BytesIO
+from pathlib import Path
 
+from reportlab.graphics.shapes import Drawing, Line, String
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate,
+    Spacer, Table, TableStyle,
+)
 
 
-AZUL = colors.HexColor("#281FD0")
-AZUL_OSCURO = colors.HexColor("#0E2442")
-AMARILLO = colors.HexColor("#FFE000")
-GRIS = colors.HexColor("#F1F5F9")
-BORDE = colors.HexColor("#CBD5E1")
+BLUE = colors.HexColor("#063B9D")
+YELLOW = colors.HexColor("#FBB900")
+GREEN = colors.HexColor("#00A651")
+RED = colors.HexColor("#ED3237")
+ORANGE = colors.HexColor("#E66A12")
+INK = colors.HexColor("#263244")
+MUTED = colors.HexColor("#667085")
+PALE = colors.HexColor("#F7F9FC")
+BORDER = colors.HexColor("#D7DDE5")
+CREST = Path(__file__).resolve().parents[1] / "templates" / "escudo_jamundi.png"
 
 
-def _text(value):
-    return escape(str(value if value not in (None, "") else "Sin informacion"))
+def _text(value, fallback="Sin informacion"):
+    return escape(str(value if value not in (None, "") else fallback))
+
+
+def _number(value):
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{value:,.0f}".replace(",", ".")
+    return _text(value, "-")
 
 
 def _period(publication, key="period"):
     value = publication.get(key) or {}
-    return f"{value.get('start', 'sin inicio')} a {value.get('end', 'sin corte')}"
+    return f"{value.get('start', 'sin inicio')} al {value.get('end', 'sin corte')}"
 
 
-def _value(value):
-    return f"{value:,.0f}" if isinstance(value, (int, float)) else _text(value)
+def _edition(publication):
+    raw = str(publication.get("edition_type") or publication.get("frequency") or "TECNICO").upper()
+    return {"WEEKLY": "SEMANAL", "MONTHLY": "MENSUAL", "SEMIANNUAL": "SEMESTRAL", "ANNUAL": "ANUAL"}.get(raw, raw)
+
+
+def _variation_value(item):
+    value = item.get("variation_percentage")
+    return value if isinstance(value, (int, float)) else None
 
 
 def _variation(item):
-    value = item.get("variation_percentage")
-    return f"{value:+.1f}%" if isinstance(value, (int, float)) else "No comparable"
+    value = _variation_value(item)
+    return f"{value:+.1f}%" if value is not None else "No comparable"
 
 
-def _table(rows, widths, header=True):
-    table = Table(rows, colWidths=widths, repeatRows=1 if header else 0)
-    commands = [
-        ("BOX", (0, 0), (-1, -1), 0.45, BORDE),
-        ("INNERGRID", (0, 0), (-1, -1), 0.3, BORDE),
+def _difference_value(item):
+    value = item.get("variation_absolute")
+    if isinstance(value, (int, float)):
+        return value
+    current, previous = item.get("value"), item.get("comparison_value")
+    if isinstance(current, (int, float)) and isinstance(previous, (int, float)):
+        return current - previous
+    return None
+
+
+def _difference(item):
+    value = _difference_value(item)
+    return f"{value:+,.0f}".replace(",", ".") if value is not None else "-"
+
+
+def _styles():
+    base = getSampleStyleSheet()
+    return {
+        "body": ParagraphStyle("body", parent=base["Normal"], fontName="Helvetica", fontSize=8.1, leading=11.3, textColor=INK),
+        "small": ParagraphStyle("small", parent=base["Normal"], fontName="Helvetica", fontSize=6.5, leading=8.2, textColor=MUTED),
+        "section": ParagraphStyle("section", parent=base["Heading2"], fontName="Helvetica-Bold", fontSize=12.5, leading=15, textColor=BLUE),
+        "sub": ParagraphStyle("sub", parent=base["Heading3"], fontName="Helvetica-Bold", fontSize=10, leading=12, textColor=BLUE),
+        "label": ParagraphStyle("label", parent=base["Normal"], fontName="Helvetica-Bold", fontSize=6.3, leading=7.4, alignment=TA_CENTER, textColor=INK),
+        "value": ParagraphStyle("value", parent=base["Heading1"], fontName="Helvetica-Bold", fontSize=21, leading=23, alignment=TA_CENTER, textColor=BLUE),
+        "note": ParagraphStyle("note", parent=base["Normal"], fontName="Helvetica", fontSize=6.1, leading=7.2, alignment=TA_CENTER, textColor=MUTED),
+        "th": ParagraphStyle("th", parent=base["Normal"], fontName="Helvetica-Bold", fontSize=6.7, leading=8, alignment=TA_CENTER, textColor=colors.HexColor("#999999")),
+        "td": ParagraphStyle("td", parent=base["Normal"], fontName="Helvetica", fontSize=7.2, leading=8.6, textColor=INK),
+        "num": ParagraphStyle("num", parent=base["Normal"], fontName="Helvetica-Bold", fontSize=7.2, leading=8.6, alignment=TA_CENTER, textColor=INK),
+    }
+
+
+def _section(number, title, styles):
+    stripe = Table([[""]], colWidths=[0.09 * cm], rowHeights=[0.55 * cm])
+    stripe.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), YELLOW)]))
+    row = Table([[stripe, Paragraph(f"{number}. {_text(title).upper()}", styles["section"])]], colWidths=[0.23 * cm, 16.87 * cm])
+    row.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 7),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-    ]
-    if header:
-        commands.extend([
-            ("BACKGROUND", (0, 0), (-1, 0), AZUL_OSCURO),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, GRIS]),
-        ])
-    table.setStyle(TableStyle(commands))
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return KeepTogether([Spacer(1, 0.08 * cm), row, Spacer(1, 0.12 * cm)])
+
+
+def _card(label, value, note, styles, accent=BLUE):
+    box = Table([
+        [Paragraph(_text(label).upper(), styles["label"])],
+        [Paragraph(_text(value, "-"), styles["value"])],
+        [Paragraph(_text(note, ""), styles["note"])],
+    ], colWidths=[4.05 * cm], rowHeights=[0.43 * cm, 0.66 * cm, 0.43 * cm])
+    box.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, 0), 2.5, accent), ("BOX", (0, 0), (-1, -1), 0.55, colors.HexColor("#555555")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    return box
+
+
+def _cards(items, widths):
+    table = Table([items], colWidths=widths, hAlign="CENTER")
+    table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+    ]))
     return table
 
 
+def _comparison_table(items, styles, limit=8):
+    rows = [[Paragraph(x, styles["th"]) for x in ("DELITO", "PER. COMPARADO", "PER. ACTUAL", "VARIACION", "VARIACION %")]]
+    for item in items[:limit]:
+        variation = _variation_value(item)
+        color = GREEN if variation is not None and variation < 0 else RED if variation is not None and variation > 0 else INK
+        rows.append([
+            Paragraph(_text(item.get("indicator_name")), styles["td"]),
+            Paragraph(_number(item.get("comparison_value")), styles["num"]),
+            Paragraph(_number(item.get("value")), styles["num"]),
+            Paragraph(f'<font color="{color.hexval()}"><b>{_difference(item)}</b></font>', styles["num"]),
+            Paragraph(f'<font color="{color.hexval()}"><b>{_variation(item)}</b></font>', styles["num"]),
+        ])
+    if len(rows) == 1:
+        rows.append([Paragraph("Sin indicadores comparables para este periodo.", styles["td"]), "-", "-", "-", "-"])
+    table = Table(rows, colWidths=[7.25 * cm, 2.8 * cm, 2.55 * cm, 2.3 * cm, 2.2 * cm], repeatRows=1)
+    table.setStyle(TableStyle([
+        ("LINEBELOW", (0, 0), (-1, -1), 0.35, BORDER), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    return table
+
+
+def _trend(items, styles):
+    temporal = [
+        item for item in items
+        if str(item.get("domain") or "").upper() in {"TIEMPO", "TEMPORAL"}
+        and isinstance(item.get("value"), (int, float))
+    ][:12]
+    if len(temporal) < 2:
+        box = Table([[Paragraph(
+            "La serie temporal no esta disponible en esta seleccion. El SISC conserva el comparativo verificable sin completar valores ausentes.",
+            styles["body"],
+        )]], colWidths=[17.1 * cm], rowHeights=[1.55 * cm])
+        box.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.5, BORDER), ("BACKGROUND", (0, 0), (-1, -1), PALE),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ]))
+        return box
+    drawing = Drawing(490, 115)
+    left, bottom, chart_w, chart_h = 32, 25, 445, 75
+    maximum = max(float(item["value"]) for item in temporal) or 1
+    for index in range(4):
+        y = bottom + chart_h * index / 3
+        drawing.add(Line(left, y, left + chart_w, y, strokeColor=colors.HexColor("#DDE5EF"), strokeWidth=0.5, strokeDashArray=[2, 2]))
+        drawing.add(String(2, y - 2, _number(maximum * index / 3), fontName="Helvetica", fontSize=6, fillColor=colors.HexColor("#90A0B7")))
+    points = []
+    for index, item in enumerate(temporal):
+        x = left + chart_w * index / max(len(temporal) - 1, 1)
+        y = bottom + chart_h * float(item["value"]) / maximum
+        points.append((x, y))
+        drawing.add(String(x - 8, 5, str(item.get("indicator_name") or index + 1)[:7], fontName="Helvetica", fontSize=5.5, fillColor=colors.HexColor("#90A0B7")))
+    for first, second in zip(points, points[1:]):
+        drawing.add(Line(first[0], first[1], second[0], second[1], strokeColor=BLUE, strokeWidth=2))
+    for x, y in points:
+        drawing.add(Line(x, y, x + 0.01, y, strokeColor=colors.white, strokeWidth=5))
+        drawing.add(Line(x, y, x + 0.01, y, strokeColor=BLUE, strokeWidth=2.5))
+    return drawing
+
+
+def _management(title, items, color, styles):
+    result = [Spacer(1, 0.3 * cm), Paragraph(title, ParagraphStyle(f"sub-{title}", parent=styles["sub"], textColor=color))]
+    if not items:
+        box = Table([[Paragraph("No existe un corte publicable para el periodo seleccionado.", styles["body"])]], colWidths=[17.1 * cm], rowHeights=[0.8 * cm])
+        box.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, BORDER), ("BACKGROUND", (0, 0), (-1, -1), PALE), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 10)]))
+        return result + [box]
+    rows = [[Paragraph(x, styles["th"]) for x in ("INDICADOR", "VALOR", "UNIDAD", "CORTE")]]
+    for item in items[:6]:
+        rows.append([
+            Paragraph(_text(item.get("indicator_name")), styles["td"]), Paragraph(_number(item.get("value")), styles["num"]),
+            Paragraph(_text(item.get("unit"), "-"), styles["num"]), Paragraph(_text(item.get("cutoff_date"), "-"), styles["num"]),
+        ])
+    table = Table(rows, colWidths=[8.2 * cm, 2.4 * cm, 3.1 * cm, 3.4 * cm], repeatRows=1)
+    table.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, 0), 0.6, BORDER), ("LINEBELOW", (0, 0), (-1, -1), 0.35, BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    return result + [table]
+
+
+def _source_card(source, styles):
+    coverage = str(source.get("coverage_status") or "Sin clasificar")
+    normalized = coverage.upper()
+    accent = GREEN if ("COMPLETA" in normalized or "VIGENTE" in normalized) and "DESACT" not in normalized else RED if any(x in normalized for x in ("DESACT", "PARCIAL", "PENDIENTE")) else YELLOW
+    name = source.get("name") or source.get("source_name") or source.get("source_code")
+    cutoff = source.get("last_cutoff_date") or source.get("cutoff_date") or "Sin corte"
+    table = Table([[Paragraph(
+        f'<b>{_text(name)}</b><br/><font size="6">{_text(coverage)}</font><br/><font size="5.5">Corte: {_text(cutoff)}</font>',
+        styles["small"],
+    )]], colWidths=[5.15 * cm], rowHeights=[1.15 * cm])
+    table.setStyle(TableStyle([
+        ("LINEBEFORE", (0, 0), (0, -1), 2.5, accent), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    return table
+
+
+def _header_footer(canvas, doc, publication):
+    canvas.saveState()
+    page, width, height = canvas.getPageNumber(), A4[0], A4[1]
+    if CREST.exists():
+        canvas.drawImage(str(CREST), 1.28 * cm, height - 2.55 * cm, width=0.95 * cm, height=1.3 * cm, preserveAspectRatio=True, mask="auto")
+    canvas.setFillColor(BLUE)
+    if page == 1:
+        canvas.setFont("Helvetica-Bold", 16)
+        canvas.drawString(2.55 * cm, height - 1.45 * cm, "BOLETIN ESTADISTICO DE")
+        canvas.drawString(2.55 * cm, height - 2.05 * cm, "SEGURIDAD Y CONVIVENCIA")
+        canvas.setFillColor(INK); canvas.setFont("Helvetica-Bold", 8.5)
+        canvas.drawString(2.55 * cm, height - 2.48 * cm, "ALCALDIA MUNICIPAL DE JAMUNDI")
+    else:
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.drawString(2.35 * cm, height - 1.55 * cm, "BOLETIN ESTADISTICO DE SEGURIDAD Y CONVIVENCIA")
+        canvas.setFillColor(INK); canvas.setFont("Helvetica", 6.4)
+        canvas.drawString(2.35 * cm, height - 1.88 * cm, "ALCALDIA MUNICIPAL DE JAMUNDI")
+    canvas.setFillColor(BLUE); canvas.setFont("Helvetica-Bold", 8.2)
+    canvas.drawRightString(width - 1.25 * cm, height - 1.42 * cm, "Secretaria de Seguridad y Convivencia")
+    canvas.setFillColor(INK); canvas.setFont("Helvetica", 6.4)
+    canvas.drawRightString(width - 1.25 * cm, height - 1.82 * cm, f"Boletin {_edition(publication)} | {_period(publication)}")
+    canvas.setFillColor(YELLOW); canvas.rect(1.25 * cm, height - 2.9 * cm, width - 2.5 * cm, 0.13 * cm, fill=1, stroke=0)
+    canvas.setStrokeColor(BORDER); canvas.line(1.25 * cm, 1.15 * cm, width - 1.25 * cm, 1.15 * cm)
+    canvas.setFillColor(INK); canvas.setFont("Helvetica-Bold", 5.8)
+    canvas.drawString(1.25 * cm, 0.78 * cm, "Fuente: SISC | Secretaria de Seguridad y Convivencia - Alcaldia de Jamundi")
+    canvas.setFont("Helvetica", 5.8)
+    canvas.drawRightString(width - 1.25 * cm, 0.78 * cm, f"Pagina {page} | Informacion agregada y anonimizada")
+    canvas.restoreState()
+
+
 def build_sisc_cifras_pdf(publication: dict) -> bytes:
-    """Genera el boletin publico detallado de Seguridad, comparacion y gestion."""
+    """Genera el boletin institucional publicable y sin datos personales."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=1.45 * cm,
-        leftMargin=1.45 * cm,
-        topMargin=1.25 * cm,
-        bottomMargin=1.25 * cm,
+        buffer, pagesize=A4, rightMargin=1.25 * cm, leftMargin=1.25 * cm,
+        topMargin=3.2 * cm, bottomMargin=1.45 * cm,
+        title="Boletin Estadistico de Seguridad y Convivencia",
+        author="SISC Jamundi - Secretaria de Seguridad y Convivencia",
     )
-    styles = getSampleStyleSheet()
-    eyebrow = ParagraphStyle("Eyebrow", parent=styles["Normal"], fontSize=8, leading=10, textColor=AZUL, spaceAfter=5)
-    title = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=19, leading=23, textColor=AZUL_OSCURO, spaceAfter=4)
-    page_title = ParagraphStyle("PageTitle", parent=styles["Heading2"], fontSize=15, leading=18, textColor=AZUL_OSCURO, spaceAfter=8)
-    section = ParagraphStyle("Section", parent=styles["Heading3"], fontSize=10.5, leading=13, textColor=AZUL_OSCURO, spaceBefore=12, spaceAfter=6)
-    body = ParagraphStyle("Body", parent=styles["Normal"], fontSize=9, leading=12, textColor=colors.HexColor("#334155"))
-    small = ParagraphStyle("Small", parent=body, fontSize=7.5, leading=9.5, textColor=colors.HexColor("#64748B"))
-    kpi = ParagraphStyle("Kpi", parent=styles["Heading1"], fontSize=30, leading=32, textColor=AZUL, alignment=1)
-
+    styles = _styles()
     indicators = publication.get("indicators") or []
     police = [item for item in indicators if item.get("source_code") == "POLICIA_SEMANAL"]
-    conductas = [item for item in police if item.get("category") == "Conducta"][:7]
-    barrios = [item for item in police if item.get("domain") == "TERRITORIO"][:6]
     total = next((item for item in police if item.get("indicator_code") == "seguridad.total"), None)
+    comparable = [item for item in police if item.get("comparison_value") is not None and item is not total]
+    conductas = [item for item in comparable if item.get("category") == "Conducta"] or comparable
     inspections = [item for item in indicators if item.get("source_code") == "INSPECCIONES_RNMC"]
     family = [item for item in indicators if item.get("source_code") == "COMISARIAS_FAMILIA"]
-    comparison_label = publication.get("comparison_label") or "periodo de comparacion"
-    story = [
-        Paragraph("ALCALDIA DE JAMUNDI | SECRETARIA DE SEGURIDAD Y CONVIVENCIA", eyebrow),
-        Paragraph("BOLETIN ESTADISTICO DE SEGURIDAD Y CONVIVENCIA", title),
-        Paragraph(f"Periodo: <b>{_text(_period(publication))}</b> | Comparacion: {_text(comparison_label)}", body),
-        Spacer(1, 10),
-    ]
+    insights, sources = publication.get("insights") or [], publication.get("sources") or []
+    current = total.get("value") if total else None
+    previous = total.get("comparison_value") if total else None
+    variation_value = _variation_value(total or {})
+    variation_color = GREEN if variation_value is not None and variation_value < 0 else RED if variation_value is not None and variation_value > 0 else BLUE
+    generated = str(publication.get("generated_at") or publication.get("published_at") or date.today().isoformat())[:10]
+    story = []
 
-    # Pagina 1: balance de seguridad y territorio.
-    if total:
-        kpi_table = Table([
-            [Paragraph("HECHOS REGISTRADOS", section), Paragraph("COMPARACION", section)],
-            [Paragraph(_value(total.get("value")), kpi), Paragraph(_value(total.get("comparison_value")), kpi)],
-            [Paragraph(f"Corte: {_text(total.get('cutoff_date'))}", small), Paragraph(_variation(total), small)],
-        ], colWidths=[8.7 * cm, 8.7 * cm])
-        kpi_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EEF2FF")),
-            ("BACKGROUND", (1, 0), (1, -1), colors.HexColor("#FFF9CC")),
-            ("BOX", (0, 0), (-1, -1), 0.6, BORDE),
-            ("INNERGRID", (0, 0), (-1, -1), 0.35, BORDE),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ]))
-        story.append(kpi_table)
+    story.append(_section("1", "Introduccion y alcance", styles))
+    intro = Table([[Paragraph(
+        f'<b>Periodo del boletin:</b> {_text(_period(publication))}<br/>'
+        f'<b>Periodo comparado:</b> {_text(_period(publication, "comparison_period"))}<br/>'
+        f'<b>Fecha de generacion:</b> {generated}', styles["body"],
+    )]], colWidths=[17.1 * cm])
+    intro.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.5, BORDER), ("LEFTPADDING", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.extend([intro, Spacer(1, 0.22 * cm)])
+    lines = []
+    for index, insight in enumerate(insights[:3], 1):
+        lines.append(f'<b>{index}. {_text(insight.get("title") or f"Hallazgo {index}").upper()}</b><br/>{_text(insight.get("detail") or insight.get("text") or "")}')
+    if not lines:
+        lines = ["<b>ANALISIS DE HALLAZGOS EJECUTIVOS</b><br/>No se generaron hallazgos comparables para el periodo seleccionado."]
+    insight_box = Table([[Paragraph("<br/><br/>".join(lines), styles["body"])]], colWidths=[17.1 * cm])
+    insight_box.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.65, colors.HexColor("#4C4C4C")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.extend([insight_box, Spacer(1, 0.22 * cm), _section("2", "Panorama general", styles)])
+    story.append(Paragraph(f"Periodo comparado: {_text(_period(publication))}, frente a {_text(_period(publication, 'comparison_period'))}.", styles["body"]))
+    story.append(Spacer(1, 0.1 * cm))
+    story.append(_cards([
+        _card("Total periodo comparado", _number(previous), "hechos registrados", styles),
+        _card("Total periodo actual", _number(current), "hechos registrados", styles),
+        _card("Variacion", _variation(total or {}), f"Diferencia: {_difference(total or {})} hechos", styles, variation_color),
+    ], [5.55 * cm] * 3))
+    story.extend([Spacer(1, 0.22 * cm), _section("3", "Comportamiento del periodo", styles)])
+    top = conductas[0] if conductas else {}
+    story.append(_cards([
+        _card("Hechos del periodo", _number(current), "periodo actual", styles),
+        _card("Periodo comparado", _number(previous), f"diferencia {_difference(total or {})}", styles, RED),
+        _card("Principal cambio", _number(top.get("value")), _text(top.get("indicator_name"), "sin dato"), styles, ORANGE),
+        _card("Fuentes", _number(len(sources)), "con corte visible", styles, YELLOW),
+    ], [4.2 * cm] * 4))
 
-    story.append(Paragraph("CONDUCTAS DEL PERIODO", section))
-    conducta_rows = [["Conducta", "Actual", "Comparacion", "Variacion"]]
-    for item in conductas:
-        conducta_rows.append([_text(item.get("indicator_name")), _value(item.get("value")), _value(item.get("comparison_value")), _variation(item)])
-    if len(conducta_rows) == 1:
-        conducta_rows.append(["Sin conductas publicables", "-", "-", "-"])
-    story.append(_table(conducta_rows, [8.2 * cm, 2.8 * cm, 3.2 * cm, 3.2 * cm]))
+    story.extend([PageBreak(), _section("4", "Comparativo por delito", styles), _comparison_table(conductas, styles)])
+    story.extend([Spacer(1, 0.25 * cm), _section("5", "Cambios destacados", styles)])
+    ranked = sorted(conductas, key=lambda item: abs(_variation_value(item) or 0), reverse=True)[:5]
+    story.append(_comparison_table(ranked, styles, 5))
+    story.extend([Spacer(1, 0.25 * cm), _section("6", "Evolucion temporal del delito", styles), _trend(police, styles)])
+    story.extend([Spacer(1, 0.12 * cm), Paragraph(
+        f"Version de publicacion: {_text(publication.get('id'), 'sin identificador')} | Estado: PUBLICADO | Generado: {generated}",
+        styles["small"],
+    )])
 
-    story.append(Paragraph("TERRITORIOS CON MAYOR REGISTRO", section))
-    barrio_rows = [["Barrio o sector", "Hechos registrados"]]
-    barrio_rows.extend([[_text(item.get("indicator_name")), _value(item.get("value"))] for item in barrios])
-    if len(barrio_rows) == 1:
-        barrio_rows.append(["Sin concentraciones territoriales publicables", "-"])
-    story.extend([
-        _table(barrio_rows, [13.7 * cm, 4 * cm]),
-        Spacer(1, 8),
-        Paragraph("Fuente: SISC | Policia Nacional. Informacion agregada y anonimizada.", small),
-    ])
-
-    # Pagina 2: comparacion y lectura tecnica.
-    story.extend([PageBreak(), Paragraph("02 | COMPARACION Y HALLAZGOS", page_title)])
-    story.append(Paragraph(f"Comparacion de {_text(_period(publication))} frente a {_text(_period(publication, 'comparison_period'))}.", body))
-    comparison_rows = [["Indicador", "Actual", "Anterior", "Dif. abs.", "Variacion"]]
-    for item in [entry for entry in police if entry.get("comparison_value") is not None][:12]:
-        comparison_rows.append([
-            _text(item.get("indicator_name")),
-            _value(item.get("value")),
-            _value(item.get("comparison_value")),
-            _value(item.get("variation_absolute")),
-            _variation(item),
-        ])
-    if len(comparison_rows) == 1:
-        comparison_rows.append(["Sin indicadores comparables", "-", "-", "-", "-"])
-    story.append(_table(comparison_rows, [7.4 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm, 2.8 * cm]))
-    story.append(Paragraph("LECTURA TECNICA", section))
-    insights = publication.get("insights") or []
-    if insights:
-        for insight in insights[:6]:
-            story.extend([Paragraph(f"<b>{_text(insight.get('title'))}:</b> {_text(insight.get('detail'))}", body), Spacer(1, 5)])
-    else:
-        story.append(Paragraph("No se generaron hallazgos comparables para el periodo.", body))
+    story.extend([PageBreak(), _section("7", "Gestion y convivencia", styles)])
+    story.append(Paragraph("Actuaciones de Inspecciones y atencion de Comisarias, cada una con su propio corte y unidad de medida.", styles["body"]))
     blockers = (publication.get("governance") or {}).get("review_blockers") or []
     if blockers:
-        story.append(Paragraph("ADVERTENCIAS DE COBERTURA", section))
-        for blocker in blockers:
-            story.append(Paragraph(f"- {_text(blocker)}", small))
-    story.extend([Spacer(1, 10), Paragraph(f"Generado: {_text(publication.get('generated_at'))} | Version: {_text(publication.get('id'))}", small)])
-
-    # Pagina 3: Inspecciones, Comisarias y trazabilidad.
-    story.extend([PageBreak(), Paragraph("03 | GESTION INSTITUCIONAL", page_title)])
-    story.append(Paragraph("INSPECCIONES DE POLICIA", section))
-    inspection_rows = [["Indicador", "Valor", "Comparacion", "Corte"]]
-    for item in inspections[:7]:
-        inspection_rows.append([_text(item.get("indicator_name")), _value(item.get("value")), _value(item.get("comparison_value")), _text(item.get("cutoff_date"))])
-    if len(inspection_rows) == 1:
-        inspection_rows.append(["Sin actuaciones publicables para el periodo", "-", "-", "-"])
-    story.append(_table(inspection_rows, [8 * cm, 2.8 * cm, 3.2 * cm, 3.7 * cm]))
-
-    story.append(Paragraph("COMISARIAS DE FAMILIA", section))
-    family_rows = [["Indicador agregado", "Valor", "Unidad", "Corte"]]
-    for item in family[:6]:
-        family_rows.append([_text(item.get("indicator_name")), _value(item.get("value")), _text(item.get("unit")), _text(item.get("cutoff_date"))])
-    if len(family_rows) == 1:
-        family_rows.append(["Sin corte mensual publicable para el periodo", "-", "-", "-"])
-    story.append(_table(family_rows, [8 * cm, 2.5 * cm, 3.5 * cm, 3.7 * cm]))
-
-    story.append(Paragraph("FUENTES Y COBERTURA", section))
-    source_rows = [["Fuente", "Corte", "Cobertura", "Calidad"]]
-    for source in publication.get("sources") or []:
-        source_rows.append([_text(source.get("name")), _text(source.get("last_cutoff_date")), _text(source.get("coverage_status")), _text(source.get("quality_status"))])
-    story.append(_table(source_rows, [7.5 * cm, 3.5 * cm, 3.4 * cm, 3.3 * cm]))
-    story.extend([
-        Spacer(1, 10),
-        Paragraph("Lectura correcta: Seguridad, Inspecciones y Comisarias describen gestiones distintas y sus valores no deben sumarse entre si.", body),
-        Spacer(1, 6),
-        Paragraph("Documento publico generado automaticamente por SISC Jamundi. No contiene datos personales ni registros individuales.", small),
-    ])
-
-    doc.build(story)
+        warning = Table([[Paragraph(f'<b>Revision de cobertura:</b> {_text(blockers[0])}', styles["small"])]], colWidths=[17.1 * cm])
+        warning.setStyle(TableStyle([
+            ("LINEBEFORE", (0, 0), (0, -1), 2.5, ORANGE), ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF9F0")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.extend([Spacer(1, 0.15 * cm), warning])
+    story.extend(_management("INSPECCIONES DE POLICIA", inspections, BLUE, styles))
+    story.extend(_management("COMISARIAS DE FAMILIA", family, colors.HexColor("#00695C"), styles))
+    story.extend([Spacer(1, 0.28 * cm), Paragraph("COBERTURA DEL BOLETIN", styles["sub"])])
+    if sources:
+        cards = [_source_card(source, styles) for source in sources[:3]]
+        while len(cards) < 3:
+            cards.append(Spacer(5.15 * cm, 1))
+        story.append(_cards(cards, [5.55 * cm] * 3))
+    story.extend([Spacer(1, 0.28 * cm), Paragraph("LECTURA DEL PERIODO", ParagraphStyle("reading", parent=styles["sub"], textColor=YELLOW))])
+    reading = blockers[0] if blockers else "Las fuentes seleccionadas cuentan con trazabilidad y fecha de corte visible."
+    story.append(Paragraph(f"<b>{_text(reading)}</b>", ParagraphStyle("reading-body", parent=styles["body"], fontSize=10.2, leading=13.5, textColor=colors.HexColor("#9E9E9E"))))
+    story.extend([Spacer(1, 0.3 * cm), Paragraph(
+        "<b>Lectura correcta:</b> los valores de Seguridad, Inspecciones y Comisarias describen gestiones distintas y no deben sumarse entre si. Las cifras son agregadas y anonimizadas; cada fuente conserva su fecha de corte y advertencias de cobertura.",
+        styles["small"],
+    )])
+    callback = lambda canvas, current_doc: _header_footer(canvas, current_doc, publication)
+    doc.build(story, onFirstPage=callback, onLaterPages=callback)
     result = buffer.getvalue()
     buffer.close()
     return result
