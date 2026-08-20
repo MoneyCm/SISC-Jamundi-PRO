@@ -1,5 +1,6 @@
 from datetime import date
 from typing import List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from api.auth import get_optional_user, log_audit, require_role
 from db.models import User
+from db.models_sisc_cifras import SiscCifrasPublication
 from db.session import get_db
 from services.sisc_cifras_service import SiscCifrasService
 from services.sisc_cifras_pdf import build_sisc_cifras_pdf
@@ -129,6 +131,89 @@ def generate_sisc_cifras_pdf(
         content=build_sisc_cifras_pdf(publication),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@router.post("/publications/{publication_id}/approve")
+async def approve_sisc_cifras_publication(
+    publication_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(PUBLICATION_ROLES)),
+):
+    row = db.query(SiscCifrasPublication).filter(SiscCifrasPublication.id == publication_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="No existe el boletin solicitado.")
+
+    publication = dict(row.publication_json or {})
+    governance = publication.get("governance") or {}
+    if not governance.get("publication_ready"):
+        raise HTTPException(
+            status_code=422,
+            detail="El boletin no puede publicarse hasta resolver las observaciones de cobertura y calidad.",
+        )
+
+    row.status = "PUBLISHED"
+    publication["status"] = "PUBLISHED"
+    publication["published_at"] = date.today().isoformat()
+    publication["published_by"] = current_user.username
+    row.publication_json = publication
+    db.commit()
+
+    await log_audit(
+        db,
+        "SISC_CIFRAS_PUBLISHED",
+        actor_id=str(current_user.id),
+        module="SISC_CIFRAS",
+        target={"publication_id": str(row.id), "period_end": row.period_end.isoformat()},
+        level=1,
+        request=request,
+    )
+    return {"id": str(row.id), "status": row.status, "published_at": publication["published_at"]}
+
+
+@router.get("/publications/public")
+def list_public_sisc_cifras_publications(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(SiscCifrasPublication).filter(
+        SiscCifrasPublication.status == "PUBLISHED",
+    ).order_by(SiscCifrasPublication.period_end.desc(), SiscCifrasPublication.created_at.desc()).limit(limit).all()
+    return [
+        {
+            "id": str(row.id),
+            "title": row.title,
+            "edition_type": row.edition_type,
+            "period_start": row.period_start.isoformat(),
+            "period_end": row.period_end.isoformat(),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "published_at": (row.publication_json or {}).get("published_at"),
+            "source_codes": row.source_codes,
+        }
+        for row in rows
+    ]
+
+
+@router.get("/publications/{publication_id}/pdf")
+def get_public_sisc_cifras_pdf(
+    publication_id: UUID,
+    download: bool = Query(default=False),
+    db: Session = Depends(get_db),
+):
+    row = db.query(SiscCifrasPublication).filter(
+        SiscCifrasPublication.id == publication_id,
+        SiscCifrasPublication.status == "PUBLISHED",
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="El boletin no esta disponible para consulta publica.")
+
+    filename = f"SISC_en_Cifras_{row.period_start.isoformat()}_{row.period_end.isoformat()}.pdf"
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=build_sisc_cifras_pdf(row.publication_json or {}),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
     )
 
 

@@ -40,6 +40,9 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
     const [error, setError] = useState('');
     const [exportingXlsx, setExportingXlsx] = useState(false);
     const [exportStatus, setExportStatus] = useState('');
+    const [bulletins, setBulletins] = useState([]);
+    const [bulletinsLoading, setBulletinsLoading] = useState(false);
+    const [selectedBulletin, setSelectedBulletin] = useState(null);
 
     const loadData = async () => {
         setLoading(true);
@@ -70,6 +73,27 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
 
     useEffect(() => { loadData(); }, []);
     useEffect(() => { setActiveSection(initialSection); }, [initialSection]);
+    useEffect(() => {
+        if (activeSection !== 'technical-bulletins') return;
+        let cancelled = false;
+        const loadBulletins = async () => {
+            setBulletinsLoading(true);
+            try {
+                const response = await fetch(`${API_BASE_URL}/sisc-cifras/publications/public`);
+                if (!response.ok) throw new Error('No fue posible consultar los boletines publicados.');
+                const rows = await response.json();
+                if (cancelled) return;
+                setBulletins(rows);
+                setSelectedBulletin((current) => current || rows[0]?.id || null);
+            } catch (requestError) {
+                if (!cancelled) setError(requestError.message || 'No fue posible cargar los boletines públicos.');
+            } finally {
+                if (!cancelled) setBulletinsLoading(false);
+            }
+        };
+        loadBulletins();
+        return () => { cancelled = true; };
+    }, [activeSection]);
 
     const indicatorRows = useMemo(() => {
         if (!data.kpis) return [];
@@ -230,14 +254,36 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
                     <section>
                         <h2 className="text-2xl font-black mb-2">Boletines técnicos</h2>
                         <p className="text-slate-600 mb-8">Solo se publican documentos revisados y aprobados para circulación ciudadana.</p>
-                        <div className="border-y border-slate-200 py-7 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-                            <div className="flex gap-4"><CalendarDays className="text-[#281FD0] shrink-0" /><div><h3 className="font-black">Ficha automática de indicadores</h3><p className="text-sm text-slate-500 mt-1">Vista informativa en tiempo real. No reemplaza un boletín oficial aprobado.</p></div></div>
-                            <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-2 border border-slate-300 px-5 py-3 font-bold print:hidden"><Printer size={18} /> Imprimir ficha</button>
-                        </div>
-                        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-px bg-slate-200 border border-slate-200">
-                            {indicatorRows.slice(0, 4).map(([label, value]) => <div key={label} className="bg-white p-5"><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-black mt-2">{value ?? '—'}</p></div>)}
-                        </div>
-                        <p className="mt-8 text-sm text-amber-800 bg-amber-50 border-l-4 border-amber-400 p-4">Aún no hay boletines oficiales aprobados cargados en este repositorio público.</p>
+                        {bulletinsLoading ? (
+                            <p className="border-l-4 border-[#281FD0] bg-indigo-50 p-4 text-sm font-bold text-[#281FD0]">Consultando boletines publicados...</p>
+                        ) : bulletins.length === 0 ? (
+                            <p className="text-sm text-amber-800 bg-amber-50 border-l-4 border-amber-400 p-4">Aún no hay boletines oficiales aprobados cargados en este repositorio público.</p>
+                        ) : (
+                            <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+                                <div className="space-y-3">
+                                    {bulletins.map((bulletin) => (
+                                        <button key={bulletin.id} onClick={() => setSelectedBulletin(bulletin.id)} className={`w-full border p-4 text-left transition ${selectedBulletin === bulletin.id ? 'border-[#281FD0] bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">{bulletin.edition_type}</p>
+                                            <p className="mt-1 font-black">{bulletin.title}</p>
+                                            <p className="mt-2 text-xs font-semibold text-slate-500">{bulletin.period_start} a {bulletin.period_end}</p>
+                                            <p className="mt-1 text-xs text-slate-500">Publicado: {bulletin.published_at || bulletin.created_at?.slice(0, 10)}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                                {selectedBulletin && (
+                                    <div className="overflow-hidden border border-slate-200 bg-white">
+                                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 print:hidden">
+                                            <p className="text-sm font-black">Boletín oficial aprobado</p>
+                                            <div className="flex gap-2">
+                                                <a href={`${API_BASE_URL}/sisc-cifras/publications/${selectedBulletin}/pdf?download=true`} className="inline-flex items-center gap-2 bg-[#281FD0] px-4 py-2 text-sm font-bold text-white"><Download size={16} /> Descargar PDF</a>
+                                                <button onClick={() => window.open(`${API_BASE_URL}/sisc-cifras/publications/${selectedBulletin}/pdf`, '_blank', 'noopener,noreferrer')} className="inline-flex items-center gap-2 border border-slate-300 px-4 py-2 text-sm font-bold"><Printer size={16} /> Imprimir</button>
+                                            </div>
+                                        </div>
+                                        <iframe title="Boletín técnico aprobado" src={`${API_BASE_URL}/sisc-cifras/publications/${selectedBulletin}/pdf`} className="h-[760px] w-full bg-white" />
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </section>
                 )}
 

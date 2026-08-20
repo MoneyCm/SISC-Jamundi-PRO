@@ -932,6 +932,7 @@ const SiscCifras = ({ publicMode = false }) => {
   const [shareStatus, setShareStatus] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [periodSuggested, setPeriodSuggested] = useState(false);
   const [institutionalPeriod, setInstitutionalPeriod] = useState('');
 
@@ -1066,6 +1067,29 @@ const SiscCifras = ({ publicMode = false }) => {
   const printPdf = async () => {
     const url = pdfUrl || await requestPdf(false);
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const publishBulletin = async () => {
+    if (!ensureCurrentPublication() || !publication?.governance?.publication_ready) {
+      setShareStatus('Este boletin requiere resolver sus observaciones antes de publicarlo.');
+      return;
+    }
+    setPublishing(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/sisc-cifras/publications/${publication.id}/approve`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (!response.ok) throw new Error(await responseError(response, 'No se pudo publicar el boletin.'));
+      const result = await response.json();
+      setPublication((current) => ({ ...current, status: result.status, published_at: result.published_at }));
+      setShareStatus('Boletin aprobado y publicado en el portal ciudadano.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const downloadJson = () => {
@@ -1419,6 +1443,11 @@ const SiscCifras = ({ publicMode = false }) => {
                       <button onClick={printPdf} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-100 px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
                         <Printer size={15} /> Imprimir PDF
                       </button>
+                      {!publicMode && (
+                        <button onClick={publishBulletin} disabled={!publicationIsCurrent || !publication.governance?.publication_ready || publishing || publication.status === 'PUBLISHED'} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-40">
+                          {publishing ? <Loader2 className="animate-spin" size={15} /> : <CheckCircle2 size={15} />} {publication.status === 'PUBLISHED' ? 'Publicado' : 'Aprobar y publicar'}
+                        </button>
+                      )}
                       <button onClick={downloadSummaryImage} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 py-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:cursor-not-allowed disabled:opacity-40">
                         <ImageDown size={15} /> Imagen resumen
                       </button>
