@@ -184,6 +184,8 @@ class PoliciaJamundiProcessor:
         # 1. Verificar si ya se proceso. Si viene de la cola HTTP, usar ese run exacto.
         existing_run = None
         backfill_existing = False
+        existing_snapshot_keys = set()
+        existing_snapshot_coverage = []
         if run_id:
             try:
                 run_uuid = uuid.UUID(str(run_id))
@@ -200,6 +202,19 @@ class PoliciaJamundiProcessor:
             run.status = "IN_PROGRESS"
             run.usuario_carga = self.user_id
             run.fecha_fin = None
+            existing_snapshot_rows = self.db.query(
+                SabanaSnapshotRow.record_key,
+                SabanaSnapshotRow.fecha_evento,
+                SabanaSnapshotRow.semana_num,
+            ).filter(
+                SabanaSnapshotRow.ingestion_id == run.id,
+            ).all()
+            existing_snapshot_keys = {row.record_key for row in existing_snapshot_rows}
+            existing_snapshot_coverage = [
+                (row.fecha_evento, row.semana_num)
+                for row in existing_snapshot_rows
+            ]
+            backfill_existing = bool(existing_snapshot_keys)
         else:
             existing_run = self.db.query(IngestionRun).filter(
                 IngestionRun.fuente_codigo == "POLICIA_SEMANAL",
@@ -250,8 +265,8 @@ class PoliciaJamundiProcessor:
                 "nuevas_consolidadas": 0, "actualizadas_consolidadas": 0, "existentes_historico": 0,
                 "repetidas_en_archivo": 0, "filas_snapshot": 0,
             }
-            snapshot_keys = set()
-            snapshot_coverage = []
+            snapshot_keys = set(existing_snapshot_keys)
+            snapshot_coverage = list(existing_snapshot_coverage)
             current_delivery_cutoff = None
             if mapping.get("fecha_evento"):
                 valid_dates = pd.to_datetime(df[mapping["fecha_evento"]], errors="coerce").dropna()
@@ -350,6 +365,11 @@ class PoliciaJamundiProcessor:
                         # Eliminamos la deduplicaciÃ³n estricta por id_fuente para aceptar mÃºltiples vÃ­ctimas
                         fp = self._generate_fingerprint(processed_data)
                         record_key = stable_record_key(sanitized_payload)
+                        if record_key in existing_snapshot_keys:
+                            # Un reintento del mismo proceso no debe volver a insertar su foto historica.
+                            stats["duplicadas"] += 1
+                            stats["existentes_historico"] += 1
+                            continue
                         if not claim_snapshot_record(snapshot_keys, record_key):
                             stats["repetidas_en_archivo"] += 1
                             stats["duplicadas"] += 1
