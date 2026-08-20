@@ -745,7 +745,7 @@ const slideToSvg = (slide, publication, assets = {}) => {
     <rect x="76" y="1128" width="928" height="94" rx="26" fill="#FFFFFF" stroke="#D9E2F0" stroke-width="2"/>
     ${escudo ? `<image href="${escudo}" x="96" y="1144" width="58" height="58"/>` : ''}
     <text x="${escudo ? 172 : 96}" y="1172" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaria de Seguridad y Convivencia</text>
-    <text x="${escudo ? 172 : 96}" y="1204" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Revision humana obligatoria antes de publicar. No contiene datos personales.</text>
+    <text x="${escudo ? 172 : 96}" y="1204" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Informacion publica agregada y anonimizada. Conserva fuentes y cortes.</text>
     <text x="76" y="1286" font-size="20" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">SISC EN CIFRAS | Serie visual ${escapeSvg(edition.toLowerCase())}</text>
     <text x="1004" y="1286" text-anchor="end" font-size="18" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">${escapeSvg(slideNumber)}</text>
   </svg>`;
@@ -837,7 +837,7 @@ const summaryToSvg = (publication, assets = {}) => {
     <rect x="76" y="1644" width="928" height="94" rx="26" fill="#FFFFFF" stroke="#D9E2F0" stroke-width="2"/>
     ${escudo ? `<image href="${escudo}" x="96" y="1660" width="58" height="58"/>` : ''}
     <text x="${escudo ? 172 : 96}" y="1688" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaria de Seguridad y Convivencia</text>
-    <text x="${escudo ? 172 : 96}" y="1720" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Revision humana obligatoria antes de publicar. No contiene datos personales.</text>
+    <text x="${escudo ? 172 : 96}" y="1720" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Informacion publica agregada y anonimizada. Conserva fuentes y cortes.</text>
     <text x="76" y="1838" font-size="22" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">SISC EN CIFRAS | Imagen resumen para chat</text>
   </svg>`;
 };
@@ -909,7 +909,7 @@ const SlidePreview = ({ slide, publication }) => {
           <img src="/assets/escudo-limpio.png" alt="Escudo" className="h-9 w-9 object-contain" />
           <div>
             <p className="text-[11px] font-black text-slate-900">Fuente: SISC | Secretaria de Seguridad y Convivencia</p>
-            <p className="text-[10px] font-bold text-slate-500">Revision humana obligatoria. Sin datos personales.</p>
+            <p className="text-[10px] font-bold text-slate-500">Informacion publica agregada y anonimizada.</p>
           </div>
         </div>
       </div>
@@ -932,7 +932,6 @@ const SiscCifras = ({ publicMode = false }) => {
   const [shareStatus, setShareStatus] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [publishing, setPublishing] = useState(false);
   const [periodSuggested, setPeriodSuggested] = useState(false);
   const [institutionalPeriod, setInstitutionalPeriod] = useState('');
 
@@ -968,14 +967,15 @@ const SiscCifras = ({ publicMode = false }) => {
     }
   };
 
-  const publicationRequest = () => ({
+  const publicationRequest = (saveHistory = !publicMode) => ({
       edition_type: edition,
       period_start: periodStart,
       period_end: periodEnd,
       comparison_mode: comparisonMode,
       source_codes: selectedSources,
       max_insights: 5,
-      save_history: !publicMode,
+      save_history: saveHistory,
+      publish_automatically: saveHistory,
     });
 
   const generate = async () => {
@@ -998,6 +998,7 @@ const SiscCifras = ({ publicMode = false }) => {
         sourceCodes: selectedSources,
       }));
       setActiveSlide(0);
+      if (data.status === 'PUBLISHED') setShareStatus('Boletin generado y publicado automaticamente en el portal ciudadano.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1040,7 +1041,7 @@ const SiscCifras = ({ publicMode = false }) => {
       const response = await fetch(`${API_BASE_URL}/sisc-cifras/generate-pdf`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify(publicationRequest()),
+        body: JSON.stringify(publicationRequest(false)),
       });
       if (!response.ok) throw new Error(await responseError(response, 'No se pudo generar el PDF del boletin.'));
       const blob = await response.blob();
@@ -1067,29 +1068,6 @@ const SiscCifras = ({ publicMode = false }) => {
   const printPdf = async () => {
     const url = pdfUrl || await requestPdf(false);
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  const publishBulletin = async () => {
-    if (!ensureCurrentPublication() || !publication?.governance?.publication_ready) {
-      setShareStatus('Este boletin requiere resolver sus observaciones antes de publicarlo.');
-      return;
-    }
-    setPublishing(true);
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/sisc-cifras/publications/${publication.id}/approve`, {
-        method: 'POST',
-        headers: authHeaders(),
-      });
-      if (!response.ok) throw new Error(await responseError(response, 'No se pudo publicar el boletin.'));
-      const result = await response.json();
-      setPublication((current) => ({ ...current, status: result.status, published_at: result.published_at }));
-      setShareStatus('Boletin aprobado y publicado en el portal ciudadano.');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setPublishing(false);
-    }
   };
 
   const downloadJson = () => {
@@ -1383,7 +1361,7 @@ const SiscCifras = ({ publicMode = false }) => {
               <div className="max-w-md text-center">
                 <BarChart3 className="mx-auto text-[#281FD0]" size={52} />
                 <h2 className="mt-4 text-xl font-black uppercase text-slate-900">Semanal para seguimiento / Mensual para balance</h2>
-                <p className="mt-2 text-sm font-semibold text-slate-500">Genera 5 laminas publicables para WhatsApp con comparacion automatica, trazabilidad de fuentes y revision institucional previa.</p>
+                <p className="mt-2 text-sm font-semibold text-slate-500">Genera laminas y un boletin PDF publico con comparacion automatica, trazabilidad de fuentes y datos anonimizados.</p>
               </div>
             </section>
           ) : (
@@ -1408,7 +1386,7 @@ const SiscCifras = ({ publicMode = false }) => {
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado</p>
-                  <p className="mt-2 flex items-center gap-2 text-lg font-black text-emerald-700"><CheckCircle2 size={20} /> {publication.governance?.history_saved ? 'Borrador guardado' : 'Vista previa'}</p>
+                  <p className="mt-2 flex items-center gap-2 text-lg font-black text-emerald-700"><CheckCircle2 size={20} /> {publication.status === 'PUBLISHED' ? 'Publicado automaticamente' : 'Vista previa publica'}</p>
                 </div>
               </section>
 
@@ -1443,10 +1421,10 @@ const SiscCifras = ({ publicMode = false }) => {
                       <button onClick={printPdf} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-100 px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
                         <Printer size={15} /> Imprimir PDF
                       </button>
-                      {!publicMode && (
-                        <button onClick={publishBulletin} disabled={!publicationIsCurrent || !publication.governance?.publication_ready || publishing || publication.status === 'PUBLISHED'} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-40">
-                          {publishing ? <Loader2 className="animate-spin" size={15} /> : <CheckCircle2 size={15} />} {publication.status === 'PUBLISHED' ? 'Publicado' : 'Aprobar y publicar'}
-                        </button>
+                      {!publicMode && publication.status === 'PUBLISHED' && (
+                        <div className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-100 px-3 py-3 text-xs font-black uppercase text-emerald-800">
+                          <CheckCircle2 size={15} /> Publicado automaticamente
+                        </div>
                       )}
                       <button onClick={downloadSummaryImage} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 py-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:cursor-not-allowed disabled:opacity-40">
                         <ImageDown size={15} /> Imagen resumen
@@ -1526,7 +1504,7 @@ const SiscCifras = ({ publicMode = false }) => {
                       ))}
                     </div>
                     <p className="mt-4 rounded-md bg-amber-50 p-3 text-xs font-bold text-amber-800">
-                      Revision humana obligatoria antes de publicar. Esta vista conserva fuentes, cortes y trazabilidad; las laminas y el resumen usan lenguaje ciudadano.
+                      Publicacion automatica de informacion agregada y anonimizada. Esta vista conserva fuentes, cortes, advertencias y trazabilidad para su correcta interpretacion.
                     </p>
                   </section>
                 </div>

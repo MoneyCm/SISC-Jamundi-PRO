@@ -29,6 +29,7 @@ class GenerateSiscCifrasRequest(BaseModel):
     source_codes: Optional[List[str]] = None
     max_insights: int = Field(default=5, ge=3, le=6)
     save_history: bool = False
+    publish_automatically: bool = False
 
 
 def _can_save_publication(user: Optional[User]) -> bool:
@@ -88,6 +89,8 @@ async def generate_sisc_cifras(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
+    if payload.publish_automatically and not payload.save_history:
+        raise HTTPException(status_code=422, detail="La publicacion automatica requiere guardar la version institucional.")
     if payload.save_history and current_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -110,14 +113,47 @@ async def generate_sisc_cifras(
         created_by=current_user.username if current_user else None,
         save_history=payload.save_history,
     )
+    if payload.publish_automatically:
+        publication_id = publication.get("id")
+        row = db.query(SiscCifrasPublication).filter(
+            SiscCifrasPublication.id == UUID(str(publication_id)),
+        ).first() if publication_id else None
+        if not row:
+            raise HTTPException(status_code=500, detail="No fue posible recuperar el boletin generado.")
+        previous_rows = db.query(SiscCifrasPublication).filter(
+            SiscCifrasPublication.id != row.id,
+            SiscCifrasPublication.edition_type == row.edition_type,
+            SiscCifrasPublication.period_start == row.period_start,
+            SiscCifrasPublication.period_end == row.period_end,
+            SiscCifrasPublication.status == "PUBLISHED",
+        ).all()
+        for previous in previous_rows:
+            previous.status = "SUPERSEDED"
+            previous_snapshot = dict(previous.publication_json or {})
+            previous_snapshot["status"] = "SUPERSEDED"
+            previous.publication_json = previous_snapshot
+        snapshot = dict(publication)
+        governance = dict(snapshot.get("governance") or {})
+        governance["human_review_required"] = False
+        governance["automatic_publication"] = True
+        governance["publication_note"] = "Publicacion automatica de informacion agregada y anonimizada; las alertas de cobertura se conservan como trazabilidad."
+        snapshot["governance"] = governance
+        snapshot["status"] = "PUBLISHED"
+        snapshot["published_at"] = date.today().isoformat()
+        snapshot["published_by"] = current_user.username
+        row.status = "PUBLISHED"
+        row.publication_json = snapshot
+        db.commit()
+        publication = snapshot
     if payload.save_history:
         await log_audit(
             db,
-            "SISC_CIFRAS_DRAFT_CREATED",
+            "SISC_CIFRAS_PUBLISHED" if payload.publish_automatically else "SISC_CIFRAS_DRAFT_CREATED",
             actor_id=str(current_user.id),
             module="SISC_CIFRAS",
             target={
                 "publication_id": publication.get("id"),
+                "status": publication.get("status"),
                 "period_start": str(payload.period_start) if payload.period_start else None,
                 "period_end": str(payload.period_end) if payload.period_end else None,
             },

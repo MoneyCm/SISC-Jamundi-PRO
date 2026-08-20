@@ -253,11 +253,11 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
                 {activeSection === 'technical-bulletins' && (
                     <section>
                         <h2 className="text-2xl font-black mb-2">Boletines técnicos</h2>
-                        <p className="text-slate-600 mb-8">Solo se publican documentos revisados y aprobados para circulación ciudadana.</p>
+                        <p className="text-slate-600 mb-8">Boletines generados con información pública agregada y anonimizada, con fuentes y fechas de corte visibles.</p>
                         {bulletinsLoading ? (
                             <p className="border-l-4 border-[#281FD0] bg-indigo-50 p-4 text-sm font-bold text-[#281FD0]">Consultando boletines publicados...</p>
                         ) : bulletins.length === 0 ? (
-                            <p className="text-sm text-amber-800 bg-amber-50 border-l-4 border-amber-400 p-4">Aún no hay boletines oficiales aprobados cargados en este repositorio público.</p>
+                            <p className="text-sm text-amber-800 bg-amber-50 border-l-4 border-amber-400 p-4">Aún no se han generado boletines en este repositorio público.</p>
                         ) : (
                             <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
                                 <div className="space-y-3">
