@@ -1,0 +1,63 @@
+{
+  "catalog": "conductas",
+  "version": "2026.08",
+  "generated_at": "2026-08-20T10:00:00-05:00",
+  "items": [
+    {
+      "code": "HOMICIDIO",
+      "label": "Homicidio",
+      "aliases": ["HOMICIDIO", "HOMICIDIO CULPOSO", "HOMICIDIO DOLOSO", "ARTÍCULO 103. HOMICIDIO"],
+      "category": "SEGURIDAD",
+      "metadata": {"publishable": true}
+    },
+    {
+      "code": "LESIONES",
+      "label": "Lesiones personales",
+      "aliases": ["LESIONES", "LESIONES PERSONALES", "ARTÍCULO 111. LESIONES PERSONALES"],
+      "category": "SEGURIDAD",
+      "metadata": {"publishable": true}
+    },
+    {
+      "code": "HURTO_PERSONAS",
+      "label": "Hurto a personas",
+      "aliases": ["H.PERSONAS", "H PERSONAS", "HURTO PERSONAS", "HURTO A PERSONAS", "ARTÍCULO 239. HURTO PERSONAS"],
+      "category": "SEGURIDAD",
+      "metadata": {"publishable": true}
+    },
+    {
+      "code": "HURTO_RESIDENCIAS",
+      "label": "Hurto a residencias",
+      "aliases": ["H.RESIDENCIAS", "H.RESIDENCIA", "HURTO RESIDENCIAS", "HURTO A RESIDENCIAS"],
+      "category": "SEGURIDAD",
+      "metadata": {"publishable": true}
+    },
+    {
+      "code": "HURTO_COMERCIO",
+      "label": "Hurto a comercio",
+      "aliases": ["H.COMERCIO", "HURTO COMERCIO", "HURTO A ESTABLECIMIENTO"],
+      "category": "SEGURIDAD",
+      "metadata": {"publishable": true}
+    },
+    {
+      "code": "HURTO_MOTOS",
+      "label": "Hurto de motocicletas",
+      "aliases": ["H.MOTOS", "H.MOTOCICLETAS", "HURTO MOTOS", "HURTO DE MOTOCICLETAS"],
+      "category": "SEGURIDAD",
+      "metadata": {"publishable": true}
+    },
+    {
+      "code": "HURTO_AUTOMOTORES",
+      "label": "Hurto de automotores",
+      "aliases": ["H.AUTOMOTORES", "HURTO AUTOMOTORES"],
+      "category": "SEGURIDAD",
+      "metadata": {"publishable": true}
+    },
+    {
+      "code": "VIOLENCIA_INTRAFAMILIAR",
+      "label": "Violencia intrafamiliar",
+      "aliases": ["VIOLENCIA INTRAFAMILIAR", "VIF"],
+      "category": "CONVIVENCIA",
+      "metadata": {"publishable": true}
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "catalog": "barrios",
+  "version": "2026.08",
+  "generated_at": "2026-08-20T10:00:00-05:00",
+  "status": "preliminary",
+  "note": "Catálogo preliminar construido desde datos de sábana. Pendiente validación institucional.",
+  "items": [
+    {
+      "code": "BARRIO-SD",
+      "label": "Sin Dato",
+      "parent_code": null,
+      "metadata": {"type": "BARRIO", "zone": null, "aliases": ["SIN DATO", "SIN DATOS", "-", "UNDEFINED", "NO DEFINIDO"]}
+    },
+    {
+      "code": "BARRIO-001",
+      "label": "La Madina",
+      "parent_code": "COMUNA-001",
+      "metadata": {"type": "BARRIO", "zone": "URBANA", "aliases": ["Alamadina", "La Amadina", "La maddina"]}
+    },
+    {
+      "code": "BARRIO-002",
+      "label": "Villa del Valle",
+      "parent_code": "COMUNA-001",
+      "metadata": {"type": "BARRIO", "zone": "URBANA", "aliases": ["Villa Valle"]}
+    },
+    {
+      "code": "BARRIO-003",
+      "label": "La Flora",
+      "parent_code": "COMUNA-002",
+      "metadata": {"type": "BARRIO", "zone": "URBANA", "aliases": ["Flora"]}
+    },
+    {
+      "code": "BARRIO-004",
+      "label": "Ciudadela Jamundí",
+      "parent_code": "COMUNA-002",
+      "metadata": {"type": "BARRIO", "zone": "URBANA", "aliases": ["Ciudadel Jamundi", "CUDAJAM"]}
+    },
+    {
+      "code": "BARRIO-005",
+      "label": "San Francisco",
+      "parent_code": "COMUNA-003",
+      "metadata": {"type": "BARRIO", "zone": "URBANA", "aliases": ["San Fran", "S.Francisco"]}
+    },
+    {
+      "code": "BARRIO-006",
+      "label": "El Recreo",
+      "parent_code": "COMUNA-003",
+      "metadata": {"type": "BARRIO", "zone": "URBANA", "aliases": ["Recreo"]}
+    },
+    {
+      "code": "COMUNA-001",
+      "label": "Comuna 1",
+      "parent_code": null,
+      "metadata": {"type": "COMUNA", "zone": "URBANA", "aliases": ["Comuna Uno"]}
+    },
+    {
+      "code": "COMUNA-002",
+      "label": "Comuna 2",
+      "parent_code": null,
+      "metadata": {"type": "COMUNA", "zone": "URBANA", "aliases": ["Comuna Dos"]}
+    },
+    {
+      "code": "COMUNA-003",
+      "label": "Comuna 3",
+      "parent_code": null,
+      "metadata": {"type": "COMUNA", "zone": "URBANA", "aliases": ["Comuna Tres"]}
+    },
+    {
+      "code": "CORREG-001",
+      "label": "Centro",
+      "parent_code": null,
+      "metadata": {"type": "CORREGIMIENTO", "zone": "RURAL", "aliases": ["Centro Jamundí"]}
+    },
+    {
+      "code": "CORREG-002",
+      "label": "El Hormiguero",
+      "parent_code": null,
+      "metadata": {"type": "CORREGIMIENTO", "zone": "RURAL", "aliases": []}
+    }
+  ]
+}

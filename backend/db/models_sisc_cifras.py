@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, DateTime, String, Text
+from sqlalchemy import Column, Date, DateTime, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
 import uuid
@@ -23,3 +23,15 @@ class SiscCifrasPublication(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # --- Fase 1.5: columnas nuevas para contrato v1 ---
+    requested_filters = Column(JSONB, nullable=True)
+    resolved_filters = Column(JSONB, nullable=True)
+    schema_version = Column(String(10), nullable=True)
+    pdf_url = Column(Text, nullable=True)
+    pdf_data = Column(LargeBinary, nullable=True)
+    pdf_sha256 = Column(String(64), nullable=True)
+    hash_integrity = Column(JSONB, nullable=True)  # {algorithm: "sha256", value: "..."}
+    suppressed_cells = Column(JSONB, nullable=True, default=list)
+    catalog_versions_used = Column(JSONB, nullable=True)
+    query_hash = Column(String(64), nullable=True, index=True)

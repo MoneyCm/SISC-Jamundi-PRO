@@ -1,0 +1,92 @@
+{
+  "catalog": "presets",
+  "version": "2026.08",
+  "generated_at": "2026-08-20T10:00:00-05:00",
+  "items": [
+    {
+      "code": "WEEKLY_SECURITY_DEFAULT",
+      "label": "Boletín Semanal",
+      "bulletin_type": "WEEKLY",
+      "description": "Total, variación, conductas principales, territorios, horarios y último corte mensual institucional",
+      "metadata": {
+        "comparison_mode": "YEAR_OVER_YEAR",
+        "default_sources": ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"],
+        "default_sections": {
+          "resumen_ejecutivo": true, "total_hechos": true, "comparacion_anual": true,
+          "comparativo_conducta": true, "evolucion": true, "distribucion_territorial": true,
+          "barrios_mayor_registro": true, "horarios_franjas": true, "modalidades_frecuentes": false,
+          "inspecciones_policia": true, "comisarias_familia": true, "fuentes_calidad": true,
+          "nota_metodologica": true
+        }
+      }
+    },
+    {
+      "code": "MONTHLY_SECURITY_DEFAULT",
+      "label": "Boletín Mensual",
+      "bulletin_type": "MONTHLY",
+      "description": "Comparativo completo, evolución, barrios, modalidades, Inspecciones y Comisarías",
+      "metadata": {
+        "comparison_mode": "YEAR_OVER_YEAR",
+        "default_sources": ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"],
+        "default_sections": {
+          "resumen_ejecutivo": true, "total_hechos": true, "comparacion_anual": true,
+          "comparativo_conducta": true, "evolucion": true, "distribucion_territorial": true,
+          "barrios_mayor_registro": true, "horarios_franjas": true, "modalidades_frecuentes": true,
+          "inspecciones_policia": true, "comisarias_familia": true, "fuentes_calidad": true,
+          "nota_metodologica": true
+        }
+      }
+    },
+    {
+      "code": "SEMESTER_SECURITY_DEFAULT",
+      "label": "Boletín Semestral",
+      "bulletin_type": "SEMESTER",
+      "description": "Tendencias acumuladas, territorios persistentes, conductas y gestión institucional",
+      "metadata": {
+        "comparison_mode": "YEAR_OVER_YEAR",
+        "default_sources": ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"],
+        "default_sections": {
+          "resumen_ejecutivo": true, "total_hechos": true, "comparacion_anual": true,
+          "comparativo_conducta": true, "evolucion": true, "distribucion_territorial": true,
+          "barrios_mayor_registro": false, "horarios_franjas": false, "modalidades_frecuentes": false,
+          "inspecciones_policia": true, "comisarias_familia": true, "fuentes_calidad": true,
+          "nota_metodologica": true
+        }
+      }
+    },
+    {
+      "code": "ANNUAL_SECURITY_DEFAULT",
+      "label": "Boletín Anual",
+      "bulletin_type": "ANNUAL",
+      "description": "Balance general, comparación anual, evolución mensual, territorios, convivencia y trazabilidad",
+      "metadata": {
+        "comparison_mode": "YEAR_OVER_YEAR",
+        "default_sources": ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"],
+        "default_sections": {
+          "resumen_ejecutivo": true, "total_hechos": true, "comparacion_anual": true,
+          "comparativo_conducta": true, "evolucion": true, "distribucion_territorial": true,
+          "barrios_mayor_registro": true, "horarios_franjas": true, "modalidades_frecuentes": true,
+          "inspecciones_policia": true, "comisarias_familia": true, "fuentes_calidad": true,
+          "nota_metodologica": true
+        }
+      }
+    },
+    {
+      "code": "TERRITORIAL_SPECIAL_DEFAULT",
+      "label": "Boletín Territorial Especial",
+      "bulletin_type": "TERRITORIAL_SPECIAL",
+      "description": "Análisis enfocado de un territorio específico con sus conductas y fuentes principales",
+      "metadata": {
+        "comparison_mode": "YEAR_OVER_YEAR",
+        "default_sources": ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"],
+        "default_sections": {
+          "resumen_ejecutivo": true, "total_hechos": true, "comparacion_anual": true,
+          "comparativo_conducta": true, "evolucion": true, "distribucion_territorial": true,
+          "barrios_mayor_registro": true, "horarios_franjas": true, "modalidades_frecuentes": true,
+          "inspecciones_policia": true, "comisarias_familia": true, "fuentes_calidad": true,
+          "nota_metodologica": true
+        }
+      }
+    }
+  ]
+}

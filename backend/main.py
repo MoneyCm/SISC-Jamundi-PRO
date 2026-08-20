@@ -132,6 +132,10 @@ app.include_router(institutional_indicators.router, prefix="/api/institutional-i
 app.include_router(sisc_cifras.router, prefix="/api/sisc-cifras", tags=["sisc-cifras"])
 app.include_router(source_center.router, prefix="/api/source-center", tags=["source-center"])
 
+# --- Fase 1.5: Router v1 para contrato aprobado ---
+from api import sisc_cifras_v1
+app.include_router(sisc_cifras_v1.router, prefix="/api/sisc-cifras", tags=["sisc-cifras-v1"])
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)

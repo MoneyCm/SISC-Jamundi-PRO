@@ -1439,3 +1439,335 @@ class SiscCifrasService:
             }
             for row in rows
         ]
+
+    # --- Fase 1.5: métodos nuevos para contrato v1 ---
+
+    @staticmethod
+    def get_capabilities() -> Dict[str, Any]:
+        from middleware.rate_limit import get_rate_limit_info
+        catalog_versions = SiscCifrasService._load_catalog_versions()
+        return {
+            "schema_version": "1.0",
+            "status": "ok",
+            "supported_modes": [
+                "OFFICIAL_PUBLICATION",
+                "PUBLIC_EXPLORATION",
+                "INSTITUTIONAL_ANALYSIS",
+            ],
+            "supported_bulletin_types": [
+                "WEEKLY", "MONTHLY", "SEMESTER", "ANNUAL", "TERRITORIAL_SPECIAL",
+            ],
+            "available_sources": [
+                "POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA",
+            ],
+            "territory_scopes": [
+                "TODO_JAMUNDI", "ZONA", "COMUNA", "CORREGIMIENTO",
+                "BARRIO", "CAI", "DEPENDENCIA",
+            ],
+            "conducta_modes": [
+                "ALL_PRIORITIZED", "SPECIFIC", "TOP_INCREASE",
+                "TOP_DECREASE", "HIGHEST_COUNT",
+            ],
+            "dimensions": [
+                "franja_horaria", "dia_semana", "zona", "modalidad",
+                "arma_medio", "clase_sitio", "grupo_edad", "genero",
+            ],
+            "max_period_days": 366,
+            "catalog_versions": catalog_versions,
+            "rate_limit": get_rate_limit_info(),
+        }
+
+    @staticmethod
+    def get_catalog(catalog_name: str) -> Dict[str, Any]:
+        import json
+        from pathlib import Path
+        catalogs_dir = Path(__file__).resolve().parents[1] / "data" / "catalogs"
+        actual_name = "territorios" if catalog_name == "barrios" else catalog_name
+        cat_file = catalogs_dir / f"{actual_name}.json"
+        if not cat_file.exists():
+            return {"status": "error", "error_code": "CATALOG_VERSION_MISMATCH", "message": f"Catálogo '{catalog_name}' no encontrado."}
+        with open(cat_file, encoding="utf-8") as f:
+            data = json.load(f)
+        items = data.get("items", [])
+        return {
+            "schema_version": "1.0",
+            "status": "ok",
+            "catalog": catalog_name,
+            "version": data.get("version", "unknown"),
+            "count": len(items),
+            "items": items,
+        }
+
+    @staticmethod
+    def _load_catalog_versions() -> Dict[str, Any]:
+        import json
+        from pathlib import Path
+        catalogs_dir = Path(__file__).resolve().parents[1] / "data" / "catalogs"
+        mapping = {"conductas": "conductas", "presets": "presets", "territorios": "barrios"}
+        versions: Dict[str, Any] = {}
+        for file_key, response_key in mapping.items():
+            cat_file = catalogs_dir / f"{file_key}.json"
+            if cat_file.exists():
+                with open(cat_file, encoding="utf-8") as f:
+                    data = json.load(f)
+                versions[response_key] = data.get("version", "unknown")
+        return versions
+
+    @staticmethod
+    def build_snapshot_from_publication(
+        publication: Dict[str, Any],
+        requested_filters: Dict[str, Any],
+        resolved_filters: Dict[str, Any],
+        catalog_versions: Dict[str, Any],
+        suppressed_cells: List[Dict[str, Any]],
+        created_by: str,
+        pdf_url: str,
+    ) -> Dict[str, Any]:
+        import hashlib, json as _json
+        period = publication.get("period", {})
+        comp = publication.get("comparison_period", {})
+        sources_data = publication.get("sources", [])
+
+        active_sources = [s.get("code") for s in sources_data if s.get("included")]
+        cutoff_str = period.get("end", date.today().isoformat())
+        records: Dict[str, Any] = {}
+        for s in sources_data:
+            code = s.get("code", "")
+            if code in ("POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"):
+                records[code] = s.get("period_records", 0)
+
+        snapshot = {
+            "requested_filters": requested_filters,
+            "resolved_filters": resolved_filters,
+            "catalog_versions_used": catalog_versions,
+            "warnings": [],
+            "suppressed_cells": suppressed_cells,
+            "generated_at": publication.get("generated_at", datetime.utcnow().isoformat() + "Z"),
+            "published_at": datetime.utcnow().isoformat() + "Z",
+            "created_by": created_by,
+            "pdf_url": pdf_url,
+            "previous_version_id": None,
+        }
+
+        payload = _json.dumps(
+            {k: v for k, v in snapshot.items() if k != "hash_integrity"},
+            sort_keys=True, default=str,
+        )
+        h = hashlib.sha256(payload.encode()).hexdigest()
+        snapshot["hash_integrity"] = {"algorithm": "sha256", "value": h}
+        return snapshot
+
+    @staticmethod
+    def generate_query_hash(
+        filters: Dict[str, Any],
+        resolved: Dict[str, Any],
+        catalog_versions: Dict[str, Any],
+        dataset_identity: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        import hashlib, json
+        identity = {
+            "requested": filters,
+            "resolved": resolved,
+            "catalogs": catalog_versions,
+            "dataset": dataset_identity or {},
+        }
+        payload = json.dumps(identity, sort_keys=True, default=str)
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    @staticmethod
+    def adapt_legacy_publication(row: SiscCifrasPublication) -> Dict[str, Any]:
+        import hashlib as _hashlib, json as _json
+        pub = dict(row.publication_json) if row.publication_json else {}
+        period = pub.get("period", {})
+        comp = pub.get("comparison_period", {})
+        sources_data = pub.get("sources", [])
+        active_sources = [s.get("code") for s in sources_data if s.get("included")]
+        records: Dict[str, Any] = {}
+        for s in sources_data:
+            code = s.get("code", "")
+            if code in ("POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"):
+                records[code] = s.get("period_records", 0)
+
+        raw_mode = pub.get("comparison_mode", "YEAR_OVER_YEAR")
+        comparison_mode = raw_mode.upper() if raw_mode else "YEAR_OVER_YEAR"
+
+        resolved_filters = {
+            "period": {
+                "start": period.get("start", ""),
+                "end": period.get("end", ""),
+                "timezone": "America/Bogota",
+                "days": 7,
+            },
+            "comparison": {
+                "mode": comparison_mode,
+                "resolved_by_backend": True,
+                "start": comp.get("start"),
+                "end": comp.get("end"),
+            },
+            "sources": {
+                "active": active_sources,
+                "cutoff_used": period.get("end", ""),
+                "records": records,
+            },
+            "territory": {
+                "scope": "TODO_JAMUNDI",
+                "resolved_barrios": ["TODO_JAMUNDI"],
+            },
+            "conductas": {
+                "mode": "ALL_PRIORITIZED",
+                "resolved_codes": [],
+            },
+        }
+        pdf_url = row.pdf_url or f"/api/sisc-cifras/publications/{row.id}/pdf"
+        hash_val = row.hash_integrity.get("value", "") if row.hash_integrity else ""
+        if len(hash_val) != 64:
+            hash_val = _hashlib.sha256(_json.dumps(pub, sort_keys=True, default=str).encode()).hexdigest()
+        return {
+            "requested_filters": row.requested_filters or {},
+            "resolved_filters": resolved_filters,
+            "catalog_versions_used": row.catalog_versions_used or {},
+            "warnings": [],
+            "suppressed_cells": row.suppressed_cells or [],
+            "hash_integrity": {"algorithm": "sha256", "value": hash_val},
+            "generated_at": pub.get("generated_at", ""),
+            "published_at": row.created_at.isoformat() if row.created_at else "",
+            "created_by": row.created_by or "legacy",
+            "pdf_url": pdf_url,
+            "previous_version_id": None,
+        }
+
+    @staticmethod
+    def find_existing_by_query_hash(db: Session, query_hash: str) -> Optional[SiscCifrasPublication]:
+        return (
+            db.query(SiscCifrasPublication)
+            .filter(
+                SiscCifrasPublication.query_hash == query_hash,
+                SiscCifrasPublication.status != "SUPERSEDED",
+            )
+            .first()
+        )
+
+    @classmethod
+    def collect_dataset_identity(cls, db: Session, start: date, end: date) -> Dict[str, Any]:
+        identity: Dict[str, Any] = {}
+        today = date.today()
+        tomorrow = datetime.combine(today + timedelta(days=1), datetime.min.time())
+
+        if not cls.database_available(db):
+            return {"POLICIA_SEMANAL": {}, "INSPECCIONES_RNMC": {}, "COMISARIAS_FAMILIA": {}}
+
+        cutoff_policia = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+        ).scalar()
+        unique_policia = int(db.query(hechos_unicos_expr()).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+            HechoSeguridad.fecha_evento >= start,
+            HechoSeguridad.fecha_evento <= min(end, today),
+        ).scalar() or 0)
+        identity["POLICIA_SEMANAL"] = {
+            "cutoff_date": cls.iso_date(cutoff_policia),
+            "unique_count": unique_policia,
+        }
+
+        cutoff_insp = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(
+            *cls.inspection_public_filters(),
+        ).scalar()
+        unique_insp = db.query(InspeccionActuacion.id).filter(
+            *cls.inspection_public_filters(),
+            InspeccionActuacion.fecha_actuacion >= datetime.combine(start, datetime.min.time()),
+            InspeccionActuacion.fecha_actuacion < min(
+                datetime.combine(end + timedelta(days=1), datetime.min.time()), tomorrow
+            ),
+        ).count()
+        identity["INSPECCIONES_RNMC"] = {
+            "cutoff_date": cls.iso_date(cutoff_insp),
+            "unique_count": unique_insp,
+        }
+
+        cutoff_comis = db.query(func.max(InstitutionalDataBatch.cutoff_date)).filter(
+            InstitutionalDataBatch.program == "COMISARIAS",
+            InstitutionalDataBatch.validation_status == "APPROVED",
+        ).scalar()
+        unique_comis = db.query(InstitutionalIndicator.id).join(
+            InstitutionalDataBatch,
+            InstitutionalIndicator.batch_id == InstitutionalDataBatch.id,
+        ).filter(
+            InstitutionalDataBatch.program == "COMISARIAS",
+            InstitutionalDataBatch.validation_status == "APPROVED",
+            InstitutionalIndicator.is_public.is_(True),
+        ).count()
+        identity["COMISARIAS_FAMILIA"] = {
+            "cutoff_date": cls.iso_date(cutoff_comis),
+            "unique_count": unique_comis,
+        }
+        return identity
+
+    @classmethod
+    def query_explore_data(
+        cls,
+        db: Session,
+        *,
+        edition_type: str,
+        period_start: date,
+        period_end: date,
+        comparison_mode: str,
+        source_codes: List[str],
+        territory_scope: str,
+        territory_codes: List[str],
+        conducta_mode: str,
+        conducta_codes: List[str],
+    ) -> Dict[str, Any]:
+        start, end = cls.period_bounds(edition_type, period_start, period_end)
+        prev_start, prev_end, comparison_label, resolved_comparison_mode = cls.comparison_bounds(
+            edition_type, comparison_mode, start, end
+        )
+
+        if not cls.database_available(db):
+            return {"indicators": [], "sources": [], "resolved_comparison_mode": resolved_comparison_mode,
+                    "comparison_label": comparison_label, "start": start, "end": end}
+
+        indicators = cls.collect_indicators(
+            db, start, end, prev_start, prev_end, source_codes, edition_type=edition_type,
+        )
+
+        if conducta_mode == "SPECIFIC" and conducta_codes:
+            allowed = set(c.upper() for c in conducta_codes)
+            aliases = cls._load_conducta_aliases()
+            code_to_aliases = {}
+            for code, alias_list in aliases.items():
+                code_to_aliases[code.upper()] = {a.upper() for a in alias_list}
+                code_to_aliases[code.upper()].add(code.upper())
+            matched_names: set = set()
+            for code in allowed:
+                matched_names.update(code_to_aliases.get(code, {code}))
+            indicators = [
+                i for i in indicators
+                if i.indicator_name.upper() in matched_names
+                or i.indicator_code.upper() in matched_names
+                or i.category == "Conducta"
+            ]
+
+        sources = cls.publication_sources(
+            db, edition_type=edition_type, start=start, end=end,
+            prev_start=prev_start, prev_end=prev_end, source_codes=source_codes,
+        )
+        return {
+            "indicators": indicators,
+            "sources": sources,
+            "resolved_comparison_mode": resolved_comparison_mode,
+            "comparison_label": comparison_label,
+            "start": start,
+            "end": end,
+        }
+
+    @staticmethod
+    def _load_conducta_aliases() -> Dict[str, List[str]]:
+        import json
+        from pathlib import Path
+        catalogs_dir = Path(__file__).resolve().parents[1] / "data" / "catalogs"
+        cat_file = catalogs_dir / "conductas.json"
+        if not cat_file.exists():
+            return {}
+        with open(cat_file, encoding="utf-8") as f:
+            data = json.load(f)
+        return {item["code"]: item.get("aliases", []) for item in data.get("items", [])}

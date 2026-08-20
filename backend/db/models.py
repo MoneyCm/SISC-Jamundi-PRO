@@ -101,6 +101,19 @@ def create_tables():
                 conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_rnmc_source_fingerprint ON rnmc_measures (source_id, event_fingerprint);"))
                 conn.execute(text("ALTER TABLE institutional_data_batches ADD COLUMN IF NOT EXISTS reporting_basis VARCHAR(20) DEFAULT 'CUMULATIVE';"))
                 
+                # --- Fase 1.5: columnas nuevas para contrato v1 ---
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS requested_filters JSONB;"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS resolved_filters JSONB;"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS schema_version VARCHAR(10);"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS pdf_url TEXT;"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS pdf_data BYTEA;"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS pdf_sha256 VARCHAR(64);"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS hash_integrity JSONB;"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS suppressed_cells JSONB DEFAULT '[]'::jsonb;"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS catalog_versions_used JSONB;"))
+                conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS query_hash VARCHAR(64);"))
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_sisc_cifras_query_hash ON sisc_cifras_publications (query_hash) WHERE query_hash IS NOT NULL AND status != 'SUPERSEDED';"))
+                
                 conn.commit()
                 print("Estructura de Base de Datos verificada con éxito.")
             except Exception as e:

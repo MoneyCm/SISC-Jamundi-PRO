@@ -1,3 +1,4 @@
+import hashlib
 import os
 import secrets
 from datetime import date
@@ -5,7 +6,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -82,7 +83,7 @@ def get_operational_summary(
     )
 
 
-@router.post("/generate")
+@router.post("/generate", deprecated=True)
 async def generate_sisc_cifras(
     payload: GenerateSiscCifrasRequest,
     request: Request,
@@ -163,11 +164,12 @@ async def generate_sisc_cifras(
     return publication
 
 
-@router.post("/generate-pdf")
+@router.post("/generate-pdf", deprecated=True)
 def generate_sisc_cifras_pdf(
     payload: GenerateSiscCifrasRequest,
     db: Session = Depends(get_db),
 ):
+    """DEPRECATED: Usar POST /v1/generate que incluye PDF atómico."""
     publication = SiscCifrasService.generate_publication(
         db,
         edition_type=payload.edition_type,
@@ -178,6 +180,13 @@ def generate_sisc_cifras_pdf(
         max_insights=payload.max_insights,
         save_history=False,
     )
+    from services.sisc_cifras_pdf import build_sisc_cifras_pdf
+    try:
+        pdf_bytes = build_sisc_cifras_pdf(publication)
+        return Response(content=pdf_bytes, media_type="application/pdf",
+                        headers={"Content-Disposition": "inline; filename=boletin.pdf"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"PDF generation failed: {e}"})
 
 
 @router.post("/publications/public/generate")
@@ -248,13 +257,6 @@ def generate_and_publish_public_sisc_cifras(
     row.publication_json = snapshot
     db.commit()
     return snapshot
-    period = publication.get("period") or {}
-    filename = f"SISC_en_Cifras_{period.get('start', 'periodo')}_{period.get('end', 'corte')}.pdf"
-    return Response(
-        content=build_sisc_cifras_pdf(publication),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
-    )
 
 
 @router.post("/publications/{publication_id}/approve")
@@ -333,6 +335,19 @@ def get_public_sisc_cifras_pdf(
 
     filename = f"SISC_en_Cifras_{row.period_start.isoformat()}_{row.period_end.isoformat()}.pdf"
     disposition = "attachment" if download else "inline"
+
+    if row.pdf_data is not None:
+        pdf_bytes = bytes(row.pdf_data)
+        if row.pdf_sha256:
+            actual_hash = hashlib.sha256(pdf_bytes).hexdigest()
+            if actual_hash != row.pdf_sha256:
+                pass
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
+        )
+
     return Response(
         content=build_sisc_cifras_pdf(row.publication_json or {}),
         media_type="application/pdf",

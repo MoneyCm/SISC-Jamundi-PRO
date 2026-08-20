@@ -46,3 +46,4 @@ backend/SABANAS_*.xlsx
 backend/static/uploads/
 backend/.pytest_cache/
 tmp/
+.codex-temp-*/
