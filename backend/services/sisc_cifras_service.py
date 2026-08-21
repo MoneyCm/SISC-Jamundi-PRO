@@ -195,7 +195,7 @@ class SiscCifrasService:
             "name": "Inspecciones de Policia / RNMC",
             "domain": "CONVIVENCIA",
             "dependency": "Inspecciones de Policia",
-            "periodicity": "Semanal",
+            "periodicity": "Mensual",
             "coverage": "Jamundi",
             "unit": "actuaciones registradas",
         },
@@ -438,6 +438,42 @@ class SiscCifrasService:
                 latest[entity_key] = batch
         return [latest[key] for key in sorted(latest)]
 
+    @staticmethod
+    def _enumerate_months(start: date, end: date) -> List[str]:
+        months: List[str] = []
+        current = start.replace(day=1)
+        while current <= end:
+            months.append(current.strftime("%Y-%m"))
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+        return months
+
+    @classmethod
+    def _resolve_institutional_batches(
+        cls,
+        db: Session,
+        program: str,
+        start: date,
+        end: date,
+    ) -> Tuple[List[InstitutionalDataBatch], List[str]]:
+        months = cls._enumerate_months(start, end)
+        all_batches: List[InstitutionalDataBatch] = []
+        for period_str in months:
+            batches = cls.latest_batches_by_entity(
+                db.query(InstitutionalDataBatch).filter(
+                    InstitutionalDataBatch.program == program,
+                    InstitutionalDataBatch.validation_status == "APPROVED",
+                    InstitutionalDataBatch.period == period_str,
+                ).order_by(
+                    InstitutionalDataBatch.reporting_entity.asc(),
+                    InstitutionalDataBatch.version.desc(),
+                ).all()
+            )
+            all_batches.extend(batches)
+        return all_batches, months
+
     @classmethod
     def publication_sources(
         cls,
@@ -470,38 +506,11 @@ class SiscCifrasService:
             )
 
             if code == "COMISARIAS_FAMILIA":
-                is_monthly = edition_type == "monthly" or (
-                    edition_type is None and (end - start).days + 1 >= 28
+                batches, covered_months = cls._resolve_institutional_batches(
+                    db, "COMISARIAS", start, end,
                 )
-                if not is_monthly:
-                    source.update(
-                        {
-                            "coverage_status": "not_applicable",
-                            "status_note": "Fuente mensual; se incorpora unicamente en el boletin mensual.",
-                        }
-                    )
-                    result.append(source)
-                    continue
-
-                target_period = end.strftime("%Y-%m")
-                previous_period = prev_end.strftime("%Y-%m")
-                batches = cls.latest_batches_by_entity(
-                    db.query(InstitutionalDataBatch).filter(
-                        InstitutionalDataBatch.program == "COMISARIAS",
-                        InstitutionalDataBatch.validation_status == "APPROVED",
-                        InstitutionalDataBatch.period == target_period,
-                        InstitutionalDataBatch.cutoff_date >= start,
-                        InstitutionalDataBatch.cutoff_date <= end,
-                    ).order_by(InstitutionalDataBatch.reporting_entity.asc(), InstitutionalDataBatch.version.desc()).all()
-                )
-                previous_batches = cls.latest_batches_by_entity(
-                    db.query(InstitutionalDataBatch).filter(
-                        InstitutionalDataBatch.program == "COMISARIAS",
-                        InstitutionalDataBatch.validation_status == "APPROVED",
-                        InstitutionalDataBatch.period == previous_period,
-                        InstitutionalDataBatch.cutoff_date >= prev_start,
-                        InstitutionalDataBatch.cutoff_date <= prev_end,
-                    ).order_by(InstitutionalDataBatch.reporting_entity.asc(), InstitutionalDataBatch.version.desc()).all()
+                prev_batches, prev_covered_months = cls._resolve_institutional_batches(
+                    db, "COMISARIAS", prev_start, prev_end,
                 )
 
                 if batches:
@@ -510,7 +519,7 @@ class SiscCifrasService:
                         if item.is_public and float(item.value) >= item.privacy_threshold
                     ]
                     previous_public_items = [
-                        item for batch in previous_batches for item in batch.indicators
+                        item for batch in prev_batches for item in batch.indicators
                         if item.is_public and float(item.value) >= item.privacy_threshold
                     ]
                     source.update(
@@ -521,18 +530,20 @@ class SiscCifrasService:
                             "included": bool(public_items),
                             "comparable": bool(previous_public_items),
                             "publishable": bool(public_items) and source.get("quality_status") == "VALIDADO",
-                            "period_label": target_period,
+                            "covered_periods": covered_months,
+                            "period_label": ",".join(covered_months),
                             "reporting_basis": sorted({batch.reporting_basis for batch in batches}),
                             "reporting_entities": sorted({batch.reporting_entity for batch in batches}),
-                            "status_note": None if public_items else "El corte existe, pero no contiene indicadores publicables.",
+                            "status_note": None if public_items else "Los cortes existen, pero no contienen indicadores publicables.",
                         }
                     )
                 else:
                     cutoff_text = source.get("last_cutoff_date")
                     cutoff = date.fromisoformat(cutoff_text) if cutoff_text else None
                     source["coverage_status"] = "stale" if cutoff and cutoff < start else "missing"
+                    periods_str = ",".join(covered_months)
                     source["status_note"] = (
-                        f"No hay un corte aprobado de Comisarias para {target_period}."
+                        f"No hay cortes aprobados de Comisarias para los periodos [{periods_str}]."
                         + (f" Ultimo corte disponible: {cutoff.isoformat()}." if cutoff else "")
                     )
                 result.append(source)
@@ -1127,38 +1138,18 @@ class SiscCifrasService:
         *,
         edition_type: Optional[str] = None,
     ) -> List[Indicator]:
-        is_monthly = edition_type == "monthly" or (
-            edition_type is None and (end - start).days + 1 >= 28
-        )
-        if not is_monthly:
-            return []
-
-        target_period = end.strftime("%Y-%m")
-        previous_period = prev_end.strftime("%Y-%m")
-        latest_batches = cls.latest_batches_by_entity(
-            db.query(InstitutionalDataBatch).filter(
-                InstitutionalDataBatch.program == "COMISARIAS",
-                InstitutionalDataBatch.validation_status == "APPROVED",
-                InstitutionalDataBatch.period == target_period,
-                InstitutionalDataBatch.cutoff_date >= start,
-                InstitutionalDataBatch.cutoff_date <= end,
-            ).order_by(InstitutionalDataBatch.reporting_entity.asc(), InstitutionalDataBatch.version.desc()).all()
+        latest_batches, _ = cls._resolve_institutional_batches(
+            db, "COMISARIAS", start, end,
         )
         if not latest_batches:
             return []
 
-        previous_batches = cls.latest_batches_by_entity(
-            db.query(InstitutionalDataBatch).filter(
-                InstitutionalDataBatch.program == "COMISARIAS",
-                InstitutionalDataBatch.validation_status == "APPROVED",
-                InstitutionalDataBatch.period == previous_period,
-                InstitutionalDataBatch.cutoff_date >= prev_start,
-                InstitutionalDataBatch.cutoff_date <= prev_end,
-            ).order_by(InstitutionalDataBatch.reporting_entity.asc(), InstitutionalDataBatch.version.desc()).all()
+        prev_batches, _ = cls._resolve_institutional_batches(
+            db, "COMISARIAS", prev_start, prev_end,
         )
 
         previous_values: Dict[Tuple[str, str], float] = {}
-        for previous_batch in previous_batches:
+        for previous_batch in prev_batches:
             previous_values.update({
                 (previous_batch.reporting_entity, item.indicator): float(item.value)
                 for item in previous_batch.indicators

@@ -1061,3 +1061,161 @@ class TestAnalyzeAuthorization:
         user = _make_user(roles=["ANALYST"])
         assert any(r.code in ("ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN")
                    for r in user.roles)
+
+
+# ===========================================================================
+# 21. _enumerate_months — periodos arbitrarios
+# ===========================================================================
+
+class TestEnumerateMonths:
+    def test_10_day_single_month(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        months = SiscCifrasService._enumerate_months(date(2026, 8, 5), date(2026, 8, 14))
+        assert months == ["2026-08"]
+
+    def test_45_day_two_months(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        months = SiscCifrasService._enumerate_months(date(2026, 6, 15), date(2026, 7, 29))
+        assert months == ["2026-06", "2026-07"]
+
+    def test_100_day_four_months(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        months = SiscCifrasService._enumerate_months(date(2026, 4, 1), date(2026, 7, 9))
+        assert months == ["2026-04", "2026-05", "2026-06", "2026-07"]
+
+    def test_exact_month_boundary(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        months = SiscCifrasService._enumerate_months(date(2026, 7, 1), date(2026, 7, 31))
+        assert months == ["2026-07"]
+
+    def test_cross_year(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        months = SiscCifrasService._enumerate_months(date(2025, 11, 15), date(2026, 2, 10))
+        assert months == ["2025-11", "2025-12", "2026-01", "2026-02"]
+
+
+# ===========================================================================
+# 22. _resolve_institutional_batches — resolución real por lotes
+# ===========================================================================
+
+class TestResolveInstitutionalBatches:
+    def _make_batch(self, program, entity, period, version=1, status="APPROVED", cutoff=None):
+        return SimpleNamespace(
+            id=f"batch-{entity}-{period}-v{version}",
+            program=program,
+            reporting_entity=entity,
+            period=period,
+            version=version,
+            validation_status=status,
+            cutoff_date=cutoff or date(2026, 8, 15),
+            reporting_basis="CUMULATIVE",
+            indicators=[],
+        )
+
+    def _make_indicator(self, indicator, value, unit="casos", is_public=True, privacy_threshold=10):
+        return SimpleNamespace(
+            id=f"ind-{indicator}",
+            indicator=indicator,
+            value=float(value),
+            unit=unit,
+            is_public=is_public,
+            privacy_threshold=privacy_threshold,
+            category="Test",
+        )
+
+    def test_10_day_no_batches_returns_empty(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        from unittest.mock import MagicMock, patch
+
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = []
+
+        batches, months = SiscCifrasService._resolve_institutional_batches(
+            mock_db, "COMISARIAS", date(2026, 8, 5), date(2026, 8, 14),
+        )
+        assert months == ["2026-08"]
+        assert batches == []
+
+    def test_45_day_uses_two_months(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        batch_jun = self._make_batch("COMISARIAS", "Entidad A", "2026-06")
+        batch_jul = self._make_batch("COMISARIAS", "Entidad A", "2026-07")
+        batch_jul.version = 2
+
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.side_effect = [[batch_jun], [batch_jul]]
+
+        batches, months = SiscCifrasService._resolve_institutional_batches(
+            mock_db, "COMISARIAS", date(2026, 6, 15), date(2026, 7, 29),
+        )
+        assert months == ["2026-06", "2026-07"]
+        assert len(batches) == 2
+        periods = [b.period for b in batches]
+        assert "2026-06" in periods
+        assert "2026-07" in periods
+
+    def test_100_day_uses_four_months(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        call_count = [0]
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            m = SimpleNamespace(reporting_entity="Entidad A", version=1,
+                               period=f"2026-{call_count[0]+3:02d}",
+                               program="COMISARIAS", validation_status="APPROVED",
+                               cutoff_date=date(2026, call_count[0]+3, 15),
+                               reporting_basis="CUMULATIVE", indicators=[])
+            return [m]
+
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.side_effect = side_effect
+
+        batches, months = SiscCifrasService._resolve_institutional_batches(
+            mock_db, "COMISARIAS", date(2026, 4, 1), date(2026, 7, 9),
+        )
+        assert months == ["2026-04", "2026-05", "2026-06", "2026-07"]
+        assert len(batches) == 4
+
+
+# ===========================================================================
+# 23. periodicidad de Inspecciones — Mensual, no Semanal
+# ===========================================================================
+
+class TestSourcePeriodicity:
+    def test_inspecciones_is_monthly(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        meta = SiscCifrasService.SOURCE_CATALOG["INSPECCIONES_RNMC"]
+        assert meta["periodicity"] == "Mensual"
+
+    def test_comisarias_is_monthly(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        meta = SiscCifrasService.SOURCE_CATALOG["COMISARIAS_FAMILIA"]
+        assert meta["periodicity"] == "Mensual"
+
+    def test_policia_is_weekly(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        meta = SiscCifrasService.SOURCE_CATALOG["POLICIA_SEMANAL"]
+        assert meta["periodicity"] == "Semanal"
