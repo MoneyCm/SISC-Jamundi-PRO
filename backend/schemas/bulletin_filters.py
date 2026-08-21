@@ -161,6 +161,14 @@ class BulletinFilters(BaseModel):
                 raise ValueError(
                     "bulletin_type es requerido cuando mode = OFFICIAL_PUBLICATION"
                 )
+            if self.sections is None:
+                raise ValueError(
+                    "sections es requerido cuando mode = OFFICIAL_PUBLICATION"
+                )
+            if self.preset is None:
+                raise ValueError(
+                    "preset es requerido cuando mode = OFFICIAL_PUBLICATION"
+                )
             dims = self.dimensions or DimensionFilter()
             if any(vars(dims).values()):
                 raise ValueError(
