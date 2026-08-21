@@ -79,6 +79,7 @@ def _resolve_filters(filters: BulletinFilters, db: Session) -> dict:
                 code: {
                     "cutoff_date": records.get(code, {}).get("cutoff_date"),
                     "unique_count": records.get(code, {}).get("unique_count", 0),
+                    "content_hash": records.get(code, {}).get("content_hash"),
                 }
                 for code in filters.sources
             },
@@ -136,6 +137,8 @@ def generate_v1(
         has_role = any(role in user_role_codes for role in PUBLICATION_ROLES)
         if not has_role:
             raise HTTPException(403, "No tiene permiso para generar boletines.")
+    if filters.mode != "OFFICIAL_PUBLICATION":
+        raise HTTPException(400, "Este endpoint solo acepta mode=OFFICIAL_PUBLICATION.")
 
     filters_dict = filters.model_dump(mode="json")
     resolved = _resolve_filters(filters, db)
@@ -256,9 +259,111 @@ def explore_v1(
     resolved = _resolve_filters(filters, db)
 
     try:
+        edition_type = filters.bulletin_type.lower().replace("_special", "") if filters.bulletin_type else "weekly"
         result_data = SiscCifrasService.query_explore_data(
             db,
-            edition_type=filters.bulletin_type.lower().replace("_special", ""),
+            edition_type=edition_type,
+            period_start=filters.period.start,
+            period_end=filters.period.end,
+            comparison_mode=filters.comparison.mode.lower(),
+            source_codes=filters.sources,
+            territory_scope=filters.territory.scope,
+            territory_codes=filters.territory.selected_codes,
+            conducta_mode=filters.conductas.mode,
+            conducta_codes=filters.conductas.selected_codes,
+        )
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
+
+    indicators = result_data.get("indicators", [])
+    domain_map = {
+        "POLICIA_SEMANAL": ("HECHOS_DELICTIVOS", "HECHOS"),
+        "INSPECCIONES_RNMC": ("ACTUACIONES_INSPECCION", "ACTUACIONES"),
+        "COMISARIAS_FAMILIA": ("ATENCIONES_COMISARIA", "ATENCIONES"),
+    }
+
+    results = []
+    suppressed_cells = []
+    warnings = []
+    for ind in indicators:
+        source_code = ind.source_code
+        if source_code not in domain_map:
+            continue
+        domain, unit = domain_map[source_code]
+        count = int(ind.value)
+        comparison_count = int(ind.comparison_value) if ind.comparison_value is not None else None
+        is_suppressed = count < 5
+        result = {
+            "key": ind.indicator_code,
+            "label": ind.indicator_name,
+            "domain": domain,
+            "source_code": source_code,
+            "unit": unit,
+            "is_suppressed": is_suppressed,
+            "count": None if is_suppressed else count,
+            "comparison_count": None if is_suppressed else comparison_count,
+            "percentage_change": None if is_suppressed else ind.variation_percentage,
+        }
+        if is_suppressed:
+            result["suppression_reason"] = "MINIMUM_CELL_SIZE"
+            suppressed_cells.append({
+                "cell_id": f"{source_code}:{ind.indicator_code}",
+                "reason": "MINIMUM_CELL_SIZE",
+                "source": source_code,
+                "row_label": ind.indicator_name,
+                "column_label": "current",
+                "threshold_used": 5,
+            })
+        results.append(result)
+
+    if any(r["is_suppressed"] for r in results):
+        warnings.append({
+            "code": "SMALL_SAMPLE_SIZE",
+            "message": "Algunos resultados fueron suprimidos por protección estadística (count < 5).",
+            "severity": "warning",
+        })
+
+    query_time_ms = int((time.time() - start_time) * 1000)
+
+    return ExploreResponse(
+        schema_version="1.0",
+        status="partial" if suppressed_cells else "ok",
+        results=results,
+        total_results=len(results),
+        resolved_filters=resolved,
+        warnings=warnings,
+        suppressed_cells=suppressed_cells,
+        metadata={
+            "query_time_ms": query_time_ms,
+            "data_sources_queried": filters.sources,
+            "filters_applied": sum(1 for v in filters_dict.values() if v),
+        },
+    )
+
+
+# --- POST /v1/analyze ---
+
+@router.post("/analyze", response_model=ExploreResponse)
+def analyze_v1(
+    filters: BulletinFilters,
+    request: Request,
+    db: Session = Depends(get_db),
+    user=Depends(get_optional_user),
+):
+    if filters.mode != "INSTITUTIONAL_ANALYSIS":
+        raise HTTPException(400, "Este endpoint solo acepta mode=INSTITUTIONAL_ANALYSIS.")
+    if not user:
+        raise HTTPException(401, "Autenticación requerida para análisis institucional.")
+
+    start_time = time.time()
+    filters_dict = filters.model_dump(mode="json")
+    resolved = _resolve_filters(filters, db)
+
+    try:
+        edition_type = filters.bulletin_type.lower().replace("_special", "") if filters.bulletin_type else "weekly"
+        result_data = SiscCifrasService.query_explore_data(
+            db,
+            edition_type=edition_type,
             period_start=filters.period.start,
             period_end=filters.period.end,
             comparison_mode=filters.comparison.mode.lower(),
