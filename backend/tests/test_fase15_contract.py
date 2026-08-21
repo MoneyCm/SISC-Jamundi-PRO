@@ -949,3 +949,66 @@ class TestExploreData:
         aliases = SiscCifrasService._load_conducta_aliases()
         assert "HURTO_PERSONAS" in aliases
         assert any("HURTO A PERSONAS" in a.upper() for a in aliases["HURTO_PERSONAS"])
+
+
+# ===========================================================================
+# 19. _infer_bulletin_type_from_period
+# ===========================================================================
+
+class TestInferBulletinType:
+    def test_weekly_period(self):
+        from api.sisc_cifras_v1 import _infer_bulletin_type_from_period
+        from datetime import date
+        result = _infer_bulletin_type_from_period(date(2026, 8, 11), date(2026, 8, 17))
+        assert result == "WEEKLY"
+
+    def test_monthly_period(self):
+        from api.sisc_cifras_v1 import _infer_bulletin_type_from_period
+        from datetime import date
+        result = _infer_bulletin_type_from_period(date(2026, 7, 1), date(2026, 7, 31))
+        assert result == "MONTHLY"
+
+    def test_annual_period(self):
+        from api.sisc_cifras_v1 import _infer_bulletin_type_from_period
+        from datetime import date
+        result = _infer_bulletin_type_from_period(date(2026, 1, 1), date(2026, 12, 31))
+        assert result == "ANNUAL"
+
+
+# ===========================================================================
+# 20. analyze endpoint role authorization
+# ===========================================================================
+
+class TestAnalyzeAuthorization:
+    def test_analyze_rejects_no_user(self):
+        from api.sisc_cifras_v1 import analyze_v1
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            analyze_v1(
+                filters=BulletinFilters(**_make_filters(mode="INSTITUTIONAL_ANALYSIS")),
+                request=MagicMock(),
+                db=MagicMock(),
+                user=None,
+            )
+        assert exc_info.value.status_code == 401
+
+    def test_analyze_rejects_wrong_role(self):
+        from api.sisc_cifras_v1 import analyze_v1
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            analyze_v1(
+                filters=BulletinFilters(**_make_filters(mode="INSTITUTIONAL_ANALYSIS")),
+                request=MagicMock(),
+                db=MagicMock(),
+                user=_make_user(roles=["CITIZEN"]),
+            )
+        assert exc_info.value.status_code == 403
+
+    def test_analyze_allows_ti_admin(self):
+        user = _make_user(roles=["TI_ADMIN"])
+        assert any(r.code == "TI_ADMIN" for r in user.roles)
+
+    def test_analyze_allows_analyst(self):
+        user = _make_user(roles=["ANALYST"])
+        assert any(r.code in ("ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN")
+                   for r in user.roles)

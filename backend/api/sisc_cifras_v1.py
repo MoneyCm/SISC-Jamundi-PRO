@@ -33,6 +33,7 @@ from api.auth import get_optional_user
 router = APIRouter(prefix="/v1", tags=["sisc-cifras-v1"])
 
 PUBLICATION_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
+ANALYSIS_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
 
 
 def _resolve_filters(filters: BulletinFilters, db: Session) -> dict:
@@ -99,6 +100,17 @@ def _resolve_filters(filters: BulletinFilters, db: Session) -> dict:
 def _dataset_identity_from_resolved(resolved: dict) -> dict:
     records = resolved.get("sources", {}).get("records", {})
     return {code: info for code, info in records.items() if isinstance(info, dict)}
+
+
+def _infer_bulletin_type_from_period(start, end):
+    """Infer bulletin_type from period duration when not explicitly set."""
+    days = (end - start).days + 1
+    if days <= 8:
+        return "WEEKLY"
+    elif days <= 32:
+        return "MONTHLY"
+    else:
+        return "ANNUAL"
 
 
 # --- GET /v1/capabilities ---
@@ -259,7 +271,10 @@ def explore_v1(
     resolved = _resolve_filters(filters, db)
 
     try:
-        edition_type = filters.bulletin_type.lower().replace("_special", "") if filters.bulletin_type else "weekly"
+        if filters.bulletin_type:
+            edition_type = filters.bulletin_type.lower().replace("_special", "")
+        else:
+            edition_type = _infer_bulletin_type_from_period(filters.period.start, filters.period.end).lower()
         result_data = SiscCifrasService.query_explore_data(
             db,
             edition_type=edition_type,
@@ -354,13 +369,21 @@ def analyze_v1(
         raise HTTPException(400, "Este endpoint solo acepta mode=INSTITUTIONAL_ANALYSIS.")
     if not user:
         raise HTTPException(401, "Autenticación requerida para análisis institucional.")
+    user_role_codes = [r.code for r in (user.roles or [])]
+    if "TI_ADMIN" not in user_role_codes:
+        has_role = any(role in user_role_codes for role in ANALYSIS_ROLES)
+        if not has_role:
+            raise HTTPException(403, "No tiene permiso para análisis institucional.")
 
     start_time = time.time()
     filters_dict = filters.model_dump(mode="json")
     resolved = _resolve_filters(filters, db)
 
     try:
-        edition_type = filters.bulletin_type.lower().replace("_special", "") if filters.bulletin_type else "weekly"
+        if filters.bulletin_type:
+            edition_type = filters.bulletin_type.lower().replace("_special", "")
+        else:
+            edition_type = _infer_bulletin_type_from_period(filters.period.start, filters.period.end).lower()
         result_data = SiscCifrasService.query_explore_data(
             db,
             edition_type=edition_type,
