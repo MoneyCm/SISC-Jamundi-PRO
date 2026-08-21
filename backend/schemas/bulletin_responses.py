@@ -4,7 +4,7 @@ Derived from contracts/bulletin-responses.schema.json ($id: sisc-bulletin-respon
 """
 
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, Literal, Any
+from typing import Annotated, Optional, Literal, Any, Union
 from datetime import date, datetime
 
 
@@ -15,28 +15,69 @@ class HashIntegrity(BaseModel):
     value: str = Field(..., pattern=r"^[a-f0-9]{64}$")
 
 
-class CatalogItem(BaseModel):
+class CatalogMeta(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    schema_version: Literal["1.0"] = "1.0"
+    status: Literal["ok"] = "ok"
+    version: str = Field(..., min_length=1)
+    count: int = Field(..., ge=0)
+
+
+class TerritoryCatalogItem(BaseModel):
     model_config = {"extra": "forbid"}
 
     code: str = Field(..., min_length=1)
     label: str = Field(..., min_length=1)
     parent_code: Optional[str] = None
-    aliases: Optional[list[str]] = None
-    category: Optional[str] = None
-    bulletin_type: Optional[str] = None
-    description: Optional[str] = None
+    metadata: dict[str, Any] = Field(...)
+
+
+class TerritoryCatalogResponse(CatalogMeta):
+    model_config = {"extra": "forbid"}
+
+    catalog: Literal["barrios"] = "barrios"
+    items: list[TerritoryCatalogItem] = Field(default_factory=list)
+
+
+class ConductaCatalogItem(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    code: str = Field(..., min_length=1)
+    label: str = Field(..., min_length=1)
+    aliases: list[str] = Field(..., min_length=1)
+    category: Literal["SEGURIDAD", "CONVIVENCIA"]
     metadata: Optional[dict[str, Any]] = None
 
 
-class CatalogResponse(BaseModel):
+class ConductaCatalogResponse(CatalogMeta):
     model_config = {"extra": "forbid"}
 
-    schema_version: Literal["1.0"] = "1.0"
-    status: Literal["ok"] = "ok"
-    catalog: Literal["barrios", "conductas", "presets"]
-    version: str = Field(..., min_length=1)
-    count: int = Field(..., ge=0)
-    items: list[CatalogItem] = Field(default_factory=list)
+    catalog: Literal["conductas"] = "conductas"
+    items: list[ConductaCatalogItem] = Field(default_factory=list)
+
+
+class PresetCatalogItem(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    code: str = Field(..., min_length=1)
+    label: str = Field(..., min_length=1)
+    bulletin_type: Literal["WEEKLY", "MONTHLY", "SEMESTER", "ANNUAL", "TERRITORIAL_SPECIAL"]
+    description: str = Field(..., min_length=1)
+    metadata: dict[str, Any] = Field(...)
+
+
+class PresetCatalogResponse(CatalogMeta):
+    model_config = {"extra": "forbid"}
+
+    catalog: Literal["presets"] = "presets"
+    items: list[PresetCatalogItem] = Field(default_factory=list)
+
+
+CatalogResponse = Annotated[
+    Union[TerritoryCatalogResponse, ConductaCatalogResponse, PresetCatalogResponse],
+    Field(discriminator="catalog"),
+]
 
 
 class CatalogVersions(BaseModel):

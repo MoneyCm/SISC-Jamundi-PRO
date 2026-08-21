@@ -18,6 +18,12 @@ from schemas.bulletin_filters import BulletinFilters
 from schemas.bulletin_responses import (
     CapabilitiesResponse,
     CatalogResponse,
+    ConductaCatalogItem,
+    ConductaCatalogResponse,
+    TerritoryCatalogItem,
+    TerritoryCatalogResponse,
+    PresetCatalogItem,
+    PresetCatalogResponse,
     ExploreResponse,
     ExploreResult,
     GenerateResponse,
@@ -656,7 +662,7 @@ class TestResponseModels:
         assert gr.status == "ok"
 
     def test_catalog_response_validates(self):
-        cr = CatalogResponse(
+        cr = ConductaCatalogResponse(
             schema_version="1.0",
             status="ok",
             catalog="conductas",
@@ -665,6 +671,7 @@ class TestResponseModels:
             items=[],
         )
         assert cr.count == 8
+        assert cr.catalog == "conductas"
 
     def test_error_response_validates(self):
         er = SiscErrorResponse(
@@ -675,6 +682,112 @@ class TestResponseModels:
             timestamp=datetime(2026, 7, 31),
         )
         assert er.status == "error"
+
+
+# ===========================================================================
+# 12b. Catálogos reales — contenido y estructura por tipo
+# ===========================================================================
+
+CATALOGS_DIR = Path(__file__).resolve().parents[1] / "data" / "catalogs"
+
+
+class TestCatalogsRealContent:
+    """Valida que el contenido real de cada catálogo pase el modelo Pydantic."""
+
+    def test_territorios_real_content(self):
+        data = json.loads((CATALOGS_DIR / "territorios.json").read_text(encoding="utf-8"))
+        resp = TerritoryCatalogResponse(
+            schema_version="1.0",
+            status="ok",
+            catalog="barrios",
+            version=data["version"],
+            count=len(data["items"]),
+            items=[TerritoryCatalogItem(**item) for item in data["items"]],
+        )
+        assert resp.catalog == "barrios"
+        assert resp.count == 12
+        codes = [i.code for i in resp.items]
+        assert "BARRIO-001" in codes
+        assert "COMUNA-001" in codes
+        assert "CORREG-001" in codes
+        barrio = next(i for i in resp.items if i.code == "BARRIO-001")
+        assert barrio.metadata["type"] == "BARRIO"
+        assert barrio.metadata["zone"] == "URBANA"
+        assert isinstance(barrio.metadata["aliases"], list)
+        assert barrio.parent_code == "COMUNA-001"
+
+    def test_conductas_real_content(self):
+        data = json.loads((CATALOGS_DIR / "conductas.json").read_text(encoding="utf-8"))
+        resp = ConductaCatalogResponse(
+            schema_version="1.0",
+            status="ok",
+            catalog="conductas",
+            version=data["version"],
+            count=len(data["items"]),
+            items=[ConductaCatalogItem(**item) for item in data["items"]],
+        )
+        assert resp.catalog == "conductas"
+        assert resp.count == 8
+        codes = [i.code for i in resp.items]
+        assert "HOMICIDIO" in codes
+        assert "VIOLENCIA_INTRAFAMILIAR" in codes
+        hom = next(i for i in resp.items if i.code == "HOMICIDIO")
+        assert hom.category == "SEGURIDAD"
+        assert len(hom.aliases) >= 3
+        assert "HOMICIDIO DOLOSO" in hom.aliases
+        vif = next(i for i in resp.items if i.code == "VIOLENCIA_INTRAFAMILIAR")
+        assert vif.category == "CONVIVENCIA"
+
+    def test_presets_real_content(self):
+        data = json.loads((CATALOGS_DIR / "presets.json").read_text(encoding="utf-8"))
+        resp = PresetCatalogResponse(
+            schema_version="1.0",
+            status="ok",
+            catalog="presets",
+            version=data["version"],
+            count=len(data["items"]),
+            items=[PresetCatalogItem(**item) for item in data["items"]],
+        )
+        assert resp.catalog == "presets"
+        assert resp.count == 5
+        codes = [i.code for i in resp.items]
+        assert "WEEKLY_SECURITY_DEFAULT" in codes
+        assert "TERRITORIAL_SPECIAL_DEFAULT" in codes
+        weekly = next(i for i in resp.items if i.code == "WEEKLY_SECURITY_DEFAULT")
+        assert weekly.bulletin_type == "WEEKLY"
+        assert weekly.metadata["comparison_mode"] == "YEAR_OVER_YEAR"
+        assert "POLICIA_SEMANAL" in weekly.metadata["default_sources"]
+        sections = weekly.metadata["default_sections"]
+        assert isinstance(sections["resumen_ejecutivo"], bool)
+        assert isinstance(sections["inspecciones_policia"], bool)
+
+    def test_catalog_rejects_wrong_discriminator(self):
+        with pytest.raises(Exception):
+            TerritoryCatalogResponse(
+                schema_version="1.0",
+                status="ok",
+                catalog="conductas",
+                version="2026.08",
+                count=1,
+                items=[],
+            )
+
+    def test_catalog_rejects_missing_required_fields(self):
+        with pytest.raises(Exception):
+            ConductaCatalogItem(
+                code="TEST",
+                label="Test",
+            )
+
+    def test_catalog_rejects_extra_fields(self):
+        with pytest.raises(Exception):
+            TerritoryCatalogItem(
+                code="TEST",
+                label="Test",
+                parent_code=None,
+                metadata={"type": "BARRIO", "zone": None, "aliases": []},
+                fake_field="nope",
+            )
 
 
 # ===========================================================================
