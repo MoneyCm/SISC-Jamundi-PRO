@@ -405,6 +405,60 @@ class TestDatasetChange:
         h2 = SiscCifrasService.generate_query_hash(filters, resolved, catalogs, ds2)
         assert h1 != h2
 
+    def test_same_count_same_cutoff_different_content_hash_different_hash(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        filters = {"mode": "PUBLIC_EXPLORATION"}
+        resolved = {"period": {"start": "2026-08-11", "end": "2026-08-17"}}
+        catalogs = {"conductas": "2026.08"}
+
+        ds1 = {
+            "POLICIA_SEMANAL": {
+                "cutoff_date": "2026-08-17",
+                "unique_count": 100,
+                "latest_ingestion_id": "aaa-bbb",
+                "content_hash": "abc123",
+            }
+        }
+        ds2 = {
+            "POLICIA_SEMANAL": {
+                "cutoff_date": "2026-08-17",
+                "unique_count": 100,
+                "latest_ingestion_id": "aaa-bbb",
+                "content_hash": "def456",
+            }
+        }
+
+        h1 = SiscCifrasService.generate_query_hash(filters, resolved, catalogs, ds1)
+        h2 = SiscCifrasService.generate_query_hash(filters, resolved, catalogs, ds2)
+        assert h1 != h2
+
+    def test_same_count_same_content_different_ingestion_different_hash(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        filters = {"mode": "PUBLIC_EXPLORATION"}
+        resolved = {"period": {"start": "2026-08-11", "end": "2026-08-17"}}
+        catalogs = {"conductas": "2026.08"}
+
+        ds1 = {
+            "POLICIA_SEMANAL": {
+                "cutoff_date": "2026-08-17",
+                "unique_count": 100,
+                "latest_ingestion_id": "aaa-bbb",
+                "content_hash": "abc123",
+            }
+        }
+        ds2 = {
+            "POLICIA_SEMANAL": {
+                "cutoff_date": "2026-08-17",
+                "unique_count": 100,
+                "latest_ingestion_id": "xxx-yyy",
+                "content_hash": "abc123",
+            }
+        }
+
+        h1 = SiscCifrasService.generate_query_hash(filters, resolved, catalogs, ds1)
+        h2 = SiscCifrasService.generate_query_hash(filters, resolved, catalogs, ds2)
+        assert h1 != h2
+
 
 # ===========================================================================
 # 8. build_snapshot_from_publication completo

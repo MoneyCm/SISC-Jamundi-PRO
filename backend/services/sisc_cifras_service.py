@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from db.models_hechos_seguridad import HechoSeguridad
-from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator
+from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator, InstitutionalAgentRun
 from db.models_inspecciones import InspeccionActuacion, InspeccionExpediente, InspeccionMedida
 from db.models_sisc_cifras import SiscCifrasPublication
 from services.hechos_metrics import hechos_unicos_expr
@@ -1656,6 +1656,8 @@ class SiscCifrasService:
         if not cls.database_available(db):
             return {"POLICIA_SEMANAL": {}, "INSPECCIONES_RNMC": {}, "COMISARIAS_FAMILIA": {}}
 
+        from sqlalchemy import text as sql_text
+
         cutoff_policia = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
         ).scalar()
@@ -1664,9 +1666,20 @@ class SiscCifrasService:
             HechoSeguridad.fecha_evento >= start,
             HechoSeguridad.fecha_evento <= min(end, today),
         ).scalar() or 0)
+
+        content_hash_policia = db.query(
+            func.md5(func.string_agg(HechoSeguridad.fingerprint, sql_text("'|' ORDER BY fingerprint")))
+        ).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+            HechoSeguridad.fecha_evento >= start,
+            HechoSeguridad.fecha_evento <= min(end, today),
+            HechoSeguridad.fingerprint.isnot(None),
+        ).scalar()
+
         identity["POLICIA_SEMANAL"] = {
             "cutoff_date": cls.iso_date(cutoff_policia),
             "unique_count": unique_policia,
+            "content_hash": content_hash_policia,
         }
 
         cutoff_insp = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(
@@ -1679,9 +1692,22 @@ class SiscCifrasService:
                 datetime.combine(end + timedelta(days=1), datetime.min.time()), tomorrow
             ),
         ).count()
+
+        content_hash_insp = db.query(
+            func.md5(func.string_agg(InspeccionActuacion.fingerprint_hash, sql_text("'|' ORDER BY fingerprint_hash")))
+        ).filter(
+            *cls.inspection_public_filters(),
+            InspeccionActuacion.fecha_actuacion >= datetime.combine(start, datetime.min.time()),
+            InspeccionActuacion.fecha_actuacion < min(
+                datetime.combine(end + timedelta(days=1), datetime.min.time()), tomorrow
+            ),
+            InspeccionActuacion.fingerprint_hash.isnot(None),
+        ).scalar()
+
         identity["INSPECCIONES_RNMC"] = {
             "cutoff_date": cls.iso_date(cutoff_insp),
             "unique_count": unique_insp,
+            "content_hash": content_hash_insp,
         }
 
         cutoff_comis = db.query(func.max(InstitutionalDataBatch.cutoff_date)).filter(
@@ -1696,9 +1722,30 @@ class SiscCifrasService:
             InstitutionalDataBatch.validation_status == "APPROVED",
             InstitutionalIndicator.is_public.is_(True),
         ).count()
+
+        latest_batch = db.query(InstitutionalDataBatch).filter(
+            InstitutionalDataBatch.program == "COMISARIAS",
+            InstitutionalDataBatch.validation_status == "APPROVED",
+        ).order_by(
+            InstitutionalDataBatch.version.desc(),
+            InstitutionalDataBatch.created_at.desc(),
+        ).first()
+
+        source_hash_comis = None
+        latest_batch_id = None
+        if latest_batch:
+            latest_batch_id = str(latest_batch.id)
+            agent_run = db.query(InstitutionalAgentRun).filter(
+                InstitutionalAgentRun.batch_id == latest_batch.id,
+            ).order_by(InstitutionalAgentRun.started_at.desc()).first()
+            if agent_run:
+                source_hash_comis = agent_run.source_sha256
+
         identity["COMISARIAS_FAMILIA"] = {
             "cutoff_date": cls.iso_date(cutoff_comis),
             "unique_count": unique_comis,
+            "latest_batch_id": latest_batch_id,
+            "content_hash": source_hash_comis,
         }
         return identity
 
