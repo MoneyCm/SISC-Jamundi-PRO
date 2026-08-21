@@ -210,7 +210,7 @@ class SiscCifrasService:
     }
 
     @staticmethod
-    def period_bounds(mode: str, period_start: Optional[date], period_end: Optional[date]) -> Tuple[date, date]:
+    def period_bounds(mode: Optional[str], period_start: Optional[date], period_end: Optional[date]) -> Tuple[date, date]:
         if period_start and period_end:
             return period_start, period_end
 
@@ -255,7 +255,7 @@ class SiscCifrasService:
             return comparison_start, comparison_start + duration
 
     @classmethod
-    def comparison_bounds(cls, edition_type: str, mode: str, start: date, end: date) -> Tuple[date, date, str, str]:
+    def comparison_bounds(cls, edition_type: Optional[str], mode: str, start: date, end: date) -> Tuple[date, date, str, str]:
         selected = (mode or "auto").lower()
         if selected == "auto":
             selected = "previous_period" if edition_type == "monthly" else "year_over_year"
@@ -443,7 +443,7 @@ class SiscCifrasService:
         cls,
         db: Session,
         *,
-        edition_type: str,
+        edition_type: Optional[str] = None,
         start: date,
         end: date,
         prev_start: date,
@@ -470,7 +470,10 @@ class SiscCifrasService:
             )
 
             if code == "COMISARIAS_FAMILIA":
-                if edition_type != "monthly":
+                is_monthly = edition_type == "monthly" or (
+                    edition_type is None and (end - start).days + 1 >= 28
+                )
+                if not is_monthly:
                     source.update(
                         {
                             "coverage_status": "not_applicable",
@@ -859,7 +862,7 @@ class SiscCifrasService:
         prev_start: date,
         prev_end: date,
         source_codes: Sequence[str],
-        edition_type: str = "weekly",
+        edition_type: Optional[str] = None,
     ) -> List[Indicator]:
         indicators: List[Indicator] = []
         if "POLICIA_SEMANAL" in source_codes:
@@ -1122,9 +1125,12 @@ class SiscCifrasService:
         prev_start: date,
         prev_end: date,
         *,
-        edition_type: str = "monthly",
+        edition_type: Optional[str] = None,
     ) -> List[Indicator]:
-        if edition_type != "monthly":
+        is_monthly = edition_type == "monthly" or (
+            edition_type is None and (end - start).days + 1 >= 28
+        )
+        if not is_monthly:
             return []
 
         target_period = end.strftime("%Y-%m")
@@ -1754,7 +1760,7 @@ class SiscCifrasService:
         cls,
         db: Session,
         *,
-        edition_type: str,
+        edition_type: Optional[str] = None,
         period_start: date,
         period_end: date,
         comparison_mode: str,

@@ -102,17 +102,6 @@ def _dataset_identity_from_resolved(resolved: dict) -> dict:
     return {code: info for code, info in records.items() if isinstance(info, dict)}
 
 
-def _infer_bulletin_type_from_period(start, end):
-    """Infer bulletin_type from period duration when not explicitly set."""
-    days = (end - start).days + 1
-    if days <= 8:
-        return "WEEKLY"
-    elif days <= 32:
-        return "MONTHLY"
-    else:
-        return "ANNUAL"
-
-
 # --- GET /v1/capabilities ---
 
 @router.get("/capabilities", response_model=CapabilitiesResponse)
@@ -271,13 +260,9 @@ def explore_v1(
     resolved = _resolve_filters(filters, db)
 
     try:
-        if filters.bulletin_type:
-            edition_type = filters.bulletin_type.lower().replace("_special", "")
-        else:
-            edition_type = _infer_bulletin_type_from_period(filters.period.start, filters.period.end).lower()
         result_data = SiscCifrasService.query_explore_data(
             db,
-            edition_type=edition_type,
+            edition_type=filters.bulletin_type,
             period_start=filters.period.start,
             period_end=filters.period.end,
             comparison_mode=filters.comparison.mode.lower(),
@@ -380,13 +365,9 @@ def analyze_v1(
     resolved = _resolve_filters(filters, db)
 
     try:
-        if filters.bulletin_type:
-            edition_type = filters.bulletin_type.lower().replace("_special", "")
-        else:
-            edition_type = _infer_bulletin_type_from_period(filters.period.start, filters.period.end).lower()
         result_data = SiscCifrasService.query_explore_data(
             db,
-            edition_type=edition_type,
+            edition_type=filters.bulletin_type,
             period_start=filters.period.start,
             period_end=filters.period.end,
             comparison_mode=filters.comparison.mode.lower(),

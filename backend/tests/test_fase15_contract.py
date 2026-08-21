@@ -182,6 +182,22 @@ class TestModeConstraints:
         ))
         assert f.mode == "INSTITUTIONAL_ANALYSIS"
 
+    def test_public_allows_bulletin_type_none(self):
+        f = BulletinFilters(**_make_filters(
+            mode="PUBLIC_EXPLORATION",
+            bulletin_type=None,
+        ))
+        assert f.mode == "PUBLIC_EXPLORATION"
+        assert f.bulletin_type is None
+
+    def test_institutional_allows_bulletin_type_none(self):
+        f = BulletinFilters(**_make_filters(
+            mode="INSTITUTIONAL_ANALYSIS",
+            bulletin_type=None,
+        ))
+        assert f.mode == "INSTITUTIONAL_ANALYSIS"
+        assert f.bulletin_type is None
+
     def test_extra_fields_forbidden(self):
         with pytest.raises(Exception):
             BulletinFilters(**_make_filters(custom_field="bad"))
@@ -952,27 +968,60 @@ class TestExploreData:
 
 
 # ===========================================================================
-# 19. _infer_bulletin_type_from_period
+# 19. edition_type=None soporta periodos arbitrarios
 # ===========================================================================
 
-class TestInferBulletinType:
-    def test_weekly_period(self):
-        from api.sisc_cifras_v1 import _infer_bulletin_type_from_period
+class TestOptionalEditionType:
+    def test_period_bounds_returns_explicit_dates(self):
+        from services.sisc_cifras_service import SiscCifrasService
         from datetime import date
-        result = _infer_bulletin_type_from_period(date(2026, 8, 11), date(2026, 8, 17))
-        assert result == "WEEKLY"
+        start, end = SiscCifrasService.period_bounds(None, date(2026, 3, 10), date(2026, 4, 15))
+        assert start == date(2026, 3, 10)
+        assert end == date(2026, 4, 15)
 
-    def test_monthly_period(self):
-        from api.sisc_cifras_v1 import _infer_bulletin_type_from_period
+    def test_comparison_bounds_defaults_to_yoy_when_none(self):
+        from services.sisc_cifras_service import SiscCifrasService
         from datetime import date
-        result = _infer_bulletin_type_from_period(date(2026, 7, 1), date(2026, 7, 31))
-        assert result == "MONTHLY"
+        cs, ce, label, mode = SiscCifrasService.comparison_bounds(None, "auto", date(2026, 3, 10), date(2026, 4, 15))
+        assert mode == "year_over_year"
+        assert cs == date(2025, 3, 10)
+        assert ce == date(2025, 4, 15)
 
-    def test_annual_period(self):
-        from api.sisc_cifras_v1 import _infer_bulletin_type_from_period
+    def test_comparison_bounds_explicit_yoy_still_works(self):
+        from services.sisc_cifras_service import SiscCifrasService
         from datetime import date
-        result = _infer_bulletin_type_from_period(date(2026, 1, 1), date(2026, 12, 31))
-        assert result == "ANNUAL"
+        cs, ce, label, mode = SiscCifrasService.comparison_bounds(None, "YEAR_OVER_YEAR", date(2026, 3, 10), date(2026, 4, 15))
+        assert mode == "year_over_year"
+
+    def test_comparison_bounds_monthly_uses_previous_period(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        cs, ce, label, mode = SiscCifrasService.comparison_bounds("monthly", "auto", date(2026, 7, 1), date(2026, 7, 31))
+        assert mode == "previous_period"
+
+    def test_10_day_period_with_none_edition(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        start, end = SiscCifrasService.period_bounds(None, date(2026, 8, 5), date(2026, 8, 14))
+        assert (end - start).days + 1 == 10
+        cs, ce, label, mode = SiscCifrasService.comparison_bounds(None, "auto", start, end)
+        assert mode == "year_over_year"
+
+    def test_45_day_period_with_none_edition(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        start, end = SiscCifrasService.period_bounds(None, date(2026, 6, 15), date(2026, 7, 29))
+        assert (end - start).days + 1 == 45
+        cs, ce, label, mode = SiscCifrasService.comparison_bounds(None, "auto", start, end)
+        assert mode == "year_over_year"
+
+    def test_100_day_period_with_none_edition(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        start, end = SiscCifrasService.period_bounds(None, date(2026, 4, 1), date(2026, 7, 9))
+        assert (end - start).days + 1 == 100
+        cs, ce, label, mode = SiscCifrasService.comparison_bounds(None, "auto", start, end)
+        assert mode == "year_over_year"
 
 
 # ===========================================================================
