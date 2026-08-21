@@ -59,7 +59,7 @@ class TerritoryFilter(BaseModel):
         if self.scope in ("COMUNA", "CORREGIMIENTO", "BARRIO", "CAI", "DEPENDENCIA"):
             if not self.selected_codes:
                 raise ValueError(
-                    f"territory.selected_codes no puede estar vacío cuando scope = {self.scope}"
+                    f"territory.selected_codes no puede estar vacio cuando scope = {self.scope}"
                 )
         return self
 
@@ -80,7 +80,7 @@ class ConductaFilter(BaseModel):
     def _validate_conductas(self) -> "ConductaFilter":
         if self.mode == "SPECIFIC" and not self.selected_codes:
             raise ValueError(
-                "conductas.selected_codes no puede estar vacío cuando mode = SPECIFIC"
+                "conductas.selected_codes no puede estar vacio cuando mode = SPECIFIC"
             )
         return self
 
@@ -140,9 +140,9 @@ class BulletinFilters(BaseModel):
     mode: Literal[
         "OFFICIAL_PUBLICATION", "PUBLIC_EXPLORATION", "INSTITUTIONAL_ANALYSIS"
     ]
-    bulletin_type: Literal[
-        "WEEKLY", "MONTHLY", "SEMESTER", "ANNUAL", "TERRITORIAL_SPECIAL"
-    ]
+    bulletin_type: Optional[
+        Literal["WEEKLY", "MONTHLY", "SEMESTER", "ANNUAL", "TERRITORIAL_SPECIAL"]
+    ] = None
     period: PeriodFilter
     comparison: ComparisonFilter
     sources: list[
@@ -157,18 +157,14 @@ class BulletinFilters(BaseModel):
     @model_validator(mode="after")
     def _validate_mode_constraints(self) -> "BulletinFilters":
         if self.mode == "OFFICIAL_PUBLICATION":
-            if self.preset is None:
+            if self.bulletin_type is None:
                 raise ValueError(
-                    "preset es requerido cuando mode = OFFICIAL_PUBLICATION"
-                )
-            if self.sections is None:
-                raise ValueError(
-                    "sections es requerido cuando mode = OFFICIAL_PUBLICATION"
+                    "bulletin_type es requerido cuando mode = OFFICIAL_PUBLICATION"
                 )
             dims = self.dimensions or DimensionFilter()
             if any(vars(dims).values()):
                 raise ValueError(
-                    "dimensions debe estar vacío cuando mode = OFFICIAL_PUBLICATION"
+                    "dimensions debe estar vacio cuando mode = OFFICIAL_PUBLICATION"
                 )
         if self.mode == "PUBLIC_EXPLORATION":
             if self.sections is not None:

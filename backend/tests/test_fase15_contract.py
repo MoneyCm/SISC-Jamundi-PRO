@@ -161,13 +161,13 @@ class TestModeConstraints:
                 sections={"resumen_ejecutivo": True},
             ))
 
-    def test_official_requires_preset(self):
-        with pytest.raises(Exception):
-            BulletinFilters(**_official_filters(preset=None))
+    def test_official_allows_optional_preset(self):
+        f = BulletinFilters(**_official_filters(preset=None))
+        assert f.preset is None
 
-    def test_official_requires_sections(self):
-        with pytest.raises(Exception):
-            BulletinFilters(**_official_filters(sections=None))
+    def test_official_allows_optional_sections(self):
+        f = BulletinFilters(**_official_filters(sections=None))
+        assert f.sections is None
 
     def test_official_rejects_dimensions(self):
         with pytest.raises(Exception):
