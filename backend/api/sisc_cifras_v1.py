@@ -58,7 +58,13 @@ def _resolve_filters(filters: BulletinFilters, db: Session) -> dict:
     elif filters.territory.scope == "COMUNA":
         resolved_barrios = filters.territory.selected_codes
 
-    records = SiscCifrasService.collect_dataset_identity(db, start, end)
+    records = {}
+    try:
+        records = SiscCifrasService.collect_dataset_identity(
+            db, start, end, source_codes=filters.sources,
+        )
+    except Exception:
+        pass
 
     return {
         "period": {
