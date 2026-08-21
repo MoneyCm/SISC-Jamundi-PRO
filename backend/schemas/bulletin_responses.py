@@ -288,6 +288,12 @@ class ExploreResult(BaseModel):
             "SOURCE_REDACTION",
         ]
     ] = None
+    coverage_type: Literal["EXACT", "CONTEXT"] = "EXACT"
+    source_period: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}$")
+    cutoff_date: Optional[date] = None
+    context_label: Optional[str] = None
+    reporting_entity: Optional[str] = None
+    reporting_basis: Optional[Literal["CUMULATIVE", "MONTHLY"]] = None
 
     @model_validator(mode="after")
     def _validate_domain_consistency(self) -> "ExploreResult":
@@ -328,6 +334,35 @@ class ExploreResult(BaseModel):
             if self.suppression_reason is not None:
                 raise ValueError(
                     "suppression_reason no debe enviarse cuando is_suppressed=false"
+                )
+        if self.coverage_type == "CONTEXT":
+            if not self.source_period:
+                raise ValueError(
+                    "source_period es requerido cuando coverage_type=CONTEXT"
+                )
+            if self.cutoff_date is None:
+                raise ValueError(
+                    "cutoff_date es requerido cuando coverage_type=CONTEXT"
+                )
+            if not self.context_label:
+                raise ValueError(
+                    "context_label es requerido cuando coverage_type=CONTEXT"
+                )
+            if not self.reporting_entity:
+                raise ValueError(
+                    "reporting_entity es requerido cuando coverage_type=CONTEXT"
+                )
+            if not self.reporting_basis:
+                raise ValueError(
+                    "reporting_basis es requerido cuando coverage_type=CONTEXT"
+                )
+            if self.comparison_count is not None:
+                raise ValueError(
+                    "comparison_count debe ser null cuando coverage_type=CONTEXT"
+                )
+            if self.percentage_change is not None:
+                raise ValueError(
+                    "percentage_change debe ser null cuando coverage_type=CONTEXT"
                 )
         return self
 

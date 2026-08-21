@@ -102,6 +102,76 @@ def _dataset_identity_from_resolved(resolved: dict) -> dict:
     return {code: info for code, info in records.items() if isinstance(info, dict)}
 
 
+DOMAIN_MAP = {
+    "POLICIA_SEMANAL": ("HECHOS_DELICTIVOS", "HECHOS"),
+    "INSPECCIONES_RNMC": ("ACTUACIONES_INSPECCION", "ACTUACIONES"),
+    "COMISARIAS_FAMILIA": ("ATENCIONES_COMISARIA", "ATENCIONES"),
+}
+
+
+def _transform_indicators(indicators, start_date: date) -> tuple:
+    results = []
+    suppressed_cells = []
+    warnings = []
+    for ind in indicators:
+        source_code = ind.source_code
+        if source_code not in DOMAIN_MAP:
+            continue
+        domain, unit = DOMAIN_MAP[source_code]
+        md = ind.metadata or {}
+        coverage_type = md.get("coverage_type", "EXACT")
+        is_context = coverage_type == "CONTEXT"
+
+        value = ind.value
+        is_suppressed = value is None or value < 5
+        count = None if is_suppressed else int(value)
+        if is_context:
+            comparison_count = None
+            pct_change = None
+        else:
+            comparison_count = None if is_suppressed else (
+                int(ind.comparison_value) if ind.comparison_value is not None else None
+            )
+            pct_change = None if is_suppressed else ind.variation_percentage
+
+        result = {
+            "key": ind.indicator_code,
+            "label": ind.indicator_name,
+            "domain": domain,
+            "source_code": source_code,
+            "unit": unit,
+            "is_suppressed": is_suppressed,
+            "count": count,
+            "comparison_count": comparison_count,
+            "percentage_change": pct_change,
+            "coverage_type": coverage_type,
+            "source_period": md.get("period"),
+            "cutoff_date": ind.cutoff_date,
+            "context_label": f"Corte mensual {md.get('period', '')}" if is_context else None,
+            "reporting_entity": md.get("reporting_entity"),
+            "reporting_basis": md.get("reporting_basis"),
+        }
+        if is_suppressed:
+            result["suppression_reason"] = "MINIMUM_CELL_SIZE"
+            suppressed_cells.append({
+                "cell_id": f"{source_code}:{ind.indicator_code}",
+                "reason": result["suppression_reason"],
+                "source": source_code,
+                "row_label": ind.indicator_name,
+                "column_label": "current",
+                "threshold_used": 5,
+            })
+        results.append(result)
+
+    if any(r["is_suppressed"] for r in results):
+        warnings.append({
+            "code": "SMALL_SAMPLE_SIZE",
+            "message": "Algunos resultados fueron suprimidos por protección estadística (count < 5).",
+            "severity": "warning",
+        })
+    return results, suppressed_cells, warnings
+
+
 # --- GET /v1/capabilities ---
 
 @router.get("/capabilities", response_model=CapabilitiesResponse)
@@ -276,52 +346,7 @@ def explore_v1(
         raise HTTPException(500, detail=str(e))
 
     indicators = result_data.get("indicators", [])
-    domain_map = {
-        "POLICIA_SEMANAL": ("HECHOS_DELICTIVOS", "HECHOS"),
-        "INSPECCIONES_RNMC": ("ACTUACIONES_INSPECCION", "ACTUACIONES"),
-        "COMISARIAS_FAMILIA": ("ATENCIONES_COMISARIA", "ATENCIONES"),
-    }
-
-    results = []
-    suppressed_cells = []
-    warnings = []
-    for ind in indicators:
-        source_code = ind.source_code
-        if source_code not in domain_map:
-            continue
-        domain, unit = domain_map[source_code]
-        count = int(ind.value)
-        comparison_count = int(ind.comparison_value) if ind.comparison_value is not None else None
-        is_suppressed = count < 5
-        result = {
-            "key": ind.indicator_code,
-            "label": ind.indicator_name,
-            "domain": domain,
-            "source_code": source_code,
-            "unit": unit,
-            "is_suppressed": is_suppressed,
-            "count": None if is_suppressed else count,
-            "comparison_count": None if is_suppressed else comparison_count,
-            "percentage_change": None if is_suppressed else ind.variation_percentage,
-        }
-        if is_suppressed:
-            result["suppression_reason"] = "MINIMUM_CELL_SIZE"
-            suppressed_cells.append({
-                "cell_id": f"{source_code}:{ind.indicator_code}",
-                "reason": "MINIMUM_CELL_SIZE",
-                "source": source_code,
-                "row_label": ind.indicator_name,
-                "column_label": "current",
-                "threshold_used": 5,
-            })
-        results.append(result)
-
-    if any(r["is_suppressed"] for r in results):
-        warnings.append({
-            "code": "SMALL_SAMPLE_SIZE",
-            "message": "Algunos resultados fueron suprimidos por protección estadística (count < 5).",
-            "severity": "warning",
-        })
+    results, suppressed_cells, warnings = _transform_indicators(indicators, filters.period.start)
 
     query_time_ms = int((time.time() - start_time) * 1000)
 
@@ -381,52 +406,7 @@ def analyze_v1(
         raise HTTPException(500, detail=str(e))
 
     indicators = result_data.get("indicators", [])
-    domain_map = {
-        "POLICIA_SEMANAL": ("HECHOS_DELICTIVOS", "HECHOS"),
-        "INSPECCIONES_RNMC": ("ACTUACIONES_INSPECCION", "ACTUACIONES"),
-        "COMISARIAS_FAMILIA": ("ATENCIONES_COMISARIA", "ATENCIONES"),
-    }
-
-    results = []
-    suppressed_cells = []
-    warnings = []
-    for ind in indicators:
-        source_code = ind.source_code
-        if source_code not in domain_map:
-            continue
-        domain, unit = domain_map[source_code]
-        count = int(ind.value)
-        comparison_count = int(ind.comparison_value) if ind.comparison_value is not None else None
-        is_suppressed = count < 5
-        result = {
-            "key": ind.indicator_code,
-            "label": ind.indicator_name,
-            "domain": domain,
-            "source_code": source_code,
-            "unit": unit,
-            "is_suppressed": is_suppressed,
-            "count": None if is_suppressed else count,
-            "comparison_count": None if is_suppressed else comparison_count,
-            "percentage_change": None if is_suppressed else ind.variation_percentage,
-        }
-        if is_suppressed:
-            result["suppression_reason"] = "MINIMUM_CELL_SIZE"
-            suppressed_cells.append({
-                "cell_id": f"{source_code}:{ind.indicator_code}",
-                "reason": "MINIMUM_CELL_SIZE",
-                "source": source_code,
-                "row_label": ind.indicator_name,
-                "column_label": "current",
-                "threshold_used": 5,
-            })
-        results.append(result)
-
-    if any(r["is_suppressed"] for r in results):
-        warnings.append({
-            "code": "SMALL_SAMPLE_SIZE",
-            "message": "Algunos resultados fueron suprimidos por protección estadística (count < 5).",
-            "severity": "warning",
-        })
+    results, suppressed_cells, warnings = _transform_indicators(indicators, filters.period.start)
 
     query_time_ms = int((time.time() - start_time) * 1000)
 

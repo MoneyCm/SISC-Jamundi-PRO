@@ -190,13 +190,34 @@ def _management(title, items, color, styles):
         box = Table([[Paragraph("No existe un corte publicable para el periodo seleccionado.", styles["body"])]], colWidths=[17.1 * cm], rowHeights=[0.8 * cm])
         box.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, BORDER), ("BACKGROUND", (0, 0), (-1, -1), PALE), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 10)]))
         return result + [box]
-    rows = [[Paragraph(x, styles["th"]) for x in ("INDICADOR", "VALOR", "UNIDAD", "CORTE")]]
+
+    has_context = any(
+        (item.get("metadata") or {}).get("coverage_type") == "CONTEXT"
+        for item in items
+    )
+    headers = ["INDICADOR", "VALOR", "UNIDAD", "CORTE"]
+    if has_context:
+        headers.extend(["MES ORIGEN", "NOTA"])
+    rows = [[Paragraph(x, styles["th"]) for x in headers]]
     for item in items[:6]:
-        rows.append([
-            Paragraph(_text(item.get("indicator_name")), styles["td"]), Paragraph(_number(item.get("value")), styles["num"]),
-            Paragraph(_text(item.get("unit"), "-"), styles["num"]), Paragraph(_text(item.get("cutoff_date"), "-"), styles["num"]),
-        ])
-    table = Table(rows, colWidths=[8.2 * cm, 2.4 * cm, 3.1 * cm, 3.4 * cm], repeatRows=1)
+        md = item.get("metadata") or {}
+        is_ctx = md.get("coverage_type") == "CONTEXT"
+        row = [
+            Paragraph(_text(item.get("indicator_name")), styles["td"]),
+            Paragraph(_number(item.get("value")), styles["num"]),
+            Paragraph(_text(item.get("unit"), "-"), styles["num"]),
+            Paragraph(_text(item.get("cutoff_date"), "-"), styles["num"]),
+        ]
+        if has_context:
+            row.append(Paragraph(_text(md.get("period"), "-"), styles["num"]))
+            row.append(Paragraph("Contexto" if is_ctx else "-", styles["num"]))
+        rows.append(row)
+
+    if has_context:
+        col_widths = [6.2 * cm, 1.8 * cm, 2.6 * cm, 2.6 * cm, 2.0 * cm, 1.9 * cm]
+    else:
+        col_widths = [8.2 * cm, 2.4 * cm, 3.1 * cm, 3.4 * cm]
+    table = Table(rows, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ("LINEABOVE", (0, 0), (-1, 0), 0.6, BORDER), ("LINEBELOW", (0, 0), (-1, -1), 0.35, BORDER),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 7),

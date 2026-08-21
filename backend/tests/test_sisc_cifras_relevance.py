@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -114,10 +114,10 @@ def test_partial_month_compares_the_same_days_of_previous_month():
 
 def test_family_batches_keep_latest_version_per_reporting_entity():
     batches = [
-        SimpleNamespace(reporting_entity="Comisaria Primera", version=1),
-        SimpleNamespace(reporting_entity="Comisaria Segunda", version=2),
-        SimpleNamespace(reporting_entity=" comisaria primera ", version=3),
-        SimpleNamespace(reporting_entity="Comisaria Segunda", version=1),
+        SimpleNamespace(reporting_entity="Comisaria Primera", version=1, period="2026-07", created_at=datetime(2026, 7, 1)),
+        SimpleNamespace(reporting_entity="Comisaria Segunda", version=2, period="2026-07", created_at=datetime(2026, 7, 1)),
+        SimpleNamespace(reporting_entity=" comisaria primera ", version=3, period="2026-07", created_at=datetime(2026, 7, 2)),
+        SimpleNamespace(reporting_entity="Comisaria Segunda", version=1, period="2026-06", created_at=datetime(2026, 6, 1)),
     ]
 
     latest = SiscCifrasService.latest_batches_by_entity(batches)
@@ -146,20 +146,59 @@ def test_fallback_publication_exposes_non_publishable_source_contract():
     assert publication["sources"][0]["publishable"] is False
 
 
-def test_weekly_publication_does_not_query_monthly_family_batches():
-    db = MagicMock()
+def test_weekly_bulletin_uses_context_when_no_exact_family_data():
+    from datetime import datetime
 
-    indicators = SiscCifrasService.family_indicators(
+    june_batch = SimpleNamespace(
+        id="batch-jun",
+        program="COMISARIAS",
+        reporting_entity="Comisaria Central",
+        period="2026-06",
+        version=1,
+        validation_status="APPROVED",
+        cutoff_date=date(2026, 6, 30),
+        reporting_basis="CUMULATIVE",
+        created_at=datetime(2026, 6, 30),
+        indicators=[
+            SimpleNamespace(
+                id="ind-1",
+                indicator="Atenciones por VIIF",
+                value=25.0,
+                unit="casos",
+                is_public=True,
+                privacy_threshold=10,
+                category="Familia",
+            )
+        ],
+    )
+
+    db = MagicMock()
+    mock_query = MagicMock()
+    db.query.return_value = mock_query
+    mock_query.filter.return_value = mock_query
+    mock_query.order_by.return_value = mock_query
+    mock_query.all.return_value = [june_batch]
+
+    exact = SiscCifrasService.family_indicators(
         db,
-        date(2026, 7, 5),
-        date(2026, 7, 11),
-        date(2025, 7, 5),
-        date(2025, 7, 11),
+        date(2026, 7, 21),
+        date(2026, 7, 27),
+        date(2025, 7, 21),
+        date(2025, 7, 27),
         edition_type="weekly",
     )
 
-    assert indicators == []
-    db.query.assert_not_called()
+    context = SiscCifrasService.family_context_indicators(
+        db,
+        date(2026, 7, 21),
+        date(2026, 7, 27),
+        edition_type="weekly",
+    )
+
+    assert len(exact) == 0, "Weekly period should not have EXACT family data"
+    assert len(context) >= 1, "Weekly period should get CONTEXT from previous closed month"
+    assert all(ind.metadata.get("coverage_type") == "CONTEXT" for ind in context)
+    assert all(ind.comparison_value is None for ind in context)
 
 
 def test_operational_summary_reuses_period_for_inspections_and_family(monkeypatch):

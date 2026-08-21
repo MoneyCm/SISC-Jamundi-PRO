@@ -1100,6 +1100,42 @@ class TestEnumerateMonths:
 
 
 # ===========================================================================
+# 21b. _is_month_fully_covered
+# ===========================================================================
+
+class TestMonthFullyCovered:
+    def test_full_month_exact_boundary(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        assert SiscCifrasService._is_month_fully_covered("2026-07", date(2026, 7, 1), date(2026, 7, 31)) is True
+
+    def test_partial_month_start_after_first(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        assert SiscCifrasService._is_month_fully_covered("2026-07", date(2026, 7, 15), date(2026, 7, 31)) is False
+
+    def test_partial_month_end_before_last(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        assert SiscCifrasService._is_month_fully_covered("2026-08", date(2026, 8, 1), date(2026, 8, 14)) is False
+
+    def test_fully_covered_middle_month(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        assert SiscCifrasService._is_month_fully_covered("2026-06", date(2026, 5, 10), date(2026, 7, 20)) is True
+
+    def test_feb_leap_year(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        assert SiscCifrasService._is_month_fully_covered("2028-02", date(2028, 2, 1), date(2028, 2, 29)) is True
+
+    def test_feb_non_leap_year(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        assert SiscCifrasService._is_month_fully_covered("2026-02", date(2026, 2, 1), date(2026, 2, 28)) is True
+
+
+# ===========================================================================
 # 22. _resolve_institutional_batches — resolución real por lotes
 # ===========================================================================
 
@@ -1115,6 +1151,7 @@ class TestResolveInstitutionalBatches:
             cutoff_date=cutoff or date(2026, 8, 15),
             reporting_basis="CUMULATIVE",
             indicators=[],
+            created_at=datetime(2026, 8, 1),
         )
 
     def _make_indicator(self, indicator, value, unit="casos", is_public=True, privacy_threshold=10):
@@ -1128,10 +1165,27 @@ class TestResolveInstitutionalBatches:
             category="Test",
         )
 
+    def _mock_db(self, period_batches_map):
+        from unittest.mock import MagicMock
+        call_count = [0]
+        periods_order = sorted(period_batches_map.keys())
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.side_effect = lambda: period_batches_map.get(periods_order[call_count[0]] if call_count[0] < len(periods_order) else "", [])
+        def inc_call(*args, **kwargs):
+            result = period_batches_map.get(periods_order[call_count[0]] if call_count[0] < len(periods_order) else "", [])
+            call_count[0] += 1
+            return result
+        mock_query.all.side_effect = inc_call
+        return mock_db
+
     def test_10_day_no_batches_returns_empty(self):
         from services.sisc_cifras_service import SiscCifrasService
         from datetime import date
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         mock_db = MagicMock()
         mock_query = MagicMock()
@@ -1140,64 +1194,170 @@ class TestResolveInstitutionalBatches:
         mock_query.order_by.return_value = mock_query
         mock_query.all.return_value = []
 
-        batches, months = SiscCifrasService._resolve_institutional_batches(
+        result = SiscCifrasService._resolve_institutional_batches(
             mock_db, "COMISARIAS", date(2026, 8, 5), date(2026, 8, 14),
         )
-        assert months == ["2026-08"]
-        assert batches == []
+        assert result["requested_months"] == ["2026-08"]
+        assert result["batches"] == []
+        assert result["covered_months"] == []
+        assert result["missing_months"] == []
+        assert result["context_months"] == []
 
-    def test_45_day_uses_two_months(self):
+    def test_full_month_with_batch_is_covered(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        batch = self._make_batch("COMISARIAS", "Entidad A", "2026-07")
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = [batch]
+
+        result = SiscCifrasService._resolve_institutional_batches(
+            mock_db, "COMISARIAS", date(2026, 7, 1), date(2026, 7, 31),
+        )
+        assert result["covered_months"] == ["2026-07"]
+        assert result["missing_months"] == []
+        assert result["context_months"] == []
+
+    def test_partial_month_with_batch_is_context(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        batch = self._make_batch("COMISARIAS", "Entidad A", "2026-08")
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = [batch]
+
+        result = SiscCifrasService._resolve_institutional_batches(
+            mock_db, "COMISARIAS", date(2026, 8, 5), date(2026, 8, 14),
+        )
+        assert result["context_months"] == ["2026-08"]
+        assert result["covered_months"] == []
+        assert result["missing_months"] == []
+
+    def test_45_day_one_full_one_partial(self):
         from services.sisc_cifras_service import SiscCifrasService
         from datetime import date
         from unittest.mock import MagicMock
 
         batch_jun = self._make_batch("COMISARIAS", "Entidad A", "2026-06")
         batch_jul = self._make_batch("COMISARIAS", "Entidad A", "2026-07")
-        batch_jul.version = 2
+
+        call_count = [0]
+        def inc_call(*args, **kwargs):
+            result = [[batch_jun], [batch_jul]][call_count[0]]
+            call_count[0] += 1
+            return result
 
         mock_db = MagicMock()
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
-        mock_query.all.side_effect = [[batch_jun], [batch_jul]]
+        mock_query.all.side_effect = inc_call
 
-        batches, months = SiscCifrasService._resolve_institutional_batches(
-            mock_db, "COMISARIAS", date(2026, 6, 15), date(2026, 7, 29),
+        result = SiscCifrasService._resolve_institutional_batches(
+            mock_db, "COMISARIAS", date(2026, 6, 15), date(2026, 7, 31),
         )
-        assert months == ["2026-06", "2026-07"]
-        assert len(batches) == 2
-        periods = [b.period for b in batches]
-        assert "2026-06" in periods
-        assert "2026-07" in periods
+        assert result["requested_months"] == ["2026-06", "2026-07"]
+        assert result["context_months"] == ["2026-06"]
+        assert result["covered_months"] == ["2026-07"]
+        assert result["missing_months"] == []
 
-    def test_100_day_uses_four_months(self):
+    def test_one_month_missing_one_covered(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        batch_jul = self._make_batch("COMISARIAS", "Entidad A", "2026-07")
+
+        call_count = [0]
+        def inc_call(*args, **kwargs):
+            result = [[], [batch_jul]][call_count[0]]
+            call_count[0] += 1
+            return result
+
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.side_effect = inc_call
+
+        result = SiscCifrasService._resolve_institutional_batches(
+            mock_db, "COMISARIAS", date(2026, 6, 1), date(2026, 7, 31),
+        )
+        assert result["requested_months"] == ["2026-06", "2026-07"]
+        assert result["covered_months"] == ["2026-07"]
+        assert result["missing_months"] == ["2026-06"]
+        assert result["context_months"] == []
+
+    def test_100_day_all_full_months(self):
         from services.sisc_cifras_service import SiscCifrasService
         from datetime import date
         from unittest.mock import MagicMock
 
         call_count = [0]
-        def side_effect(*args, **kwargs):
+        def inc_call(*args, **kwargs):
+            idx = call_count[0]
             call_count[0] += 1
-            m = SimpleNamespace(reporting_entity="Entidad A", version=1,
-                               period=f"2026-{call_count[0]+3:02d}",
-                               program="COMISARIAS", validation_status="APPROVED",
-                               cutoff_date=date(2026, call_count[0]+3, 15),
-                               reporting_basis="CUMULATIVE", indicators=[])
-            return [m]
+            months = ["2026-04", "2026-05", "2026-06", "2026-07"]
+            if idx < 4:
+                return [self._make_batch("COMISARIAS", "Entidad A", months[idx])]
+            return []
 
         mock_db = MagicMock()
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
-        mock_query.all.side_effect = side_effect
+        mock_query.all.side_effect = inc_call
 
-        batches, months = SiscCifrasService._resolve_institutional_batches(
+        result = SiscCifrasService._resolve_institutional_batches(
             mock_db, "COMISARIAS", date(2026, 4, 1), date(2026, 7, 9),
         )
-        assert months == ["2026-04", "2026-05", "2026-06", "2026-07"]
-        assert len(batches) == 4
+        assert result["requested_months"] == ["2026-04", "2026-05", "2026-06", "2026-07"]
+        assert result["covered_months"] == ["2026-04", "2026-05", "2026-06"]
+        assert result["missing_months"] == []
+        assert result["context_months"] == ["2026-07"]
+
+    def test_100_day_two_full_two_partial(self):
+        from services.sisc_cifras_service import SiscCifrasService
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        batch_apr = self._make_batch("COMISARIAS", "Entidad A", "2026-04")
+        batch_may = self._make_batch("COMISARIAS", "Entidad A", "2026-05")
+        batch_jun = self._make_batch("COMISARIAS", "Entidad A", "2026-06")
+
+        call_count = [0]
+        def inc_call(*args, **kwargs):
+            idx = call_count[0]
+            call_count[0] += 1
+            return [[batch_apr], [batch_may], [batch_jun], []][idx]
+
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.side_effect = inc_call
+
+        result = SiscCifrasService._resolve_institutional_batches(
+            mock_db, "COMISARIAS", date(2026, 4, 15), date(2026, 7, 20),
+        )
+        assert result["requested_months"] == ["2026-04", "2026-05", "2026-06", "2026-07"]
+        assert result["covered_months"] == ["2026-05", "2026-06"]
+        assert result["context_months"] == ["2026-04"]
+        assert result["missing_months"] == []
 
 
 # ===========================================================================

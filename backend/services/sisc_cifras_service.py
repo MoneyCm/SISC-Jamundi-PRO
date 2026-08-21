@@ -53,7 +53,7 @@ class Indicator:
     category: str
     indicator_code: str
     indicator_name: str
-    value: float
+    value: Optional[float]
     unit: str
     period_start: str
     period_end: str
@@ -427,14 +427,43 @@ class SiscCifrasService:
         return "aligned"
 
     @staticmethod
+    def _normalize_entity(entity: Optional[str]) -> str:
+        normalized = (entity or "").strip().upper()
+        return normalized or "_UNKNOWN"
+
+    @staticmethod
+    def _is_month_closed(period_str: str, cutoff_date) -> bool:
+        if cutoff_date is None:
+            return False
+        import calendar
+        y, m = int(period_str[:4]), int(period_str[5:7])
+        last_day = date(y, m, calendar.monthrange(y, m)[1])
+        return cutoff_date >= last_day
+
+    @staticmethod
+    def _per_entity_coverage(batches: list) -> Dict[str, Dict]:
+        result = {}
+        for batch in batches:
+            entity = SiscCifrasService._normalize_entity(batch.reporting_entity)
+            result[entity] = {
+                "period": batch.period,
+                "cutoff_date": batch.cutoff_date.isoformat() if batch.cutoff_date else None,
+                "closed": SiscCifrasService._is_month_closed(batch.period, batch.cutoff_date),
+            }
+        return result
+
+    @staticmethod
     def latest_batches_by_entity(
         batches: Sequence[InstitutionalDataBatch],
     ) -> List[InstitutionalDataBatch]:
         latest: Dict[str, InstitutionalDataBatch] = {}
-        for batch in batches:
-            entity_key = (batch.reporting_entity or "").strip().upper()
-            current = latest.get(entity_key)
-            if current is None or batch.version > current.version:
+        for batch in sorted(
+            batches,
+            key=lambda b: (b.period or "", b.version or 0, b.created_at or datetime.min),
+            reverse=True,
+        ):
+            entity_key = SiscCifrasService._normalize_entity(batch.reporting_entity)
+            if entity_key not in latest:
                 latest[entity_key] = batch
         return [latest[key] for key in sorted(latest)]
 
@@ -450,6 +479,14 @@ class SiscCifrasService:
                 current = current.replace(month=current.month + 1)
         return months
 
+    @staticmethod
+    def _is_month_fully_covered(month_str: str, start: date, end: date) -> bool:
+        import calendar
+        y, m = int(month_str[:4]), int(month_str[5:7])
+        month_start = date(y, m, 1)
+        month_end = date(y, m, calendar.monthrange(y, m)[1])
+        return start <= month_start and end >= month_end
+
     @classmethod
     def _resolve_institutional_batches(
         cls,
@@ -457,10 +494,15 @@ class SiscCifrasService:
         program: str,
         start: date,
         end: date,
-    ) -> Tuple[List[InstitutionalDataBatch], List[str]]:
-        months = cls._enumerate_months(start, end)
+    ) -> Dict[str, Any]:
+        requested_months = cls._enumerate_months(start, end)
         all_batches: List[InstitutionalDataBatch] = []
-        for period_str in months:
+        covered_months: List[str] = []
+        closed_months: List[str] = []
+        context_months: List[str] = []
+        missing_months: List[str] = []
+
+        for period_str in requested_months:
             batches = cls.latest_batches_by_entity(
                 db.query(InstitutionalDataBatch).filter(
                     InstitutionalDataBatch.program == program,
@@ -471,8 +513,48 @@ class SiscCifrasService:
                     InstitutionalDataBatch.version.desc(),
                 ).all()
             )
-            all_batches.extend(batches)
-        return all_batches, months
+            if batches:
+                all_batches.extend(batches)
+                month_covered = cls._is_month_fully_covered(period_str, start, end)
+                all_closed = all(cls._is_month_closed(period_str, b.cutoff_date) for b in batches)
+                if month_covered and all_closed:
+                    covered_months.append(period_str)
+                    closed_months.append(period_str)
+                else:
+                    context_months.append(period_str)
+            else:
+                if cls._is_month_fully_covered(period_str, start, end):
+                    missing_months.append(period_str)
+
+        return {
+            "batches": all_batches,
+            "requested_months": requested_months,
+            "covered_months": covered_months,
+            "closed_months": closed_months,
+            "context_months": context_months,
+            "missing_months": missing_months,
+        }
+
+    @classmethod
+    def _latest_approved_context_batch(
+        cls,
+        db: Session,
+        program: str,
+        period_end: date,
+    ) -> List[InstitutionalDataBatch]:
+        next_day = datetime.combine(period_end + timedelta(days=1), datetime.min.time())
+        batches = db.query(InstitutionalDataBatch).filter(
+            InstitutionalDataBatch.program == program,
+            InstitutionalDataBatch.validation_status == "APPROVED",
+            InstitutionalDataBatch.cutoff_date <= period_end,
+            InstitutionalDataBatch.created_at < next_day,
+        ).order_by(
+            InstitutionalDataBatch.period.desc(),
+            InstitutionalDataBatch.version.desc(),
+            InstitutionalDataBatch.created_at.desc(),
+        ).all()
+        closed = [b for b in batches if cls._is_month_closed(b.period, b.cutoff_date)]
+        return cls.latest_batches_by_entity(closed)
 
     @classmethod
     def publication_sources(
@@ -506,46 +588,107 @@ class SiscCifrasService:
             )
 
             if code == "COMISARIAS_FAMILIA":
-                batches, covered_months = cls._resolve_institutional_batches(
-                    db, "COMISARIAS", start, end,
-                )
-                prev_batches, prev_covered_months = cls._resolve_institutional_batches(
-                    db, "COMISARIAS", prev_start, prev_end,
-                )
+                resolution = cls._resolve_institutional_batches(db, "COMISARIAS", start, end)
+                prev_resolution = cls._resolve_institutional_batches(db, "COMISARIAS", prev_start, prev_end)
 
-                if batches:
+                closed_set = set(resolution.get("closed_months", resolution["covered_months"]))
+                exact_batches = [b for b in resolution["batches"] if b.period in closed_set]
+                prev_batches = prev_resolution["batches"]
+
+                if exact_batches:
                     public_items = [
-                        item for batch in batches for item in batch.indicators
+                        item for batch in exact_batches for item in batch.indicators
                         if item.is_public and float(item.value) >= item.privacy_threshold
                     ]
                     previous_public_items = [
                         item for batch in prev_batches for item in batch.indicators
                         if item.is_public and float(item.value) >= item.privacy_threshold
                     ]
-                    source.update(
-                        {
-                            "period_records": len(public_items),
-                            "comparison_records": len(previous_public_items),
-                            "coverage_status": "aligned" if public_items else "missing",
-                            "included": bool(public_items),
-                            "comparable": bool(previous_public_items),
-                            "publishable": bool(public_items) and source.get("quality_status") == "VALIDADO",
-                            "covered_periods": covered_months,
-                            "period_label": ",".join(covered_months),
-                            "reporting_basis": sorted({batch.reporting_basis for batch in batches}),
-                            "reporting_entities": sorted({batch.reporting_entity for batch in batches}),
-                            "status_note": None if public_items else "Los cortes existen, pero no contienen indicadores publicables.",
-                        }
-                    )
-                else:
-                    cutoff_text = source.get("last_cutoff_date")
-                    cutoff = date.fromisoformat(cutoff_text) if cutoff_text else None
-                    source["coverage_status"] = "stale" if cutoff and cutoff < start else "missing"
-                    periods_str = ",".join(covered_months)
-                    source["status_note"] = (
-                        f"No hay cortes aprobados de Comisarias para los periodos [{periods_str}]."
-                        + (f" Ultimo corte disponible: {cutoff.isoformat()}." if cutoff else "")
-                    )
+                    fully_covered = not resolution["missing_months"]
+                    source.update({
+                        "period_records": len(public_items),
+                        "comparison_records": len(previous_public_items),
+                        "coverage_status": "aligned" if fully_covered and public_items else (
+                            "partial" if public_items else "missing"
+                        ),
+                        "included": bool(public_items),
+                        "comparable": bool(previous_public_items),
+                        "publishable": fully_covered and bool(public_items) and source.get("quality_status") == "VALIDADO",
+                        "requested_months": resolution["requested_months"],
+                        "covered_months": resolution["covered_months"],
+                        "closed_months": resolution["closed_months"],
+                        "context_months": resolution["context_months"],
+                        "missing_months": resolution["missing_months"],
+                        "period_label": ",".join(resolution["closed_months"]),
+                        "reporting_basis": sorted({batch.reporting_basis for batch in exact_batches}),
+                        "reporting_entities": sorted({batch.reporting_entity for batch in exact_batches}),
+                        "status_note": None if fully_covered and public_items else (
+                            f"Cobertura parcial: meses cerrados [{','.join(resolution['closed_months'])}], "
+                            f"meses parciales [{','.join(resolution['context_months'])}], "
+                            f"meses sin datos [{','.join(resolution['missing_months'])}]."
+                            if resolution["context_months"] or resolution["missing_months"]
+                            else "Los cortes existen, pero no contienen indicadores publicables."
+                        ),
+                    })
+
+                    exact_entities = {cls._normalize_entity(b.reporting_entity) for b in exact_batches}
+                    context_batches = cls._latest_approved_context_batch(db, "COMISARIAS", end)
+                    missing_context = [
+                        b for b in context_batches
+                        if cls._normalize_entity(b.reporting_entity) not in exact_entities
+                    ]
+                    if missing_context:
+                        context_public = [
+                            item for batch in missing_context for item in batch.indicators
+                            if item.is_public and float(item.value) >= item.privacy_threshold
+                        ]
+                        if context_public:
+                            source["period_records"] = source.get("period_records", 0) + len(context_public)
+                            source["included"] = True
+                            per_entity = cls._per_entity_coverage(exact_batches + missing_context)
+                            heterogeneous = len(set(e["period"] for e in per_entity.values())) > 1
+                            source["per_entity_coverage"] = per_entity
+                            source["context_heterogeneous"] = heterogeneous
+                            if heterogeneous:
+                                source["status_note"] = (
+                                    source.get("status_note") or ""
+                                ) + " Cobertura contextual heterogénea por entidad."
+
+                elif not resolution["batches"]:
+                    context_batches = cls._latest_approved_context_batch(db, "COMISARIAS", end)
+                    if context_batches:
+                        public_items = [
+                            item for batch in context_batches for item in batch.indicators
+                            if item.is_public and float(item.value) >= item.privacy_threshold
+                        ]
+                        if public_items:
+                            per_entity = cls._per_entity_coverage(context_batches)
+                            heterogeneous = len(set(e["period"] for e in per_entity.values())) > 1
+                            source.update({
+                                "period_records": len(public_items),
+                                "comparison_records": 0,
+                                "coverage_status": "context",
+                                "included": True,
+                                "comparable": False,
+                                "publishable": True,
+                                "per_entity_coverage": per_entity,
+                                "context_heterogeneous": heterogeneous,
+                                "status_note": (
+                                    "Cobertura contextual heterogénea por entidad."
+                                    if heterogeneous
+                                    else f"Último corte mensual disponible: {list(per_entity.values())[0]['period']}."
+                                ),
+                            })
+                    else:
+                        cutoff_text = source.get("last_cutoff_date")
+                        cutoff_d = date.fromisoformat(cutoff_text) if cutoff_text else None
+                        source["coverage_status"] = "stale" if cutoff_d and cutoff_d < start else "missing"
+                        requested_str = ",".join(resolution["requested_months"])
+                        source["status_note"] = (
+                            f"No hay cortes aprobados de Comisarias para los periodos solicitados [{requested_str}]."
+                            + (f" Último corte disponible: {cutoff_d.isoformat()}." if cutoff_d else "")
+                        )
+
                 result.append(source)
                 continue
 
@@ -672,6 +815,11 @@ class SiscCifrasService:
             for source in applicable_sources
             if not source.get("publishable")
         ]
+        context_warnings = [
+            source.get("status_note") or f"{source.get('name', source['code'])} con cobertura contextual."
+            for source in applicable_sources
+            if source.get("coverage_status") == "context" and source.get("publishable")
+        ]
 
         publication = {
             "id": str(uuid4()),
@@ -695,6 +843,7 @@ class SiscCifrasService:
                 "publication_ready": bool(indicators) and not review_blockers,
                 "history_saved": False,
                 "review_blockers": review_blockers,
+                "context_warnings": context_warnings,
                 "privacy_note": "Solo se usan indicadores agregados y clasificados como PUBLICO.",
                 "aggregation_note": "Los dominios se presentan por separado y sus valores no se suman entre si.",
             },
@@ -881,7 +1030,10 @@ class SiscCifrasService:
         if "INSPECCIONES_RNMC" in source_codes:
             indicators.extend(cls.inspection_indicators(db, start, end, prev_start, prev_end))
         if "COMISARIAS_FAMILIA" in source_codes:
-            indicators.extend(cls.family_indicators(db, start, end, prev_start, prev_end, edition_type=edition_type))
+            family = cls.family_indicators(db, start, end, prev_start, prev_end, edition_type=edition_type)
+            if not family:
+                family = cls.family_context_indicators(db, start, end, edition_type=edition_type)
+            indicators.extend(family)
         return indicators
 
     @staticmethod
@@ -1138,15 +1290,14 @@ class SiscCifrasService:
         *,
         edition_type: Optional[str] = None,
     ) -> List[Indicator]:
-        latest_batches, _ = cls._resolve_institutional_batches(
-            db, "COMISARIAS", start, end,
-        )
-        if not latest_batches:
+        resolution = cls._resolve_institutional_batches(db, "COMISARIAS", start, end)
+        closed_set = set(resolution.get("closed_months", []))
+        exact_batches = [b for b in resolution["batches"] if b.period in closed_set]
+        if not exact_batches:
             return []
 
-        prev_batches, _ = cls._resolve_institutional_batches(
-            db, "COMISARIAS", prev_start, prev_end,
-        )
+        prev_resolution = cls._resolve_institutional_batches(db, "COMISARIAS", prev_start, prev_end)
+        prev_batches = prev_resolution["batches"]
 
         previous_values: Dict[Tuple[str, str], float] = {}
         for previous_batch in prev_batches:
@@ -1158,9 +1309,9 @@ class SiscCifrasService:
 
         public_items = [
             (batch, item)
-            for batch in latest_batches
+            for batch in exact_batches
             for item in batch.indicators
-            if item.is_public and float(item.value) >= item.privacy_threshold
+            if item.is_public
         ]
         if not public_items:
             return []
@@ -1180,20 +1331,21 @@ class SiscCifrasService:
         indicators: List[Indicator] = []
         ordered_items = sorted(
             public_items,
-            key=lambda pair: (family_priority(pair[1]), float(pair[1].value)),
+            key=lambda pair: (family_priority(pair[1]), float(pair[1].value) if float(pair[1].value) >= pair[1].privacy_threshold else 0),
             reverse=True,
         )[:6]
         for batch, item in ordered_items:
             priority = family_priority(item)
+            below_threshold = float(item.value) < item.privacy_threshold
             indicators.append(
                 cls.indicator(
                     source="Comisarias de Familia",
                     source_code="COMISARIAS_FAMILIA",
                     domain="FAMILIA Y PROTECCION",
                     category=item.category or "Indicador agregado",
-                    code=f"familia.indicador.{batch.reporting_entity[:20]}.{item.indicator[:32]}",
+                    code=f"familia.indicador.{cls._normalize_entity(batch.reporting_entity)[:20]}.{item.indicator[:32]}",
                     name=item.indicator,
-                    value=float(item.value),
+                    value=None if below_threshold else float(item.value),
                     unit=item.unit,
                     start=start,
                     end=end,
@@ -1202,10 +1354,81 @@ class SiscCifrasService:
                     priority=priority,
                     metadata={
                         "period": batch.period,
+                        "coverage_type": "EXACT",
                         "reporting_entity": batch.reporting_entity,
                         "reporting_basis": batch.reporting_basis,
                         "privacy_threshold": item.privacy_threshold,
-                        "privacy_threshold_applied": True,
+                        "privacy_threshold_applied": below_threshold,
+                    },
+                )
+            )
+        return indicators
+
+    @classmethod
+    def family_context_indicators(
+        cls,
+        db: Session,
+        start: date,
+        end: date,
+        *,
+        edition_type: Optional[str] = None,
+    ) -> List[Indicator]:
+        context_batches = cls._latest_approved_context_batch(db, "COMISARIAS", end)
+        if not context_batches:
+            return []
+
+        public_items = [
+            (batch, item)
+            for batch in context_batches
+            for item in batch.indicators
+            if item.is_public
+        ]
+        if not public_items:
+            return []
+
+        def family_priority(item: InstitutionalIndicator) -> float:
+            name = item.indicator.upper()
+            if "VIOLENCIA INTRAFAMILIAR" in name:
+                return 0.95
+            if "MEDIDAS DE PROTECCION URGENTES" in name:
+                return 0.9
+            if "RESTABLECIMIENTO DE DERECHOS" in name:
+                return 0.86
+            if "VIOLENCIA" in name or "PROTECCION" in name:
+                return 0.82
+            return 0.7
+
+        indicators: List[Indicator] = []
+        ordered_items = sorted(
+            public_items,
+            key=lambda pair: (family_priority(pair[1]), float(pair[1].value) if float(pair[1].value) >= pair[1].privacy_threshold else 0),
+            reverse=True,
+        )[:6]
+        for batch, item in ordered_items:
+            priority = family_priority(item)
+            below_threshold = float(item.value) < item.privacy_threshold
+            indicators.append(
+                cls.indicator(
+                    source="Comisarias de Familia",
+                    source_code="COMISARIAS_FAMILIA",
+                    domain="FAMILIA Y PROTECCION",
+                    category=item.category or "Indicador agregado",
+                    code=f"familia.indicador.{cls._normalize_entity(batch.reporting_entity)[:20]}.{item.indicator[:32]}",
+                    name=item.indicator,
+                    value=None if below_threshold else float(item.value),
+                    unit=item.unit,
+                    start=start,
+                    end=end,
+                    comparison_value=None,
+                    cutoff=batch.cutoff_date,
+                    priority=priority,
+                    metadata={
+                        "period": batch.period,
+                        "coverage_type": "CONTEXT",
+                        "reporting_entity": batch.reporting_entity,
+                        "reporting_basis": batch.reporting_basis,
+                        "privacy_threshold": item.privacy_threshold,
+                        "privacy_threshold_applied": below_threshold,
                     },
                 )
             )
@@ -1231,14 +1454,19 @@ class SiscCifrasService:
         geography: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Indicator:
-        variation_abs = value - comparison_value if comparison_value is not None else None
-        variation_pct = pct_change(value, comparison_value)
-        quality = cls.quality_status(value, cutoff)
+        if value is not None:
+            variation_abs = value - comparison_value if comparison_value is not None else None
+            variation_pct = pct_change(value, comparison_value)
+            quality = cls.quality_status(value, cutoff)
+        else:
+            variation_abs = None
+            variation_pct = None
+            quality = "VALIDADO"
         cutoff_date = cutoff.date().isoformat() if hasattr(cutoff, "date") else cutoff.isoformat() if cutoff else None
         meta = metadata or {}
         meta["priority"] = priority
         meta["relevance_score"] = calculate_relevance(
-            value=value,
+            value=value or 0,
             variation_percentage=variation_pct,
             priority=priority,
             quality_status=quality,
@@ -1252,7 +1480,7 @@ class SiscCifrasService:
             category=category,
             indicator_code=code,
             indicator_name=name,
-            value=float(value or 0),
+            value=value,
             unit=unit,
             period_start=start.isoformat(),
             period_end=end.isoformat(),
@@ -1297,13 +1525,17 @@ class SiscCifrasService:
 
     @staticmethod
     def insight_from_indicator(indicator: Indicator, comparison_label: str = "mismo periodo del ano anterior") -> Insight:
-        value = int(indicator.value) if float(indicator.value).is_integer() else indicator.value
-        delta = variation_text(indicator.variation_percentage)
-        if indicator.variation_percentage is None:
-            detail = f"{indicator.indicator_name}: {value} {indicator.unit} en el periodo."
+        if indicator.value is None:
+            value_text = "|||"
+            detail = f"{indicator.indicator_name}: cifra protegida ({indicator.unit}) en el periodo."
         else:
-            verb = "aumento" if indicator.variation_percentage > 0 else "disminuyo" if indicator.variation_percentage < 0 else "se mantuvo"
-            detail = f"{indicator.indicator_name} {verb} {abs(indicator.variation_percentage):.1f}% frente al {comparison_label}."
+            value_text = str(int(indicator.value) if float(indicator.value).is_integer() else indicator.value)
+            delta = variation_text(indicator.variation_percentage)
+            if indicator.variation_percentage is None:
+                detail = f"{indicator.indicator_name}: {value_text} {indicator.unit} en el periodo."
+            else:
+                verb = "aumento" if indicator.variation_percentage > 0 else "disminuyo" if indicator.variation_percentage < 0 else "se mantuvo"
+                detail = f"{indicator.indicator_name} {verb} {abs(indicator.variation_percentage):.1f}% frente al {comparison_label}."
 
         return Insight(
             id=f"insight:{indicator.id}",
@@ -1311,7 +1543,7 @@ class SiscCifrasService:
             source=indicator.source,
             indicator_code=indicator.indicator_code,
             title=indicator.indicator_name,
-            value_text=f"{value} {indicator.unit}",
+            value_text=f"{value_text} {indicator.unit}",
             detail=detail,
             relevance_score=indicator.metadata.get("relevance_score", 0),
             quality_status=indicator.quality_status,
