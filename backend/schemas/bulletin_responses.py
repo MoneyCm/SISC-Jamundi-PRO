@@ -21,6 +21,10 @@ class CatalogItem(BaseModel):
     code: str = Field(..., min_length=1)
     label: str = Field(..., min_length=1)
     parent_code: Optional[str] = None
+    aliases: Optional[list[str]] = None
+    category: Optional[str] = None
+    bulletin_type: Optional[str] = None
+    description: Optional[str] = None
     metadata: Optional[dict[str, Any]] = None
 
 
