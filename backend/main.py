@@ -98,9 +98,10 @@ async def global_exception_handler(request: Request, exc: Exception):
         request.url.path,
     )
 
+    tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Error interno del servidor", "incident_id": incident_id},
+        content={"detail": "Error interno del servidor", "incident_id": incident_id, "traceback": "".join(tb)},
     )
 
 # Configuración CORS
@@ -114,7 +115,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "SISC Jamundí API is running"}
+    return {"message": "SISC Jamundí API is running", "commit": "8fb59aa"}
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(analitica.router, prefix="/api/analitica", tags=["analitica"])
