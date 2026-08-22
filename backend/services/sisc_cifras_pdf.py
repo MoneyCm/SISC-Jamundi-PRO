@@ -37,6 +37,17 @@ def _number(value):
     return _text(value, "-")
 
 
+SUPPRESSED_LABEL = "Dato protegido"
+
+
+def _protected_cell(item):
+    """Render an indicator value cell: 'Dato protegido' if suppressed, number otherwise."""
+    value = item.get("value") if isinstance(item, dict) else None
+    if value is None or (isinstance(value, (int, float)) and value < 5):
+        return SUPPRESSED_LABEL
+    return _number(value)
+
+
 def _period(publication, key="period"):
     value = publication.get(key) or {}
     return f"{value.get('start', 'sin inicio')} al {value.get('end', 'sin corte')}"
@@ -129,10 +140,15 @@ def _comparison_table(items, styles, limit=8):
     for item in items[:limit]:
         variation = _variation_value(item)
         color = GREEN if variation is not None and variation < 0 else RED if variation is not None and variation > 0 else INK
+        is_suppressed = item.get("value") is None or (
+            isinstance(item.get("value"), (int, float)) and item.get("value") < 5
+        )
+        val_cell = SUPPRESSED_LABEL if is_suppressed else _number(item.get("value"))
+        comp_cell = SUPPRESSED_LABEL if is_suppressed else _number(item.get("comparison_value"))
         rows.append([
             Paragraph(_text(item.get("indicator_name")), styles["td"]),
-            Paragraph(_number(item.get("comparison_value")), styles["num"]),
-            Paragraph(_number(item.get("value")), styles["num"]),
+            Paragraph(comp_cell, styles["num"]),
+            Paragraph(val_cell, styles["num"]),
             Paragraph(f'<font color="{color.hexval()}"><b>{_difference(item)}</b></font>', styles["num"]),
             Paragraph(f'<font color="{color.hexval()}"><b>{_variation(item)}</b></font>', styles["num"]),
         ])
@@ -204,7 +220,7 @@ def _management(title, items, color, styles):
         is_ctx = md.get("coverage_type") == "CONTEXT"
         row = [
             Paragraph(_text(item.get("indicator_name")), styles["td"]),
-            Paragraph(_number(item.get("value")), styles["num"]),
+            Paragraph(_protected_cell(item), styles["num"]),
             Paragraph(_text(item.get("unit"), "-"), styles["num"]),
             Paragraph(_text(item.get("cutoff_date"), "-"), styles["num"]),
         ]

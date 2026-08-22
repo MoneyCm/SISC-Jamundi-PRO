@@ -114,7 +114,8 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "SISC Jamundí API is running", "commit": "8fb59aa"}
+    commit = os.getenv("RENDER_GIT_COMMIT", "unknown")
+    return {"message": "SISC Jamundí API is running", "commit": commit[:7] if commit else "unknown"}
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(analitica.router, prefix="/api/analitica", tags=["analitica"])
