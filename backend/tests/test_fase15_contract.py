@@ -941,6 +941,49 @@ class TestDatasetIdentity:
         assert identity["POLICIA_SEMANAL"]["unique_count"] == 100
         assert identity["INSPECCIONES_RNMC"]["cutoff_date"] == "2026-08-16"
 
+    def test_resolved_for_response_strips_identity(self):
+        from api.sisc_cifras_v1 import _resolved_for_response
+        resolved = {
+            "period": {"start": "2026-08-11", "end": "2026-08-17", "timezone": "America/Bogota", "days": 7},
+            "comparison": {"mode": "NONE", "resolved_by_backend": False, "start": None, "end": None},
+            "sources": {
+                "active": ["POLICIA_SEMANAL"],
+                "cutoff_used": "2026-08-17",
+                "records": {"POLICIA_SEMANAL": 100},
+                "identity": {
+                    "POLICIA_SEMANAL": {"cutoff_date": "2026-08-17", "unique_count": 100, "content_hash": "abc123"},
+                },
+            },
+            "territory": {"scope": "TODO_JAMUNDI", "zona": None, "resolved_barrios": ["TODO_JAMUNDI"]},
+            "conductas": {"mode": "ALL_PRIORITIZED", "resolved_codes": []},
+        }
+        public = _resolved_for_response(resolved)
+        assert "identity" not in public["sources"]
+        assert public["sources"]["records"]["POLICIA_SEMANAL"] == 100
+        assert isinstance(public["sources"]["records"]["POLICIA_SEMANAL"], int)
+
+    def test_public_resolved_validates_against_response_model(self):
+        from api.sisc_cifras_v1 import _resolved_for_response
+        from schemas.bulletin_responses import ResolvedFilters
+        resolved = {
+            "period": {"start": "2026-08-11", "end": "2026-08-17", "timezone": "America/Bogota", "days": 7},
+            "comparison": {"mode": "NONE", "resolved_by_backend": False, "start": None, "end": None},
+            "sources": {
+                "active": ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"],
+                "cutoff_used": "2026-08-17",
+                "records": {"POLICIA_SEMANAL": 100, "INSPECCIONES_RNMC": 50, "COMISARIAS_FAMILIA": 10},
+                "identity": {
+                    "POLICIA_SEMANAL": {"cutoff_date": "2026-08-17", "unique_count": 100},
+                },
+            },
+            "territory": {"scope": "TODO_JAMUNDI", "zona": None, "resolved_barrios": ["TODO_JAMUNDI"]},
+            "conductas": {"mode": "ALL_PRIORITIZED", "resolved_codes": []},
+        }
+        public = _resolved_for_response(resolved)
+        rf = ResolvedFilters(**public)
+        assert rf.sources.records.POLICIA_SEMANAL == 100
+        assert rf.sources.records.INSPECCIONES_RNMC == 50
+
 
 # ===========================================================================
 # 17. SiscErrorResponse extras_forbid

@@ -264,8 +264,9 @@ def generate_v1(
 
     suppressed_cells = []
     for ind in publication.get("indicators", []):
-        count = int(ind.get("value", 0))
-        if count < 5:
+        value = ind.get("value")
+        count = int(value) if isinstance(value, (int, float)) else None
+        if count is None or count < 5:
             suppressed_cells.append({
                 "cell_id": f"{ind.get('source_code', '')}:{ind.get('indicator_code', '')}",
                 "reason": "MINIMUM_CELL_SIZE",
