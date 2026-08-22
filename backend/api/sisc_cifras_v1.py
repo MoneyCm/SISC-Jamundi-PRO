@@ -226,12 +226,13 @@ def generate_v1(
         raise HTTPException(400, "Este endpoint solo acepta mode=OFFICIAL_PUBLICATION.")
 
     filters_dict = filters.model_dump(mode="json")
-    resolved = _resolve_filters(filters, db)
+    resolved_internal = _resolve_filters(filters, db)
+    dataset_id = _dataset_identity_from_resolved(resolved_internal)
+    resolved_public = _resolved_for_response(resolved_internal)
 
     catalog_versions = SiscCifrasService._load_catalog_versions()
-    dataset_id = _dataset_identity_from_resolved(resolved)
     query_hash = SiscCifrasService.generate_query_hash(
-        filters_dict, resolved, catalog_versions, dataset_id,
+        filters_dict, resolved_public, catalog_versions, dataset_id,
     )
 
     existing = SiscCifrasService.find_existing_by_query_hash(db, query_hash)
@@ -276,7 +277,7 @@ def generate_v1(
 
     pdf_url = f"/api/sisc-cifras/publications/{publication.get('id')}/pdf"
     snapshot = SiscCifrasService.build_snapshot_from_publication(
-        publication, filters_dict, resolved, catalog_versions,
+        publication, filters_dict, resolved_public, catalog_versions,
         suppressed_cells, str(user.id), pdf_url,
     )
 
@@ -299,7 +300,7 @@ def generate_v1(
         source_codes=filters.sources,
         publication_json=publication,
         requested_filters=filters_dict,
-        resolved_filters=resolved,
+        resolved_filters=resolved_public,
         schema_version="1.0",
         pdf_url=pdf_url,
         pdf_data=pdf_bytes,
