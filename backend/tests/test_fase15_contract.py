@@ -928,6 +928,10 @@ class TestDatasetIdentity:
         resolved = {
             "sources": {
                 "records": {
+                    "POLICIA_SEMANAL": 100,
+                    "INSPECCIONES_RNMC": 50,
+                },
+                "identity": {
                     "POLICIA_SEMANAL": {"cutoff_date": "2026-08-17", "unique_count": 100},
                     "INSPECCIONES_RNMC": {"cutoff_date": "2026-08-16", "unique_count": 50},
                 }

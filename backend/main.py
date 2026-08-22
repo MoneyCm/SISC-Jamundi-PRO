@@ -98,10 +98,9 @@ async def global_exception_handler(request: Request, exc: Exception):
         request.url.path,
     )
 
-    tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Error interno del servidor", "incident_id": incident_id, "traceback": "".join(tb)},
+        content={"detail": "Error interno del servidor", "incident_id": incident_id},
     )
 
 # Configuración CORS

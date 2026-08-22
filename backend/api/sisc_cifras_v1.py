@@ -83,13 +83,12 @@ def _resolve_filters(filters: BulletinFilters, db: Session) -> dict:
             "active": filters.sources,
             "cutoff_used": end.isoformat(),
             "records": {
-                code: {
-                    "cutoff_date": records.get(code, {}).get("cutoff_date"),
-                    "unique_count": records.get(code, {}).get("unique_count", 0),
-                    "content_hash": records.get(code, {}).get("content_hash"),
-                }
+                code: records.get(code, {}).get("unique_count", 0)
+                if isinstance(records.get(code), dict) and "error" not in records.get(code, {})
+                else 0
                 for code in filters.sources
             },
+            "identity": records,
         },
         "territory": {
             "scope": filters.territory.scope,
@@ -104,8 +103,17 @@ def _resolve_filters(filters: BulletinFilters, db: Session) -> dict:
 
 
 def _dataset_identity_from_resolved(resolved: dict) -> dict:
-    records = resolved.get("sources", {}).get("records", {})
-    return {code: info for code, info in records.items() if isinstance(info, dict)}
+    identity = resolved.get("sources", {}).get("identity", {})
+    return {code: info for code, info in identity.items() if isinstance(info, dict) and "error" not in info}
+
+
+def _resolved_for_response(resolved: dict) -> dict:
+    """Return a copy of resolved_filters without internal-only keys like 'identity'."""
+    out = dict(resolved)
+    sources = dict(out.get("sources", {}))
+    sources.pop("identity", None)
+    out["sources"] = sources
+    return out
 
 
 DOMAIN_MAP = {
@@ -361,7 +369,7 @@ def explore_v1(
         status="partial" if suppressed_cells else "ok",
         results=results,
         total_results=len(results),
-        resolved_filters=resolved,
+        resolved_filters=_resolved_for_response(resolved),
         warnings=warnings,
         suppressed_cells=suppressed_cells,
         metadata={
@@ -421,7 +429,7 @@ def analyze_v1(
         status="partial" if suppressed_cells else "ok",
         results=results,
         total_results=len(results),
-        resolved_filters=resolved,
+        resolved_filters=_resolved_for_response(resolved),
         warnings=warnings,
         suppressed_cells=suppressed_cells,
         metadata={
