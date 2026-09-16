@@ -10,9 +10,11 @@ from sqlalchemy import desc, func, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from db.models_hechos_seguridad import HechoSeguridad
+from db.models_fiscalia_spoa import FiscaliaSpoaRecord, FiscaliaSpoaSnapshot, FiscaliaSpoaRun
+from db.models_hechos_seguridad import HechoSeguridad, IngestionRun
 from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator, InstitutionalAgentRun
 from db.models_inspecciones import InspeccionActuacion, InspeccionExpediente, InspeccionMedida
+from db.models_medicina_legal import MedicinaLegalRecord, MedicinaLegalSnapshot
 from db.models_sisc_cifras import SiscCifrasPublication
 from services.hechos_metrics import hechos_unicos_expr
 
@@ -850,9 +852,33 @@ class SiscCifrasService:
         }
 
         if save_history:
+            from services.indicator_catalog import METHODOLOGY_VERSION as _METHODOLOGY_VERSION
             publication_id = uuid4()
             publication["id"] = str(publication_id)
+            publication["methodology_version"] = _METHODOLOGY_VERSION
             publication["governance"]["history_saved"] = True
+            # Trazabilidad: versiones de fuente vigentes al publicar (no sobrescribe historial).
+            try:
+                dataset_identity = cls.collect_dataset_identity(db, start, end, selected_sources)
+                source_version_ids = {
+                    code: (info or {}).get("latest_snapshot_id")
+                          or (info or {}).get("latest_ingestion_id")
+                          or (info or {}).get("latest_batch_id")
+                    for code, info in (dataset_identity or {}).items()
+                }
+            except Exception:
+                source_version_ids = {}
+            try:
+                latest_run = (
+                    db.query(IngestionRun.id)
+                    .filter(IngestionRun.fuente_codigo == "POLICIA_SEMANAL", IngestionRun.status == "COMPLETED")
+                    .order_by(IngestionRun.fecha_fin.desc().nullslast())
+                    .first()
+                )
+                if latest_run and "POLICIA_SEMANAL" in selected_sources and not source_version_ids.get("POLICIA_SEMANAL"):
+                    source_version_ids["POLICIA_SEMANAL"] = str(latest_run[0])
+            except Exception:
+                pass
             row = SiscCifrasPublication(
                 id=publication_id,
                 title=publication["title"],
@@ -862,6 +888,8 @@ class SiscCifrasService:
                 created_by=created_by,
                 source_codes=selected_sources,
                 publication_json=publication,
+                methodology_version=_METHODOLOGY_VERSION,
+                source_version_ids=source_version_ids or None,
             )
             db.add(row)
             db.commit()
@@ -1892,7 +1920,8 @@ class SiscCifrasService:
         today = date.today()
         tomorrow = datetime.combine(today + timedelta(days=1), datetime.min.time())
 
-        all_codes = {"POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"}
+        all_codes = {"POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA",
+                     "FISCALIA_SPOA_V3", "MEDICINA_LEGAL"}
         requested = set(source_codes) if source_codes else all_codes
 
         if not cls.database_available(db):
@@ -2001,6 +2030,91 @@ class SiscCifrasService:
                 }
             except Exception as e:
                 identity["COMISARIAS_FAMILIA"] = {"error": str(e)}
+
+        if "FISCALIA_SPOA_V3" in requested:
+            try:
+                spoa_snap = db.query(FiscaliaSpoaSnapshot).join(
+                    FiscaliaSpoaRun,
+                    FiscaliaSpoaSnapshot.run_id == FiscaliaSpoaRun.id,
+                ).filter(
+                    FiscaliaSpoaRun.status == "COMPLETED",
+                    FiscaliaSpoaSnapshot.cutoff_date <= min(end, today),
+                ).order_by(
+                    FiscaliaSpoaSnapshot.cutoff_date.desc(),
+                    FiscaliaSpoaSnapshot.created_at.desc(),
+                ).first()
+
+                if spoa_snap is None:
+                    identity["FISCALIA_SPOA_V3"] = {"status": "SIN_ENTREGA_FIJA"}
+                else:
+                    unique_spoa = db.query(
+                        func.count(func.distinct(FiscaliaSpoaRecord.record_key))
+                    ).filter(
+                        FiscaliaSpoaRecord.snapshot_id == spoa_snap.id,
+                        FiscaliaSpoaRecord.year_hecho.isnot(None),
+                        FiscaliaSpoaRecord.month_hecho.isnot(None),
+                        FiscaliaSpoaRecord.year_hecho >= start.year,
+                        FiscaliaSpoaRecord.year_hecho <= min(end, today).year,
+                    ).scalar()
+
+                    content_hash_spoa = db.query(
+                        func.md5(func.string_agg(
+                            FiscaliaSpoaRecord.record_key,
+                            sql_text("'|' ORDER BY record_key"),
+                        ))
+                    ).filter(
+                        FiscaliaSpoaRecord.snapshot_id == spoa_snap.id,
+                    ).scalar()
+
+                    identity["FISCALIA_SPOA_V3"] = {
+                        "cutoff_date": cls.iso_date(spoa_snap.cutoff_date),
+                        "unique_count": int(unique_spoa or 0),
+                        "latest_snapshot_id": str(spoa_snap.id),
+                        "content_hash": content_hash_spoa,
+                    }
+            except Exception as e:
+                identity["FISCALIA_SPOA_V3"] = {"error": str(e)}
+
+        if "MEDICINA_LEGAL" in requested:
+            try:
+                ml_snap = db.query(MedicinaLegalSnapshot).filter(
+                    MedicinaLegalSnapshot.definitive.is_(True),
+                    MedicinaLegalSnapshot.cutoff_date <= min(end, today),
+                    MedicinaLegalSnapshot.dataset_key == "HOMICIDIOS_DEF",
+                ).order_by(
+                    MedicinaLegalSnapshot.cutoff_date.desc(),
+                    MedicinaLegalSnapshot.created_at.desc(),
+                ).first()
+
+                if ml_snap is None:
+                    identity["MEDICINA_LEGAL"] = {"status": "SIN_ENTREGA_DEFINITIVA"}
+                else:
+                    unique_ml = db.query(
+                        func.count(func.distinct(MedicinaLegalRecord.record_key))
+                    ).filter(
+                        MedicinaLegalRecord.snapshot_id == ml_snap.id,
+                        MedicinaLegalRecord.codigo_dane_municipio == "76364",
+                        MedicinaLegalRecord.year_hecho >= start.year,
+                        MedicinaLegalRecord.year_hecho <= min(end, today).year,
+                    ).scalar()
+
+                    content_hash_ml = db.query(
+                        func.md5(func.string_agg(
+                            MedicinaLegalRecord.record_key,
+                            sql_text("'|' ORDER BY record_key"),
+                        ))
+                    ).filter(
+                        MedicinaLegalRecord.snapshot_id == ml_snap.id,
+                    ).scalar()
+
+                    identity["MEDICINA_LEGAL"] = {
+                        "cutoff_date": cls.iso_date(ml_snap.cutoff_date),
+                        "unique_count": int(unique_ml or 0),
+                        "latest_snapshot_id": str(ml_snap.id),
+                        "content_hash": content_hash_ml,
+                    }
+            except Exception as e:
+                identity["MEDICINA_LEGAL"] = {"error": str(e)}
         return identity
 
     @classmethod
