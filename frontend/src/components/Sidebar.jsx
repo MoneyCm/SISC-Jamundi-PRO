@@ -36,6 +36,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
     const menuItems = isPublic ? [
         { id: 'dashboard', label: 'Portal Ciudadano', icon: LayoutDashboard, category: 'HOME', show: true },
         { id: 'map', label: 'Mapa Público', icon: Map, category: 'HOME', show: true },
+        { id: 'technical-bulletins', label: 'Boletines técnicos', icon: FileText, category: 'SALIDA', show: true },
     ] : allItems.filter(item => item.show);
 
     // Helper to render grouped items

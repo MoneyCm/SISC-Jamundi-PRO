@@ -80,7 +80,7 @@ const ObservatoryBulletins = () => {
         let cancelled = false;
         const load = async () => {
             try {
-                const data = await apiJson('/publications/public');
+                const data = await apiJson('/sisc-cifras/publications/public');
                 if (!cancelled) setBulletins(Array.isArray(data) ? data : []);
             } catch (e) {
                 if (!cancelled) setError(e?.message || 'Error al cargar boletines');

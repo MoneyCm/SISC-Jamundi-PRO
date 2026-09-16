@@ -341,16 +341,19 @@ const App = () => {
 
   if (isPublic) {
     return (
-      <>
-        <div className="min-h-screen animate-fade-in">
+      <Layout
+        activePage={publicActivePage}
+        setActivePage={setPublicActivePage}
+        onLogout={() => {}}
+        isPublic={isPublic}
+        userRoles={userRoles}
+        dataLevel={dataLevel}
+        currentUser={currentUser}
+      >
+        <div className="animate-fade-in h-full">
           <Suspense fallback={<PageLoading />}>{renderContent()}</Suspense>
         </div>
-        {showCitizenAssistant && (
-          <Suspense fallback={null}>
-            <SiscAIChatbot />
-          </Suspense>
-        )}
-      </>
+      </Layout>
     );
   }
 

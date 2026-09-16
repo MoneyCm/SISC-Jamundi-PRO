@@ -1,5 +1,5 @@
 import React from 'react';
-import { PublicPortalHeader } from '../components/public/PublicPortalHeader';
+import PublicPortalHeader from '../components/public/PublicPortalHeader';
 import ObservatoryBulletins from '../components/ObservatoryBulletins';
 
 const ObservatoryBulletinsPage = ({ onNavigate, onLoginClick }) => {
