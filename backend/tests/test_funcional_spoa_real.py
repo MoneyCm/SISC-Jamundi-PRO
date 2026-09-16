@@ -38,7 +38,7 @@ def test_collect_identity_real():
     print("MEDICINA_LEGAL ->", {k: ml.get(k) for k in ("status", "cutoff_date", "unique_count", "latest_snapshot_id", "content_hash")})
 
     assert "unique_count" in pol, "POLICIA_SEMANAL debe tener unique_count real"
-    assert "status" in spoa and spoa["status"] == "SIN_ENTREGA_FIJA", f"SPOA error real: {spoa}"
+    assert "latest_snapshot_id" in spoa and spoa["latest_snapshot_id"], f"SPOA should resolve snapshot, got: {spoa}"
     assert "latest_snapshot_id" in ml, "ML debe tener latest_snapshot_id (snapshot HOMICIDIOS_DEF existe)"
     assert ml["latest_snapshot_id"], "latest_snapshot_id no vacío"
     print("OK: identity real coherente")
