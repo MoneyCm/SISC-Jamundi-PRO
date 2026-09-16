@@ -35,3 +35,7 @@ class SiscCifrasPublication(Base):
     suppressed_cells = Column(JSONB, nullable=True, default=list)
     catalog_versions_used = Column(JSONB, nullable=True)
     query_hash = Column(String(64), nullable=True, index=True)
+    # --- Conciliación histórica: versión metodológica y linaje ---
+    methodology_version = Column(String(10), nullable=True, default="1")
+    previous_version_id = Column(UUID(as_uuid=True), nullable=True)
+    source_version_ids = Column(JSONB, nullable=True)  # {POLICIA_SEMANAL: ingestion_id, ...}

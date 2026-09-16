@@ -3,7 +3,6 @@ import './index.css';
 import Layout from './components/Layout';
 import CitizenPortalHome from './pages/CitizenPortalHome';
 import PublicPortalHeader from './components/public/PublicPortalHeader';
-import SiscAIChatbot from './components/SiscAIChatbot';
 import { loadPublicDashboard } from './utils/publicDashboardCache';
 import { apiJson, clearStoredSession, SESSION_EXPIRED_EVENT } from './utils/apiClient';
 
@@ -23,6 +22,7 @@ const SecureReporting = lazy(() => import('./pages/SecureReporting'));
 const CommunityParticipation = lazy(() => import('./pages/CommunityParticipation'));
 const IntelligenceModule = lazy(() => import('./pages/IntelligenceModule'));
 const DataQuality = lazy(() => import('./pages/DataQuality'));
+const SiscAIChatbot = lazy(() => import('./components/SiscAIChatbot'));
 
 
 const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
@@ -31,6 +31,7 @@ const StatsModule = lazy(() => import('./pages/StatsModule'));
 const SourceCenter = lazy(() => import('./pages/SourceCenter'));
 const PoliceWeeklyExplorer = lazy(() => import('./pages/PoliceWeeklyExplorer'));
 const SiscCifras = lazy(() => import('./pages/SiscCifras'));
+const ObservatoryBulletinsPage = lazy(() => import('./pages/ObservatoryBulletinsPage'));
 const RegionalContext = lazy(() => import('./pages/RegionalContext'));
 const RNMCModule = lazy(() => import('./pages/RNMCModule'));
 const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
@@ -241,9 +242,13 @@ const App = () => {
             onBack={() => navigatePublic('hub')}
             onNavigate={navigatePublic}
           />;
+        case 'technical-bulletins':
+          return <ObservatoryBulletinsPage
+            onNavigate={navigatePublic}
+            onLoginClick={() => setAppMode('login')}
+          />;
         case 'transparency-info':
         case 'open-data':
-        case 'technical-bulletins':
         case 'accountability':
           return <PublicInformation
             initialSection={publicActivePage}
