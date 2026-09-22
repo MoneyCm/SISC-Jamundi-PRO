@@ -16,8 +16,10 @@ import {
     buildCitizenInsights, DEFAULT_PUBLIC_FILTERS, filtersToSearchParams,
     formatNumber, formatVariation, parsePublicFilters, variationTone,
 } from '../utils/citizenInsights';
-import { getCachedPublicDashboard, loadPublicDashboard } from '../utils/publicDashboardCache';
-import { downloadCsvFile, downloadJsonFile, downloadXlsxFile } from '../utils/publicDataDownloads';
+import { buildOpenDataUrl, getCachedPublicDashboard, loadPublicDashboard } from '../utils/publicDashboardCache';
+import { downloadXlsxFile } from '../utils/publicDataDownloads';
+
+const CC_BY_URL = 'https://creativecommons.org/licenses/by/4.0/deed.es';
 
 const PUBLIC_DATA_DICTIONARY = [
     { field: 'dataset', description: 'Grupo de información publicado.' },
@@ -179,34 +181,34 @@ const PublicDataExplorer = ({ onBack, onNavigate, onLoginClick }) => {
     const insights = useMemo(() => buildCitizenInsights(data, 3), [data]);
     const openDataRows = useMemo(() => buildOpenDataRows(data), [data]);
 
-    const downloadCsv = () => {
+    const [citation, setCitation] = useState(null);
+    const downloadStable = async (format) => {
         if (!data) return;
-        const headers = Object.keys(openDataRows[0] || {});
-        downloadCsvFile(
-            `sisc-jamundi-datos-agregados-${data.metadata?.period_end || 'corte'}.csv`,
-            headers,
-            openDataRows.map((row) => headers.map((header) => row[header]))
-        );
+        setShareStatus('');
+        try {
+            const response = await fetch(buildOpenDataUrl(appliedFilters, format));
+            if (!response.ok) throw new Error(`Error ${response.status}`);
+            const hash = response.headers.get('x-dataset-hash') || '';
+            const cutoff = response.headers.get('x-dataset-cutoff') || '';
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `sisc-jamundi-datos-abiertos-${cutoff || 'corte'}-${hash.slice(0, 8)}.${format}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            setCitation({ hash, cutoff, format });
+            setShareStatus(`Dataset ${format.toUpperCase()} descargado. Versión ${hash.slice(0, 8)}.`);
+        } catch {
+            setShareStatus(`No fue posible descargar el dataset ${format.toUpperCase()}.`);
+        }
     };
 
-    const buildOpenDataPackage = () => ({
-        metadata: data?.metadata || {},
-        selected_filters: data?.filters?.selected || appliedFilters,
-        privacy: {
-            minimum_territory_count: data?.map?.min_location_count || 3,
-            note: data?.metadata?.privacy || '',
-        },
-        data_dictionary: PUBLIC_DATA_DICTIONARY,
-        records: openDataRows,
-    });
+    const downloadCsv = () => downloadStable('csv');
 
-    const downloadJson = () => {
-        if (!data) return;
-        downloadJsonFile(
-            `sisc-jamundi-datos-agregados-${data.metadata?.period_end || 'corte'}.json`,
-            buildOpenDataPackage()
-        );
-    };
+    const downloadJson = () => downloadStable('json');
 
     const downloadXlsx = async () => {
         if (!data || exportingXlsx) return;
@@ -274,6 +276,12 @@ const PublicDataExplorer = ({ onBack, onNavigate, onLoginClick }) => {
                     {bulletin && <a href={downloadUrl(bulletin.url)} className="inline-flex min-h-11 items-center gap-2 bg-[#281FD0] px-4 text-sm font-black text-white"><FileText size={17} /> Boletín PDF</a>}
                     {shareStatus && <span className="text-xs font-bold text-slate-600" role="status">{shareStatus}</span>}
                 </div>
+                <p className="text-xs font-semibold leading-5 text-slate-600">
+                    Dataset estable bajo licencia <a className="font-black text-[#281FD0] underline" href={CC_BY_URL} target="_blank" rel="noreferrer">CC BY 4.0</a>
+                    {citation?.hash
+                        ? <> · Corte {citation.cutoff || 'N/D'} · Versión {citation.hash.slice(0, 8)} · Citar como: SISC Jamundí, Alcaldía de Jamundí.</>
+                        : ' · Al descargar se indica corte y versión para citar.'}
+                </p>
 
                 {error && <div className="border-l-4 border-amber-500 bg-amber-50 p-4 text-sm font-bold text-amber-900" role="alert">Se conservan los últimos datos disponibles. {error}</div>}
 
@@ -309,7 +317,7 @@ const PublicDataExplorer = ({ onBack, onNavigate, onLoginClick }) => {
                     <aside className="space-y-4"><div className="border border-slate-200 bg-white p-5"><div className="flex items-center gap-2"><ShieldCheck className="text-[#281FD0]" size={20} /><h2 className="font-black text-slate-950">Protección de datos</h2></div><p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{meta.privacy}</p></div><div className="border border-slate-200 bg-white p-5"><div className="flex items-center gap-2"><Info className="text-[#281FD0]" size={20} /><h2 className="font-black text-slate-950">Fuente y método</h2></div><p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{meta.methodology}</p><button onClick={() => onNavigate?.('transparency-info')} className="mt-4 inline-flex min-h-10 items-center gap-2 font-black text-[#281FD0]">Ver metodología completa <ArrowLeft className="rotate-180" size={16} /></button></div></aside>
                 </section>
             </main>
-            <footer className="mt-10 border-t-4 border-[#FFE000] bg-slate-950 px-4 py-8 text-center text-sm font-bold text-white/65">SISC Jamundí · Publicación ciudadana agregada · Fuente y corte visibles en cada consulta</footer>
+            <footer className="mt-10 border-t-4 border-[#FFE000] bg-slate-950 px-4 py-8 text-center text-sm font-bold text-white/65">SISC Jamundí · Publicación ciudadana agregada · Fuente y corte visibles en cada consulta · Licencia <a className="underline" href={CC_BY_URL} target="_blank" rel="noreferrer">CC BY 4.0</a></footer>
         </div>
     );
 };

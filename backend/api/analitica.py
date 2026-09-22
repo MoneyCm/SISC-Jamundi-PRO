@@ -16,8 +16,12 @@ from services.hechos_metrics import (
     victimas_identificables_expr,
 )
 from services.national_context_service import population_for, rate_per_100k
+import csv
+import hashlib
+import io
+import json
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List
 
 from api.auth import get_current_user, get_optional_user, institutional_access, log_audit
@@ -1130,6 +1134,177 @@ def get_por_zona(
 
     results = q.group_by(HechoSeguridad.zona).order_by(text('total DESC')).all()
     return [{"zona": r.zona, "total": r.total} for r in results]
+
+
+# ─────────────────────────────────────────────
+# DATOS ABIERTOS VERSIONADOS (CC BY 4.0)
+# Reusa el tablero ciudadano sin duplicar su lógica: el payload del
+# dashboard se transforma en un paquete citable con hash de versión.
+# ─────────────────────────────────────────────
+
+OPEN_DATA_LICENSE = {
+    "name": "Creative Commons Atribución 4.0 Internacional",
+    "short": "CC BY 4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/deed.es",
+}
+
+OPEN_DATA_DICTIONARY = [
+    {"field": "dataset", "description": "Grupo de información publicado."},
+    {"field": "category", "description": "Nombre ciudadano del indicador, conducta, zona o territorio."},
+    {"field": "current_value", "description": "Valor agregado del periodo seleccionado."},
+    {"field": "comparison_value", "description": "Valor agregado del periodo usado como comparación."},
+    {"field": "period_start", "description": "Fecha inicial del periodo consultado, formato AAAA-MM-DD."},
+    {"field": "period_end", "description": "Fecha final del periodo consultado, formato AAAA-MM-DD."},
+    {"field": "cutoff_date", "description": "Fecha del último registro disponible en la fuente."},
+    {"field": "source", "description": "Fuente institucional de la información."},
+]
+
+OPEN_DATA_CSV_HEADERS = [
+    "dataset", "category", "current_value", "comparison_value",
+    "period_start", "period_end", "cutoff_date", "source",
+]
+
+
+def _open_data_value(value):
+    return "" if value is None else value
+
+
+def build_open_data_records(payload):
+    """Filas agregadas del paquete, con el mismo esquema de las descargas ciudadanas."""
+    payload = payload or {}
+    meta = payload.get("metadata") or {}
+    kpis = payload.get("kpis") or {}
+    rows = []
+
+    def push(dataset, category, current, comparison=""):
+        rows.append({
+            "dataset": dataset,
+            "category": category,
+            "current_value": _open_data_value(current),
+            "comparison_value": _open_data_value(comparison),
+            "period_start": meta.get("period_start") or "",
+            "period_end": meta.get("period_end") or "",
+            "cutoff_date": meta.get("latest_event_date") or "",
+            "source": meta.get("source") or "",
+        })
+
+    push("indicadores", "Casos agregados", kpis.get("total_hechos"), kpis.get("previous_total"))
+    push("indicadores", "Homicidios", kpis.get("homicidios"))
+    for item in payload.get("conductas") or []:
+        push("conductas", item.get("name"), item.get("value"), item.get("previous_value", ""))
+    for item in payload.get("zones") or []:
+        push("zonas", item.get("name"), item.get("value"), item.get("previous_value", ""))
+    for item in payload.get("territories") or []:
+        push("territorios", item.get("name"), item.get("total"), item.get("previous_value", ""))
+    return rows
+
+
+def open_data_version(records, metadata, filters):
+    """Hash SHA-256 del contenido canónico: identifica la versión del dataset."""
+    canonical = json.dumps(
+        {"metadata": metadata, "filters": filters, "records": records},
+        sort_keys=True, ensure_ascii=False, default=str,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def build_open_data_package(payload):
+    """Paquete citable: metadatos + licencia + versión + diccionario + registros.
+
+    La versión es un hash del contenido (sin generated_at): los mismos datos
+    y filtros siempre producen la misma versión, en cualquier momento.
+    """
+    payload = payload or {}
+    meta = payload.get("metadata") or {}
+    records = build_open_data_records(payload)
+    filters = (payload.get("filters") or {}).get("selected") or {}
+    metadata = {
+        "title": "SISC Jamundí — Datos públicos agregados de seguridad y convivencia",
+        "publisher": "Alcaldía de Jamundí — Secretaría de Seguridad y Convivencia",
+        "cutoff_date": meta.get("latest_event_date") or "",
+        "period_start": meta.get("period_start") or "",
+        "period_end": meta.get("period_end") or "",
+        "comparison": meta.get("comparison_label") or "",
+        "source": meta.get("source") or "",
+        "privacy": meta.get("privacy") or "",
+        "methodology": meta.get("methodology") or "",
+        "license": OPEN_DATA_LICENSE,
+    }
+    metadata["version"] = open_data_version(records, metadata, filters)
+    metadata["generated_at"] = datetime.now(timezone.utc).isoformat()
+    return {
+        "metadata": metadata,
+        "filters": filters,
+        "data_dictionary": OPEN_DATA_DICTIONARY,
+        "records": records,
+    }
+
+
+def open_data_csv_text(package):
+    """Render CSV del paquete (solo registros; los metadatos viajan en el JSON)."""
+    package = package or {}
+    buffer = io.StringIO()
+    buffer.write("\ufeff")  # BOM: Excel en Windows abre el UTF-8 sin romper tildes
+    writer = csv.DictWriter(buffer, fieldnames=OPEN_DATA_CSV_HEADERS, extrasaction="ignore")
+    writer.writeheader()
+    for row in package.get("records") or []:
+        writer.writerow({key: ("" if row.get(key) is None else row.get(key)) for key in OPEN_DATA_CSV_HEADERS})
+    return buffer.getvalue()
+
+
+def open_data_filename(package, extension):
+    """Nombre estable y citable: incluye corte y hash corto de versión."""
+    metadata = (package or {}).get("metadata") or {}
+    cutoff = metadata.get("cutoff_date") or "sin-corte"
+    digest = (metadata.get("version") or "00000000")[:8]
+    return f"sisc-jamundi-datos-abiertos-{cutoff}-{digest}.{extension}"
+
+
+@router.get("/public/open-data")
+def get_public_open_data(
+    response: Response,
+    format: str = Query("json", pattern="^(json|csv)$"),
+    year: Optional[int] = None,
+    period_mode: str = Query("year_to_date"),
+    comparison: str = Query("same_period_previous_year"),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    conducta: Optional[str] = None,
+    zona: Optional[str] = None,
+    territorio: Optional[str] = None,
+    min_location_count: int = Query(PUBLIC_MAP_MIN_LOCATION_COUNT, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Dataset ciudadano versionado (CC BY 4.0), derivado del tablero público."""
+    payload = get_public_dashboard(
+        Response(),
+        year=year,
+        period_mode=period_mode,
+        comparison=comparison,
+        start_date=start_date,
+        end_date=end_date,
+        conducta=conducta,
+        zona=zona,
+        territorio=territorio,
+        include_map=False,
+        min_location_count=min_location_count,
+        db=db,
+    )
+    package = build_open_data_package(payload)
+    metadata = package["metadata"]
+    if format == "csv":
+        filename = open_data_filename(package, "csv")
+        return Response(
+            content=open_data_csv_text(package),
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Dataset-Hash": metadata["version"],
+                "X-Dataset-Cutoff": metadata["cutoff_date"],
+                "X-Dataset-License": OPEN_DATA_LICENSE["short"],
+            },
+        )
+    return package
 
 
 

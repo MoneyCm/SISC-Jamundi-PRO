@@ -6,6 +6,21 @@ const MAX_AGE_MS = 10 * 60 * 1000;
 let memoryCache = {};
 let pendingRequests = {};
 
+const RETRY_DELAY_MS = 1200;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchDashboard = async (url, options, attempts = 2) => {
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            return await fetch(url, options);
+        } catch {
+            if (attempt < attempts) await wait(RETRY_DELAY_MS);
+        }
+    }
+    throw new Error('El servicio de datos tardó demasiado en responder. Intenta de nuevo en unos segundos.');
+};
+
 const normalizeOptions = (input = {}) => {
     const source = typeof input === 'number' ? { minLocationCount: input } : input || {};
     const threshold = Number.isFinite(Number(source.minLocationCount)) ? Number(source.minLocationCount) : 3;
@@ -59,6 +74,13 @@ const saveDashboard = (data, input) => {
     return data;
 };
 
+export const buildOpenDataUrl = (filters = {}, format = 'json') => {
+    const options = normalizeOptions({ ...filters, includeMap: false });
+    const query = buildQuery(options);
+    query.set('format', format);
+    return `${API_BASE_URL}/analitica/public/open-data?${query}`;
+};
+
 const buildQuery = (options) => {
     const query = new URLSearchParams({
         min_location_count: String(options.minLocationCount),
@@ -89,7 +111,7 @@ export const loadPublicDashboard = async ({ force = false, ...input } = {}) => {
     const key = cacheKey(options);
     if (pendingRequests[key]) return pendingRequests[key];
 
-    pendingRequests[key] = fetch(`${API_BASE_URL}/analitica/public/dashboard?${buildQuery(options)}`, {
+    pendingRequests[key] = fetchDashboard(`${API_BASE_URL}/analitica/public/dashboard?${buildQuery(options)}`, {
         headers: { Accept: 'application/json' },
         cache: force ? 'no-store' : 'default',
     })
