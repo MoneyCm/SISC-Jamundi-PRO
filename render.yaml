@@ -26,7 +26,7 @@ services:
       - key: SISC_SOURCE_MONITOR_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://sisc-frontend.onrender.com
+        value: https://sisc-frontend.onrender.com,https://sisc.jamundi.gov.co
       - key: AI_PROVIDER
         value: GEMINI
       - key: GEMINI_API_KEY

@@ -1955,6 +1955,12 @@ class SiscCifrasService:
                     "content_hash": content_hash_policia,
                 }
             except Exception as e:
+                # Una fuente fallida aborta la transaccion: restablecerla para no
+                # envenenar las demas fuentes ni la siguiente llamada con esta sesion.
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 identity["POLICIA_SEMANAL"] = {"error": str(e)}
 
         if "INSPECCIONES_RNMC" in requested:
@@ -1987,6 +1993,10 @@ class SiscCifrasService:
                     "content_hash": content_hash_insp,
                 }
             except Exception as e:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 identity["INSPECCIONES_RNMC"] = {"error": str(e)}
 
         if "COMISARIAS_FAMILIA" in requested:
@@ -2029,6 +2039,10 @@ class SiscCifrasService:
                     "content_hash": source_hash_comis,
                 }
             except Exception as e:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 identity["COMISARIAS_FAMILIA"] = {"error": str(e)}
 
         if "FISCALIA_SPOA_V3" in requested:
@@ -2073,6 +2087,10 @@ class SiscCifrasService:
                         "content_hash": content_hash_spoa,
                     }
             except Exception as e:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 identity["FISCALIA_SPOA_V3"] = {"error": str(e)}
 
         if "MEDICINA_LEGAL" in requested:
@@ -2114,6 +2132,10 @@ class SiscCifrasService:
                         "content_hash": content_hash_ml,
                     }
             except Exception as e:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 identity["MEDICINA_LEGAL"] = {"error": str(e)}
         return identity
 

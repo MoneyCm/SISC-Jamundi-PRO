@@ -14,8 +14,9 @@ from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIs
 from db.models import EventType, Event
 from services.geocoding_service import GeocodingService
 from services.hechos_metrics import canonical_hecho_key
-from services.file_reader import smart_read_file
-from services.sabana_history import build_coverage, claim_snapshot_record, normalize_source_id, snapshot_hecho_key, stable_record_key
+from services.file_reader import select_sheet_frame
+from services.sabana_history import build_coverage, build_record_identity, build_snapshot_record_key, claim_snapshot_record, content_hash, normalize_source_id, snapshot_hecho_key, stable_record_key
+from services.conducta_homologation import homologar_conducta_policia
 
 logger = logging.getLogger("sisc_policia_processor")
 
@@ -53,7 +54,11 @@ class PoliciaJamundiProcessor:
     def _load_catalogo(self):
         try:
             catalogo = self.db.query(CatalogoConductaFuente).filter(CatalogoConductaFuente.activo == True).all()
-            return {c.valor_fuente.upper(): c for c in catalogo}
+            return {
+                self._normalize_text(c.valor_fuente): c
+                for c in catalogo
+                if c.valor_fuente
+            }
         except:
             return {}
 
@@ -157,26 +162,11 @@ class PoliciaJamundiProcessor:
         return hecho
 
     def _homologar_conducta(self, conducta_raw):
-        val = self._normalize_text(conducta_raw)
-        
-        # 1. Intento por catÃ¡logo
-        if val in self.catalogo_conductas:
-            c = self.catalogo_conductas[val]
-            return c.valor_estandar, c.categoria_delito
-        
-        # 2. HeurÃ­stica robusta
-        if any(x in val for x in ["HOMICIDIO", "MUERTE"]): return "Homicidio", "HOMICIDIO"
-        if any(x in val for x in ["LESIONES", "HERIDO"]): return "Lesiones personales", "LESIONES"
-        if any(x in val for x in ["HURTO", "ROBO"]):
-            if "PERSONA" in val: return "Hurto a personas", "HURTO"
-            if "RESIDENCIA" in val: return "Hurto a residencias", "HURTO"
-            if "COMERCIO" in val: return "Hurto a comercio", "HURTO"
-            if "MOTO" in val: return "Hurto a motocicletas", "HURTO"
-            if "AUTO" in val: return "Hurto a automotores", "HURTO"
-            return "Hurto (Otros)", "HURTO"
-        if "VIOLENCIA" in val and "INTRAFAMILIAR" in val: return "Violencia intrafamiliar", "VIF"
-        
-        return "Delito General", "OTROS"
+        conducta_estandar, categoria_delito, _matched = homologar_conducta_policia(
+            conducta_raw,
+            self.catalogo_conductas,
+        )
+        return conducta_estandar, categoria_delito
 
     def process(self, contents: bytes, filename: str, run_id: str = None, force: bool = False):
         file_hash = hashlib.sha256(contents).hexdigest()
@@ -245,7 +235,7 @@ class PoliciaJamundiProcessor:
         self.db.commit()
 
         try:
-            df = smart_read_file(contents)
+            _, df = select_sheet_frame(contents, filename, COLUMN_ALIASES)
             run = self.db.query(IngestionRun).filter(IngestionRun.id == run.id).first()
             run.total_filas = len(df)
             self.db.flush()
@@ -361,10 +351,13 @@ class PoliciaJamundiProcessor:
                             "cantidad": self._parse_count(data.get("cantidad"))
                         }
                         
-                        # h. DeduplicaciÃ³n por Fingerprint (Hecho + VÃ­ctima)
-                        # Eliminamos la deduplicaciÃ³n estricta por id_fuente para aceptar mÃºltiples vÃ­ctimas
+                        # h. Identidad vs huella (intervención conciliación):
+                        # - identidad estable: ID oficial si existe, si no fingerprint (confianza UNCERTAIN).
+                        # - huella de contenido: copia exacta, detecta correcciones (barrio/fecha/conducta).
                         fp = self._generate_fingerprint(processed_data)
-                        record_key = stable_record_key(sanitized_payload)
+                        identity = build_record_identity(processed_data["id_fuente"], fp)
+                        payload_hash = content_hash(sanitized_payload)
+                        record_key = build_snapshot_record_key(identity["record_identity"], payload_hash)
                         if record_key in existing_snapshot_keys:
                             # Un reintento del mismo proceso no debe volver a insertar su foto historica.
                             stats["duplicadas"] += 1
@@ -381,6 +374,8 @@ class PoliciaJamundiProcessor:
                             ingestion_id=run.id,
                             fila_origen=idx + 2,
                             record_key=record_key,
+                            content_hash=payload_hash,
+                            identity_confidence=identity["confidence"],
                             hecho_key=snapshot_hecho_key(processed_data["id_fuente"], fp),
                             id_fuente=processed_data["id_fuente"] or None,
                             anio=processed_data["fecha_evento"].year,
@@ -491,6 +486,18 @@ class PoliciaJamundiProcessor:
             run.georreferenciadas = stats["georreferenciadas"]
             run.status = "COMPLETED"
             run.fecha_fin = datetime.utcnow()
+            coverage = build_coverage(snapshot_coverage)
+            run.cobertura_inicio = datetime.fromisoformat(coverage["min_date"]).date() if coverage.get("min_date") else None
+            run.cobertura_fin = datetime.fromisoformat(coverage["max_date"]).date() if coverage.get("max_date") else None
+            run.calidad_resultado = "VALIDATED" if stats["aprobadas"] > 0 else "PRELIMINARY"
+            run.procesador_version = "policia_processor_v1"
+            try:
+                from pathlib import Path
+                import json as _json
+                cat_file = Path(__file__).resolve().parents[1] / "data" / "catalogs" / "conductas.json"
+                run.homologacion_version = _json.loads(cat_file.read_text(encoding="utf-8")).get("version", "2026.08") if cat_file.exists() else "2026.08"
+            except Exception:
+                run.homologacion_version = "2026.08"
             run.resumen = {
                 **(run.resumen or {}),
                 "top_conductas": df[mapping.get("conducta_original")].value_counts().head(5).to_dict() if "conducta_original" in mapping else {},

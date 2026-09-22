@@ -521,6 +521,22 @@ def run_dq(
         )
         report["error"] = str(exc)
         return report
+    # Libro con pivotes: si la primera hoja no trae el esquema del perfil,
+    # buscar la hoja que sí lo traiga antes de fallar. No cambia nada para
+    # archivos que ya resuelven con la lectura por defecto.
+    try:
+        from services.file_reader import select_sheet_frame
+
+        config = PROFILE_CONFIG[selected_profile]
+        required = config["required"]
+        missing = [c for c in required if c not in _prepare_frame(frame, selected_profile).columns]
+        if missing:
+            _, alt = select_sheet_frame(file_bytes, filename, config["aliases"])
+            missing_alt = [c for c in required if c not in _prepare_frame(alt, selected_profile).columns]
+            if len(missing_alt) < len(missing):
+                frame = alt
+    except Exception:
+        pass
     return _run_frame(frame, filename, source_name, selected_profile)
 
 

@@ -34,13 +34,15 @@ def _user(*roles):
     return SimpleNamespace(roles=[SimpleNamespace(code=role) for role in roles])
 
 
-def test_catalog_has_the_five_distinct_source_connectors():
+def test_catalog_has_the_distinct_source_connectors():
     assert set(SOURCE_CONNECTORS) == {
         "POLICIA_JAMUNDI",
         "POLICIA_NACIONAL",
         "MINDEFENSA",
         "SIEDCO_PUBLICO",
         "OBSERVATORIO_VALLE",
+        "FISCALIA_SPOA_V3",
+        "MEDICINA_LEGAL",
     }
     assert SOURCE_CONNECTORS["POLICIA_JAMUNDI"]["purpose"] == "Fuente operativa principal"
     assert SOURCE_CONNECTORS["POLICIA_NACIONAL"]["purpose"] == "Contraste mensual oficial de la sabana semanal"
@@ -49,6 +51,8 @@ def test_catalog_has_the_five_distinct_source_connectors():
     assert SOURCE_CONNECTORS["MINDEFENSA"]["action_type"] == "OPEN"
     assert SOURCE_CONNECTORS["SIEDCO_PUBLICO"]["expected_frequency"] == "Mensual y bajo demanda"
     assert SOURCE_CONNECTORS["OBSERVATORIO_VALLE"]["expected_frequency"] == "Semanal"
+    assert SOURCE_CONNECTORS["FISCALIA_SPOA_V3"]["purpose"] == "Capa judicial complementaria del Observatorio del Delito"
+    assert SOURCE_CONNECTORS["MEDICINA_LEGAL"]["purpose"] == "Capa forense que arbitra homicidios, suicidios y violencia de causa externa"
 
 
 def test_freshness_thresholds_are_explicit():
@@ -133,6 +137,7 @@ def test_github_oidc_claims_are_scoped_to_connector_workflow():
     [
         ("POLICIA_NACIONAL", "MoneyCm/monitor-policia", "monitor.yml"),
         ("MINDEFENSA", "MoneyCm/monitor-mindefensa", "monitor.yml"),
+        ("FISCALIA_SPOA_V3", "MoneyCm/monitor-fiscalia-spoa-v3", "monitor_spoa_v3.yml"),
     ],
 )
 def test_github_oidc_accepts_daily_metadata_monitors(connector_code, repository, workflow):

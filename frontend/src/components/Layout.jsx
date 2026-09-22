@@ -5,6 +5,12 @@ import Header from './Header';
 const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userRoles, dataLevel, currentUser }) => {
     const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
+    // En modo público cada página trae su propio encabezado institucional;
+    // el sidebar y el header del Layout duplicarían la navegación.
+    if (isPublic) {
+        return <>{children}</>;
+    }
+
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden relative">
             {/* Mobile Sidebar Overlay */}

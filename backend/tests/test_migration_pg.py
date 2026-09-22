@@ -442,6 +442,16 @@ class TestDatasetIdentityIntegration:
         cur.close()
         conn.close()
 
+    def _clear_policia(self):
+        # Cada test parte de tabla limpia: no depender del orden de ejecucion
+        # ni de filas dejadas por otros tests (las claves ID:SRC-* colisionan).
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM hechos_seguridad WHERE fuente_codigo = 'POLICIA_SEMANAL'")
+        conn.commit()
+        cur.close()
+        conn.close()
+
     def _insert_policia(self, fingerprints):
         conn = get_conn()
         cur = conn.cursor()
@@ -501,6 +511,7 @@ class TestDatasetIdentityIntegration:
         return Session(), engine
 
     def test_identity_returns_content_hashes(self):
+        self._clear_policia()
         self._insert_policia(["fp_aaa", "fp_bbb", "fp_ccc"])
         self._insert_inspeccion(["insp_001", "insp_002"])
         self._insert_comisarias("sha_of_source_file_abc123")
@@ -534,6 +545,7 @@ class TestDatasetIdentityIntegration:
             engine.dispose()
 
     def test_different_data_different_hash(self):
+        self._clear_policia()
         self._insert_policia(["fp_xxx"])
 
         session, engine = self._get_session()
@@ -559,7 +571,7 @@ class TestDatasetIdentityIntegration:
             )
             hash_after = identity2["POLICIA_SEMANAL"]["content_hash"]
             assert hash_before != hash_after, "content_hash should change when new data added"
-            assert identity2["POLICIA_SEMANAL"]["unique_count"] == 4
+            assert identity2["POLICIA_SEMANAL"]["unique_count"] == 2
         finally:
             session.close()
             engine.dispose()

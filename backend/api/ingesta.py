@@ -18,6 +18,9 @@ logger = logging.getLogger("sisc_api")
 from api.auth import admin_only, analyst_or_admin, ingestion_operator, log_audit, get_current_user, require_role
 from db import crud_dq
 from services import dq_service
+from services.hechos_metrics import hechos_unicos_expr
+from services.file_reader import select_sheet_frame
+from services.conducta_homologation import homologar_conducta_policia, normalize_conducta_key
 
 router = APIRouter()
 
@@ -318,6 +321,42 @@ def _process_policia_background(contents: bytes, filename: str, username: str, r
     finally:
         db.close()
 
+# Alias aceptados por el preflight de la SABANA semanal. Deben cubrir los que
+# acepta el procesador (services/excel_policia_processor.py::COLUMN_ALIASES)
+# para no bloquear archivos que la ingesta real si puede consolidar.
+PREFLIGHT_ALIASES = {
+    "hecho_id": ["HECHOS_ID", "ID_HECHO", "HECHO_ID", "ID", "COD_HECHO"],
+    "conducta": ["DESCRIPCION_CONDUCTA", "CONDUCTA", "DELITO", "CONDUCTA_SITIO"],
+    "fecha": ["FECHA_HECHO", "FECHA", "FECHA DEL HECHO", "FECHA_INCIDENTE"],
+    "semana": ["NOSEMANA", "SEMANA", "NUM_SEMANA", "SEMANA_DEL"],
+    "barrio": ["BARRIOS_HECHO", "BARRIO", "BARRIO_HECHO", "DESCRIPCION_BARRIO"],
+    "municipio": ["MUNICIPIO_HECHO", "HECHOS_MUNICIPIO", "MUNICIPIO", "MPIO", "CIUDAD"],
+    "zona": ["ZONA", "ZONA_HECHO"],
+}
+
+PREFLIGHT_REQUIRED = ["hecho_id", "conducta", "fecha", "semana", "barrio", "zona"]
+
+
+def normalize_preflight_name(value):
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return re.sub(r"[^A-Z0-9]+", "", text.upper())
+
+
+def resolve_preflight_columns(columns):
+    """Mapea encabezados reales a claves canonicas (o None si no hay match)."""
+    normalized = {normalize_preflight_name(column): str(column).strip() for column in columns}
+
+    def column_for(key):
+        return next(
+            (normalized.get(normalize_preflight_name(alias)) for alias in PREFLIGHT_ALIASES[key]
+             if normalize_preflight_name(alias) in normalized),
+            None,
+        )
+
+    return {key: column_for(key) for key in PREFLIGHT_ALIASES}
+
+
 @router.post("/policia/preflight")
 async def policia_preflight(
     file: UploadFile = File(...),
@@ -335,31 +374,13 @@ async def policia_preflight(
         raise HTTPException(status_code=413, detail="El archivo supera el limite de 25 MB.")
 
     try:
-        frame = pd.read_csv(io.BytesIO(contents)) if filename.lower().endswith(".csv") else pd.read_excel(io.BytesIO(contents))
+        sheet_name, frame = select_sheet_frame(contents, filename, PREFLIGHT_ALIASES)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"No fue posible leer la SABANA: {exc}")
 
-    def normalize_name(value):
-        text = unicodedata.normalize("NFKD", str(value or ""))
-        text = "".join(char for char in text if not unicodedata.combining(char))
-        return re.sub(r"[^A-Z0-9]+", "", text.upper())
-
-    columns = {normalize_name(column): str(column).strip() for column in frame.columns}
-    aliases = {
-        "hecho_id": ["HECHOS_ID", "ID_HECHO", "HECHO_ID"],
-        "conducta": ["DESCRIPCION_CONDUCTA", "CONDUCTA", "DELITO"],
-        "fecha": ["FECHA_HECHO", "FECHA"],
-        "semana": ["NOSEMANA", "SEMANA", "NUM_SEMANA"],
-        "barrio": ["BARRIOS_HECHO", "BARRIO", "BARRIO_HECHO"],
-        "municipio": ["MUNICIPIO_HECHO", "HECHOS_MUNICIPIO", "MUNICIPIO"],
-        "zona": ["ZONA", "ZONA_HECHO"],
-    }
-    def column_for(key):
-        return next((columns.get(normalize_name(alias)) for alias in aliases[key] if normalize_name(alias) in columns), None)
-
-    resolved = {key: column_for(key) for key in aliases}
-    required = ["hecho_id", "conducta", "fecha", "semana", "barrio", "zona"]
-    missing_required = [key for key in required if not resolved[key]]
+    columns = [str(column).strip() for column in frame.columns]
+    resolved = resolve_preflight_columns(columns)
+    missing_required = [key for key in PREFLIGHT_REQUIRED if not resolved[key]]
     total_rows = len(frame)
     dates = pd.to_datetime(frame[resolved["fecha"]], errors="coerce") if resolved["fecha"] else pd.Series(dtype="datetime64[ns]")
     invalid_dates = int(dates.isna().sum()) if resolved["fecha"] else total_rows
@@ -375,13 +396,21 @@ async def policia_preflight(
         CatalogoConductaFuente.fuente_codigo == "POLICIA_SEMANAL",
         CatalogoConductaFuente.activo.is_(True),
     ).all()
-    known_conductas = {normalize_name(item.valor_fuente) for item in catalog}
-    unmapped_conductas = sorted({item for item in conductas.unique() if normalize_name(item) not in known_conductas})[:12]
+    catalog_by_name = {}
+    for item in catalog:
+        catalog_by_name[str(item.valor_fuente or "").strip().upper()] = item
+        catalog_by_name[normalize_conducta_key(item.valor_fuente)] = item
+
+    unmapped_conductas = sorted({
+        item
+        for item in conductas.unique()
+        if not homologar_conducta_policia(item, catalog_by_name)[2]
+    })[:12]
 
     municipality_outside = 0
     if resolved["municipio"]:
         municipalities = frame[resolved["municipio"]].fillna("").astype(str)
-        municipality_outside = int(sum(normalize_name(item) not in {"", "JAMUNDI"} for item in municipalities))
+        municipality_outside = int(sum(normalize_preflight_name(item) not in {"", "JAMUNDI"} for item in municipalities))
 
     field_aliases = {
         "Hora y franja": ["HORA24", "HORA_HECHO", "INTERVALOS_HORA", "TURNO"],
@@ -390,9 +419,10 @@ async def policia_preflight(
         "Perfil agregado": ["GENERO", "AGRUPA_EDAD_PERSONA", "GRUPOS_VULNERABLES_PERSONA"],
         "Analisis especializado": ["SPOA_CARACTERIZACION", "SPOA_MOTIVACION", "CONDUCTAS_ESPECIALES", "UNIDAD_APOYA"],
     }
+    normalized_columns = {normalize_preflight_name(column): column for column in columns}
     available_fields = []
     for label, names in field_aliases.items():
-        found = [columns[normalize_name(name)] for name in names if normalize_name(name) in columns]
+        found = [normalized_columns[normalize_preflight_name(name)] for name in names if normalize_preflight_name(name) in normalized_columns]
         available_fields.append({"group": label, "columns": found, "available": bool(found)})
 
     issues = []
@@ -411,6 +441,7 @@ async def policia_preflight(
     return {
         "status": status,
         "filename": filename,
+        "sheet": sheet_name,
         "file_hash": hashlib.sha256(contents).hexdigest(),
         "summary": {
             "rows": int(total_rows),
@@ -468,9 +499,10 @@ async def police_weekly_explorer(
             query = query.filter(HechoSeguridad.semana_num == semana)
 
     def breakdown(column, limit=10):
-        rows = query.with_entities(column, func.count(HechoSeguridad.id)).filter(
+        # Cifra oficial: hechos únicos (metodología v1), no filas.
+        rows = query.with_entities(column, hechos_unicos_expr()).filter(
             column.isnot(None), column != ""
-        ).group_by(column).order_by(func.count(HechoSeguridad.id).desc()).limit(limit).all()
+        ).group_by(column).order_by(hechos_unicos_expr().desc()).limit(limit).all()
         return [{"label": str(label), "value": int(value)} for label, value in rows]
 
     years = [int(row[0]) for row in source.with_entities(func.extract("year", HechoSeguridad.fecha_evento)).distinct().order_by(func.extract("year", HechoSeguridad.fecha_evento).desc()).all() if row[0]]
@@ -486,11 +518,13 @@ async def police_weekly_explorer(
 
     return {
         "access": {"can_filter_detailed": can_filter_detailed, "label": role_label},
-        "summary": {"total": query.count(), "corte": corte.isoformat() if corte else None},
+        "summary": {"total": query.with_entities(hechos_unicos_expr()).scalar() or 0, "corte": corte.isoformat() if corte else None,
+                    "unit": "HECHO", "methodology_version": "1",
+                    "note": "Total en hechos únicos (COUNT DISTINCT hecho_key)."},
         "filters": {"years": years, "conductas": conductas if can_filter_detailed else [], "zonas": zonas if can_filter_detailed else [], "semanas": semanas if can_filter_detailed else []},
         "breakdowns": {
             "conductas": breakdown(HechoSeguridad.conducta_estandar),
-            "semanas": [{"label": f"Semana {int(label)}", "value": int(value)} for label, value in query.with_entities(HechoSeguridad.semana_num, func.count(HechoSeguridad.id)).filter(HechoSeguridad.semana_num.isnot(None)).group_by(HechoSeguridad.semana_num).order_by(HechoSeguridad.semana_num).all()],
+            "semanas": [{"label": f"Semana {int(label)}", "value": int(value)} for label, value in query.with_entities(HechoSeguridad.semana_num, hechos_unicos_expr()).filter(HechoSeguridad.semana_num.isnot(None)).group_by(HechoSeguridad.semana_num).order_by(HechoSeguridad.semana_num).all()],
             "barrios": breakdown(HechoSeguridad.barrio_normalizado),
             "zonas": breakdown(HechoSeguridad.zona),
             "modalidades": breakdown(HechoSeguridad.modalidad) if can_filter_detailed else [],
@@ -519,7 +553,14 @@ async def upload_with_gate(
     5. Carga datos si pasa el gate.
     """
     dataset_code = dataset_code.upper()
-    contents = await file.read()
+    if dataset_code == "POLICIA_SEMANAL":
+        if not (file.filename or "").lower().endswith((".xlsx", ".xls", ".csv")):
+            raise HTTPException(status_code=422, detail="Seleccione una sábana XLSX, XLS o CSV.")
+        contents = await file.read(25 * 1024 * 1024 + 1)
+        if len(contents) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="El archivo supera el límite de 25 MB.")
+    else:
+        contents = await file.read()
 
     if not contents:
         raise HTTPException(status_code=400, detail="El archivo esta vacio.")

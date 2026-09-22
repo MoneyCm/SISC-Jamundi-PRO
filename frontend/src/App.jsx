@@ -57,6 +57,8 @@ const PUBLIC_PAGE_META = {
   'technical-bulletins': ['Boletines | SISC Jamundí', 'Consulta boletines técnicos públicos del SISC Jamundí.'],
   'open-data': ['Datos abiertos | SISC Jamundí', 'Descarga información pública agregada en formatos CSV, JSON y XLSX.'],
   'transparency-info': ['Metodología y fuentes | SISC Jamundí', 'Conoce las fuentes, fechas de corte, metodología y límites de las cifras públicas.'],
+  reporting: ['Reporte seguro | SISC Jamundí', 'Canal institucional para informar delitos o riesgos, con opción de anonimato.'],
+  pqr: ['Ventanilla PQR | SISC Jamundí', 'Sistema de PQR y trámites de la Alcaldía de Jamundí.'],
 };
 
 const App = () => {

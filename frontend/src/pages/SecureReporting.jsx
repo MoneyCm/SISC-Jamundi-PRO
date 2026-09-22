@@ -24,9 +24,10 @@ const getLocalDate = () => {
 
 const StepIndicator = ({ currentStep }) => (
     <div className="flex items-center justify-center space-x-4 mb-10">
+        <p className="sr-only">Paso {currentStep} de 3</p>
         {[1, 2, 3].map((step) => (
-            <div key={step} className="flex items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${currentStep >= step ? 'bg-primary text-white shadow-lg' : 'bg-slate-200 text-slate-500'
+            <div key={step} className="flex items-center" aria-hidden="true">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors ${currentStep >= step ? 'bg-primary text-white shadow-lg' : 'bg-slate-200 text-slate-500'
                     }`}>
                     {step}
                 </div>
@@ -43,6 +44,7 @@ const SecureReporting = ({ onBack }) => {
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [reportId, setReportId] = useState("");
+    const [validationError, setValidationError] = useState("");
     const [formData, setFormData] = useState({
         tipo: 'HURTO A PERSONAS',
         subtipo: '',
@@ -58,14 +60,34 @@ const SecureReporting = ({ onBack }) => {
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
+        setValidationError("");
         setFormData(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
     };
 
+    const validateStep = (targetStep) => {
+        if (step === 1 && targetStep > 1 && !formData.barrio.trim()) {
+            setValidationError("Indica el barrio o sector antes de continuar.");
+            return false;
+        }
+        if (step === 2 && targetStep > 2 && !formData.descripcion.trim()) {
+            setValidationError("Describe lo sucedido antes de continuar.");
+            return false;
+        }
+        setValidationError("");
+        return true;
+    };
+
+    const goToStep = (targetStep) => {
+        if (!validateStep(targetStep)) return;
+        setStep(targetStep);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!validateStep(3)) return;
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
@@ -112,7 +134,7 @@ const SecureReporting = ({ onBack }) => {
                     </div>
                     <button
                         onClick={onBack}
-                        className="w-full bg-primary text-white font-black py-4 rounded-2xl hover:bg-primary-600 transition-all flex items-center justify-center gap-2"
+                        className="w-full bg-primary text-white font-black py-4 rounded-2xl hover:bg-[#3A30F1] transition-colors flex items-center justify-center gap-2"
                     >
                         <Home size={18} /> Volver al Inicio
                     </button>
@@ -150,6 +172,11 @@ const SecureReporting = ({ onBack }) => {
                         <StepIndicator currentStep={step} />
 
                         <form onSubmit={handleSubmit}>
+                            {validationError && (
+                                <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800" role="alert">
+                                    {validationError}
+                                </div>
+                            )}
                             {step === 1 && (
                                 <div className="space-y-6 animate-fade-in">
                                     <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -158,7 +185,7 @@ const SecureReporting = ({ onBack }) => {
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Tipo de Incidente</label>
+                                            <label className="text-xs font-black uppercase tracking-widest text-slate-500">Tipo de Incidente</label>
                                             <select
                                                 name="tipo"
                                                 value={formData.tipo}
@@ -173,7 +200,7 @@ const SecureReporting = ({ onBack }) => {
                                             </select>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Barrio / Sector</label>
+                                            <label className="text-xs font-black uppercase tracking-widest text-slate-500">Barrio / Sector</label>
                                             <input
                                                 type="text"
                                                 name="barrio"
@@ -185,7 +212,7 @@ const SecureReporting = ({ onBack }) => {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Fecha</label>
+                                            <label className="text-xs font-black uppercase tracking-widest text-slate-500">Fecha</label>
                                             <div className="relative">
                                                 <Calendar size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                                 <input
@@ -198,7 +225,7 @@ const SecureReporting = ({ onBack }) => {
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Hora Aproximada</label>
+                                            <label className="text-xs font-black uppercase tracking-widest text-slate-500">Hora Aproximada</label>
                                             <div className="relative">
                                                 <Clock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                                 <input
@@ -214,8 +241,8 @@ const SecureReporting = ({ onBack }) => {
                                     <div className="flex justify-end">
                                         <button
                                             type="button"
-                                            onClick={() => setStep(2)}
-                                            className="bg-primary text-white font-black px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-primary-600 transition-all shadow-lg"
+                                            onClick={() => goToStep(2)}
+                                            className="bg-primary text-white font-black px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-[#3A30F1] transition-colors shadow-lg"
                                         >
                                             Siguiente Paso <ArrowRight size={18} />
                                         </button>
@@ -230,7 +257,7 @@ const SecureReporting = ({ onBack }) => {
                                         Relato de los Hechos
                                     </h3>
                                     <div className="space-y-2">
-                                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Descripción Detallada</label>
+                                        <label className="text-xs font-black uppercase tracking-widest text-slate-500">Descripción Detallada</label>
                                         <textarea
                                             name="descripcion"
                                             value={formData.descripcion}
@@ -243,22 +270,22 @@ const SecureReporting = ({ onBack }) => {
                                     </div>
                                     <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 flex gap-4">
                                         <EyeOff size={24} className="text-primary shrink-0" />
-                                        <p className="text-xs text-primary-900 leading-relaxed font-medium">
+                                        <p className="text-xs text-[#281FD0] leading-relaxed font-medium">
                                             <strong>Nota de Privacidad:</strong> Tu descripción será utilizada solo para fines de inteligencia de seguridad y no será publicada en el portal de transparencia de forma literal.
                                         </p>
                                     </div>
                                     <div className="flex justify-between">
                                         <button
                                             type="button"
-                                            onClick={() => setStep(1)}
-                                            className="bg-slate-100 text-slate-500 font-black px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-all"
+                                            onClick={() => goToStep(1)}
+                                            className="bg-slate-100 text-slate-500 font-black px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-colors"
                                         >
                                             <ArrowLeft size={18} /> Anterior
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setStep(3)}
-                                            className="bg-primary text-white font-black px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-primary-600 transition-all shadow-lg"
+                                            onClick={() => goToStep(3)}
+                                            className="bg-primary text-white font-black px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-[#3A30F1] transition-colors shadow-lg"
                                         >
                                             Siguiente Paso <ArrowRight size={18} />
                                         </button>
@@ -290,7 +317,7 @@ const SecureReporting = ({ onBack }) => {
                                         {!formData.es_anonimo && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nombre Completo</label>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Nombre Completo</label>
                                                     <input
                                                         type="text"
                                                         name="nombre"
@@ -300,7 +327,7 @@ const SecureReporting = ({ onBack }) => {
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Teléfono / Email</label>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Teléfono / Email</label>
                                                     <input
                                                         type="text"
                                                         name="contacto"
@@ -331,15 +358,15 @@ const SecureReporting = ({ onBack }) => {
                                     <div className="flex justify-between pt-6 border-t border-slate-100">
                                         <button
                                             type="button"
-                                            onClick={() => setStep(2)}
-                                            className="bg-slate-100 text-slate-500 font-black px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-all"
+                                            onClick={() => goToStep(2)}
+                                            className="bg-slate-100 text-slate-500 font-black px-8 py-4 rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-colors"
                                         >
                                             <ArrowLeft size={18} /> Anterior
                                         </button>
                                         <button
                                             type="submit"
                                             disabled={loading || !formData.autoriza_datos}
-                                            className="bg-emerald-600 text-white font-black px-12 py-4 rounded-2xl flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed group"
+                                            className="bg-emerald-600 text-white font-black px-12 py-4 rounded-2xl flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-xl disabled:opacity-50 disabled:cursor-not-allowed group"
                                         >
                                             {loading ? 'Procesando...' : (
                                                 <>
@@ -354,7 +381,7 @@ const SecureReporting = ({ onBack }) => {
                     </div>
                     {/* Bottom safety notice */}
                     <div className="bg-slate-900 py-3 px-8 text-center">
-                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.4em]">
+                        <p className="text-[10px] font-bold text-white/60 uppercase tracking-[0.4em]">
                             Tratamiento reservado • SISC Jamundí
                         </p>
                     </div>

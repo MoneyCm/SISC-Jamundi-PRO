@@ -3,14 +3,14 @@ import { ArrowLeft, Globe, ExternalLink } from 'lucide-react';
 
 const PQRPage = ({ onBack }) => {
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col animate-fade-in">
+        <div className="min-h-screen bg-[#F2F4F7] flex flex-col animate-fade-in">
             {/* Header / Nav */}
             <div className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm relative z-10">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={onBack}
                         className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 hover:text-primary"
-                        title="Volver"
+                        title="Volver" aria-label="Volver"
                     >
                         <ArrowLeft size={24} />
                     </button>
@@ -26,7 +26,7 @@ const PQRPage = ({ onBack }) => {
                     href="https://www.sisnet.com.co/jamundipqr/#no-back-button"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="hidden md:flex items-center gap-2 text-xs font-bold text-primary bg-primary/10 px-4 py-2 rounded-lg hover:bg-primary/20 transition-colors"
+                    className="flex items-center gap-2 text-xs font-bold text-primary bg-primary/10 px-4 py-2 rounded-lg hover:bg-primary/20 transition-colors"
                 >
                     Abrir en nueva pestaña <ExternalLink size={14} />
                 </a>
