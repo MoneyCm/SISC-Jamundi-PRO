@@ -23,6 +23,12 @@ class IngestionRun(Base):
     fecha_fin = Column(DateTime)
     resumen = Column(JSONB) # Top conductas, etc.
     status = Column(String(50), default="IN_PROGRESS") # COMPLETED, FAILED
+    # --- Trazabilidad entrega (intervención conciliación histórica) ---
+    cobertura_inicio = Column(Date, nullable=True)
+    cobertura_fin = Column(Date, nullable=True)
+    calidad_resultado = Column(String(30), nullable=True)  # VALIDATED | PRELIMINARY | FAILED
+    procesador_version = Column(String(20), nullable=True, default="policia_processor_v1")
+    homologacion_version = Column(String(20), nullable=True, default="2026.08")
 
 class IngestionIssue(Base):
     __tablename__ = "ingestion_issues"
@@ -51,6 +57,10 @@ class SabanaSnapshotRow(Base):
     ingestion_id = Column(UUID(as_uuid=True), ForeignKey("ingestion_runs.id"), nullable=False, index=True)
     fila_origen = Column(Integer)
     record_key = Column(String(64), nullable=False)
+    # Huella del contenido (detecta cambios) vs identidad estable (reconoce el registro).
+    # record_key = identidad estable; content_hash = huella de la copia exacta.
+    content_hash = Column(String(64), nullable=True)
+    identity_confidence = Column(String(20), nullable=True, default="HIGH")  # HIGH | UNCERTAIN
     hecho_key = Column(String(255), nullable=False, index=True)
     id_fuente = Column(String(100), index=True)
     anio = Column(Integer, nullable=False, index=True)
