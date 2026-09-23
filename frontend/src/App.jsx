@@ -76,7 +76,7 @@ const App = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReportId, setSelectedReportId] = useState(null);
-  const [selectedDataset, setSelectedDataset] = useState({ code: 'SECUESTRO', label: 'Secuestro' });
+  const [selectedDataset, setSelectedDataset] = useState({ code: 'POLICIA_SEMANAL', label: 'Policía Jamundí - Base Semanal' });
   const [rnmcFilters, setRnmcFilters] = useState(null);
 
   const navigatePublic = (page, options = {}) => {
@@ -333,8 +333,8 @@ const App = () => {
         return <UniversalIngesta
           setActivePage={setActivePage}
           setReportId={setSelectedReportId}
-          datasetCode={selectedDataset?.code || "SECUESTRO"}
-          label={selectedDataset?.label || "Secuestro"}
+          datasetCode={selectedDataset?.code || "POLICIA_SEMANAL"}
+          label={selectedDataset?.label || "Policía Jamundí - Base Semanal"}
         />;
       default:
         return <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;

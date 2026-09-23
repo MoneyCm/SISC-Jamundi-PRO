@@ -34,7 +34,7 @@ const DATASETS_CONFIG = [
     { code: 'POLICIA_PORTAL', label: 'SIEDCO (Público)' },
 ];
 
-const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO", label = "Secuestro" }) => {
+const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "POLICIA_SEMANAL", label = "Policía Jamundí - Base Semanal" }) => {
     const [currentDataset, setCurrentDataset] = useState({ code: datasetCode, label: label });
     const [status, setStatus] = useState('idle'); // idle, uploading, rejected, success
     const [reportInfo, setReportInfo] = useState(null);
@@ -331,6 +331,9 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600">Previsualización de la sábana</p>
                             <h2 className="text-3xl font-black text-slate-800 tracking-tight mt-2">Revisa antes de consolidar</h2>
                             <p className="text-sm text-slate-500 mt-2">Este diagnóstico no guarda datos. Las filas que comparten un HECHOS_ID se revisan como posibles registros del mismo hecho, no como error automático.</p>
+                            {preflight.sheet && (
+                                <p className="mt-2 inline-block text-[11px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-3 py-1 rounded-full">Hoja analizada: {preflight.sheet}</p>
+                            )}
                         </div>
                         <span className={`px-4 py-2 rounded-full text-xs font-black ${preflight.status === 'READY' ? 'bg-emerald-100 text-emerald-700' : preflight.status === 'REVIEW' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                             {preflight.status === 'READY' ? 'LISTO PARA PROCESAR' : preflight.status === 'REVIEW' ? 'REQUIERE REVISIÓN' : 'CARGA BLOQUEADA'}
@@ -356,6 +359,12 @@ const UniversalIngesta = ({ setActivePage, setReportId, datasetCode = "SECUESTRO
                     <div className="grid md:grid-cols-2 gap-5">
                         <div className="border border-slate-200 rounded-2xl p-5">
                             <h3 className="font-black text-slate-800">Variables disponibles</h3>
+                            {preflight.schema.detected_columns?.length > 0 && (
+                                <p className="mt-3 text-xs leading-5 text-slate-500 break-words">
+                                    <strong className="font-black text-slate-700">Columnas detectadas ({preflight.schema.detected_columns.length}): </strong>
+                                    {preflight.schema.detected_columns.join(', ')}
+                                </p>
+                            )}
                             <div className="mt-3 space-y-2">
                                 {preflight.schema.available_fields.map((group) => (
                                     <div key={group.group} className="flex items-start justify-between gap-3 text-sm">
