@@ -30,9 +30,49 @@ def snapshot_hecho_key(source_id: str, fingerprint: str) -> str:
     return f"ID:{source_id}" if source_id else f"FP:{fingerprint}"
 
 def stable_record_key(payload: dict) -> str:
-    """Identifica una copia exacta sin confundir victimas del mismo hecho."""
+    """Huella del CONTENIDO: identifica una copia exacta sin confundir victimas.
+
+    LEGADO: se usaba como identidad. No usar como única identidad estable:
+    barrio/fecha/conducta pueden corregirse y generarían un registro "nuevo"
+    en vez de una corrección. Ver build_record_identity() + content_hash().
+    """
+    return content_hash(payload)
+
+
+def content_hash(payload: dict) -> str:
+    """Huella del contenido: detecta que los valores cambiaron."""
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def build_record_identity(source_id: str, fingerprint: str) -> dict:
+    """Identidad del registro: permite reconocerlo entre entregas.
+
+    - Con ID oficial (HECHOS_ID): identidad estable ID:<id>, confianza HIGH.
+    - Sin ID: fallback a fingerprint (hecho+víctima), confianza UNCERTAIN.
+      No presentar coincidencia aproximada como corrección confirmada.
+    """
+    clean = normalize_source_id(source_id)
+    if clean:
+        return {"record_identity": f"ID:{clean}", "confidence": "HIGH"}
+    return {"record_identity": f"FP:{fingerprint}", "confidence": "UNCERTAIN"}
+
+
+def build_snapshot_record_key(record_identity: str, payload_hash: str) -> str:
+    """Clave estable de FILA: identidad + huella de contenido.
+
+    Varias víctimas del mismo hecho comparten identidad pero tienen contenido
+    distinto, por lo que cada una conserva su fila. Una copia exacta repetida
+    (reintento del mismo archivo) produce la misma clave y se deduplica.
+    Una corrección (misma identidad, distinto contenido) produce otra clave;
+    la correspondencia entre entregas se hace por identidad, no por clave.
+    """
+    return f"{record_identity}#{payload_hash[:12]}"
+
+
+def record_identity_of(record_key: str) -> str:
+    """Extrae la identidad de una clave de fila (compatible con legado sin '#')."""
+    return str(record_key or "").split("#", 1)[0]
 
 
 def claim_snapshot_record(seen: set[str], record_key: str) -> bool:
