@@ -1,0 +1,50 @@
+name: Verify deployed source center
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify Fiscalia routes are deployed and protected
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import urlopen
+
+          base = "https://sisc-backend.onrender.com"
+          required = {
+              "/api/source-center/heartbeat",
+              "/api/fiscalia-spoa/ingest",
+              "/api/fiscalia-spoa/runs/{run_id}/complete",
+              "/api/fiscalia-spoa/summary",
+          }
+          for attempt in range(12):
+              try:
+                  with urlopen(base + "/openapi.json", timeout=20) as response:
+                      schema = json.load(response)
+                  missing = required - set(schema["paths"])
+                  if not missing:
+                      try:
+                          with urlopen(base + "/api/fiscalia-spoa/summary", timeout=20):
+                              raise SystemExit("Unexpected unauthenticated access to Fiscalia summary")
+                      except HTTPError as error:
+                          if error.code not in {401, 403}:
+                              raise
+                      print("Fiscalia routes deployed; institutional summary requires authentication.")
+                      break
+                  print("Waiting for deployment; missing routes:", sorted(missing), flush=True)
+              except (HTTPError, URLError, TimeoutError, OSError) as error:
+                  print("Deployment temporarily unavailable:", type(error).__name__, flush=True)
+              if attempt == 11:
+                  raise SystemExit("Could not confirm deployed Fiscalia routes")
+              time.sleep(20)
+          PY
