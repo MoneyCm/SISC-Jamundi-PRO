@@ -84,6 +84,20 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "fresh_days": 10,
         "lagged_days": 24,
     },
+    "FISCALIA_SPOA_V3": {
+        "name": "Fiscalía SPOA V3",
+        "institution": "Fiscalía General de la Nación",
+        "scope": "Procesos, víctimas y procesados filtrados para Jamundí",
+        "purpose": "Capa judicial complementaria del Observatorio del Delito",
+        "update_mode": "AUTOMATIC_EXTERNAL",
+        "expected_frequency": "Revisión diaria hábil; publicación mensual",
+        "source_url": "https://www.fiscalia.gov.co/gestion/estadisticas/",
+        "action_type": "OPEN",
+        "action_label": "Abrir fuente oficial",
+        "dataset_code": None,
+        "fresh_days": 55,
+        "lagged_days": 90,
+    },
 }
 
 STATUS_LABELS = {
@@ -356,6 +370,7 @@ class SourceCenterService:
             cls._apply_state(cls._base("MINDEFENSA"), states.get("MINDEFENSA")),
             cls._apply_state(cls._base("SIEDCO_PUBLICO"), states.get("SIEDCO_PUBLICO")),
             cls._apply_state(cls._base("OBSERVATORIO_VALLE"), states.get("OBSERVATORIO_VALLE")),
+            cls._apply_state(cls._base("FISCALIA_SPOA_V3"), states.get("FISCALIA_SPOA_V3")),
         ]
         attention_statuses = {"ERROR", "NOT_CONNECTED", "UPDATE_AVAILABLE", "NEEDS_REVIEW", "EXPIRED"}
         timestamps = [item["last_checked_at"] for item in connectors if item["last_checked_at"]]

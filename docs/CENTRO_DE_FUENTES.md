@@ -87,3 +87,26 @@ Estados de calidad permitidos: `VALIDATED`, `WARNING`, `INCOMPLETE` y `ERROR`.
 Los umbrales son mas estrictos para la sabana semanal y Valle. Las fuentes
 nacionales mensuales admiten el rezago normal entre el corte estadistico y la
 fecha de publicacion institucional.
+
+
+### Sincronizacion de la instalacion local
+
+Los workflows reportan a Render, no a `localhost`. Para recibir sus reportes en
+la base local, ejecutar `python backend/scripts/sync_source_monitors.py` en el
+equipo con GitHub CLI autenticado (`gh auth login`). `--watch` repite la consulta
+cada 15 minutos; `powershell -File backend/scripts/start_source_sync.ps1` inicia el proceso oculto sin duplicarlo.
+La sincronizacion no ejecuta monitores, no envia correos y rechaza bases remotas.
+
+Los cinco monitores conservan `sisc-heartbeat.json` en el artefacto
+`sisc-heartbeat` durante 30 dias, incluso si falla el envio a Render. El lector
+solo acepta el workflow registrado de `main`, ejecuciones programadas o manuales
+y el conector esperado. Conserva las fechas reales del reporte, valida el JSON
+y no reemplaza reportes recientes por antiguos.
+
+Las ejecuciones anteriores que no tengan este artefacto solo acreditan que el
+monitor existe y se ejecuto: se registran como **Sin revisar**, con advertencias
+y enlace de procedencia, sin inventar fecha de revision, corte ni cifras. Esta
+evidencia parcial nunca sustituye un reporte real ya recibido. Los cambios de
+los workflows deben publicarse para que las proximas ejecuciones guarden el
+artefacto. Los emisores reintentan tres veces los fallos temporales; un 404 no
+se reintenta y requiere revisar la version/ruta desplegada en Render.

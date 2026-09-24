@@ -50,6 +50,12 @@ TRUSTED_GITHUB_WORKFLOWS = {
             "MoneyCm/monitor-mindefensa/.github/workflows/monitor.yml@refs/heads/main"
         ),
     },
+    "FISCALIA_SPOA_V3": {
+        "repository": "MoneyCm/monitor-fiscalia-spoa-v3",
+        "workflow_ref": (
+            "MoneyCm/monitor-fiscalia-spoa-v3/.github/workflows/monitor_spoa_v3.yml@refs/heads/main"
+        ),
+    },
 }
 _GITHUB_JWKS_CACHE: Dict[str, Any] = {"expires_at": 0.0, "keys": []}
 

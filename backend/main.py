@@ -20,7 +20,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sisc_api")
 
-from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa, users, policia, inspecciones, institutional_indicators, sisc_cifras, source_center
+from api import analitica, ingesta, auth, reportes, ia, intelligence, participacion, dq, mindefensa, users, policia, inspecciones, institutional_indicators, sisc_cifras, source_center, fiscalia_spoa
 logger.info(f"DEBUG: Intelligence module from: {intelligence.__file__}")
 from db.models import create_tables
 from contextlib import asynccontextmanager
@@ -131,6 +131,7 @@ app.include_router(inspecciones.router, prefix="/api/inspecciones", tags=["inspe
 app.include_router(institutional_indicators.router, prefix="/api/institutional-indicators", tags=["institutional-indicators"])
 app.include_router(sisc_cifras.router, prefix="/api/sisc-cifras", tags=["sisc-cifras"])
 app.include_router(source_center.router, prefix="/api/source-center", tags=["source-center"])
+app.include_router(fiscalia_spoa.router, prefix="/api/fiscalia-spoa", tags=["fiscalia-spoa"])
 
 # --- Fase 1.5: Router v1 para contrato aprobado ---
 from api import sisc_cifras_v1
