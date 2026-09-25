@@ -1,6 +1,7 @@
 // Nombre único de cada página interna: lo usan la barra lateral y el encabezado,
 // para que el título siempre coincida con la opción que se eligió.
 export const INSTITUTIONAL_PAGE_LABELS = {
+    observatory: 'Centro de análisis',
     dashboard: 'Inicio',
     sources: 'Centro de fuentes',
     police_explorer: 'Explorador policial',

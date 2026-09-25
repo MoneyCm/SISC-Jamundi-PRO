@@ -59,6 +59,9 @@ def load_registry() -> Dict[str, Any]:
         return json.load(registry_file)
 
 
+SMALL_BASE = 30
+
+
 def _pct(current: int, previous: int) -> Optional[float]:
     if not previous:
         return None
@@ -326,7 +329,9 @@ def _signals(groups, territories, advised, current_year, previous_year, years, f
             top = item["top_conductas"][0]["label"].lower() if item["top_conductas"] else "hechos"
             signals.append({
                 "kind": "AUMENTO_TERRITORIAL",
-                "title": f"{item['name']}: {_fmt_pct(variation)} frente a {prev}",
+                # Base pequeña (menos de 30 hechos): la diferencia en casos, no un porcentaje que exagera.
+                "title": (f"{item['name']}: {current - previous:+d} hechos frente a {prev}" if previous < SMALL_BASE
+                          else f"{item['name']}: {_fmt_pct(variation)} frente a {prev}"),
                 "detail": f"{previous} → {current} hechos en la misma ventana; predomina {top}.",
                 "territory": item["name"],
             })

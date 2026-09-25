@@ -139,6 +139,8 @@ from api import interventions
 from api import council_commitments
 app.include_router(interventions.router, prefix="/api/interventions", tags=["interventions"])
 app.include_router(council_commitments.router, prefix="/api/council-commitments", tags=["council-commitments"])
+from api import observatory
+app.include_router(observatory.router, prefix="/api/observatory", tags=["observatory"])
 
 # --- Fase 1.5: Router v1 para contrato aprobado ---
 from api import sisc_cifras_v1

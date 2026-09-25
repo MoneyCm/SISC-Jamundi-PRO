@@ -35,6 +35,7 @@ const RegionalContext = lazy(() => import('./pages/RegionalContext'));
 const RNMCModule = lazy(() => import('./pages/RNMCModule'));
 const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
 const CouncilCommitments = lazy(() => import('./pages/CouncilCommitments'));
+const ObservatoryCenter = lazy(() => import('./pages/ObservatoryCenter'));
 const UsersManagement = lazy(() => import('./pages/UsersManagementV2'));
 const AccessRequests = lazy(() => import('./pages/AccessRequests'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
@@ -61,6 +62,9 @@ const PUBLIC_PAGE_META = {
   pqr: ['Ventanilla PQR | SISC Jamundí', 'Sistema de PQR y trámites de la Alcaldía de Jamundí.'],
 };
 
+const ANALYSIS_ROLES = ['ANALYST', 'DIRECTIVE', 'FUNC_ADMIN', 'TI_ADMIN'];
+const landingPage = (roles = []) => (roles.some((role) => ANALYSIS_ROLES.includes(role)) ? 'observatory' : 'dashboard');
+
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [userRoles, setUserRoles] = useState([]);
@@ -69,7 +73,14 @@ const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [sessionNotice, setSessionNotice] = useState('');
   const [appMode, setAppMode] = useState('loading'); // Nuevo estado inicial
-  const [activePage, setActivePage] = useState('dashboard');
+  // Análisis y dirección entran al Centro de análisis (qué merece atención); los demás, al Inicio.
+  const [activePage, setActivePage] = useState(() => {
+    try {
+      return landingPage(JSON.parse(localStorage.getItem('userRoles') || '[]'));
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [publicActivePage, setPublicActivePage] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('page') || 'hub';
@@ -181,7 +192,7 @@ const App = () => {
     setIsAuthenticated(true);
     setSessionNotice('');
     setAppMode('authenticated');
-    setActivePage('dashboard');
+    setActivePage(landingPage(roles || []));
     localStorage.setItem('token', newToken);
     localStorage.setItem('userRoles', JSON.stringify(roles || []));
     localStorage.setItem('dataLevel', (dl || 1).toString());
@@ -320,6 +331,8 @@ const App = () => {
         return <AlertsFeed onPageChange={setActivePage} setExternalFilters={setRnmcFilters} />;
       case 'council_commitments':
         return <CouncilCommitments />;
+      case 'observatory':
+        return <ObservatoryCenter userRoles={userRoles} onNavigate={setActivePage} />;
       case 'rnmc':
         return <RNMCModule externalFilters={rnmcFilters} clearExternalFilters={() => setRnmcFilters(null)} />;
       case 'dq':

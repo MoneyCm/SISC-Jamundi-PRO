@@ -1,6 +1,6 @@
 import React from 'react';
 import { INSTITUTIONAL_PAGE_LABELS } from '../utils/pageLabels';
-import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks, Compass } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -12,6 +12,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
     const canApproveAccess = userRoles.includes('FUNC_ADMIN') || userRoles.includes('DATA_OWNER') || userRoles.includes('TI_ADMIN');
 
     const allItems = [
+        { id: 'observatory', label: 'Centro de análisis', icon: Compass, category: 'HOME', show: isAnalyst || isDirective },
         { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, category: 'HOME', show: true },
         { id: 'sources', label: 'Centro de fuentes', icon: Layers, category: 'OPERACIONES', show: isUploader || isSteward || isDataOwner || isAnalyst || isDirective },
         { id: 'police_explorer', label: 'Explorador Policial', icon: BarChart2, category: 'ESTRATEGIA', show: isAnalyst || isDirective || isSteward || isDataOwner },
