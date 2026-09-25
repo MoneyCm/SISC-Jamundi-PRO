@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ClipboardCopy, Clock, FileText, History, Loader2, RefreshCw, Repeat, Search, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCopy, Clock, FileText, History, Loader2, RefreshCw, Repeat, Search, Target, Upload } from 'lucide-react';
 import ActReviewPanel from '../components/ActReviewPanel';
 import RecurringTopics from '../components/RecurringTopics';
+import InterventionPanel from '../components/InterventionPanel';
+import { STAGE_LABELS } from '../utils/interventions';
 import { apiFetch, apiJson } from '../utils/apiClient';
 
 const STATUS_STYLES = {
@@ -36,7 +38,8 @@ const Tile = ({ label, value, helper, tone = 'slate' }) => {
     );
 };
 
-const CommitmentCard = ({ item, statuses, onSaved }) => {
+const CommitmentCard = ({ item, statuses, onSaved, interventions = [], onInterventionChanged }) => {
+    const [showIntervention, setShowIntervention] = useState(false);
     const [status, setStatus] = useState(item.status);
     const [note, setNote] = useState('');
     const [evidence, setEvidence] = useState('');
@@ -91,6 +94,9 @@ const CommitmentCard = ({ item, statuses, onSaved }) => {
                         {item.flags.includes('REPETIDO') && (
                             <span className="inline-flex items-center gap-1 bg-red-50 px-2 py-0.5 text-[11px] font-black text-red-700"><Repeat size={12} /> Mencionado {item.mentions} veces</span>
                         )}
+                        {interventions.length > 0 && (
+                            <span className="inline-flex items-center gap-1 bg-indigo-50 px-2 py-0.5 text-[11px] font-black text-[#281FD0]"><Target size={12} /> Intervención: {STAGE_LABELS[interventions[0]] || interventions[0]}</span>
+                        )}
                         {item.flags.includes('ATRASADO') && (
                             <span className="inline-flex items-center gap-1 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-800"><Clock size={12} /> Atrasado</span>
                         )}
@@ -129,6 +135,9 @@ const CommitmentCard = ({ item, statuses, onSaved }) => {
                 <button onClick={toggleHistory} className="inline-flex min-h-10 items-center gap-2 border border-slate-300 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
                     <History size={16} /> Historial
                 </button>
+                <button onClick={() => setShowIntervention((open) => !open)} aria-expanded={showIntervention} className="inline-flex min-h-10 items-center gap-2 border border-slate-300 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                    <Target size={16} /> Intervención
+                </button>
             </div>
             {needsSupport && <p className="mt-2 text-xs font-bold text-amber-700">Para cerrar un compromiso escriba cómo se verificó o agregue el enlace al soporte.</p>}
             {error && <p className="mt-2 text-sm font-bold text-red-700" role="alert">{error}</p>}
@@ -143,6 +152,7 @@ const CommitmentCard = ({ item, statuses, onSaved }) => {
                     ))}
                 </ol>
             )}
+            {showIntervention && <InterventionPanel commitment={item} canEdit onChanged={onInterventionChanged} />}
         </article>
     );
 };
@@ -166,6 +176,11 @@ const CouncilCommitments = () => {
     const [agenda, setAgenda] = useState('');
     const fileRef = useRef(null);
 
+    const [interventions, setInterventions] = useState({});
+    const loadInterventions = useCallback(() => {
+        apiJson('/interventions/by-commitment').then(setInterventions).catch(() => setInterventions({}));
+    }, []);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -176,12 +191,13 @@ const CouncilCommitments = () => {
             setInstances(list.instances || []);
             setSummary(totals);
             apiJson('/council-commitments/acts').then(setPendingReads).catch(() => setPendingReads([]));
+            loadInterventions();
         } catch (loadError) {
             setMessage({ type: 'error', text: loadError.message });
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [loadInterventions]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -380,7 +396,8 @@ const CouncilCommitments = () => {
                 ) : visible.length === 0 ? (
                     <p className="bg-white p-6 text-center text-sm font-semibold text-slate-500">No hay compromisos con este filtro.</p>
                 ) : (
-                    visible.map((item) => <CommitmentCard key={`${item.code}-${item.version}`} item={item} statuses={statuses} onSaved={onSaved} />)
+                    visible.map((item) => <CommitmentCard key={`${item.code}-${item.version}`} item={item} statuses={statuses} onSaved={onSaved}
+                        interventions={interventions[item.code]} onInterventionChanged={loadInterventions} />)
                 )}
             </section>
             )}

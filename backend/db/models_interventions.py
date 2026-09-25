@@ -8,7 +8,9 @@ from db.session import Base
 class InterventionCase(Base):
     __tablename__ = "intervention_cases"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    alert_id = Column(UUID(as_uuid=True), ForeignKey("intelligence_alerts.id"), nullable=False, index=True)
+    # Origen: una alerta del SISC o un compromiso del Consejo (al menos uno).
+    alert_id = Column(UUID(as_uuid=True), ForeignKey("intelligence_alerts.id"), nullable=True, index=True)
+    commitment_code = Column(String(40), nullable=True, index=True)
     version = Column(Integer, nullable=False, default=0)
     status = Column(String(30), nullable=False, default="BORRADOR")
     document = Column(JSONB, nullable=False)

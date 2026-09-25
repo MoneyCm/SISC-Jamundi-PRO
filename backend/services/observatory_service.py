@@ -168,10 +168,10 @@ def intervention_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     if not total:
         return [signal("DECISIONES", "intervenciones", "INFO", "Ninguna intervención documentada",
                        "Sin intervenciones registradas no se puede evaluar qué funcionó. "
-                       "Cada alerta atendida o compromiso en ejecución debería tener su expediente.", "alerts")]
+                       "Cada compromiso en ejecución debería tener su intervención documentada.", "council_commitments")]
     detail = ", ".join(f"{n} {status.lower().replace('_', ' ')}" for status, n in sorted(counts.items()))
     return [signal("DECISIONES", "intervenciones", "INFO", _plural(total, "intervención documentada", "intervenciones documentadas"),
-                   detail + ".", "alerts", total)]
+                   detail + ".", "council_commitments", total)]
 
 
 # --- Conocimiento ----------------------------------------------------------------------------

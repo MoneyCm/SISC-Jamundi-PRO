@@ -85,6 +85,37 @@ INDICATOR_CATALOG = {
 }
 
 
+# Conductas medibles con la sábana policial, en hechos únicos. La fuente trae dos grafías
+# ("Hurto a personas" y "HURTO_PERSONAS"); el filtro incluye ambas.
+_CONDUCTS = {
+    "HURTO_PERSONAS": ("Hurto a personas", ["Hurto a personas", "HURTO_PERSONAS"]),
+    "HURTO_MOTOS": ("Hurto de motocicletas", ["Hurto a motocicletas", "HURTO_MOTOS"]),
+    "HURTO_AUTOMOTORES": ("Hurto de automotores", ["Hurto a automotores", "HURTO_AUTOMOTORES"]),
+    "HURTO_RESIDENCIAS": ("Hurto a residencias", ["Hurto a residencias", "HURTO_RESIDENCIAS"]),
+    "HURTO_COMERCIO": ("Hurto a comercio", ["Hurto a comercio", "HURTO_COMERCIO"]),
+    "LESIONES": ("Lesiones personales", ["Lesiones personales", "LESIONES"]),
+}
+for _code, (_label, _filter) in _CONDUCTS.items():
+    INDICATOR_CATALOG[_code] = {
+        "code": _code,
+        "label": _label,
+        "source": "POLICIA_SEMANAL",
+        "unit": UNIT_HECHO,
+        "unit_label": "hechos registrados",
+        "deduplication": "COUNT DISTINCT canonical_hecho_key, igual que HOMICIDIO.",
+        "date_field": "fecha_evento",
+        "dimensions": ["barrio_normalizado", "zona"],
+        "conducta_filter": _filter,
+        "territory": "JAMUNDI",
+        "methodology_version": METHODOLOGY_VERSION,
+    }
+INDICATOR_CATALOG["HOMICIDIO"].setdefault("label", "Homicidio")
+INDICATOR_CATALOG["SEGURIDAD_TOTAL"].setdefault("label", "Total de hechos de seguridad")
+
+# Indicadores con los que se puede seguir una intervención (hechos, municipio).
+FOLLOWUP_INDICATORS = ["SEGURIDAD_TOTAL", "HOMICIDIO", *_CONDUCTS]
+
+
 def get_indicator_meta(code: str) -> dict:
     meta = INDICATOR_CATALOG.get(code)
     if not meta:
