@@ -948,30 +948,37 @@ RNMC_STALE_DAYS = 45
 
 @router.get("/alerts/rnmc/coverage")
 def rnmc_alert_coverage(db: Session = Depends(get_db), current_user: User = Depends(institutional_access)):
-    """Hasta qué fecha llegan los comparendos que alimentan las alertas del SISC.
+    """Hasta qué fecha llegan los comparendos (Inspecciones MIP) que alimentan las alertas del SISC.
 
     Sin esto, una lista vacía se lee como "todo bajo control" aunque los datos lleven meses sin cargarse.
     """
     from datetime import date as _date
     from sqlalchemy import func
+    from db.models_inspecciones import InspeccionActuacion, InspeccionMedida
 
     today = _date.today()
-    total = db.query(func.count(RNMCMeasure.id)).scalar() or 0
-    valid_max = db.query(func.max(RNMCMeasure.fecha_actuacion)).filter(func.date(RNMCMeasure.fecha_actuacion) <= today).scalar()
-    first = db.query(func.min(RNMCMeasure.fecha_actuacion)).scalar()
-    last_load = db.query(func.max(RNMCMeasure.fecha_ingesta)).scalar()
-    future = db.query(func.count(RNMCMeasure.id)).filter(func.date(RNMCMeasure.fecha_actuacion) > today).scalar() or 0
+    measures = db.query(func.count(InspeccionMedida.id)).scalar() or 0
+    first = db.query(func.min(InspeccionActuacion.fecha_actuacion)).scalar()
+    valid_max = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(
+        func.date(InspeccionActuacion.fecha_actuacion) <= today).scalar()
+    last_load = db.query(func.max(InspeccionActuacion.created_at)).scalar()
+    future = db.query(func.count(InspeccionActuacion.id)).filter(
+        func.date(InspeccionActuacion.fecha_actuacion) > today).scalar() or 0
     last_alert = db.query(func.max(IntelligenceAlert.updated_at)).filter(IntelligenceAlert.source == "RNMC").scalar()
     days_since_load = (today - last_load.date()).days if last_load else None
+    # Vigencia según el dato más reciente, no según el día de carga: cargar hoy un archivo viejo no lo vuelve actual.
+    days_since_data = (today - valid_max.date()).days if valid_max else None
     return {
-        "records": total,
+        "records": measures,
         "first_date": first.date().isoformat() if first else None,
         "last_date": valid_max.date().isoformat() if valid_max else None,
         "last_load": last_load.date().isoformat() if last_load else None,
         "days_since_load": days_since_load,
-        "stale": days_since_load is None or days_since_load > RNMC_STALE_DAYS,
+        "days_since_data": days_since_data,
+        "stale": days_since_data is None or days_since_data > RNMC_STALE_DAYS,
         "future_dated": future,
         "last_alert_update": last_alert.isoformat() if last_alert else None,
+        "source": "Inspecciones MIP",
     }
 
 

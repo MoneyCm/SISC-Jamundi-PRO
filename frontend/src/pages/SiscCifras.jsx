@@ -31,6 +31,10 @@ const COMPARISON_MODES = [
 ];
 
 const DEFAULT_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'];
+// Página oficial donde la Secretaría publica el Boletín institucional completo (PDF).
+export const BOLETIN_WEB_URL = import.meta.env?.VITE_BOLETIN_WEB_URL
+  || 'https://www.jamundi.gov.co/Dependencias-1/Paginas/Secretaria-de-Seguridad-y-Convivencia.aspx';
+const BOLETIN_WEB_LABEL = 'jamundi.gov.co › Secretaría de Seguridad y Convivencia';
 const DOMAIN_COLORS = {
   SEGURIDAD: '#281FD0',
   CONVIVENCIA: '#3A30F1',
@@ -272,14 +276,16 @@ const buildWhatsappText = (publication) => {
 
   return [
     'SISC EN CIFRAS',
-    `Jamundi | ${period}`,
+    `Jamundí | ${period}`,
     `Comparado con: ${label}`,
     '',
     body,
     '',
     `Fuentes: ${sourceLines.join(' | ') || 'SISC'}`,
-    'Secretaria de Seguridad y Convivencia',
+    'Secretaría de Seguridad y Convivencia',
     'Cifras agregadas para información ciudadana.',
+    '',
+    `Boletín completo: ${BOLETIN_WEB_URL}`,
   ].join('\n');
 };
 
@@ -333,7 +339,7 @@ const buildTikTokPrompt = (publication) => {
     '3-8 s: presenta la cifra principal con un número grande y el indicador completo.',
     '8-16 s: presenta hasta dos cambios relevantes, un dato por escena, indicando la base de comparación.',
     '16-21 s: explica en una frase sencilla lo que significa la cifra, sin atribuir causas que los datos no demuestran.',
-    '21-25 s: cierre "Consulta las cifras completas en el SISC Jamundi" y fuentes con fecha de corte.',
+    '21-25 s: cierre "Boletín completo en jamundi.gov.co, Secretaría de Seguridad y Convivencia" y fuentes con fecha de corte.',
     '',
     'REGLAS OBLIGATORIAS:',
     '- Usa texto grande, alto contraste, transiciones suaves y subtitulos sincronizados.',
@@ -756,8 +762,8 @@ const slideToSvg = (slide, publication, assets = {}) => {
     ${insightSvg}
     <rect x="76" y="1128" width="928" height="94" rx="26" fill="#FFFFFF" stroke="#D9E2F0" stroke-width="2"/>
     ${escudo ? `<image href="${escudo}" x="96" y="1144" width="58" height="58"/>` : ''}
-    <text x="${escudo ? 172 : 96}" y="1172" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaria de Seguridad y Convivencia</text>
-    <text x="${escudo ? 172 : 96}" y="1204" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Información pública agregada y anonimizada. Conserva fuentes y cortes.</text>
+    <text x="${escudo ? 172 : 96}" y="1172" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaría de Seguridad y Convivencia</text>
+    <text x="${escudo ? 172 : 96}" y="1204" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Boletín completo: ${escapeSvg(BOLETIN_WEB_LABEL)}</text>
     <text x="76" y="1286" font-size="20" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">SISC EN CIFRAS | Serie visual ${escapeSvg(edition.toLowerCase())}</text>
     <text x="1004" y="1286" text-anchor="end" font-size="18" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">${escapeSvg(slideNumber)}</text>
   </svg>`;
@@ -848,8 +854,8 @@ const summaryToSvg = (publication, assets = {}) => {
 
     <rect x="76" y="1644" width="928" height="94" rx="26" fill="#FFFFFF" stroke="#D9E2F0" stroke-width="2"/>
     ${escudo ? `<image href="${escudo}" x="96" y="1660" width="58" height="58"/>` : ''}
-    <text x="${escudo ? 172 : 96}" y="1688" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaria de Seguridad y Convivencia</text>
-    <text x="${escudo ? 172 : 96}" y="1720" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Información pública agregada y anonimizada. Conserva fuentes y cortes.</text>
+    <text x="${escudo ? 172 : 96}" y="1688" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaría de Seguridad y Convivencia</text>
+    <text x="${escudo ? 172 : 96}" y="1720" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Boletín completo: ${escapeSvg(BOLETIN_WEB_LABEL)}</text>
     <text x="76" y="1838" font-size="22" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">SISC EN CIFRAS | Imagen resumen para chat</text>
   </svg>`;
 };
@@ -920,8 +926,8 @@ const SlidePreview = ({ slide, publication }) => {
         <div className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
           <img src="/assets/escudo-limpio.png" alt="Escudo" className="h-9 w-9 object-contain" />
           <div>
-            <p className="text-[11px] font-black text-slate-900">Fuente: SISC | Secretaria de Seguridad y Convivencia</p>
-            <p className="text-[10px] font-bold text-slate-500">Información pública agregada y anonimizada.</p>
+            <p className="text-[11px] font-black text-slate-900">Fuente: SISC | Secretaría de Seguridad y Convivencia</p>
+            <p className="text-[10px] font-bold text-slate-500">Boletín completo: <a href={BOLETIN_WEB_URL} target="_blank" rel="noopener noreferrer" className="text-[#281FD0] underline">{BOLETIN_WEB_LABEL}</a></p>
           </div>
         </div>
       </div>
@@ -948,6 +954,7 @@ const SiscCifras = ({ publicMode = false }) => {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [periodSuggested, setPeriodSuggested] = useState(false);
   const [institutionalPeriod, setInstitutionalPeriod] = useState('');
+  const [latestPublished, setLatestPublished] = useState(null);
 
   const publicSources = useMemo(
     () => sources.filter((source) => source.publication_level === 'PUBLICO'),
@@ -1191,7 +1198,41 @@ const SiscCifras = ({ publicMode = false }) => {
 
   useEffect(() => {
     fetchSources();
+    fetch(`${API_BASE_URL}/sisc-cifras/publications/public?limit=1`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((rows) => setLatestPublished(rows?.[0] || null))
+      .catch(() => setLatestPublished(null));
   }, []);
+
+  // Usa el boletín ya publicado tal como quedó guardado: mismo periodo y mismas cifras que la web.
+  // No se vuelve a calcular, porque una sábana recargada después podría cambiar algún número.
+  const applyLatestPublished = () => {
+    if (!latestPublished?.publication_json) return;
+    const stored = latestPublished.publication_json;
+    const sourceCodes = latestPublished.source_codes?.length ? latestPublished.source_codes : selectedSources;
+    const mode = stored.comparison_mode || 'auto';
+    setEdition(latestPublished.edition_type);
+    setPeriodStart(latestPublished.period_start);
+    setPeriodEnd(latestPublished.period_end);
+    setComparisonMode(mode);
+    setSelectedSources(sourceCodes);
+    setInstitutionalPeriod('');
+    setPublication({ ...stored, status: 'PUBLISHED' });
+    setPublicationSelectionKey(siscCifrasSelectionKey({
+      edition: latestPublished.edition_type,
+      periodStart: latestPublished.period_start,
+      periodEnd: latestPublished.period_end,
+      comparisonMode: mode,
+      sourceCodes,
+    }));
+    setActiveSlide(0);
+    setError(null);
+    setShareStatus('Cargado el boletín publicado: mismo periodo y mismas cifras que el PDF de la web.');
+  };
+
+  const showsPublishedBulletin = Boolean(
+    latestPublished && publication?.id && publication.id === latestPublished.id && publicationIsCurrent
+  );
 
   useEffect(() => {
     if (!sources.length) return;
@@ -1263,6 +1304,27 @@ const SiscCifras = ({ publicMode = false }) => {
       </div>}
       <div className="grid gap-6 p-6 xl:grid-cols-[360px_1fr]">
         <aside className="space-y-5">
+          {!publicMode && latestPublished && (
+            <section className={`rounded-lg border-2 p-5 shadow-sm ${showsPublishedBulletin ? 'border-emerald-400 bg-emerald-50' : 'border-[#281FD0] bg-white'}`} aria-label="Último boletín publicado">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">Último boletín publicado</p>
+              <p className="mt-1 text-base font-black text-slate-900">
+                {latestPublished.period_start} al {latestPublished.period_end}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-600">
+                Publicado {latestPublished.published_at ? `el ${String(latestPublished.published_at).slice(0, 10)}` : ''}. Para redes y WhatsApp use estas mismas cifras: así coinciden con el PDF de la web.
+              </p>
+              {showsPublishedBulletin ? (
+                <p className="mt-3 text-xs font-black text-emerald-800">✓ Mostrando el boletín publicado: mismas cifras que la web.</p>
+              ) : (
+                <button onClick={applyLatestPublished} disabled={loading} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:opacity-40">
+                  Usar este boletín (mismas cifras)
+                </button>
+              )}
+              <a href={BOLETIN_WEB_URL} target="_blank" rel="noopener noreferrer" className="mt-2 block text-center text-[11px] font-bold text-[#281FD0] underline">
+                Ver la página de la web donde se publica
+              </a>
+            </section>
+          )}
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-2 text-slate-900">
               <CalendarDays size={18} />

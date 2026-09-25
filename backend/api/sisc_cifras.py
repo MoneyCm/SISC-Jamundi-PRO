@@ -345,6 +345,9 @@ async def approve_sisc_cifras_publication(
         raise HTTPException(status_code=404, detail="No existe el boletín solicitado.")
     if row.status == "PUBLISHED":
         raise HTTPException(status_code=409, detail="El boletín ya está publicado.")
+    # Solo se aprueban borradores: una versión reemplazada o retirada no vuelve a publicarse.
+    if row.status != "DRAFT":
+        raise HTTPException(status_code=409, detail="Este boletín fue reemplazado o retirado. Genere uno nuevo.")
 
     publication = dict(row.publication_json or {})
     governance = dict(publication.get("governance") or {})

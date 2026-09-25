@@ -298,7 +298,7 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
                         : <>
                             Comparendos cargados del {fmtDay(coverage.first_date)} al {fmtDay(coverage.last_date)} ({coverage.records} registros).
                             {' '}Última carga: {fmtDay(coverage.last_load)}.
-                            {coverage.stale && <strong> Hace {coverage.days_since_load} días que no se cargan: esta lista no refleja la situación actual. Cargue el reporte RNMC reciente.</strong>}
+                            {coverage.stale && <strong> El dato más reciente tiene {coverage.days_since_data} días: esta lista no refleja la situación actual. Cargue en Inspecciones MIP el reporte de comparendos reciente.</strong>}
                             {coverage.future_dated > 0 && <> {coverage.future_dated} registro(s) con fecha futura: revisar en la fuente.</>}
                         </>}
                 </div>
@@ -439,7 +439,7 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
                         <AlertTriangle className="text-amber-500 mb-4" size={32} />
                         <p className="text-slate-900 font-black text-xl">Sin alertas, pero con datos desactualizados</p>
                         <p className="max-w-lg text-center text-slate-500 font-medium">
-                            Que no haya alertas no significa que todo esté bien: los comparendos no se cargan desde {coverage ? fmtDay(coverage.last_load) : 'hace tiempo'}.
+                            Que no haya alertas no significa que todo esté bien: los comparendos solo llegan hasta el {coverage ? fmtDay(coverage.last_date) : 'sin fecha'}.
                         </p>
                     </>}
                 </div>
