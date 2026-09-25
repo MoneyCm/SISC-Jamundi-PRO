@@ -107,7 +107,7 @@ const StatusBadge = ({ connector }) => {
     );
 };
 
-const SourceCenter = ({ onIngest, userRoles = [] }) => {
+const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -189,7 +189,7 @@ const SourceCenter = ({ onIngest, userRoles = [] }) => {
 
     const runAction = (connector) => {
         if (connector.action?.type === 'UPLOAD') {
-            if (canUpload) onIngest?.(connector.action.dataset_code, connector.name);
+            if (canUpload && connector.action.dataset_code === 'POLICIA_SEMANAL') onOpenBulletin?.();
             return;
         }
         if (connector.action?.type === 'CHECK') {
@@ -208,7 +208,7 @@ const SourceCenter = ({ onIngest, userRoles = [] }) => {
     };
 
     const actionLabel = (type) => {
-        if (type === 'UPLOAD') return 'Cargar';
+        if (type === 'UPLOAD') return 'Ir a Boletín';
         if (type === 'CHECK') return 'Revisar';
         return 'Abrir';
     };
@@ -356,7 +356,7 @@ const SourceCenter = ({ onIngest, userRoles = [] }) => {
                                         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                                         Detalles
                                     </button>
-                                    <button
+                                    {(connector.action?.type !== 'UPLOAD' || connector.action.dataset_code === 'POLICIA_SEMANAL') && (<button
                                         type="button"
                                         onClick={() => runAction(connector)}
                                         disabled={actionDisabled(connector)}
@@ -365,7 +365,7 @@ const SourceCenter = ({ onIngest, userRoles = [] }) => {
                                     >
                                         {isChecking ? <Loader2 className="animate-spin" size={15} /> : <ActionIcon size={15} />}
                                         {actionLabel(connector.action?.type)}
-                                    </button>
+                                    </button>)}
                                 </div>
 
                                 {isExpanded && (
@@ -407,9 +407,6 @@ const SourceCenter = ({ onIngest, userRoles = [] }) => {
                                                                 )}
                                                                 <button type="button" onClick={() => checkConnector(connector.code, asset.code)} disabled={!canOperate || Boolean(checking)} title="Revisar este archivo" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#3026D9] disabled:opacity-40">
                                                                     {checking === assetKey ? <Loader2 className="animate-spin" size={15} /> : <RefreshCw size={15} />}
-                                                                </button>
-                                                                <button type="button" onClick={() => onIngest?.(asset.code, asset.name)} disabled={!canUpload} title="Cargar archivo" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#3026D9] disabled:opacity-40">
-                                                                    <FileSpreadsheet size={15} />
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -475,7 +472,7 @@ const SourceCenter = ({ onIngest, userRoles = [] }) => {
                                                 <p className="mt-0.5 text-xs text-slate-500">{connector.asset_count ? `${connector.asset_count} archivos vigilados` : connector.update_mode === 'MANUAL' ? 'Carga institucional' : 'Monitor externo'}</p>
                                             </td>
                                             <td className="px-3 py-4 text-right">
-                                                <button
+                                                {(connector.action?.type !== 'UPLOAD' || connector.action.dataset_code === 'POLICIA_SEMANAL') && (<button
                                                     type="button"
                                                     onClick={() => runAction(connector)}
                                                     disabled={actionDisabled(connector)}
@@ -484,7 +481,7 @@ const SourceCenter = ({ onIngest, userRoles = [] }) => {
                                                 >
                                                     {isChecking ? <Loader2 className="animate-spin" size={15} /> : <ActionIcon size={15} />}
                                                     {actionLabel(connector.action?.type)}
-                                                </button>
+                                                </button>)}
                                             </td>
                                         </tr>
                                         {isExpanded && (
@@ -556,15 +553,6 @@ const SourceCenter = ({ onIngest, userRoles = [] }) => {
                                                                                         className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#3026D9] disabled:opacity-40"
                                                                                     >
                                                                                         {checking === assetKey ? <Loader2 className="animate-spin" size={15} /> : <RefreshCw size={15} />}
-                                                                                    </button>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => onIngest?.(asset.code, asset.name)}
-                                                                                        disabled={!canUpload}
-                                                                                        title="Cargar archivo"
-                                                                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#3026D9] disabled:opacity-40"
-                                                                                    >
-                                                                                        <FileSpreadsheet size={15} />
                                                                                     </button>
                                                                                 </div>
                                                                             </div>

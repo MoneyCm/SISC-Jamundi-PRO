@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import MapComponent from '../components/Map/MapComponent';
 import { Filter, Calendar, AlertTriangle, CalendarDays, Layers3, Loader2, MapPinned, RefreshCw, ShieldCheck } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
-import TerritoryMap from '../components/Map/TerritoryMap';
+import TerritoryExplorer from '../components/Map/TerritoryExplorer';
 import { loadPublicDashboard } from '../utils/publicDashboardCache';
 
 const CATEGORIES = [
@@ -240,7 +240,7 @@ const OperationalTerritoryMap = () => {
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[300px_1fr]">
+      <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="space-y-4">
           <section className="border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2 text-slate-900"><Filter size={18} /><h2 className="text-sm font-black uppercase tracking-wide">Consulta territorial</h2></div>
@@ -272,20 +272,20 @@ const OperationalTerritoryMap = () => {
             <div className="flex items-center gap-2 text-slate-900"><Layers3 size={18} /><h2 className="text-sm font-black uppercase tracking-wide">Cobertura</h2></div>
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex items-center justify-between gap-3"><dt className="font-semibold text-slate-600">Territorios en mapa</dt><dd className="font-black text-slate-950">{formatNumber(map.points?.length)}</dd></div>
-              <div className="flex items-center justify-between gap-3"><dt className="font-semibold text-slate-600">Omitidos por privacidad</dt><dd className="font-black text-slate-950">{formatNumber(map.suppressed_count)}</dd></div>
+              <div className="flex items-center justify-between gap-3"><dt className="font-semibold text-slate-600">Registros ocultos por privacidad</dt><dd className="font-black text-slate-950">{formatNumber(map.suppressed_count)}</dd></div>
               <div className="flex items-center justify-between gap-3"><dt className="font-semibold text-slate-600">Sin polígono oficial</dt><dd className="font-black text-slate-950">{formatNumber(map.unmapped_count)}</dd></div>
             </dl>
           </section>
         </aside>
 
-        <main className="space-y-4">
+        <main className="min-w-0 space-y-4">
           {error && <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"><AlertTriangle className="mt-0.5 shrink-0" size={18} />{error}</div>}
           <section className="border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-3 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
               <div><h2 className="text-lg font-black text-slate-950">Distribución por territorio oficial</h2><p className="mt-1 text-sm font-semibold text-slate-500">{formatDate(data?.metadata?.period_start)} - {formatDate(data?.metadata?.period_end)} | Corte disponible: {formatDate(latestCutoff)}</p></div>
               <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">{data?.metadata?.source || 'Fuente en consulta'}</div>
             </div>
-            <TerritoryMap map={map} selectedTerritory={selectedTerritory} onSelect={setSelectedTerritory} className="h-[560px]" />
+            {loading ? <div role="status" className="flex h-96 items-center justify-center gap-3 text-slate-500"><Loader2 className="animate-spin" size={22} />Actualizando territorios…</div> : <TerritoryExplorer map={map} selectedTerritory={selectedTerritory} onSelect={setSelectedTerritory} />}
             <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 text-xs font-semibold leading-5 text-slate-600 md:grid-cols-3"><p><strong className="text-slate-900">Método:</strong> el color indica volumen agregado, no riesgo individual.</p><p><strong className="text-slate-900">Privacidad:</strong> mínimo {formatNumber(map.min_location_count || 3)} casos por territorio.</p><p><strong className="text-slate-900">Cartografía:</strong> solo polígonos oficiales verificados.</p></div>
           </section>
 

@@ -1463,19 +1463,9 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
         <div className="p-6 flex flex-col gap-6">
           <section className="order-3 bg-ui-card-bg p-5 rounded-lg border border-ui-border">
             <h2 className="text-lg font-semibold text-ui-text-primary mb-3 flex items-center gap-2">
-              📂 Cargar Datos
+              📂 Cargar sábana semanal
             </h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-ui-text-secondary mb-1">Archivo SABANAS (Excel, carga local rápida)</label>
-                <input
-                  type="file" accept=".xlsx, .xls, .csv"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f); }}
-                  onClick={(e: React.MouseEvent<HTMLInputElement>) => { e.currentTarget.value = ''; }}
-                  className="block w-full text-sm text-ui-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-ui-accent file:text-white hover:file:bg-blue-600 cursor-pointer bg-black/20 rounded-md border border-ui-border"
-                />
-                <p className="mt-1 text-[11px] text-ui-text-secondary">Previsualización inmediata en este navegador. Para cifra oficial y publicación use la carga validada al servidor.</p>
-              </div>
               <SabanaUploadFlow
                 onStart={() => { setLoadedDelivery(''); setOfficialResult(null); setRawExcelData([]); setUploadSummary(null); setSiscPublication(null); }}
                 onReady={(file, run) => {

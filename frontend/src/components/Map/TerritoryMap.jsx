@@ -1,5 +1,5 @@
 import React from 'react';
-import { GeoJSON, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
+import { GeoJSON, MapContainer, Popup, Tooltip, ScaleControl, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -7,7 +7,7 @@ const formatNumber = (value) => new Intl.NumberFormat('es-CO').format(Number(val
 
 // Escala secuencial de 5 clases por cuantiles: evita que un solo barrio con muchos casos
 // deje al resto del municipio en el mismo tono.
-const CLASS_COLORS = ['#DDE3FF', '#AAB6FB', '#6F7FF3', '#3B45D6', '#FFB600'];
+const CLASS_COLORS = ['#dbeafe', '#93c5fd', '#60a5fa', '#2563eb', '#1e3a8a'];
 
 const buildClasses = (points) => {
   const values = [...new Set(points.map((point) => Number(point.total || 0)))].sort((a, b) => a - b);
@@ -35,9 +35,9 @@ const classFor = (value, classes) => classes.find((item) => value >= item.from &
 const territoryStyle = (point, classes, selectedTerritory) => {
   const selected = selectedTerritory === point.name;
   return {
-    color: selected ? '#0F172A' : '#281FD0',
+    color: selected ? '#0F172A' : '#2563eb',
     fillColor: classFor(Number(point.total || 0), classes)?.color || CLASS_COLORS[0],
-    fillOpacity: selected ? 0.9 : 0.72,
+    fillOpacity: selected ? 0.65 : 0.42,
     weight: selected ? 3 : 1,
     opacity: 0.85,
   };
@@ -74,16 +74,26 @@ export const BASEMAP = {
 };
 
 // Ajusta la vista a los polígonos visibles en lugar de un zoom fijo.
-const FitToTerritories = ({ points }) => {
+const FitToTerritories = ({ points, view, selectedTerritory, revision }) => {
   const map = useMap();
-  const key = points.map((p) => p.name).join('|');
   React.useEffect(() => {
+    const resize = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+    resize.observe(map.getContainer());
+    return () => resize.disconnect();
+  }, [map]);
+  React.useEffect(() => {
+    map.invalidateSize({ pan: false });
+    if (view === 'urban') {
+      map.setView([3.2606, -76.5364], 14);
+      return;
+    }
+    const selected = points.find((point) => point.name === selectedTerritory);
+    const visible = view === 'selected' && selected ? [selected] : points;
     try {
-      const bounds = L.geoJSON(points.map((p) => p.geometry)).getBounds();
-      if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
-    } catch (e) { /* geometría inválida: se conserva la vista por defecto */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+      const bounds = L.geoJSON(visible.map((point) => point.geometry)).getBounds();
+      if (bounds.isValid()) map.fitBounds(bounds, { padding: [35, 35], maxZoom: 16 });
+    } catch { /* Mantener el encuadre si no hay geometrías válidas. */ }
+  }, [map, points, view, selectedTerritory, revision]);
   return null;
 };
 
@@ -118,6 +128,7 @@ const TerritoryLayer = ({ point, pathStyle, onSelect }) => {
       eventHandlers={{ click: () => onSelect?.(point.name) }}
       style={() => pathStyle}
     >
+      <Tooltip sticky><strong>{point.name}</strong><br />{formatNumber(point.total)} casos agregados</Tooltip>
       <Popup>
         <div className="min-w-44 text-slate-800">
           <strong>{point.name}</strong>
@@ -130,8 +141,12 @@ const TerritoryLayer = ({ point, pathStyle, onSelect }) => {
   );
 };
 
-const TerritoryMap = ({ map, onSelect, selectedTerritory, className = 'h-full' }) => {
-  const points = map?.points || [];
+const TerritoryMap = ({ map, onSelect, selectedTerritory, className = 'h-full', explore = false, focusSelection = false }) => {
+  const points = React.useMemo(() => map?.points || [], [map?.points]);
+  const [view, setView] = React.useState(explore ? 'urban' : 'all');
+  const [revision, setRevision] = React.useState(0);
+  const chooseTerritory = (name) => { onSelect?.(name); if (explore) setView('selected'); };
+  const changeView = (next) => { setView(next); setRevision((value) => value + 1); };
   const classes = React.useMemo(() => buildClasses(points), [points]);
   const orderedPoints = React.useMemo(
     () => [...points].sort((a, b) => geometryArea(b.geometry) - geometryArea(a.geometry)),
@@ -143,21 +158,34 @@ const TerritoryMap = ({ map, onSelect, selectedTerritory, className = 'h-full' }
   }
 
   return (
-    <div className={className}>
+    <div className={`flex min-w-0 flex-col ${className}`}>
+      {explore && <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white p-3">
+        <div className="flex rounded-lg bg-slate-100 p-1" aria-label="Encuadre del mapa">
+          {[['urban', 'Casco urbano'], ['all', 'Todos los territorios']].map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => changeView(key)} className={`rounded-md px-3 py-2 text-xs font-bold focus-visible:outline-primary ${view === key ? 'bg-white text-primary shadow-sm' : 'text-slate-600 hover:bg-white/70'}`}>{label}</button>)}
+        </div>
+        <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-bold text-slate-600"><span>Acercar a</span><select aria-label="Acercar a un territorio" value={view === 'selected' ? selectedTerritory || '' : ''} onChange={(event) => { if (event.target.value) chooseTerritory(event.target.value); }} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900">
+          <option value="">Selecciona un barrio o vereda</option>
+          {[...points].sort((a, b) => a.name.localeCompare(b.name, 'es')).map((point) => <option key={point.name} value={point.name}>{point.name} · {formatNumber(point.total)} casos</option>)}
+        </select></label>
+        <p className="w-full text-[11px] text-slate-500">{view === 'urban' ? 'Encuadre urbano. Las veredas siguen disponibles en “Todos los territorios”.' : 'El encuadre cambia la vista; no modifica los filtros ni los conteos.'}</p>
+      </div>}
+      <div className="relative z-0 min-h-0 flex-1">
       <MapContainer center={[3.2606, -76.5364]} zoom={12} preferCanvas style={{ height: '100%', width: '100%', background: '#F8FAFC' }}>
         <TileLayer attribution={BASEMAP.attribution} url={BASEMAP.url} maxZoom={16} />
         <LabelsPane />
-        <FitToTerritories points={points} />
+        <FitToTerritories points={points} view={focusSelection && selectedTerritory ? 'selected' : view} selectedTerritory={selectedTerritory} revision={revision} />
+        <ScaleControl position="bottomright" imperial={false} />
         {orderedPoints.map((point) => (
           <TerritoryLayer
             key={point.name}
             point={point}
             pathStyle={territoryStyle(point, classes, selectedTerritory)}
-            onSelect={onSelect}
+            onSelect={chooseTerritory}
           />
         ))}
         <Legend classes={classes} />
       </MapContainer>
+      </div>
     </div>
   );
 };

@@ -25,10 +25,8 @@ const DataQuality = lazy(() => import('./pages/DataQuality'));
 const SiscAIChatbot = lazy(() => import('./components/SiscAIChatbot'));
 
 
-const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
-const InstitutionalAgents = lazy(() => import('./pages/InstitutionalAgents'));
 const StatsModule = lazy(() => import('./pages/StatsModule'));
-const SourceCenter = lazy(() => import('./pages/SourceCenter'));
+const SourceCenter = lazy(() => import('./pages/SourceCenterHub'));
 const PoliceWeeklyExplorer = lazy(() => import('./pages/PoliceWeeklyExplorer'));
 const SiscCifras = lazy(() => import('./pages/SiscCifras'));
 const BoletinReplica = lazy(() => import('./features/boletin/BoletinReplica'));
@@ -79,7 +77,6 @@ const App = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReportId, setSelectedReportId] = useState(null);
-  const [selectedDataset, setSelectedDataset] = useState({ code: 'POLICIA_SEMANAL', label: 'Policía Jamundí - Base Semanal' });
   const [rnmcFilters, setRnmcFilters] = useState(null);
 
   const navigatePublic = (page, options = {}) => {
@@ -97,10 +94,6 @@ const App = () => {
     }, 0);
   };
 
-  const handleIngestDataset = (code, label) => {
-    setSelectedDataset({ code, label });
-    setActivePage('ingesta_universal');
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -308,11 +301,12 @@ const App = () => {
       case 'sources':
       case 'monitoring':
       case 'police_monitor':
-        return <SourceCenter onIngest={handleIngestDataset} userRoles={userRoles} />;
+        return <SourceCenter onOpenBulletin={() => setActivePage('boletin_replica')} userRoles={userRoles} />;
       case 'police_explorer':
         return <PoliceWeeklyExplorer />;
       case 'sisc_cifras':
         return <SiscCifras />;
+      case 'ingesta_universal': // Compatibilidad: la carga ahora vive en Boletín institucional.
       case 'boletin_replica':
         return <BoletinReplica onOpenArchive={() => setActivePage('technical_bulletins')} />;
       case 'technical_bulletins':
@@ -335,16 +329,9 @@ const App = () => {
       case 'inspecciones':
         return <InspeccionesModule />;
       case 'police_audit':
-        return <PoliceIngestionAudit runId={selectedReportId} onBack={() => setActivePage('ingesta_universal')} />;
+        return <PoliceIngestionAudit runId={selectedReportId} onBack={() => setActivePage('boletin_replica')} />;
       case 'institutional_agents':
-        return <InstitutionalAgents />;
-      case 'ingesta_universal':
-        return <UniversalIngesta
-          setActivePage={setActivePage}
-          setReportId={setSelectedReportId}
-          datasetCode={selectedDataset?.code || "POLICIA_SEMANAL"}
-          label={selectedDataset?.label || "Policía Jamundí - Base Semanal"}
-        />;
+        return <SourceCenter initialSection="deliveries" userRoles={userRoles} onOpenBulletin={() => setActivePage('boletin_replica')} />;
       default:
         return <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;
     }

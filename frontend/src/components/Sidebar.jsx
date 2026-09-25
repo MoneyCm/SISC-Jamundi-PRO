@@ -16,20 +16,18 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'sources', label: 'Centro de fuentes', icon: Layers, category: 'OPERACIONES', show: isUploader || isSteward || isDataOwner || isAnalyst || isDirective },
         { id: 'police_explorer', label: 'Explorador Policial', icon: BarChart2, category: 'ESTRATEGIA', show: isAnalyst || isDirective || isSteward || isDataOwner },
         { id: 'sisc_cifras', label: 'SISC en cifras', icon: Newspaper, category: 'SALIDA', show: isAnalyst || isDirective },
-        { id: 'boletin_replica', label: 'Boletín institucional', icon: FileText, category: 'SALIDA', show: isAnalyst || isDirective },
+        { id: 'boletin_replica', label: 'Boletín institucional', icon: FileText, category: 'SALIDA', show: isAnalyst || isDirective || isUploader || isSteward },
 
         { id: 'users', label: 'Gestión Usuarios', icon: ShieldAlert, category: 'ADMINISTRACIÓN', show: isAdmin },
         { id: 'access_requests', label: 'Solicitudes de acceso', icon: ClipboardCheck, category: 'ADMINISTRACIÓN', show: canApproveAccess },
 
-        { id: 'ingesta_universal', label: 'Ingesta Universal', icon: LayoutDashboard, category: 'OPERACIONES', show: isUploader || isSteward },
-        { id: 'institutional_agents', label: 'Agentes institucionales', icon: ShieldCheck, category: 'OPERACIONES', show: isUploader || isSteward || isDataOwner },
 
         { id: 'stats', label: 'Estadísticas', icon: BarChart2, category: 'ESTRATEGIA', show: true },
         { id: 'map', label: 'Mapa territorial', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'intelligence', label: 'Contexto comparado', icon: Globe2, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'alerts', label: 'Alertas Tempranas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
-        { id: 'inspecciones', label: 'Inspecciones MIP', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
+        { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
 
         { id: 'reports', label: 'Reportes', icon: FileText, category: 'SALIDA', show: isDirective || isAnalyst },
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },

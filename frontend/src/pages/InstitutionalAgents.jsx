@@ -239,7 +239,7 @@ const InstitutionalAgents = () => {
                                 <Bot size={15} /> Operación asistida
                             </div>
                             <h1 className="font-titles text-3xl font-black tracking-tight md:text-5xl">
-                                Agentes institucionales
+                                Entregas institucionales
                             </h1>
                             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
                                 Carga informes, revisa lo que extrajo el agente y decide qué información puede publicarse.
