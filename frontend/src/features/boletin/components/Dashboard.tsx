@@ -25,6 +25,8 @@ import { withinBulletinCutoff } from '../lib/bulletinPeriod';
 import OfficialQueryPanel from './OfficialQueryPanel';
 import CentralHistoryPanel from './CentralHistoryPanel';
 import SabanaUploadFlow from './SabanaUploadFlow';
+// Componente JSX compartido con SISC en cifras (misma revisión editorial).
+import EditorialReview from '../../../components/EditorialReview';
 import type { OfficialResult } from '../hooks/useOfficialIndicator';
 
 export const NOMBRES_CONDUCTAS_DICT: Record<string, string> = {
@@ -53,7 +55,7 @@ export const NOMBRES_CONDUCTAS_DICT: Record<string, string> = {
 export const normalizarConducta = (raw: string): string => {
   if (!raw) return 'Sin Dato';
   const normalizedKey = raw.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  
+
   // Buscar coincidencia exacta
   for (const [key, label] of Object.entries(NOMBRES_CONDUCTAS_DICT)) {
     const cleanKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -61,7 +63,7 @@ export const normalizarConducta = (raw: string): string => {
       return label;
     }
   }
-  
+
   // Buscar coincidencia parcial
   for (const [key, label] of Object.entries(NOMBRES_CONDUCTAS_DICT)) {
     const cleanKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -91,10 +93,10 @@ export const getDatesForWeek = (year: number, weekNum: number) => {
 
   const startDate = new Date(firstSunday);
   startDate.setDate(firstSunday.getDate() + (weekNum - 1) * 7);
-  
+
   const endDate = new Date(startDate);
   endDate.setDate(startDate.getDate() + 6);
-  
+
   return { start: startDate, end: endDate };
 };
 
@@ -172,6 +174,7 @@ const fetchSiscPublication = async (
   signal?: AbortSignal,
   publish = false,
   sourceVersionId?: string,
+  warningsAcknowledged = false,
 ): Promise<SiscPublication> => {
   const editionMap: Record<PeriodType, string> = {
     semanal: 'weekly',
@@ -190,6 +193,7 @@ const fetchSiscPublication = async (
       comparison_mode: 'auto',
       publish,
       source_version_id: sourceVersionId,
+      warnings_acknowledged: warningsAcknowledged,
     }),
   });
   const data = await response.json();
@@ -212,7 +216,7 @@ export const excelSerialToDateString = (serialVal: unknown): string => {
   }
   const serial = Number(serialVal);
   if (isNaN(serial) || serial <= 0) return String(serialVal);
-  
+
   const offset = serial > 59 ? 25569 + 1 : 25569;
   const dateVal = new Date((serial - offset) * 86400 * 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -270,6 +274,8 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
   // Modales de historial
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Revisión editorial: quien publica confirma que revisó las advertencias (bases pequeñas, semana preliminar...).
+  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showAntecedentModal, setShowAntecedentModal] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<BulletinRecord | null>(null);
@@ -287,7 +293,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
   const [antTotalYTD, setAntTotalYTD] = useState<number>(0);
   const [antFileName, setAntFileName] = useState('');
   const [antMotive, setAntMotive] = useState('Registro manual antecedente');
-  const [antConductasSemanaText, setAntConductasSemanaText] = useState('{}'); 
+  const [antConductasSemanaText, setAntConductasSemanaText] = useState('{}');
   const [antConductasYTDText, setAntConductasYTDText] = useState('{}');
 
   const handleRegisterPublish = async () => {
@@ -307,6 +313,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
         undefined,
         true,
         officialResult.source_version_id || undefined,
+        reviewAcknowledged,
       );
     } catch (error: unknown) {
       alert(error instanceof Error ? error.message : 'No fue posible publicar el boletín en el repositorio central.');
@@ -319,11 +326,11 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                        periodType === 'semestral' ? Number(selectedPeriodValue) : 1;
     const baseYear = Number(selectedYear);
     const id = createBulletinId();
-    
-    const existingIndex = history.findIndex(b => 
-      b.anio === baseYear && 
-      b.semana === targetWeek && 
-      (b.periodType || 'semanal') === periodType && 
+
+    const existingIndex = history.findIndex(b =>
+      b.anio === baseYear &&
+      b.semana === targetWeek &&
+      (b.periodType || 'semanal') === periodType &&
       b.estado === 'vigente'
     );
     const updatedHistory = [...history];
@@ -377,7 +384,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
 
   const handleRegisterAntecedent = () => {
     const id = createBulletinId();
-    
+
     let condSemana: Record<string, number> = {};
     let condYTD: Record<string, number> = {};
     try {
@@ -640,7 +647,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                     if(!isNaN(y)) {
                         const rawConducta = String(row[columns[conductaIdx]] ?? '').trim();
                         const normalizedConducta = normalizarConducta(rawConducta);
-                        
+
                         parsedData.push({
                             AÑO: y,
                             MES: mesIdx ? String(row[columns[mesIdx]] ?? '').toLowerCase() : '',
@@ -726,10 +733,10 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
     let prevPeriodCount = 0;
     let currentYTDCount = 0;
     let prevYTDCount = 0;
-    
+
     let prevImmediatePeriodCount = 0;
     let last4WeeksCount = 0;
-    
+
     const currentPeriodRows: CrimeRow[] = [];
 
     const baseYear = Number(selectedYear);
@@ -748,12 +755,12 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
       const year = row.AÑO;
       const month = row.MES;
       const week = row.NoSEMANA;
-      
+
       let inCurrentPeriod = false;
       let inPrevPeriod = false;
       let inCurrentYTD = false;
       let inPrevYTD = false;
-      
+
       let inPrevImmediatePeriod = false;
       let inLast4Weeks = false;
 
@@ -777,7 +784,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
         const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
         const targetMonthIdx = months.indexOf(String(selectedPeriodValue).toLowerCase().substring(0,3));
         const rowMonthIdx = months.indexOf(month.substring(0,3));
-        
+
         if (rowMonthIdx === targetMonthIdx) {
             if (year === baseYear) inCurrentPeriod = true;
             if (year === prevYear) inPrevPeriod = true;
@@ -1091,13 +1098,13 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
 
         const esAltoImpacto = hasImmediateBaseline && Math.abs(diferenciaYTD) > 15;
         let notaGenerada = '';
-        
+
         if (esAltoImpacto) {
           notaGenerada = `Inconsistencia histórica de alto impacto: el valor recalculado (${totalYTDRecalculado}) difiere significativamente del boletín publicado (${totalYTDPublicado}) en la semana ${compWeek}. Se requiere revisión del archivo utilizado, los filtros aplicados o la metodología de conteo antes de generar una nota automática.`;
         } else if (tipoAjuste === 'incremento_neto') {
           const hechoSemanaWord = Math.abs(diferenciaSemana) === 1 ? 'hecho corresponde' : 'hechos corresponden';
           const hechoPrevWord = Math.abs(ajusteSemanasPrevias) === 1 ? 'hecho a semanas previas' : 'hechos a semanas previas';
-          
+
           if (diferenciaSemana !== 0 && ajusteSemanasPrevias !== 0) {
             notaGenerada = `Ajuste de la serie: la nueva entrega de la fuente oficial presenta una variación neta positiva de ${diferenciaYTD} hechos correspondientes a periodos anteriores. De esta diferencia, ${Math.abs(diferenciaSemana)} ${hechoSemanaWord} a la semana ${compWeek} y ${Math.abs(ajusteSemanasPrevias)} ${hechoPrevWord}. Las cifras acumuladas fueron actualizadas y pueden diferir de boletines previamente publicados.`;
           } else if (diferenciaSemana !== 0) {
@@ -1108,7 +1115,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
         } else if (tipoAjuste === 'reduccion_neta') {
           const hechoSemanaWord = Math.abs(diferenciaSemana) === 1 ? 'hecho corresponde' : 'hechos corresponden';
           const hechoPrevWord = Math.abs(ajusteSemanasPrevias) === 1 ? 'hecho' : 'hechos';
-          
+
           if (diferenciaSemana !== 0 && ajusteSemanasPrevias !== 0) {
             notaGenerada = `Ajuste de la serie: la nueva entrega de la fuente oficial presenta una reducción neta de ${Math.abs(diferenciaYTD)} hechos correspondientes a periodos anteriores. De esta diferencia, ${Math.abs(diferenciaSemana)} ${hechoSemanaWord} a la semana ${compWeek} y ${Math.abs(ajusteSemanasPrevias)} ${hechoPrevWord} a semanas previas. Las cifras acumuladas fueron actualizadas.`;
           } else if (diferenciaSemana !== 0) {
@@ -1141,8 +1148,8 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
     const periodTableData = formatTablePeriod(tableCountsPeriod);
     const ytdTableData = formatTableYTD(tableCountsYTD);
 
-    const periodName = periodType === 'semanal' ? `Semana ${selectedPeriodValue}` : 
-                       periodType === 'mensual' ? `Mes ${String(selectedPeriodValue).toUpperCase()}` : 
+    const periodName = periodType === 'semanal' ? `Semana ${selectedPeriodValue}` :
+                       periodType === 'mensual' ? `Mes ${String(selectedPeriodValue).toUpperCase()}` :
                        periodType === 'semestral' ? `Semestre ${selectedPeriodValue}` : `Anual`;
 
     // 1. Balance General
@@ -1481,15 +1488,15 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                   }
                 }}
               />
-              
+
               <div>
                 <label className="block text-sm font-medium text-ui-text-secondary mb-1">Resultados Operativos (PDF)</label>
-                <input 
+                <input
                   type="file" accept=".pdf" onChange={handlePdfUpload} onClick={(e: React.MouseEvent<HTMLInputElement>) => { e.currentTarget.value = ''; }}
                   className="block w-full text-sm text-ui-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-police-green file:text-white hover:file:bg-green-600 cursor-pointer bg-black/20 rounded-md border border-ui-border"
                 />
               </div>
-              
+
               {loading && <div className="text-ui-accent text-sm font-bold animate-pulse">Procesando archivo...</div>}
               {uploadSummary && !loading && (
                 <div className="border border-ui-border bg-black/20 p-3 text-xs text-ui-text-secondary">
@@ -1706,7 +1713,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                     <strong className="text-white text-base">{stats.prevYTDCount}</strong>
                  </div>
               </div>
-              <button 
+              <button
                 onClick={() => window.print()}
                 className="mt-4 w-full bg-ui-accent hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors flex items-center justify-center gap-2"
               >
@@ -1742,10 +1749,10 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                                        periodType === 'mensual' ? months.indexOf(String(selectedPeriodValue).toLowerCase().substring(0,3)) + 1 :
                                        periodType === 'semestral' ? Number(selectedPeriodValue) : 1;
                     const baseYear = Number(selectedYear);
-                    const existing = history.find(b => 
-                      b.anio === baseYear && 
-                      b.semana === targetWeek && 
-                      (b.periodType || 'semanal') === periodType && 
+                    const existing = history.find(b =>
+                      b.anio === baseYear &&
+                      b.semana === targetWeek &&
+                      (b.periodType || 'semanal') === periodType &&
                       b.estado === 'vigente'
                     );
                     if (existing) {
@@ -1756,6 +1763,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                       setCustomVersion('1.0');
                       setRevisionMotive('Publicación inicial');
                     }
+                    setReviewAcknowledged(false);
                     setShowPublishModal(true);
                   }}
                   disabled={siscLoading || publishing || !publicationCanBeRegistered || officialPending}
@@ -1832,9 +1840,9 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
           <div className="bg-[#1a1a24] border border-ui-border rounded-xl max-w-md w-full p-6 text-white shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-2">📢 Generar boletín público</h3>
             <p className="text-xs text-ui-text-secondary mb-4">
-              La información es agregada y anonimizada. Las alertas de cobertura y conciliación se conservarán en el boletín como trazabilidad, sin requerir aprobación de un administrador.
+              La información es agregada y anonimizada. Antes de publicar en la web, el SISC hace la misma revisión editorial que SISC en cifras: si hay bloqueos no se publica, y las advertencias deben confirmarse.
             </p>
-            
+
             <div className="bg-black/30 p-3 rounded-lg text-xs space-y-2 mb-4 border border-ui-border/50">
               <div>
                 <strong className="text-gray-400">Año / Período:</strong> {selectedYear} / {
@@ -1854,46 +1862,64 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-ui-text-secondary mb-1">Versión del boletín</label>
-                  <input 
-                    type="text" 
-                    value={customVersion} 
-                    onChange={e => setCustomVersion(e.target.value)} 
+                  <input
+                    type="text"
+                    value={customVersion}
+                    onChange={e => setCustomVersion(e.target.value)}
                     className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                   />
                 </div>
                 <div>
                   <label className="block text-ui-text-secondary mb-1">Fecha de publicación</label>
-                  <input 
-                    type="date" 
-                    value={publishDate} 
-                    onChange={e => setPublishDate(e.target.value)} 
+                  <input
+                    type="date"
+                    value={publishDate}
+                    onChange={e => setPublishDate(e.target.value)}
                     className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-ui-text-secondary mb-1">Motivo de la versión / Nota de revisión *</label>
-                <textarea 
+                <textarea
                   required
                   rows={3}
                   placeholder="Ej: Publicación inicial, o Corrección de 2 delitos por reclasificación retroactiva de la fuente."
-                  value={revisionMotive} 
-                  onChange={e => setRevisionMotive(e.target.value)} 
+                  value={revisionMotive}
+                  onChange={e => setRevisionMotive(e.target.value)}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white resize-none"
                 />
               </div>
             </div>
 
+            {siscPublication?.governance?.editorial_review && (
+              <div className="mb-4 max-h-64 overflow-y-auto rounded-lg">
+                <EditorialReview publication={siscPublication} showActions={false} />
+              </div>
+            )}
+            {(siscPublication?.governance?.editorial_review?.warnings || 0) > 0 && !(siscPublication?.governance?.editorial_review?.blocking > 0) && (
+              <label className="mb-4 flex items-start gap-2 text-xs text-gray-200">
+                <input type="checkbox" checked={reviewAcknowledged} onChange={(event) => setReviewAcknowledged(event.target.checked)} className="mt-0.5" />
+                Revisé las advertencias y el boletín las presenta de forma que no induce a error.
+              </label>
+            )}
+            {siscPublication?.governance?.editorial_review?.blocking > 0 && (
+              <p role="alert" className="mb-4 rounded border border-red-400/40 bg-red-900/30 p-2 text-xs text-red-100">
+                La revisión editorial tiene bloqueos: resuélvalos antes de publicar en la web.
+              </p>
+            )}
             <div className="flex gap-3 justify-end text-xs font-bold">
-              <button 
+              <button
                 onClick={() => setShowPublishModal(false)}
                 className="bg-black/30 hover:bg-black/40 border border-ui-border text-white px-4 py-2 rounded transition-colors"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 onClick={handleRegisterPublish}
-                disabled={publishing}
+                disabled={publishing
+                  || siscPublication?.governance?.editorial_review?.blocking > 0
+                  || ((siscPublication?.governance?.editorial_review?.warnings || 0) > 0 && !reviewAcknowledged)}
                 className="bg-ui-accent hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-wait text-white px-4 py-2 rounded transition-colors"
               >
                 {publishing ? 'Publicando…' : 'Generar y guardar'}
@@ -1907,13 +1933,13 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#1a1a24] border border-ui-border rounded-xl max-w-4xl w-full max-h-[85vh] flex flex-col text-white shadow-2xl overflow-hidden">
-            
+
             <div className="p-6 border-b border-ui-border flex justify-between items-center">
               <div>
                 <h3 className="text-lg font-bold text-white">📚 Historial de Boletines Publicados</h3>
                 <p className="text-xs text-ui-text-secondary">Registro inmutable de publicaciones del Observatorio del Delito de Jamundí</p>
               </div>
-              <button 
+              <button
                 onClick={() => setShowHistoryModal(false)}
                 className="text-gray-400 hover:text-white font-bold text-lg"
               >
@@ -1951,8 +1977,8 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                           antecedente: 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                         };
                         return (
-                          <tr 
-                            key={record.id} 
+                          <tr
+                            key={record.id}
                             className={`hover:bg-white/5 cursor-pointer ${selectedHistoryItem?.id === record.id ? 'bg-white/10' : ''}`}
                             onClick={() => setSelectedHistoryItem(record)}
                           >
@@ -1970,14 +1996,14 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                             </td>
                             <td className="py-2.5 px-3 text-gray-400">{record.fechaPublicacion}</td>
                             <td className="py-2.5 px-3 space-x-2" onClick={e => e.stopPropagation()}>
-                              <button 
+                              <button
                                 onClick={() => setSelectedHistoryItem(record)}
                                 className="text-police-accent hover:underline text-[11px]"
                               >
                                 Detalle
                               </button>
                               {record.estado === 'vigente' && (
-                                <button 
+                                <button
                                   onClick={() => handleAnnulRecord(record.id)}
                                   className="text-red-400 hover:underline text-[11px]"
                                 >
@@ -1985,7 +2011,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                                 </button>
                               )}
                               {(record.estado === 'anulada' || record.estado === 'antecedente') && (
-                                <button 
+                                <button
                                   onClick={() => handleDeleteRecord(record.id)}
                                   className="text-gray-400 hover:text-white hover:underline text-[11px]"
                                 >
@@ -2007,7 +2033,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                     <h4 className="font-bold text-white text-sm">Detalles del Registro</h4>
                     <button onClick={() => setSelectedHistoryItem(null)} className="text-gray-400 hover:text-white font-bold">✕</button>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div><strong className="text-gray-400">ID:</strong> <span className="font-mono text-gray-500">{selectedHistoryItem.id.substring(0,8)}...</span></div>
                     <div><strong className="text-gray-400">Año / Semana:</strong> {selectedHistoryItem.anio} / S{selectedHistoryItem.semana}</div>
@@ -2040,7 +2066,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
             </div>
 
             <div className="p-6 border-t border-ui-border flex justify-end">
-              <button 
+              <button
                 onClick={() => setShowHistoryModal(false)}
                 className="bg-ui-accent hover:bg-blue-600 text-white font-bold py-2 px-6 rounded transition-colors text-xs"
               >
@@ -2063,28 +2089,28 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
             <div className="grid grid-cols-3 gap-2 text-xs mb-3">
               <div>
                 <label className="block text-ui-text-secondary mb-1">Año</label>
-                <input 
-                  type="number" 
-                  value={antYear} 
-                  onChange={e => setAntYear(Number(e.target.value))} 
+                <input
+                  type="number"
+                  value={antYear}
+                  onChange={e => setAntYear(Number(e.target.value))}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-ui-text-secondary mb-1">Semana</label>
-                <input 
-                  type="number" 
-                  value={antWeek} 
-                  onChange={e => setAntWeek(Number(e.target.value))} 
+                <input
+                  type="number"
+                  value={antWeek}
+                  onChange={e => setAntWeek(Number(e.target.value))}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-ui-text-secondary mb-1">Versión</label>
-                <input 
-                  type="text" 
-                  value={antVersion} 
-                  onChange={e => setAntVersion(e.target.value)} 
+                <input
+                  type="text"
+                  value={antVersion}
+                  onChange={e => setAntVersion(e.target.value)}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                 />
               </div>
@@ -2093,19 +2119,19 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
             <div className="grid grid-cols-2 gap-2 text-xs mb-3">
               <div>
                 <label className="block text-ui-text-secondary mb-1">Total Semana</label>
-                <input 
-                  type="number" 
-                  value={antTotalSemana} 
-                  onChange={e => setAntTotalSemana(Number(e.target.value))} 
+                <input
+                  type="number"
+                  value={antTotalSemana}
+                  onChange={e => setAntTotalSemana(Number(e.target.value))}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-ui-text-secondary mb-1">Total YTD Acumulado</label>
-                <input 
-                  type="number" 
-                  value={antTotalYTD} 
-                  onChange={e => setAntTotalYTD(Number(e.target.value))} 
+                <input
+                  type="number"
+                  value={antTotalYTD}
+                  onChange={e => setAntTotalYTD(Number(e.target.value))}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                 />
               </div>
@@ -2114,51 +2140,51 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
             <div className="space-y-3 text-xs mb-4">
               <div>
                 <label className="block text-ui-text-secondary mb-1">Nombre del Archivo Excel Original</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="SABANAS SEM X 2026.xlsx"
-                  value={antFileName} 
-                  onChange={e => setAntFileName(e.target.value)} 
+                  value={antFileName}
+                  onChange={e => setAntFileName(e.target.value)}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-ui-text-secondary mb-1">Observaciones / Motivo de carga</label>
-                <input 
-                  type="text" 
-                  value={antMotive} 
-                  onChange={e => setAntMotive(e.target.value)} 
+                <input
+                  type="text"
+                  value={antMotive}
+                  onChange={e => setAntMotive(e.target.value)}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-ui-text-secondary mb-1">Totales por Conducta Semana (JSON)</label>
-                <textarea 
+                <textarea
                   rows={2}
-                  value={antConductasSemanaText} 
-                  onChange={e => setAntConductasSemanaText(e.target.value)} 
+                  value={antConductasSemanaText}
+                  onChange={e => setAntConductasSemanaText(e.target.value)}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white font-mono text-[10px]"
                 />
               </div>
               <div>
                 <label className="block text-ui-text-secondary mb-1">Totales por Conducta YTD (JSON)</label>
-                <textarea 
+                <textarea
                   rows={2}
-                  value={antConductasYTDText} 
-                  onChange={e => setAntConductasYTDText(e.target.value)} 
+                  value={antConductasYTDText}
+                  onChange={e => setAntConductasYTDText(e.target.value)}
                   className="w-full bg-black/40 border border-ui-border rounded p-2 text-white font-mono text-[10px]"
                 />
               </div>
             </div>
 
             <div className="flex gap-3 justify-end text-xs font-bold">
-              <button 
+              <button
                 onClick={() => setShowAntecedentModal(false)}
                 className="bg-black/30 hover:bg-black/40 border border-ui-border text-white px-4 py-2 rounded transition-colors"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 onClick={handleRegisterAntecedent}
                 className="bg-ui-accent hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors"
               >

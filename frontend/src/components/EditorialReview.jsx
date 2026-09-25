@@ -18,7 +18,7 @@ const formatDateTime = (value) => {
  * Revisión editorial antes de publicar: muestra qué comprobó el sistema, qué debe mirar
  * una persona y, si no hay bloqueos, permite aprobar y publicar dejando constancia.
  */
-const EditorialReview = ({ publication, authHeaders, canApprove, onPublished }) => {
+const EditorialReview = ({ publication, authHeaders, canApprove, onPublished, showActions = true }) => {
     const [acknowledged, setAcknowledged] = useState(false);
     const [working, setWorking] = useState(false);
     const [error, setError] = useState('');
@@ -83,7 +83,7 @@ const EditorialReview = ({ publication, authHeaders, canApprove, onPublished }) 
                 })}
             </ul>
 
-            <div className="mt-4 border-t border-slate-100 pt-4">
+            {showActions && <div className="mt-4 border-t border-slate-100 pt-4">
                 {published ? (
                     <p className="flex items-center gap-2 text-sm font-black text-emerald-700">
                         <CheckCircle2 size={18} />
@@ -116,7 +116,7 @@ const EditorialReview = ({ publication, authHeaders, canApprove, onPublished }) 
                     </div>
                 )}
                 {error && <p className="mt-3 text-sm font-bold text-red-700" role="alert">{error}</p>}
-            </div>
+            </div>}
         </section>
     );
 };

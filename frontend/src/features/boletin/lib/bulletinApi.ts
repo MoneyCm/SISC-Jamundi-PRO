@@ -15,6 +15,29 @@ async function request(path: string, options: RequestInit = {}) {
   return json({ ...payload, error, detail: error }, response.status);
 }
 
+const BULLETIN_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'];
+
+/**
+ * Fuentes del Boletín para un periodo. Inspecciones entra solo si sus datos llegan al periodo:
+ * sin comparendos de esa semana, incluirla bloquearía la publicación (la revisión editorial lo exige).
+ * La sábana policial va siempre; Comisarías entra como contexto de otro periodo, señalado como tal.
+ */
+export function coveringBulletinSources(sources: { code: string; last_cutoff_date?: string | null }[], periodStart: string): string[] {
+  const cutoff = (code: string) => sources.find(source => source.code === code)?.last_cutoff_date || '';
+  return BULLETIN_SOURCES.filter(code => code !== 'INSPECCIONES_RNMC' || (periodStart && cutoff(code) >= periodStart));
+}
+
+async function bulletinSourceCodes(periodStart: string, signal?: AbortSignal | null): Promise<string[]> {
+  try {
+    const response = await request('/sisc-cifras/sources', { signal: signal || undefined });
+    if (!response.ok) return BULLETIN_SOURCES;
+    return coveringBulletinSources(await response.json(), periodStart);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    return BULLETIN_SOURCES;
+  }
+}
+
 async function summary(id: string, options: RequestInit) {
   const runResponse = await request(`/ingesta/runs/${encodeURIComponent(id)}`, options);
   if (!runResponse.ok) return runResponse;
@@ -54,10 +77,12 @@ export async function bulletinFetch(url: string, options: RequestInit = {}): Pro
   if (url === '/api/sisc-publication') {
     if (options.method !== 'POST') return request('/sisc-cifras/publications/public', options);
     const body = JSON.parse(String(options.body));
+    const sourceCodes = await bulletinSourceCodes(String(body.period_start || ''), options.signal);
     return request('/sisc-cifras/generate', { ...options, body: JSON.stringify({
       edition_type: body.edition_type, period_start: body.period_start, period_end: body.period_end,
-      comparison_mode: body.comparison_mode || 'auto', source_codes: ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'],
+      comparison_mode: body.comparison_mode || 'auto', source_codes: sourceCodes,
       max_insights: 6, save_history: Boolean(body.publish), publish_automatically: Boolean(body.publish),
+      warnings_acknowledged: Boolean(body.warnings_acknowledged),
       ...(body.source_version_id ? { source_version_id: body.source_version_id } : {}),
     }) });
   }

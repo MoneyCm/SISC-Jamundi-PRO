@@ -54,3 +54,43 @@ test('bulletin forwards the original upload and preserves gate responses', async
         delete globalThis.__bulletinTransport;
     }
 });
+
+test('the bulletin leaves out Inspecciones when its data does not reach the period', async () => {
+    const result = await build({
+        entryPoints: [fileURLToPath(new URL('../features/boletin/lib/bulletinApi.ts', import.meta.url))],
+        bundle: true, write: false, format: 'esm', platform: 'node',
+        plugins: [{ name: 'isolated-transport', setup(builder) {
+            builder.onResolve({ filter: /utils\/apiClient$/ }, () => ({ path: 'transport', namespace: 'test' }));
+            builder.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: 'export const apiFetch = (...args) => globalThis.__bulletinTransport(...args);' }));
+            builder.onResolve({ filter: /\.\/pdfOperations$/ }, () => ({ path: 'pdf', namespace: 'unused' }));
+            builder.onLoad({ filter: /.*/, namespace: 'unused' }, () => ({ contents: 'export function extractOperations() { throw new Error("unused"); }' }));
+        } }],
+    });
+    const { bulletinFetch, coveringBulletinSources } = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
+    const sources = [
+        { code: 'POLICIA_SEMANAL', last_cutoff_date: '2026-09-12' },
+        { code: 'INSPECCIONES_RNMC', last_cutoff_date: '2026-05-25' },
+        { code: 'COMISARIAS_FAMILIA', last_cutoff_date: '2026-03-26' },
+    ];
+    // Semana de septiembre: Inspecciones (corte mayo) queda fuera; Comisarías sigue como contexto.
+    assert.deepEqual(coveringBulletinSources(sources, '2026-09-06'), ['POLICIA_SEMANAL', 'COMISARIAS_FAMILIA']);
+    assert.deepEqual(coveringBulletinSources(sources, '2026-05-01'), ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA']);
+
+    const calls = [];
+    globalThis.__bulletinTransport = async (path, options) => {
+        calls.push({ path, options });
+        const body = path === '/sisc-cifras/sources' ? sources : { id: 'x', status: 'DRAFT' };
+        return new Response(JSON.stringify(body), { status: 200 });
+    };
+    try {
+        await bulletinFetch('/api/sisc-publication', { method: 'POST', body: JSON.stringify({
+            edition_type: 'weekly', period_start: '2026-09-06', period_end: '2026-09-12', publish: true, warnings_acknowledged: true,
+        }) });
+        const sent = JSON.parse(calls.find(call => call.path === '/sisc-cifras/generate').options.body);
+        assert.deepEqual(sent.source_codes, ['POLICIA_SEMANAL', 'COMISARIAS_FAMILIA']);
+        assert.equal(sent.publish_automatically, true);
+        assert.equal(sent.warnings_acknowledged, true);
+    } finally {
+        delete globalThis.__bulletinTransport;
+    }
+});

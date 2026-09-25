@@ -64,6 +64,8 @@ class GenerateSiscCifrasRequest(BaseModel):
     save_history: bool = False
     publish_automatically: bool = False
     source_version_id: Optional[UUID] = None
+    # Al publicar directo (Boletín institucional), quien publica confirma que revisó las advertencias.
+    warnings_acknowledged: bool = False
 
 
 def _check_selected_delivery(db, payload, row=None):
@@ -172,6 +174,22 @@ async def generate_sisc_cifras(
         ).first() if publication_id else None
         if not row:
             raise HTTPException(status_code=500, detail="No fue posible recuperar el boletin generado.")
+        # El Boletín institucional va a la web oficial: pasa la misma revisión editorial que SISC en cifras.
+        # Si no se publica, el borrador queda guardado para corregir y volver a intentar.
+        from services.publication_review import review_publication, summarize as summarize_review
+        review = summarize_review(review_publication(publication))
+        if not review["can_publish"]:
+            titles = "; ".join(check["title"] for check in review["checks"] if check["level"] == "BLOQUEA")
+            raise HTTPException(
+                status_code=422,
+                detail=f"No se publicó: la revisión editorial tiene {review['blocking']} bloqueo(s): {titles}. Quedó guardado como borrador.",
+            )
+        if review["warnings"] and not payload.warnings_acknowledged:
+            titles = "; ".join(check["title"] for check in review["checks"] if check["level"] == "REVISAR")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Confirme que revisó las advertencias antes de publicar: {titles}.",
+            )
         from services.publication_guards import enforce_publication_integrity
         try:
             _check_selected_delivery(db, payload, row)
@@ -194,8 +212,15 @@ async def generate_sisc_cifras(
         snapshot = dict(publication)
         governance = dict(snapshot.get("governance") or {})
         governance["human_review_required"] = False
-        governance["automatic_publication"] = True
-        governance["publication_note"] = "Publicacion automatica de informacion agregada y anonimizada; las alertas de cobertura se conservan como trazabilidad."
+        governance["automatic_publication"] = False
+        governance["publication_note"] = "Publicado desde el Boletín institucional tras la revisión editorial; las alertas de cobertura se conservan como trazabilidad."
+        governance["editorial_review"] = review
+        governance["approval"] = {
+            "approved_by": current_user.username,
+            "approved_at": datetime.utcnow().isoformat() + "Z",
+            "warnings_acknowledged": [check["code"] for check in review["checks"] if check["level"] == "REVISAR"],
+            "channel": "BOLETIN_INSTITUCIONAL",
+        }
         governance["integrity"] = integrity
         snapshot["governance"] = governance
         snapshot["status"] = "PUBLISHED"
