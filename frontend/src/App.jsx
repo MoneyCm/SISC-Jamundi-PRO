@@ -31,10 +31,13 @@ const StatsModule = lazy(() => import('./pages/StatsModule'));
 const SourceCenter = lazy(() => import('./pages/SourceCenter'));
 const PoliceWeeklyExplorer = lazy(() => import('./pages/PoliceWeeklyExplorer'));
 const SiscCifras = lazy(() => import('./pages/SiscCifras'));
+const BoletinReplica = lazy(() => import('./features/boletin/BoletinReplica'));
+const ReplicaBulletinArchive = lazy(() => import('./components/ObservatoryBulletins'));
 const ObservatoryBulletinsPage = lazy(() => import('./pages/ObservatoryBulletinsPage'));
 const RegionalContext = lazy(() => import('./pages/RegionalContext'));
 const RNMCModule = lazy(() => import('./pages/RNMCModule'));
 const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
+const CouncilCommitments = lazy(() => import('./pages/CouncilCommitments'));
 const UsersManagement = lazy(() => import('./pages/UsersManagementV2'));
 const AccessRequests = lazy(() => import('./pages/AccessRequests'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
@@ -310,6 +313,10 @@ const App = () => {
         return <PoliceWeeklyExplorer />;
       case 'sisc_cifras':
         return <SiscCifras />;
+      case 'boletin_replica':
+        return <BoletinReplica onOpenArchive={() => setActivePage('technical_bulletins')} />;
+      case 'technical_bulletins':
+        return <><button className="mb-4 rounded border px-4 py-2" onClick={() => setActivePage('boletin_replica')}>Volver al generador</button><ReplicaBulletinArchive /></>;
 
       case 'intelligence':
         return <IntelligenceModule />;
@@ -319,6 +326,8 @@ const App = () => {
         return <StatsModule userRoles={userRoles} dataLevel={dataLevel} />;
       case 'alerts':
         return <AlertsFeed onPageChange={setActivePage} setExternalFilters={setRnmcFilters} />;
+      case 'council_commitments':
+        return <CouncilCommitments />;
       case 'rnmc':
         return <RNMCModule externalFilters={rnmcFilters} clearExternalFilters={() => setRnmcFilters(null)} />;
       case 'dq':

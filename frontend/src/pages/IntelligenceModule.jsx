@@ -1,5 +1,42 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, TrendingUp, Activity, BarChart2, Clock, ArrowUpRight, Brain, Globe2, Search, ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Minus, RefreshCw, Activity, BarChart2, Clock, ArrowUpRight, Brain, Globe2, Search, ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from "lucide-react";
+
+// Nombres legibles para los códigos de conducta de MinDefensa
+const DELITO_LABELS = {
+    LESIONES_PERSONALES: 'Lesiones personales',
+    HOMICIDIO: 'Homicidio',
+    HOMICIDIO_INTENCIONAL: 'Homicidio intencional',
+    HURTO_VEHICULOS: 'Hurto de vehículos',
+    HURTO_PERSONAS: 'Hurto a personas',
+    HURTO_RESIDENCIAS: 'Hurto a residencias',
+    HURTO_COMERCIO: 'Hurto a comercio',
+    HURTO_MOTOCICLETAS: 'Hurto de motocicletas',
+    HURTO_AUTOMOTORES: 'Hurto de automotores',
+    VIOLENCIA_INTRAFAMILIAR: 'Violencia intrafamiliar',
+    EXTORSION: 'Extorsión',
+    SECUESTRO: 'Secuestro',
+    DELITOS_SEXUALES: 'Delitos sexuales',
+};
+const delitoLabel = (code) => {
+    const key = String(code || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, '_');
+    if (DELITO_LABELS[key]) return DELITO_LABELS[key];
+    const txt = String(code || '').replace(/_/g, ' ').toLowerCase();
+    return txt.charAt(0).toUpperCase() + txt.slice(1);
+};
+const fmtNum = (v, decimals = 0) => v == null || v === '' || Number.isNaN(Number(v))
+    ? '—'
+    : Number(v).toLocaleString('es-CO', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+const fmtDate = (value) => {
+    if (!value) return null;
+    const d = new Date(`${String(value).slice(0, 10)}T12:00:00`);
+    return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+const PROVIDER_LABELS = { MISTRAL: 'Mistral', GEMINI: 'Gemini', SISC_AUTOMATICO: 'lectura automática SISC (sin IA)' };
+// Etiqueta veraz: proveedor y modelo que realmente redactaron el texto.
+const providerLabel = (provider, model) => {
+    const base = PROVIDER_LABELS[provider] || provider || 'SISC';
+    return model ? `${base} (${model}), cifras verificadas` : base;
+};
 import {
     BarChart,
     Bar,
@@ -30,14 +67,16 @@ const Button = ({ children, variant = "default", className, ...props }) => {
 
 const IntelligenceModule = () => {
     const [loading, setLoading] = useState(false);
-    const [selectedYear, setSelectedYear] = useState(2025);
+    // Arranca en el año en curso; fetchYears lo ajusta al año más reciente con datos cargados.
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedMunicipio, setSelectedMunicipio] = useState("JAMUNDI");
     const [municipios, setMunicipios] = useState([]);
     const [availableYears, setAvailableYears] = useState([2026, 2025, 2024, 2023]);
     const [stats, setStats] = useState({ summary: [], trend: [], context: null });
     const [insight, setInsight] = useState(null);
     const [insightLoading, setInsightLoading] = useState(false);
-    const [activeProvider, setActiveProvider] = useState("Gemini Pro");
+    const [activeProvider, setActiveProvider] = useState('');
+    const [insightFallback, setInsightFallback] = useState(false);
     const [comparisonCrime, setComparisonCrime] = useState("");
     const [comparisonScope, setComparisonScope] = useState("regional");
     const [nationalRanking, setNationalRanking] = useState(null);
@@ -135,7 +174,8 @@ const IntelligenceModule = () => {
             if (response.ok) {
                 const data = await response.json();
                 setInsight(data.insight);
-                if (data.provider) setActiveProvider(data.provider === "MISTRAL" ? "Mistral Large" : "Gemini Pro");
+                setInsightFallback(Boolean(data.fallback));
+                setActiveProvider(providerLabel(data.provider, data.verified ? data.model : null));
             } else {
                 setInsight("Error al obtener el análisis estratégico.");
             }
@@ -176,10 +216,8 @@ const IntelligenceModule = () => {
                 const data = await response.json();
                 if (data && data.length > 0) {
                     setAvailableYears(data);
-                    // Si el año seleccionado no está en la lista, elegir el más reciente
-                    if (!data.includes(selectedYear)) {
-                        setSelectedYear(data[0]);
-                    }
+                    // Por defecto se analiza el año más reciente disponible frente al anterior.
+                    setSelectedYear(data[0]);
                 }
             }
         } catch (error) {
@@ -216,7 +254,7 @@ const IntelligenceModule = () => {
     const rateComparisonData = (stats.summary || [])
         .filter(item => item.rate_per_100k != null)
         .map(item => ({
-            delito: item.delito,
+            delito: delitoLabel(item.delito),
             localRate: item.rate_per_100k,
             regionalRate: item.territorial_benchmark?.available
                 ? item.territorial_benchmark.reference_rate_per_100k
@@ -346,10 +384,12 @@ const IntelligenceModule = () => {
                             </div>
                             <div className="mt-4 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <span className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold">
-                                        Redacción asistida por {insightLoading ? "Motor IA" : activeProvider}
-                                    </span>
-                                    {insight && (
+                                    {(insightLoading || activeProvider) && (
+                                        <span className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold">
+                                            {insightLoading ? "Redactando…" : `Redacción: ${activeProvider}`}
+                                        </span>
+                                    )}
+                                    {insight && !insightFallback && (
                                         <button
                                             onClick={() => setChatOpen(true)}
                                             className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-400/10 px-3 py-1.5 rounded-lg border border-emerald-400/20"
@@ -441,7 +481,7 @@ const IntelligenceModule = () => {
                         </select>
                     </div>
                     <Button variant="outline" onClick={fetchStats} className="mt-5">
-                        <Loader2 className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                     </Button>
                 </CardContent>
             </Card>
@@ -451,12 +491,16 @@ const IntelligenceModule = () => {
                 {stats.summary?.map((item, idx) => (
                     <Card key={idx} className="hover:shadow-md transition-shadow">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-medium text-slate-600">{item.delito}</CardTitle>
-                            <TrendingUp className={`h-4 w-4 ${item.yoy_pct == null ? 'text-slate-400' : item.yoy_pct > 2 ? 'text-red-500' : item.yoy_pct < -2 ? 'text-emerald-500' : 'text-slate-500'}`} />
+                            <CardTitle className="text-sm font-medium text-slate-600">{delitoLabel(item.delito)}</CardTitle>
+                            {(() => {
+                                const TrendIcon = item.yoy_pct == null ? Minus : item.yoy_pct > 2 ? TrendingUp : item.yoy_pct < -2 ? TrendingDown : Minus;
+                                const tone = item.yoy_pct == null ? 'text-slate-400' : item.yoy_pct > 2 ? 'text-red-500' : item.yoy_pct < -2 ? 'text-emerald-500' : 'text-slate-500';
+                                return <TrendIcon className={`h-4 w-4 ${tone}`} />;
+                            })()}
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-slate-800">
-                                {item.local}
+                                {fmtNum(item.local)}
                                 <span className="text-xs text-slate-400 font-normal ml-2">casos registrados</span>
                             </div>
                             <div className="flex flex-col gap-1 mt-2">
@@ -464,29 +508,19 @@ const IntelligenceModule = () => {
                                     <Activity className="mr-1 h-3 w-3" />
                                     {item.yoy_pct == null
                                         ? `Sin base comparable en ${selectedYear - 1}`
-                                        : `${item.yoy_pct > 0 ? '+' : ''}${item.yoy_pct}% frente a ${selectedYear - 1}`}
+                                        : `${item.yoy_pct > 0 ? '+' : ''}${fmtNum(item.yoy_pct, 1)}% frente a ${item.period_end_month && item.period_end_month < 12 ? `ene-${monthNames[item.period_end_month - 1].slice(0, 3)} ` : ''}${selectedYear - 1}${Math.abs(item.yoy_pct) <= 2 ? ' (estable)' : ''}`}
                                 </p>
                                 {item.rate_per_100k != null && (
-                                    <p className="text-[10px] text-slate-500">Tasa local DANE: {item.rate_per_100k} por 100.000 hab.</p>
+                                    <p className="text-[10px] text-slate-500">Tasa local DANE: {fmtNum(item.rate_per_100k, 2)} por 100.000 hab.</p>
                                 )}
                                 {item.territorial_benchmark?.available && (
                                     <p className="text-[10px] font-bold text-emerald-700">
-                                        Referencia territorial: {item.territorial_benchmark.reference_rate_per_100k} por 100.000 hab.
-                                    </p>
-                                )}
-                                {item.territorial_benchmark && !item.territorial_benchmark.available && (
-                                    <p className="text-[10px] text-slate-400">
-                                        Referencia territorial pendiente: {item.territorial_benchmark.coverage.observed_municipalities}/{item.territorial_benchmark.coverage.expected_municipalities} municipios con cobertura verificable.
+                                        Referencia territorial: {fmtNum(item.territorial_benchmark.reference_rate_per_100k, 2)} por 100.000 hab.
                                     </p>
                                 )}
                                 {item.national_benchmark?.available && (
                                     <p className="text-[10px] font-bold text-indigo-700">
-                                        Referencia nacional: {item.national_benchmark.national_rate_per_100k} por 100.000 hab.
-                                    </p>
-                                )}
-                                {item.national_benchmark && !item.national_benchmark.available && (
-                                    <p className="text-[10px] text-slate-400">
-                                        Referencia nacional pendiente: {item.national_benchmark.coverage.observed_municipalities}/{item.national_benchmark.coverage.expected_municipalities} municipios con cobertura verificable.
+                                        Referencia nacional: {fmtNum(item.national_benchmark.national_rate_per_100k, 2)} por 100.000 hab.
                                     </p>
                                 )}
                             </div>
@@ -550,7 +584,7 @@ const IntelligenceModule = () => {
                                     onChange={(event) => { setComparisonCrime(event.target.value); setNationalPage(1); }}
                                     className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
                                 >
-                                    {comparisonOptions.map(item => <option key={item.delito} value={item.delito}>{item.label || item.delito}</option>)}
+                                    {comparisonOptions.map(item => <option key={item.delito} value={item.delito}>{item.label || delitoLabel(item.delito)}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -569,7 +603,7 @@ const IntelligenceModule = () => {
                                 </span>
                                 {selectedComparisonItem?.isAggregate && <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">{sourceComparisonOptions.length} conductas priorizadas sumadas</span>}
                                 {selectedComparisonItem?.hasMixedPeriods && <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">Cortes independientes</span>}
-                                {territorialComparison.cutoff && <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al: {territorialComparison.cutoff}</span>}
+                                {territorialComparison.cutoff && <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al {fmtDate(territorialComparison.cutoff)}</span>}
                             </div>
                             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                                 <div className="max-h-[440px] overflow-auto">
@@ -622,7 +656,7 @@ const IntelligenceModule = () => {
                                         </span>
                                         <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{nationalRanking.coverage.national_universe} municipios DANE</span>
                                         {nationalRanking.has_mixed_periods && <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">Cortes independientes</span>}
-                                        {nationalRanking.cutoff && <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al: {nationalRanking.cutoff}</span>}
+                                        {nationalRanking.cutoff && <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al {fmtDate(nationalRanking.cutoff)}</span>}
                                     </div>
                                     <div className="grid overflow-hidden rounded-lg border border-slate-200 bg-white sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-slate-200">
                                         <div className="px-4 py-3"><p className="text-xs font-semibold uppercase text-slate-500">Posición nacional</p><p className="mt-1 text-2xl font-bold text-indigo-700">{nationalRanking.target.posicion_nacional} de {nationalRanking.coverage.national_universe}</p></div>
@@ -723,7 +757,7 @@ const IntelligenceModule = () => {
                             </p>
                             {stats.context?.coverage && (
                                 <p className="mt-1 text-xs">
-                                    Corte nacional evaluado: {stats.context.cutoff || 'sin corte informado'}.
+                                    Corte nacional evaluado: {fmtDate(stats.context.cutoff) || 'sin corte informado'}.
                                 </p>
                             )}
                         </div>

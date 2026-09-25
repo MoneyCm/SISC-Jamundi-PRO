@@ -12,7 +12,7 @@ const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userR
     }
 
     return (
-        <div className="flex h-screen bg-slate-50 overflow-hidden relative">
+        <div className="sisc-layout flex h-screen bg-slate-50 overflow-hidden relative">
             {/* Mobile Sidebar Overlay */}
             {sidebarOpen && (
                 <div
@@ -32,9 +32,9 @@ const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userR
                 dataLevel={dataLevel}
             />
 
-            <div className="flex-1 flex flex-col min-w-0 h-full">
+            <div className="sisc-layout-content flex-1 flex flex-col min-w-0 h-full">
                 <Header onMenuClick={() => setSidebarOpen(true)} isPublic={isPublic} currentUser={currentUser} activePage={activePage} />
-                <main className={`flex-1 overflow-y-auto ${isPublic ? 'p-0' : 'p-4 md:p-8'}`}>
+                <main className={`sisc-layout-main flex-1 overflow-y-auto ${isPublic || activePage === 'boletin_replica' ? 'p-0' : 'p-4 md:p-8'}`}>
                     {children}
                 </main>
             </div>

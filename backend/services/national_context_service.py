@@ -19,8 +19,8 @@ from typing import Iterable, Optional
 REFERENCE_DIR = Path(__file__).resolve().parents[1] / "data" / "reference"
 POPULATION_FILE = REFERENCE_DIR / "dane_population_municipal_2018_2042.csv"
 NATIONAL_BENCHMARK_REQUIREMENTS = [
-    "poblacion DANE para cada municipio",
-    "cobertura completa de municipios para la misma conducta y ano",
+    "población DANE para cada municipio",
+    "cobertura completa de municipios para la misma conducta y año",
     "misma definicion de conducta, periodo y corte",
 ]
 REFERENCE_DEPARTMENTS = ("76", "19")  # Valle del Cauca y Cauca
@@ -271,8 +271,8 @@ def named_territorial_comparison(
         "coverage_complete": normalized_expected <= normalized_covered and bool(normalized_expected),
         "rows": rows,
         "methodology": (
-            "Municipios de Valle del Cauca y Cauca con poblacion entre 50% y 200% "
-            "de la poblacion del municipio objetivo; tasas por 100.000 habitantes con poblacion DANE."
+            "Municipios de Valle del Cauca y Cauca con población entre 50% y 200% "
+            "de la población del municipio objetivo; tasas por 100.000 habitantes con población DANE."
         ),
     }
 
@@ -293,8 +293,8 @@ def national_benchmark_guard(
         "status": "PENDING_EQUIVALENT_RATE",
         "title": "Referencia nacional pendiente de cobertura verificable",
         "reason": (
-            "No se publica una comparacion nacional hasta verificar cobertura "
-            "municipal completa para la misma conducta, ano y corte."
+            "No se publica una comparación nacional hasta verificar cobertura "
+            "municipal completa para la misma conducta, año y corte."
         ),
         "requirements": NATIONAL_BENCHMARK_REQUIREMENTS,
         "source_ids": sorted({source_id for source_id in source_ids if source_id}),
@@ -401,13 +401,13 @@ def comparable_reference_rate(
         "reason": None,
     }
     if not expected_codes:
-        result["reason"] = "No hay municipios de referencia con poblacion DANE para el ano consultado."
+        result["reason"] = "No hay municipios de referencia con población DANE para el año consultado."
         return result
     if local_population is None:
-        result["reason"] = "No hay poblacion DANE homologada para el municipio consultado."
+        result["reason"] = "No hay población DANE homologada para el municipio consultado."
         return result
     if missing_codes:
-        result["reason"] = "La cobertura de la fuente no es completa para esta conducta y ano."
+        result["reason"] = "La cobertura de la fuente no es completa para esta conducta y año."
         return result
     if comparable_cutoff is None:
         result["reason"] = "La fuente no tiene un corte unico verificable para esta conducta."

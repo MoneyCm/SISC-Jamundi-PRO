@@ -1,9 +1,9 @@
 {
   "contrato": "boletin_seguimiento.v1",
-  "fecha_corte": "2026-08-03",
+  "fecha_corte": "2026-09-17",
   "periodo": {
-    "inicio": "2026-07-28",
-    "fin": "2026-08-03"
+    "inicio": "2026-09-11",
+    "fin": "2026-09-17"
   },
   "eventos_semana": {
     "total": 0,
@@ -377,6 +377,6 @@
     "cerradas": 55,
     "focos_con_seguimiento": 50
   },
-  "generado_en": "2026-08-03T11:58:52",
+  "generado_en": "2026-09-16T20:14:42",
   "fuente": "SISC-Jamundi-PRO"
 }

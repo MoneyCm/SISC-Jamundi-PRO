@@ -20,6 +20,7 @@ import {
     Hash
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import SatRadarPanel from '../components/SatRadarPanel';
 
 const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
     const [alerts, setAlerts] = useState([]);
@@ -30,6 +31,8 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
         severity: ''
     });
     const [error, setError] = useState(null);
+    // Distingue "no hay alertas" de "no se pudieron consultar": nunca mostrar "Todo bajo control" tras un fallo.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [snapshotInfo, setSnapshotInfo] = useState(null);
     const [scoringConfig, setScoringConfig] = useState(null);
@@ -49,8 +52,10 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
             const data = await response.json();
             setAlerts(data.items || []);
             setError(null);
+            setLoadFailed(false);
         } catch (err) {
             setError(err.message);
+            setLoadFailed(true);
         } finally {
             setLoading(false);
         }
@@ -254,6 +259,9 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
 
     return (
         <div className="max-w-6xl mx-auto p-6 space-y-8 animate-fade-in pb-40">
+            {/* Contexto: alertas de la Defensoría contrastadas con los hechos registrados */}
+            <SatRadarPanel />
+
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -371,6 +379,11 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
                 <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100 border-dashed">
                     <RefreshCw className="text-blue-500 animate-spin mb-4" size={32} />
                     <p className="text-slate-500 font-bold">Calculando Action Scores (IA Prioritization)...</p>
+                </div>
+            ) : alerts.length === 0 && loadFailed ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100 border-dashed">
+                    <p className="text-slate-900 font-black text-xl">No se pudieron consultar las alertas</p>
+                    <p className="text-slate-500 font-medium">El estado real es desconocido. Intenta de nuevo o revisa el servicio.</p>
                 </div>
             ) : alerts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100 border-dashed">

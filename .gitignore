@@ -18,6 +18,8 @@ dist/
 
 # Database & Dumps
 *.sql
+!backend/db/migrations/20260828_fiscalia_spoa_v3.sql
+!backend/db/migrations/20260908_interventions.sql
 *.sqlite
 *.sqlite3
 
@@ -46,4 +48,16 @@ backend/SABANAS_*.xlsx
 backend/static/uploads/
 backend/.pytest_cache/
 tmp/
+
+# Estado local de la carga de referencia MinDefensa
+mindefensa_reference_sync_state.json
+
+# Copias de trabajo con documentos reservados o datos personales (no versionar)
 .codex-temp-*/
+.helicon/
+output/pdf/
+monitor_execution.json
+backend/monitor_execution.json
+# Página de QA local con datos de prueba
+frontend/executive-qa.html
+frontend/executive-qa.jsx

@@ -120,6 +120,10 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const [mapData, setMapData] = useState(null);
     const [alerts, setAlerts] = useState([]);
     const [alertsUpdatedAt, setAlertsUpdatedAt] = useState(null);
+    // Bandeja central (motor nuevo): evaluaciones persistidas y vigentes.
+    // No se ejecuta ninguna evaluación al abrir el tablero; el GET que calcula
+    // solo se usa como previsualización del estado actual (sin persistir).
+    const [trayStatus, setTrayStatus] = useState(null);
     const [aiInsight, setAiInsight] = useState('');
     const [aiProvider, setAiProvider] = useState('');
     const [inbox, setInbox] = useState(null);
@@ -269,7 +273,8 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             const query = `start_date=${range.start}&end_date=${range.end}`;
             const results = await Promise.allSettled([
                 apiJson(`/ia/insights?${query}`),
-                apiJson('/ia/alertas'),
+                // Bandeja central: solo vigentes OPEN (SUPERSEDED queda en historial).
+                apiJson('/alerts-tray/?limit=3'),
                 apiJson('/participacion/admin/bandeja'),
             ]);
             if (cancelled) return;
@@ -278,8 +283,35 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 setAiProvider(results[0].value.provider || 'IA');
             }
             if (results[1].status === 'fulfilled') {
-                setAlerts(results[1].value.alertas || []);
-                setAlertsUpdatedAt(results[1].value.timestamp || null);
+                const items = (results[1].value.items || []).map((item) => ({
+                    id: item.id,
+                    nivel: item.tier,
+                    titulo: item.title,
+                    mensaje: item.reason,
+                    periodo: item.evidence?.current_period,
+                    comparacion: item.evidence ? `${item.evidence.previous_value} → ${item.evidence.current_value} ${item.evidence.unit || ''}` : '',
+                    cobertura: item.evidence?.coverage,
+                    corte: item.evidence?.cutoff,
+                    revision: item.review_state,
+                    createdAt: item.created_at,
+                }));
+                setAlerts(items);
+                setAlertsUpdatedAt(items[0]?.createdAt || null);
+                if (items.length > 0) {
+                    setTrayStatus('ALERTA');
+                } else {
+                    // Sin vigentes: previsualización de solo lectura para distinguir
+                    // SIN_ALERTA de SIN_COBERTURA (no persiste evaluaciones).
+                    try {
+                        const preview = await apiJson('/ia/alertas-semanales?indicator=HOMICIDIO');
+                        setTrayStatus(preview.status === 'SIN_COBERTURA' ? 'SIN_COBERTURA' : 'SIN_ALERTA');
+                    } catch {
+                        setTrayStatus('SIN_ALERTA');
+                    }
+                }
+            } else {
+                setAlerts([]);
+                setTrayStatus('ERROR');
             }
             if (results[2].status === 'fulfilled') setInbox(results[2].value.items || []);
             setExtrasLoading(false);
@@ -378,7 +410,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
 
             {isInstitutional ? (
                 <section className="grid xl:grid-cols-2 gap-4">
-                    <AlertsPanel alerts={alerts} updatedAt={alertsUpdatedAt} onOpen={() => onNavigate?.('alerts')} />
+                    <AlertsPanel alerts={alerts} updatedAt={alertsUpdatedAt} trayStatus={trayStatus} onOpen={() => onNavigate?.('alerts')} />
                     <AIAnalysisPanel insight={aiInsight} provider={aiProvider} loading={extrasLoading} onOpen={() => onNavigate?.('intelligence')} onDownload={() => exportPdf(false)} />
                 </section>
             ) : <EmptyInstitutionalPanel />}

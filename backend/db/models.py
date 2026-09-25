@@ -11,7 +11,11 @@ def create_tables():
         from db.models_mindefensa import MindefensaAsset
         from db.models_policia import PoliceAsset
         from db.models_source_center import SourceConnectorState
+        from db.models_fiscalia_spoa import FiscaliaSpoaRun, FiscaliaSpoaSnapshot, FiscaliaSpoaRecord
+        from db.models_medicina_legal import MedicinaLegalRun, MedicinaLegalSnapshot, MedicinaLegalRecord
         from db.models_alerts import IntelligenceAlert
+        from db.models_interventions import InterventionCase, InterventionRevision
+        from db.models_council import CouncilActRead, CouncilCommitment, CouncilCommitmentUpdate
         from db.models_auth import User, Role, Permission, AuditLog, AccessRequest
         from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion, InspeccionFinanza
         from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator, InstitutionalAgentRun, InstitutionalAgentFinding

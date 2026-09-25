@@ -1,4 +1,5 @@
 import { Bell, User, Search, Menu, ShieldCheck } from 'lucide-react';
+import { pageLabel } from '../utils/pageLabels';
 
 const LegacyHeader = ({ onMenuClick, isPublic }) => {
     // In public mode, we only show a very minimal header for mobile menu access
@@ -59,18 +60,7 @@ const LegacyHeader = ({ onMenuClick, isPublic }) => {
     );
 };
 
-const PAGE_LABELS = {
-    dashboard: 'Resumen operativo',
-    users: 'Gestión de usuarios',
-    access_requests: 'Solicitudes de acceso',
-    audit: 'Auditoría',
-    sources: 'Centro de fuentes',
-    reports: 'Reportes',
-    stats: 'Estadísticas',
-    map: 'Mapa institucional',
-    intelligence: 'Contexto comparado',
-    alerts: 'Alertas estadísticas',
-};
+// Los nombres de página vienen de utils/pageLabels.js (los mismos de la barra lateral).
 
 const ROLE_LABELS = {
     TI_ADMIN: 'Administración TI',
@@ -95,7 +85,7 @@ const Header = ({ onMenuClick, isPublic, currentUser, activePage }) => {
                 </button>
                 <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase text-slate-400">Centro de mando SISC</p>
-                    <h1 className="text-sm md:text-base font-black text-slate-800 truncate">{PAGE_LABELS[activePage] || 'Gestión institucional'}</h1>
+                    <h1 className="text-sm md:text-base font-black text-slate-800 truncate">{pageLabel(activePage)}</h1>
                 </div>
             </div>
 

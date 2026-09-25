@@ -27,28 +27,28 @@
     {
       "code": "HURTO_RESIDENCIAS",
       "label": "Hurto a residencias",
-      "aliases": ["H.RESIDENCIAS", "H.RESIDENCIA", "HURTO RESIDENCIAS", "HURTO A RESIDENCIAS"],
+      "aliases": ["H.RESIDENCIAS", "H.RESIDENCIA", "HURTO RESIDENCIAS", "HURTO A RESIDENCIAS", "ARTÍCULO 239. HURTO RESIDENCIAS"],
       "category": "SEGURIDAD",
       "metadata": {"publishable": true}
     },
     {
       "code": "HURTO_COMERCIO",
       "label": "Hurto a comercio",
-      "aliases": ["H.COMERCIO", "HURTO COMERCIO", "HURTO A ESTABLECIMIENTO"],
+      "aliases": ["H.COMERCIO", "HURTO COMERCIO", "HURTO A COMERCIO", "HURTO A ESTABLECIMIENTO", "ARTÍCULO 239. HURTO ENTIDADES COMERCIALES"],
       "category": "SEGURIDAD",
       "metadata": {"publishable": true}
     },
     {
       "code": "HURTO_MOTOS",
       "label": "Hurto de motocicletas",
-      "aliases": ["H.MOTOS", "H.MOTOCICLETAS", "HURTO MOTOS", "HURTO DE MOTOCICLETAS"],
+      "aliases": ["H.MOTOS", "H.MOTOCICLETAS", "HURTO MOTOS", "HURTO MOTOCICLETAS", "HURTO DE MOTOCICLETAS", "ARTÍCULO 239. HURTO MOTOCICLETAS"],
       "category": "SEGURIDAD",
       "metadata": {"publishable": true}
     },
     {
       "code": "HURTO_AUTOMOTORES",
       "label": "Hurto de automotores",
-      "aliases": ["H.AUTOMOTORES", "HURTO AUTOMOTORES"],
+      "aliases": ["H.AUTOMOTORES", "HURTO AUTOMOTORES", "ARTÍCULO 239. HURTO AUTOMOTORES"],
       "category": "SEGURIDAD",
       "metadata": {"publishable": true}
     },

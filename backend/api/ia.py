@@ -17,13 +17,15 @@ from api.auth import analyst_or_admin, institutional_access
 router = APIRouter()
 
 # ConfiguraciÃ³n de Modelos
-GEMINI_MODEL = "gemini-2.0-flash-lite"
+# gemini-2.0-flash-lite fue retirado por Google; el modelo se configura por entorno.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-2603")
 
 # ConfiguraciÃ³n desde .env
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "GEMINI").upper()
+AI_MODEL = MISTRAL_MODEL if AI_PROVIDER == "MISTRAL" else GEMINI_MODEL
 
 print(f"SISC JamundÃ­ AI: Iniciando con Proveedor: {AI_PROVIDER}")
 
@@ -541,16 +543,27 @@ def _format_institutional_answer(message: str, db: Session):
     return "\n\n".join(sections + [closing])
 
 async def call_gemini(contexto):
-    url = f"https://generativelanguage.googleapis.com/v1/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-    payload = {"contents": [{"parts": [{"text": contexto}]}]}
+    # La llave va en un encabezado, no en la URL: los errores de httpx imprimen la URL
+    # y la dejaban expuesta en los registros.
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    headers = {"x-goog-api-key": GEMINI_API_KEY or "", "Content-Type": "application/json"}
+    payload = {
+        "contents": [{"parts": [{"text": contexto}]}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024},
+    }
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
-            result = response.json()
-            return result['candidates'][0]['content']['parts'][0]['text']
+            candidate = response.json()['candidates'][0]
+            if candidate.get('finishReason') == 'MAX_TOKENS':
+                raise RuntimeError("Respuesta de Gemini truncada por limite de tokens.")
+            return "".join(part.get('text', '') for part in candidate['content']['parts'])
+        except httpx.HTTPStatusError as e:
+            print(f"Error llamando a Gemini ({GEMINI_MODEL}): HTTP {e.response.status_code}")
+            raise
         except Exception as e:
-            print(f"Error llamando a Gemini: {e}")
+            print(f"Error llamando a Gemini ({GEMINI_MODEL}): {type(e).__name__}")
             raise
 
 async def call_mistral(contexto):
@@ -562,17 +575,57 @@ async def call_mistral(contexto):
     payload = {
         "model": MISTRAL_MODEL,
         "messages": [{"role": "user", "content": contexto}],
-        "max_tokens": 150
+        # 150 tokens cortaba respuestas de 70-120 palabras a mitad de frase.
+        "max_tokens": 400,
+        "temperature": 0.2,
     }
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             result = response.json()
-            return result['choices'][0]['message']['content']
+            choice = result['choices'][0]
+            if choice.get('finish_reason') == 'length':
+                raise RuntimeError("Respuesta de Mistral truncada por limite de tokens.")
+            return choice['message']['content']
         except Exception as e:
             print(f"Error llamando a Mistral: {e}")
             raise
+
+async def redactar_verificado(contexto: str, datos: str, respaldo: Optional[str] = None, extra_allowed=()) -> dict:
+    """Redacta con la IA configurada y verifica el texto contra `datos` antes de usarlo.
+
+    `datos` son solo las cifras entregadas en el prompt (no las instrucciones). Si la IA
+    falla, se corta o altera una cifra o el sentido de un cambio, se usa `respaldo`
+    (texto calculado sin IA) y se informa el motivo.
+    """
+    from services.ai_output_guard import verify_ai_text
+
+    import asyncio
+
+    base = {"provider": AI_PROVIDER, "model": AI_MODEL}
+    texto = None
+    # Un reintento ante saturación temporal del proveedor (429 / 5xx).
+    for intento in range(2):
+        try:
+            texto = await (call_mistral(contexto) if AI_PROVIDER == "MISTRAL" else call_gemini(contexto))
+            break
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if intento == 0 and (status == 429 or status >= 500):
+                await asyncio.sleep(2)
+                continue
+            print(f"Error con IA ({AI_PROVIDER}): HTTP {status}")
+        except Exception as exc:
+            print(f"Error con IA ({AI_PROVIDER}): {type(exc).__name__}")
+        return {**base, "text": respaldo, "verified": False, "fallback": True, "problems": ["La IA no respondio."]}
+    texto = (texto or "").strip()
+    guard = verify_ai_text(texto, datos, extra_allowed=extra_allowed)
+    if not guard.ok:
+        print(f"Texto de IA descartado por verificacion: {guard.problems}")
+        return {**base, "text": respaldo, "verified": False, "fallback": True, "problems": guard.problems}
+    return {**base, "text": texto, "verified": True, "fallback": False, "problems": []}
+
 
 @router.get("/insights", dependencies=[Depends(institutional_access)])
 async def get_ai_insights(
@@ -617,7 +670,9 @@ async def get_ai_insights(
         return {
             "insight": ia_cache["insight"],
             "status": "success",
-            "provider": AI_PROVIDER,
+            "provider": ia_cache.get("effective_provider", AI_PROVIDER),
+            "model": ia_cache.get("model"),
+            "verified": ia_cache.get("verified"),
             "periodo": {"inicio": period_start.isoformat(), "fin": period_end.isoformat()},
             "cached": True
         }
@@ -707,43 +762,53 @@ async def get_ai_insights(
     Responde en español, con tono institucional claro y máximo 60 palabras.
     """
 
-    try:
-        if AI_PROVIDER == "MISTRAL":
-            insight_text = await call_mistral(contexto)
-        else:
-            insight_text = await call_gemini(contexto)
+    top_nombre = top_barrio_2026[0] if top_barrio_2026 else 'sin dato clasificable'
+    top_total = top_barrio_2026[1] if top_barrio_2026 else 0
+    datos = (
+        f"Periodo: {period_start.isoformat()} a {period_end.isoformat()}. Registros unicos: {total_real_periodo}. "
+        f"Homicidios: {homicidios_periodo}. Mayor concentracion: {top_nombre} ({top_total} registros)."
+    )
+    respaldo = (
+        f"Lectura descriptiva del periodo {period_start.isoformat()} a {period_end.isoformat()}: "
+        f"{total_real_periodo} registros únicos y {homicidios_periodo} homicidios. "
+        f"Mayor concentración territorial publicable: {top_nombre} ({top_total} registros)."
+    )
+    resultado = await redactar_verificado(contexto, datos, respaldo)
+    effective_provider = "SISC_AUTOMATICO" if resultado["fallback"] else AI_PROVIDER
 
-        # Update Cache
-        ia_cache["insight"] = insight_text
-        ia_cache["timestamp"] = ahora
-        ia_cache["last_total"] = total
-        ia_cache["provider"] = AI_PROVIDER
-        ia_cache["period"] = period_key
+    # Update Cache
+    ia_cache["insight"] = resultado["text"]
+    ia_cache["timestamp"] = ahora
+    ia_cache["last_total"] = total
+    ia_cache["provider"] = AI_PROVIDER
+    ia_cache["effective_provider"] = effective_provider
+    ia_cache["model"] = None if resultado["fallback"] else resultado["model"]
+    ia_cache["verified"] = resultado["verified"]
+    ia_cache["period"] = period_key
 
-        return {
-            "insight": insight_text,
-            "status": "success",
-            "provider": AI_PROVIDER,
-            "periodo": {"inicio": period_start.isoformat(), "fin": period_end.isoformat()},
-            "cached": False
-        }
-    except Exception as e:
-        print(f"Error con IA ({AI_PROVIDER}): {e}")
-        return {
-            "insight": f"El analista del SISC ({AI_PROVIDER}) estÃ¡ saturado. Reintentando en breve...",
-            "status": "error"
-        }
+    return {
+        "insight": resultado["text"],
+        "status": "success",
+        "provider": effective_provider,
+        "model": ia_cache["model"],
+        "verified": resultado["verified"],
+        "verification_notes": resultado["problems"],
+        "periodo": {"inicio": period_start.isoformat(), "fin": period_end.isoformat()},
+        "cached": False
+    }
 
 from services.alert_engine import AlertEngine
 
-@router.get("/alertas", dependencies=[Depends(institutional_access)])
+@router.get("/alertas", dependencies=[Depends(institutional_access)], deprecated=True)
 async def get_ai_alerts(db: Session = Depends(get_db)):
-    """
-    Sistema de Alertas Tempranas (SAT): Detecta incrementos anÃ³malos en delitos
-    para la SecretarÃ­a de Seguridad de JamundÃ­.
+    """DEPRECATED: motor legado (ventanas desiguales, mezcla de unidades).
+
+    Compatibilidad únicamente para tableros no migrados. Uso operativo:
+    bandeja central /api/alerts-tray (evaluaciones persistidas y vigentes).
     """
     try:
-        # Usar el nuevo motor de alertas deductivo y unificado
+        # LEGADO (ventanas desiguales, mezcla de unidades): se mantiene por compatibilidad.
+        # Para alertas reproducibles usar GET /api/ia/alertas-semanales.
         alertas = AlertEngine.calculate_alerts(db)
 
         return {
@@ -756,6 +821,48 @@ async def get_ai_alerts(db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error en SAT: {e}")
         raise HTTPException(status_code=500, detail="Error al generar alertas del sistema.")
+
+
+@router.get("/alertas-semanales", dependencies=[Depends(institutional_access)])
+def get_weekly_alerts(
+    indicator: str = "HOMICIDIO",
+    ref_date: Optional[date] = None,
+    source_version_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Consulta (solo lectura): evalúa la alerta semanal sin persistir.
+
+    Determinista; la IA solo redacta a partir de la evidencia devuelta.
+    Umbrales propuestos, pendientes de acuerdo con el Observatorio.
+    """
+    from services.alert_rules import evaluate_weekly
+    try:
+        return evaluate_weekly(db, indicator=indicator.upper(), ref_date=ref_date,
+                               source_version_id=source_version_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as e:
+        print(f"Error en alertas semanales: {e}")
+        raise HTTPException(status_code=500, detail="Error al generar la alerta semanal.")
+
+
+@router.post("/alertas-semanales", dependencies=[Depends(analyst_or_admin)])
+def post_weekly_alerts(
+    indicator: str = "HOMICIDIO",
+    ref_date: Optional[date] = None,
+    source_version_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Ejecución: evalúa y persiste idempotentemente la alerta semanal."""
+    from services.alert_rules import emit_weekly
+    try:
+        return emit_weekly(db, indicator=indicator.upper(), ref_date=ref_date,
+                           source_version_id=source_version_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as e:
+        print(f"Error en alertas semanales: {e}")
+        raise HTTPException(status_code=500, detail="Error al generar la alerta semanal.")
 @router.post("/chat_ciudadano")
 async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
     """
@@ -780,10 +887,40 @@ async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
     ).scalar() or 0
 
-    homicidios = db.query(func.count(HechoSeguridad.id)).filter(
+    # Unidad oficial: HECHO (hechos únicos). HOMICIDIO usa la misma regla que el
+    # resto de conductas —corrige inconsistencia histórica COUNT(filas) vs hechos—.
+    # total_registros queda solo como diagnóstico de volumen de fuente.
+    # Vía única: estas cifras deben coincidir con POST /api/sisc-cifras/indicator
+    # para mismos filtros y versiones (ver provenance_* abajo).
+    homicidios = db.query(hechos_unicos_expr()).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
         HechoSeguridad.conducta_estandar.in_(HOMICIDE_ALIASES),
     ).scalar() or 0
+    provenance_official: dict = {}
+    try:
+        from services.indicator_calculation import calculate_indicator as _calc
+
+        _minmax = db.query(func.min(HechoSeguridad.fecha_evento), func.max(HechoSeguridad.fecha_evento)).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
+        ).first()
+        _min_d, _max_d = (_minmax or (None, None))
+        if _min_d and _max_d:
+            _off_total = _calc(db, indicator="SEGURIDAD_TOTAL", period_start=_min_d, period_end=_max_d)
+            _off_hom = _calc(db, indicator="HOMICIDIO", period_start=_min_d, period_end=_max_d)
+            provenance_official = {
+                "indicator": "SEGURIDAD_TOTAL/HOMICIDIO",
+                "unit": _off_total.get("unit"),
+                "period": _off_total.get("period"),
+                "source_version_id": _off_total.get("source_version_id"),
+                "methodology_version": _off_total.get("methodology_version"),
+                "query_hash": _off_total.get("query_hash"),
+                "values": {"total": _off_total.get("value"), "homicidios": _off_hom.get("value")},
+            }
+            # Coherencia: el chat usa la vía única; si difiere, prevalece el servicio común.
+            total_incidentes = int(_off_total.get("value") or total_incidentes)
+            homicidios = int(_off_hom.get("value") or homicidios)
+    except Exception:
+        provenance_official = {}
 
     min_modern_date = db.query(func.min(HechoSeguridad.fecha_evento)).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
@@ -815,7 +952,8 @@ async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
     for year in years_to_track:
         year_data = []
         for name, aliases in delitos_prioritarios.items():
-            metric = func.count(HechoSeguridad.id) if name == "HOMICIDIO" else hechos_unicos_expr()
+            # Todas las conductas —incluido HOMICIDIO— usan hechos únicos (unidad HECHO, metodología v1).
+            metric = hechos_unicos_expr()
             filters = [
                 HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
                 func.extract('year', HechoSeguridad.fecha_evento) == year,
@@ -936,7 +1074,7 @@ async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
         homicide_monthly_rows = db.query(
             func.extract('year', HechoSeguridad.fecha_evento).label('year'),
             func.extract('month', HechoSeguridad.fecha_evento).label('month'),
-            func.count(HechoSeguridad.id).label('total'),
+            hechos_unicos_expr().label('total'),
         ).filter(
             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
             HechoSeguridad.conducta_estandar.in_(HOMICIDE_ALIASES),
@@ -1017,6 +1155,13 @@ async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
     if direct_monthly_response:
         return {"response": direct_monthly_response}
 
+    # Misma fuente de población que el tablero público (proyección DANE del año del corte).
+    from services.national_context_service import population_for
+    _anio_poblacion = (fecha_corte_date or date.today()).year
+    _poblacion = population_for("76364", _anio_poblacion)
+    poblacion_texto = (f"{_poblacion:,} habitantes (proyeccion DANE {_anio_poblacion})".replace(",", ".")
+                       if _poblacion else "sin proyeccion DANE disponible")
+
     contexto = f"""
     Eres el Asistente Virtual del SISC JamundÃ­ (Sistema de InformaciÃ³n para la Seguridad y Convivencia).
     Tu objetivo es guiar a los ciudadanos y responder dudas sobre seguridad con DATOS REALES.
@@ -1029,7 +1174,7 @@ async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
     - Resumen mensual consolidado de la fuente mas reciente: {stats_mensuales}
     - Fecha de corte de los datos cargados para consulta ciudadana: {fecha_corte}
     - Fuente usada para la fecha de corte: {fuente_corte}
-    - Poblacion de Jamundi: 180,942 habitantes (Proyeccion 2026).
+    - Poblacion de Jamundi: {poblacion_texto}.
 
     REGLAS DE RESPUESTA:
     1. Se amable, empatico y profesional.
@@ -1044,14 +1189,19 @@ async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
     El ciudadano te pregunta: "{user_message}"
     """
 
-    try:
-        if AI_PROVIDER == "MISTRAL":
-            response_text = await call_mistral(contexto)
-        else:
-            response_text = await call_gemini(contexto)
-
-        return {"response": response_text}
-    except Exception as e:
-        print(f"Error en Chat Ciudadano ({AI_PROVIDER}): {e}")
-        return {"response": "Lo siento, tengo dificultades tÃ©cnicas. Por favor, consulta los tableros de datos en el portal o llama al 123 en caso de emergencia."}
+    # Solo los datos (no las reglas) cuentan como fuente de cifras; la pregunta del
+    # ciudadano puede traer años o meses, y el 123 es la única línea permitida.
+    datos_chat = contexto.split("REGLAS DE RESPUESTA:")[0]
+    resultado = await redactar_verificado(
+        contexto,
+        datos_chat,
+        respaldo=(
+            "No pude verificar las cifras de esa respuesta, así que prefiero no dártela. "
+            "Puedes consultar los tableros de datos del portal. Ante una emergencia, llama al 123."
+        ),
+        extra_allowed=[user_message, "123"],
+    )
+    return {"response": resultado["text"], "provenance": provenance_official or None,
+            "unit": "HECHO", "methodology_version": "1",
+            "verified": resultado["verified"], "model": None if resultado["fallback"] else resultado["model"]}
 

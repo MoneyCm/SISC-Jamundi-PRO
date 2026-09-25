@@ -6,19 +6,26 @@ CONDUCTAS_POLICIA = [
     # HURTO
     ("POLICIA_SEMANAL", "H.PERSONAS", "Hurto a personas", "HURTO"),
     ("POLICIA_SEMANAL", "HURTO A PERSONAS", "Hurto a personas", "HURTO"),
+    ("POLICIA_SEMANAL", "ARTÍCULO 239. HURTO PERSONAS", "Hurto a personas", "HURTO"),
     ("POLICIA_SEMANAL", "H.MOTOS", "Hurto a motocicletas", "HURTO"),
+    ("POLICIA_SEMANAL", "ARTÍCULO 239. HURTO MOTOCICLETAS", "Hurto a motocicletas", "HURTO"),
     ("POLICIA_SEMANAL", "H.AUTOMOTORES", "Hurto a automotores", "HURTO"),
+    ("POLICIA_SEMANAL", "ARTÍCULO 239. HURTO AUTOMOTORES", "Hurto a automotores", "HURTO"),
     ("POLICIA_SEMANAL", "H.RESIDENCIAS", "Hurto a residencias", "HURTO"),
     ("POLICIA_SEMANAL", "HURTO A RESIDENCIAS", "Hurto a residencias", "HURTO"),
+    ("POLICIA_SEMANAL", "ARTÍCULO 239. HURTO RESIDENCIAS", "Hurto a residencias", "HURTO"),
     ("POLICIA_SEMANAL", "H.COMERCIO", "Hurto a comercio", "HURTO"),
     ("POLICIA_SEMANAL", "HURTO A COMERCIO", "Hurto a comercio", "HURTO"),
+    ("POLICIA_SEMANAL", "ARTÍCULO 239. HURTO ENTIDADES COMERCIALES", "Hurto a comercio", "HURTO"),
     
     # LESIONES
     ("POLICIA_SEMANAL", "LESIONES PERSONALES", "Lesiones personales", "LESIONES"),
     ("POLICIA_SEMANAL", "LESIONES", "Lesiones personales", "LESIONES"),
+    ("POLICIA_SEMANAL", "ARTÍCULO 111. LESIONES PERSONALES", "Lesiones personales", "LESIONES"),
     
     # HOMICIDIO
     ("POLICIA_SEMANAL", "HOMICIDIO", "Homicidio", "HOMICIDIO"),
+    ("POLICIA_SEMANAL", "ARTÍCULO 103. HOMICIDIO", "Homicidio", "HOMICIDIO"),
     
     # VIF / SEXUALES
     ("POLICIA_SEMANAL", "VIOLENCIA INTRAFAMILIAR", "Violencia intrafamiliar", "VIF"),

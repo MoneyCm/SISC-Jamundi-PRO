@@ -1,5 +1,5 @@
 import logging
-from api.ia import call_gemini, call_mistral, AI_PROVIDER
+from api.ia import redactar_verificado, AI_PROVIDER
 from db.models_alerts import IntelligenceAlert
 
 logger = logging.getLogger("ai_prioritizer")
@@ -30,21 +30,14 @@ async def build_ai_rationale(alert: IntelligenceAlert, scoring_output: dict) -> 
     5. No uses asteriscos excesivos. Solo texto con negritas para enfatizar.
     """
     
-    try:
-        if AI_PROVIDER == "MISTRAL":
-            rationale = await call_mistral(contexto)
-        else:
-            rationale = await call_gemini(contexto)
-            
-        return {
-            "ai_rationale_md": rationale,
-            "ai_provider": AI_PROVIDER,
-            "ai_request_id": "gen_" + alert.id.hex[:8]
-        }
-    except Exception as e:
-        logger.error(f"Error generando AI Rationale: {e}")
-        return {
-            "ai_rationale_md": None,
-            "ai_provider": AI_PROVIDER,
-            "ai_request_id": "error"
-        }
+    # Solo los datos de la alerta (no las reglas) cuentan como fuente de cifras.
+    datos = contexto.split("REGLAS:")[0]
+    resultado = await redactar_verificado(contexto, datos, respaldo=None)
+    if resultado["fallback"]:
+        logger.warning(f"AI Rationale descartado: {resultado['problems']}")
+        return {"ai_rationale_md": None, "ai_provider": AI_PROVIDER, "ai_request_id": "rejected"}
+    return {
+        "ai_rationale_md": resultado["text"],
+        "ai_provider": f"{AI_PROVIDER}:{resultado['model']}",
+        "ai_request_id": "gen_" + alert.id.hex[:8]
+    }

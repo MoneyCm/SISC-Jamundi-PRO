@@ -140,17 +140,23 @@ def _comparison_table(items, styles, limit=8):
     for item in items[:limit]:
         variation = _variation_value(item)
         color = GREEN if variation is not None and variation < 0 else RED if variation is not None and variation > 0 else INK
-        is_suppressed = item.get("value") is None or (
+        is_current_suppressed = item.get("value") is None or (
             isinstance(item.get("value"), (int, float)) and item.get("value") < 5
         )
+        is_comparison_suppressed = item.get("comparison_value") is None or (
+            isinstance(item.get("comparison_value"), (int, float)) and item.get("comparison_value") < 5
+        )
+        is_suppressed = is_current_suppressed or is_comparison_suppressed
         val_cell = SUPPRESSED_LABEL if is_suppressed else _number(item.get("value"))
         comp_cell = SUPPRESSED_LABEL if is_suppressed else _number(item.get("comparison_value"))
+        diff_cell = SUPPRESSED_LABEL if is_suppressed else _difference(item)
+        variation_cell = SUPPRESSED_LABEL if is_suppressed else _variation(item)
         rows.append([
             Paragraph(_text(item.get("indicator_name")), styles["td"]),
             Paragraph(comp_cell, styles["num"]),
             Paragraph(val_cell, styles["num"]),
-            Paragraph(f'<font color="{color.hexval()}"><b>{_difference(item)}</b></font>', styles["num"]),
-            Paragraph(f'<font color="{color.hexval()}"><b>{_variation(item)}</b></font>', styles["num"]),
+            Paragraph(f'<font color="{color.hexval()}"><b>{diff_cell}</b></font>', styles["num"]),
+            Paragraph(f'<font color="{color.hexval()}"><b>{variation_cell}</b></font>', styles["num"]),
         ])
     if len(rows) == 1:
         rows.append([Paragraph("Sin indicadores comparables para este periodo.", styles["td"]), "-", "-", "-", "-"])

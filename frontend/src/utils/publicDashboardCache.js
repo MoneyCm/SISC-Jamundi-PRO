@@ -1,6 +1,6 @@
 import { API_BASE_URL } from './apiConfig';
 
-const CACHE_KEY_PREFIX = 'sisc_public_dashboard_v5_normalized_territories';
+const CACHE_KEY_PREFIX = 'sisc_public_dashboard_v6_unified_territories';
 const MAX_AGE_MS = 10 * 60 * 1000;
 
 let memoryCache = {};

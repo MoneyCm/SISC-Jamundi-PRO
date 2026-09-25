@@ -1,7 +1,21 @@
+const isLocalApiUrl = (value) => {
+    try {
+        const url = new URL(value.startsWith('http') ? value : `http://${value}`);
+        return (
+            url.hostname === 'localhost' ||
+            url.hostname === '127.0.0.1' ||
+            url.hostname.startsWith('192.168.') ||
+            url.hostname.startsWith('10.') ||
+            /^172\.(1[6-9]|2\d|3[0-1])\./.test(url.hostname)
+        );
+    } catch {
+        return false;
+    }
+};
+
 const getApiBaseUrl = () => {
     const host = window.location.hostname;
-    const protocol = window.location.protocol;
-    
+
     // 1. Variable de entorno definida en build-time (Prioridad máxima)
     const envUrl = import.meta.env?.VITE_API_URL;
     
@@ -11,8 +25,9 @@ const getApiBaseUrl = () => {
         return envUrl;
     }
 
-    // Si la envUrl es una URL completa (no localhost), la formateamos
-    if (envUrl && !envUrl.includes('localhost')) {
+    // Si la envUrl es una URL completa remota, la formateamos.
+    // En desarrollo local preferimos el proxy de Vite para evitar CORS y backends apagados.
+    if (envUrl && !isLocalApiUrl(envUrl)) {
         let url = envUrl.startsWith('http') ? envUrl : `https://${envUrl}`;
         if (!url.endsWith('/api')) url += '/api';
         console.log(`[API Config] Usando URL de entorno: ${url}`);

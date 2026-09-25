@@ -20,6 +20,13 @@ from services.hechos_metrics import hechos_unicos_expr
 
 
 MIN_PUBLIC_TERRITORIAL_COUNT = 3
+# Con menos de este número de casos en ambos periodos, un porcentaje es ruido
+# (1 frente a 8 = -87,5%): se informa la diferencia absoluta, no el porcentaje.
+SMALL_BASE_THRESHOLD = 30
+# Días finales de una entrega policial que suelen completarse con reportes tardíos.
+PRELIMINARY_LAG_DAYS = 7
+MONTH_NAMES_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+                  "septiembre", "octubre", "noviembre", "diciembre")
 NON_PUBLIC_TERRITORY_VALUES = {
     "BARRIO PENDIENTE POR ASIGNAR",
     "PENDIENTE POR ASIGNAR",
@@ -555,8 +562,15 @@ class SiscCifrasService:
             InstitutionalDataBatch.version.desc(),
             InstitutionalDataBatch.created_at.desc(),
         ).all()
-        closed = [b for b in batches if cls._is_month_closed(b.period, b.cutoff_date)]
-        return cls.latest_batches_by_entity(closed)
+        # Un informe acumulado con corte a mitad de mes (p. ej. enero-mayo, corte 28/05) es
+        # válido como contexto: se publica con su fecha de corte real. Un informe mensual
+        # parcial no, porque presentaría medio mes como el mes completo.
+        usable = [
+            b for b in batches
+            if cls._is_month_closed(b.period, b.cutoff_date)
+            or (b.reporting_basis or "").upper() == "CUMULATIVE"
+        ]
+        return cls.latest_batches_by_entity(usable)
 
     @classmethod
     def publication_sources(
@@ -850,6 +864,10 @@ class SiscCifrasService:
                 "aggregation_note": "Los dominios se presentan por separado y sus valores no se suman entre si.",
             },
         }
+
+        # Revisión editorial: qué debe mirar quien aprueba antes de publicar.
+        from services.publication_review import review_publication, summarize as summarize_review
+        publication["governance"]["editorial_review"] = summarize_review(review_publication(publication))
 
         if save_history:
             from services.indicator_catalog import METHODOLOGY_VERSION as _METHODOLOGY_VERSION
@@ -1441,9 +1459,24 @@ class SiscCifrasService:
             key=lambda pair: (family_priority(pair[1]), float(pair[1].value) if float(pair[1].value) >= pair[1].privacy_threshold else 0),
             reverse=True,
         )[:6]
+        import calendar
+
         for batch, item in ordered_items:
             priority = family_priority(item)
             below_threshold = float(item.value) < item.privacy_threshold
+            # El dato es del periodo del lote, no de la semana del boletín. Los informes de
+            # gestión son acumulados del año (CUMULATIVE): enero hasta el mes del lote.
+            batch_year, batch_month = int(batch.period[:4]), int(batch.period[5:7])
+            cumulative = (batch.reporting_basis or "").upper() == "CUMULATIVE"
+            batch_start = date(batch_year, 1 if cumulative else batch_month, 1)
+            batch_end = date(batch_year, batch_month, calendar.monthrange(batch_year, batch_month)[1])
+            if cumulative and batch_month > 1:
+                period_label = f"enero a {MONTH_NAMES_ES[batch_month - 1]} de {batch_year}"
+            else:
+                period_label = f"{MONTH_NAMES_ES[batch_month - 1]} de {batch_year}"
+            if batch.cutoff_date and batch.cutoff_date < batch_end:
+                batch_end = batch.cutoff_date
+                period_label += f" (corte {batch.cutoff_date.day} de {MONTH_NAMES_ES[batch.cutoff_date.month - 1]})"
             indicators.append(
                 cls.indicator(
                     source="Comisarias de Familia",
@@ -1454,13 +1487,14 @@ class SiscCifrasService:
                     name=item.indicator,
                     value=None if below_threshold else float(item.value),
                     unit=item.unit,
-                    start=start,
-                    end=end,
+                    start=batch_start,
+                    end=batch_end,
                     comparison_value=None,
                     cutoff=batch.cutoff_date,
                     priority=priority,
                     metadata={
                         "period": batch.period,
+                        "period_label": period_label,
                         "coverage_type": "CONTEXT",
                         "reporting_entity": batch.reporting_entity,
                         "reporting_basis": batch.reporting_basis,
@@ -1502,6 +1536,11 @@ class SiscCifrasService:
         cutoff_date = cutoff.date().isoformat() if hasattr(cutoff, "date") else cutoff.isoformat() if cutoff else None
         meta = metadata or {}
         meta["priority"] = priority
+        # Porcentajes sobre bases pequeñas no se destacan (ver SMALL_BASE_THRESHOLD).
+        meta["small_base"] = bool(
+            value is not None and comparison_value is not None
+            and max(float(value), float(comparison_value)) < SMALL_BASE_THRESHOLD
+        )
         meta["relevance_score"] = calculate_relevance(
             value=value or 0,
             variation_percentage=variation_pct,
@@ -1545,9 +1584,17 @@ class SiscCifrasService:
         candidates.sort(key=lambda item: item.metadata.get("relevance_score", 0), reverse=True)
         # The public "Que cambio" story must lead with a real comparison. Volume-only
         # rows remain available in their domain slide, but do not displace a trend.
-        comparable = [item for item in candidates if item.variation_percentage is not None]
+        comparable = [
+            item for item in candidates
+            if item.variation_percentage is not None
+            and not (
+                item.comparison_value is not None and item.value is not None
+                and max(float(item.value), float(item.comparison_value)) < SMALL_BASE_THRESHOLD
+            )
+        ]
         if comparable:
-            candidates = comparable + [item for item in candidates if item.variation_percentage is None]
+            comparable_ids = {item.id for item in comparable}
+            candidates = comparable + [item for item in candidates if item.id not in comparable_ids]
 
         insights: List[Insight] = []
         used_domains = set()
@@ -1561,18 +1608,49 @@ class SiscCifrasService:
         return insights
 
     @staticmethod
+    def is_preliminary(indicator: Indicator) -> bool:
+        """Periodo que termina en los últimos días de la entrega policial."""
+        if indicator.source_code != "POLICIA_SEMANAL" or not indicator.cutoff_date or not indicator.period_end:
+            return False
+        try:
+            cutoff = date.fromisoformat(str(indicator.cutoff_date)[:10])
+            period_end = date.fromisoformat(str(indicator.period_end)[:10])
+        except ValueError:
+            return False
+        return period_end > cutoff - timedelta(days=PRELIMINARY_LAG_DAYS)
+
+    @staticmethod
     def insight_from_indicator(indicator: Indicator, comparison_label: str = "mismo periodo del ano anterior") -> Insight:
         if indicator.value is None:
             value_text = "|||"
             detail = f"{indicator.indicator_name}: cifra protegida ({indicator.unit}) en el periodo."
         else:
             value_text = str(int(indicator.value) if float(indicator.value).is_integer() else indicator.value)
-            delta = variation_text(indicator.variation_percentage)
-            if indicator.variation_percentage is None:
-                detail = f"{indicator.indicator_name}: {value_text} {indicator.unit} en el periodo."
+            meta = indicator.metadata or {}
+            comparison = indicator.comparison_value
+            if meta.get("coverage_type") == "CONTEXT":
+                entity = meta.get("reporting_entity") or indicator.source
+                period_label = meta.get("period_label") or meta.get("period") or "un periodo anterior"
+                detail = (
+                    f"Dato de {entity}, {period_label}: último informe reportado. "
+                    "No corresponde al periodo del boletín."
+                )
+            elif indicator.variation_percentage is None:
+                detail = f"{value_text} {indicator.unit} en el periodo; sin base comparable."
+            elif comparison is not None and max(float(indicator.value), float(comparison)) < SMALL_BASE_THRESHOLD:
+                difference = int(round(float(indicator.value) - float(comparison)))
+                change = (
+                    f"{abs(difference)} {'más' if difference > 0 else 'menos'}" if difference else "igual cifra"
+                )
+                detail = (
+                    f"{value_text} {indicator.unit} frente a {int(round(float(comparison)))} en el {comparison_label} "
+                    f"({change}). Con cifras pequeñas, la variación porcentual no es concluyente."
+                )
             else:
                 verb = "aumento" if indicator.variation_percentage > 0 else "disminuyo" if indicator.variation_percentage < 0 else "se mantuvo"
                 detail = f"{indicator.indicator_name} {verb} {abs(indicator.variation_percentage):.1f}% frente al {comparison_label}."
+            if SiscCifrasService.is_preliminary(indicator):
+                detail += " Cifra preliminar: los últimos días pueden completarse con reportes tardíos."
 
         return Insight(
             id=f"insight:{indicator.id}",
@@ -1654,7 +1732,9 @@ class SiscCifrasService:
             "domain": domain,
             "value": int(total.value),
             "unit": total.unit,
-            "variation": total.variation_percentage,
+            "variation": None if total.metadata.get("small_base") else total.variation_percentage,
+            "comparison_value": total.comparison_value,
+            "small_base": bool(total.metadata.get("small_base")),
             "cutoff_date": total.cutoff_date,
             "quality_status": total.quality_status,
         }

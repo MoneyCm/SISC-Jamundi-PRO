@@ -1,7 +1,7 @@
 import hashlib
 import os
 import secrets
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from api.auth import get_optional_user, log_audit, require_role
+from api.auth import get_optional_user, log_audit, require_role, institutional_access
 from db.models import User
 from db.models_sisc_cifras import SiscCifrasPublication
 from db.session import get_db
@@ -20,6 +20,38 @@ from services.sisc_cifras_pdf import build_sisc_cifras_pdf
 router = APIRouter()
 PUBLICATION_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
 PUBLIC_SOURCE_CODES = ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"]
+
+
+@router.get("/executive-followup")
+def executive_followup(db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    """Current institutional follow-up, deliberately separate from public statistics."""
+    from db.models_interventions import InterventionCase
+    groups = {}
+    for name, statuses in {
+        "decisions": ["BORRADOR"],
+        "commitments": ["DECIDIDA", "EN_EJECUCION"],
+        "results": ["FINALIZADA", "EVALUADA"],
+    }.items():
+        query = db.query(InterventionCase).filter(InterventionCase.status.in_(statuses))
+        total = query.count()
+        rows = query.order_by(InterventionCase.created_at.desc(), InterventionCase.id).limit(3).all()
+        items = []
+        for row in rows:
+            doc = row.document or {}
+            items.append({
+                "id": str(row.id), "status": row.status,
+                **{key: doc.get(key) for key in (
+                    "recommendation", "decision", "responsible", "deadline", "completed_on"
+                )},
+                "evidence_count": len(doc.get("evidence") or []),
+            })
+        groups[name] = {"total": total, "items": items}
+    # Compromisos de los Consejos de Seguridad (seguimiento de la Secretaría).
+    from db.models_council import CouncilCommitment
+    from services.council_commitments_service import executive_block
+    council_rows = db.query(CouncilCommitment).all()
+    council = executive_block(council_rows) if council_rows else None
+    return {"checked_at": datetime.now(timezone.utc).isoformat(), "groups": groups, "council": council}
 
 
 class GenerateSiscCifrasRequest(BaseModel):
@@ -295,24 +327,49 @@ def generate_and_publish_public_sisc_cifras(
     return snapshot
 
 
+class ApprovePublicationRequest(BaseModel):
+    # Quien aprueba confirma que revisó las advertencias de la revisión editorial.
+    warnings_acknowledged: bool = False
+
+
 @router.post("/publications/{publication_id}/approve")
 async def approve_sisc_cifras_publication(
     publication_id: UUID,
     request: Request,
+    payload: Optional[ApprovePublicationRequest] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(PUBLICATION_ROLES)),
 ):
     row = db.query(SiscCifrasPublication).filter(SiscCifrasPublication.id == publication_id).first()
     if not row:
-        raise HTTPException(status_code=404, detail="No existe el boletin solicitado.")
+        raise HTTPException(status_code=404, detail="No existe el boletín solicitado.")
+    if row.status == "PUBLISHED":
+        raise HTTPException(status_code=409, detail="El boletín ya está publicado.")
 
     publication = dict(row.publication_json or {})
-    governance = publication.get("governance") or {}
+    governance = dict(publication.get("governance") or {})
     if not governance.get("publication_ready"):
         raise HTTPException(
             status_code=422,
-            detail="El boletin no puede publicarse hasta resolver las observaciones de cobertura y calidad.",
+            detail="El boletín no puede publicarse hasta resolver las observaciones de cobertura y calidad.",
         )
+    # La revisión se recalcula sobre lo guardado: no depende de lo que envíe el navegador.
+    from services.publication_review import review_publication, summarize as summarize_review
+    review = summarize_review(review_publication(publication))
+    if not review["can_publish"]:
+        raise HTTPException(status_code=422, detail="La revisión editorial tiene bloqueos sin resolver.")
+    if review["warnings"] and not (payload and payload.warnings_acknowledged):
+        raise HTTPException(
+            status_code=422,
+            detail="Confirme que revisó las advertencias de la revisión editorial antes de publicar.",
+        )
+    governance["editorial_review"] = review
+    governance["approval"] = {
+        "approved_by": current_user.username,
+        "approved_at": datetime.utcnow().isoformat() + "Z",
+        "warnings_acknowledged": [check["code"] for check in review["checks"] if check["level"] == "REVISAR"],
+    }
+    governance["automatic_publication"] = False
 
     from services.publication_guards import enforce_publication_integrity
     try:
@@ -322,6 +379,20 @@ async def approve_sisc_cifras_publication(
         raise
     governance["integrity"] = integrity
     publication["governance"] = governance
+    # Una sola versión publicada por periodo: la anterior queda como reemplazada.
+    previous_rows = db.query(SiscCifrasPublication).filter(
+        SiscCifrasPublication.id != row.id,
+        SiscCifrasPublication.edition_type == row.edition_type,
+        SiscCifrasPublication.period_start == row.period_start,
+        SiscCifrasPublication.period_end == row.period_end,
+        SiscCifrasPublication.status == "PUBLISHED",
+    ).all()
+    for previous in previous_rows:
+        previous.status = "SUPERSEDED"
+        previous_snapshot = dict(previous.publication_json or {})
+        previous_snapshot["status"] = "SUPERSEDED"
+        previous_snapshot["superseded_by"] = str(row.id)
+        previous.publication_json = previous_snapshot
     row.status = "PUBLISHED"
     publication["status"] = "PUBLISHED"
     publication["published_at"] = date.today().isoformat()
@@ -338,7 +409,7 @@ async def approve_sisc_cifras_publication(
         level=1,
         request=request,
     )
-    return {"id": str(row.id), "status": row.status, "published_at": publication["published_at"]}
+    return {"id": str(row.id), "status": row.status, "published_at": publication["published_at"], "governance": governance}
 
 
 @router.get("/publications/public")

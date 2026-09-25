@@ -1,3 +1,4 @@
+import base64
 import calendar
 import csv
 import hashlib
@@ -19,6 +20,10 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from db.models_institutional import InstitutionalAgentFinding, InstitutionalAgentRun, InstitutionalDataBatch, InstitutionalIndicator
+from services.institutional_table_parser import extract_comisaria_tables
+
+# PDF con capa de texto: se lee en el servidor, sin enviarlo a un servicio externo.
+MIN_PDF_TEXT_CHARS = 200
 
 
 @dataclass
@@ -29,15 +34,24 @@ class Candidate:
     category: Optional[str] = None
     confidence: float = 1.0
     evidence: Optional[str] = None
+    # False cuando el propio informe es inconsistente: se carga como no público.
+    public_allowed: bool = True
 
 
 class InstitutionalAgentService:
-    EXTRACTOR_VERSION = "1.6"
-    MISTRAL_OCR_MODEL = os.getenv("MISTRAL_OCR_MODEL", "mistral-ocr-4-0")
+    EXTRACTOR_VERSION = "1.7"
+    # OCR solo para PDF escaneados, con autorización explícita del usuario.
+    # Modelos en orden de preferencia: si uno está saturado se usa el siguiente.
+    GEMINI_OCR_MODELS = [
+        model.strip() for model in os.getenv("GEMINI_OCR_MODELS", "gemini-3.5-flash,gemini-3.5-flash-lite").split(",")
+        if model.strip()
+    ]
+    GEMINI_OCR_MAX_BYTES = 18 * 1024 * 1024  # límite de datos en línea por solicitud
     SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".pptx", ".docx", ".pdf"}
 
     def __init__(self, db: Session):
         self.db = db
+        self.table_findings = []
 
     @staticmethod
     def canonical_entity(value: str) -> str:
@@ -89,59 +103,73 @@ class InstitutionalAgentService:
                     blocks.append(text)
         return blocks
 
+    @staticmethod
+    def _extract_pdf_text(content: bytes) -> List[str]:
+        """Texto de cada página de un PDF digital. Lista vacía si no tiene capa de texto."""
+        try:
+            import logging
+            from pypdf import PdfReader
+
+            logging.getLogger("pypdf").setLevel(logging.ERROR)
+            reader = PdfReader(io.BytesIO(content))
+            return [page.extract_text() or "" for page in reader.pages]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _has_usable_text(blocks: List[str]) -> bool:
+        text = "".join(blocks)
+        return len(re.sub(r"\s+", "", text)) >= MIN_PDF_TEXT_CHARS and bool(re.search(r"\d", text))
+
     def _extract_pdf_ocr(self, content: bytes, filename: str) -> List[str]:
-        api_key = os.getenv("MISTRAL_API_KEY")
+        """Transcribe un PDF escaneado con Gemini. Devuelve un bloque de texto por página.
+
+        El PDF se envía en la misma solicitud (no se sube como archivo persistente). Se pide
+        transcripción literal: el lector de tablas del SISC hace después la verificación.
+        """
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise RuntimeError("MISTRAL_API_KEY no esta configurada para OCR.")
-        headers = {"Authorization": f"Bearer {api_key}"}
-        file_id = None
-        with httpx.Client(timeout=180.0) as client:
-            try:
-                upload = client.post(
-                    "https://api.mistral.ai/v1/files",
-                    headers=headers,
-                    data={"purpose": "ocr", "visibility": "user"},
-                    files={"file": (PurePath(filename).name, content, "application/pdf")},
-                )
-                upload.raise_for_status()
-                file_id = upload.json()["id"]
-
-                signed = None
-                for attempt in range(5):
-                    signed = client.get(
-                        f"https://api.mistral.ai/v1/files/{file_id}/url",
-                        headers=headers,
-                        params={"expiry": 1},
-                    )
-                    if signed.is_success:
-                        break
-                    if signed.status_code == 404 and attempt < 4:
-                        time.sleep(1.5 * (attempt + 1))
+            raise RuntimeError("GEMINI_API_KEY no esta configurada para OCR.")
+        if len(content) > self.GEMINI_OCR_MAX_BYTES:
+            raise RuntimeError("El PDF supera el tamano admitido para OCR en una sola solicitud.")
+        prompt = (
+            "Transcribe literalmente el contenido de este documento, pagina por pagina. "
+            "Antes de cada pagina escribe una linea exacta '=== PAGINA N ===' con su numero. "
+            "Escribe cada tabla en formato Markdown, una fila por linea, conservando todas sus "
+            "columnas y celdas en el mismo orden. Copia cada cifra exactamente como aparece: no "
+            "sumes, no corrijas, no redondees, no completes celdas vacias y no resumas. No agregues "
+            "comentarios ni texto que no este en el documento."
+        )
+        payload = {
+            "contents": [{"parts": [
+                {"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(content).decode("ascii")}},
+                {"text": prompt},
+            ]}],
+            "generationConfig": {"temperature": 0, "maxOutputTokens": 32768},
+        }
+        response = None
+        with httpx.Client(timeout=240.0) as client:
+            for model in self.GEMINI_OCR_MODELS:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                for attempt in range(2):
+                    response = client.post(url, json=payload, headers={"x-goog-api-key": api_key})
+                    # Saturación temporal: un reintento y luego el siguiente modelo.
+                    if response.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+                        time.sleep(3)
                         continue
-                    signed.raise_for_status()
-                if signed is None or not signed.is_success:
-                    raise RuntimeError("Mistral recibio el archivo pero no habilito su lectura temporal.")
-                document_url = signed.json()["url"]
+                    break
+                if response.status_code < 400:
+                    self.ocr_model_used = model
+                    break
+            if response is None or response.status_code >= 400:
+                raise RuntimeError(f"Gemini OCR respondio HTTP {response.status_code if response else 'sin respuesta'}.")
+            candidate = (response.json().get("candidates") or [{}])[0]
+            if candidate.get("finishReason") == "MAX_TOKENS":
+                raise RuntimeError("La transcripcion de Gemini quedo incompleta (documento demasiado largo).")
+            text = "".join(part.get("text", "") for part in (candidate.get("content") or {}).get("parts", []))
+        pages = [page.strip() for page in re.split(r"^=== PAGINA \d+ ===\s*$", text, flags=re.MULTILINE)]
+        return [page for page in pages if page]
 
-                response = client.post(
-                    "https://api.mistral.ai/v1/ocr",
-                    headers={**headers, "Content-Type": "application/json"},
-                    json={
-                        "model": self.MISTRAL_OCR_MODEL,
-                        "document": {"type": "document_url", "document_url": document_url},
-                        "table_format": "markdown",
-                        "confidence_scores_granularity": "page",
-                    },
-                )
-                response.raise_for_status()
-                pages = response.json().get("pages") or []
-                return [page.get("markdown", "") for page in pages if page.get("markdown")]
-            finally:
-                if file_id:
-                    try:
-                        client.delete(f"https://api.mistral.ai/v1/files/{file_id}", headers=headers)
-                    except Exception:
-                        pass
     def _structured_rows(self, content: bytes, extension: str) -> List[Dict]:
         if extension == ".csv":
             return list(csv.DictReader(io.StringIO(content.decode("utf-8-sig", errors="replace"))))
@@ -283,7 +311,18 @@ class InstitutionalAgentService:
                 ("Resoluciones de certificado de defuncion", "RESOLUCION CERTIFICADO DE DEFUNCION", "TOTAL RECAUDO", "first", "tramites"),
                 ("Recaudo por tramites", "TOTAL RECAUDO POR TRAMITES", None, "last", "COP"),
             ]
+        blocks = list(blocks)
         found = {}
+        self.table_findings = []
+        if "COMIS" in self._normalize(program):
+            table_candidates, self.table_findings = extract_comisaria_tables(blocks)
+            for item in table_candidates:
+                found[item.indicator] = Candidate(
+                    indicator=item.indicator, value=Decimal(item.value), unit=item.unit,
+                    category=item.category, confidence=item.confidence, evidence=item.evidence,
+                    public_allowed=item.public_allowed,
+                )
+        table_names = set(found)
         for block in blocks:
             for indicator, start, end, pick, unit in rules:
                 if indicator not in found:
@@ -292,7 +331,8 @@ class InstitutionalAgentService:
                         found[indicator] = candidate
         results = list(found.values())
         if "COMIS" in self._normalize(program):
-            narrative = self._parse_family_narrative(blocks, period)
+            # Prioridad: tabla verificada > narrativa > regla por proximidad.
+            narrative = [item for item in self._parse_family_narrative(blocks, period) if item.indicator not in table_names]
             narrative_names = {item.indicator for item in narrative}
             results = [item for item in results if item.indicator not in narrative_names] + narrative
         if "INSPE" in self._normalize(program):
@@ -308,6 +348,8 @@ class InstitutionalAgentService:
                 blocks = self._extract_ooxml_text(content, extension)
             except Exception:
                 blocks = []
+        elif extension == ".pdf" and content:
+            blocks = self._extract_pdf_text(content)
         elif extension in {".csv", ".xlsx"}:
             try:
                 rows = self._structured_rows(content, extension)[:50]
@@ -479,9 +521,11 @@ class InstitutionalAgentService:
             run.finished_at = datetime.utcnow()
             self.db.commit()
             return run
-        if extension == ".pdf" and not use_cloud_ocr:
+        pdf_blocks = self._extract_pdf_text(content) if extension == ".pdf" else []
+        pdf_has_text = self._has_usable_text(pdf_blocks)
+        if extension == ".pdf" and not pdf_has_text and not use_cloud_ocr:
             run.status = "NEEDS_OCR_CONSENT"
-            run.summary = "El PDF requiere autorizacion explicita para procesarse con Mistral OCR 4."
+            run.summary = "El PDF no tiene texto legible (parece escaneado) y requiere autorizacion explicita para procesarse con el OCR de Google Gemini."
             run.findings.append(InstitutionalAgentFinding(
                 agent_name="intake", severity="HIGH", code="CLOUD_OCR_CONSENT_REQUIRED",
                 message=run.summary, blocks_publication=True,
@@ -494,7 +538,16 @@ class InstitutionalAgentService:
             candidates = self._parse_structured(content, extension)
         elif extension == ".pdf":
             try:
-                blocks = self._extract_pdf_ocr(content, filename)
+                blocks = pdf_blocks if pdf_has_text else self._extract_pdf_ocr(content, filename)
+                run.findings.append(InstitutionalAgentFinding(
+                    agent_name="intake", severity="LOW",
+                    code="PDF_TEXT_LOCAL" if pdf_has_text else "PDF_CLOUD_OCR",
+                    message=(
+                        "PDF digital leido en el servidor; no se envio a servicios externos."
+                        if pdf_has_text else f"PDF escaneado transcrito con Google Gemini ({getattr(self, 'ocr_model_used', 'modelo no identificado')}) con autorizacion del usuario."
+                    ),
+                    blocks_publication=False,
+                ))
                 metadata = self.detect_metadata(b"", filename, blocks)
                 missing_metadata = [key for key in ("program", "reporting_entity", "period") if not metadata.get(key)]
                 program = metadata.get("program") or program
@@ -527,9 +580,11 @@ class InstitutionalAgentService:
                     version = latest.version + 1
                 candidates = self._parse_reports(blocks, program, period)
             except Exception as exc:
+                if pdf_has_text:
+                    raise
                 run.status = "OCR_FAILED"
-                print(f"Mistral OCR error: {type(exc).__name__}: {exc}")
-                run.summary = "El servicio Mistral OCR 4 no completo el procesamiento. Puedes intentarlo nuevamente; no se almaceno ni publico informacion."
+                print(f"Gemini OCR error: {type(exc).__name__}: {exc}")
+                run.summary = "El OCR de Google Gemini no completo el procesamiento. Puedes intentarlo nuevamente; no se almaceno ni publico informacion."
                 run.findings.append(InstitutionalAgentFinding(
                     agent_name="ocr", severity="HIGH", code="OCR_PROCESSING_FAILED",
                     message=run.summary, blocks_publication=True,
@@ -549,15 +604,21 @@ class InstitutionalAgentService:
         for candidate in candidates:
             batch.indicators.append(InstitutionalIndicator(
                 indicator=candidate.indicator, category=candidate.category, value=candidate.value,
-                unit=candidate.unit, is_public=candidate.value >= 10, privacy_threshold=10,
+                unit=candidate.unit, is_public=candidate.value >= 10 and candidate.public_allowed, privacy_threshold=10,
                 notes=f"Confianza: {candidate.confidence:.0%}. Evidencia: {candidate.evidence or ''}",
             ))
-            if candidate.confidence < 0.9:
+            # Un valor retenido por inconsistencia del informe ya tiene su hallazgo y no se publica.
+            if candidate.confidence < 0.9 and candidate.public_allowed:
                 run.findings.append(InstitutionalAgentFinding(
                     agent_name="extraction", severity="MEDIUM", code="REVIEW_EXTRACTED_VALUE",
                     message=f"Validar manualmente: {candidate.indicator} = {candidate.value}",
                     evidence=candidate.evidence, blocks_publication=True,
                 ))
+        for finding in self.table_findings:
+            run.findings.append(InstitutionalAgentFinding(
+                agent_name="consistency", severity="MEDIUM", code=finding.code,
+                message=finding.message, evidence=finding.evidence, blocks_publication=False,
+            ))
         for finding in self._privacy_findings(blocks):
             run.findings.append(InstitutionalAgentFinding(
                 agent_name="privacy", severity="HIGH", code=finding["code"],

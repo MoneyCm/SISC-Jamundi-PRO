@@ -14,7 +14,7 @@ from reportlab.lib.units import cm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable, PageBreak
 from services.alert_engine import AlertEngine
-from api.ia import call_gemini, call_mistral, AI_PROVIDER
+from api.ia import redactar_verificado
 from db.models_hechos_seguridad import HechoSeguridad
 from services.hechos_metrics import hechos_unicos_expr
 from db.models import EventType
@@ -314,10 +314,20 @@ async def generar_boletin_ejecutivo(
     - Hurtos: {stats_act.get('HURTO', 0)}
     SÉ BREVE Y ESTRATÉGICO. Máximo 50 palabras. Tono institucional.
     """
-    try:
-        if AI_PROVIDER == "MISTRAL": insight_exec = await call_mistral(prompt_exec)
-        else: insight_exec = await call_gemini(prompt_exec)
-    except: insight_exec = "Resumen estratégico temporalmente no disponible por alta demanda de procesos."
+    datos_exec = (
+        f"Periodo: {inicio_act.isoformat()} a {fin_act.isoformat()}; comparacion con {fin_act.year-1}. "
+        f"Incidentes: {total_act}. Variacion: {var_total:.1f}%. "
+        f"Homicidios: {stats_act.get('HOMICIDIO', 0)}. Hurtos: {stats_act.get('HURTO', 0)}."
+    )
+    insight_exec = (await redactar_verificado(
+        prompt_exec,
+        datos_exec,
+        respaldo=(
+            f"Entre {inicio_act.isoformat()} y {fin_act.isoformat()} se registraron {total_act} incidentes "
+            f"({var_total:.1f}% frente al mismo periodo de {fin_act.year-1}), con "
+            f"{stats_act.get('HOMICIDIO', 0)} homicidios y {stats_act.get('HURTO', 0)} hurtos."
+        ),
+    ))["text"]
 
     # 4. Construcción del PDF
     buffer = io.BytesIO()

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, AlertTriangle, Skull, Briefcase, Home, Activity, Clock, CheckCircle, AlertCircle, Brain, Info, Users, X, FileText, UserMinus, Car, PhoneForwarded, ShieldCheck, Zap, ArrowRight, Database } from 'lucide-react';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const iconMap = {
     AlertTriangle: AlertTriangle,
@@ -85,7 +86,7 @@ export const TrendChart = ({ data, year }) => {
                 </h3>
                 <span className="text-[10px] font-black text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1 rounded-full uppercase tracking-widest">{year || new Date().getFullYear()}</span>
             </div>
-            <div className="flex-1 w-full min-h-[300px]">
+            <div className="flex-1 w-full min-w-0 min-h-[300px]">
                 {(!data || data.length === 0) ? (
                     <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 italic">
                         <Activity size={32} className="text-slate-200 mb-3" />
@@ -134,7 +135,7 @@ export const DistributionChart = ({ data }) => {
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 h-96 flex flex-col">
             <h3 className="text-lg font-bold text-slate-800 mb-2">Distribución por Delito</h3>
-            <div className="flex-1 w-full min-h-[300px]">
+            <div className="flex-1 w-full min-w-0 min-h-[300px]">
                 {(!data || data.length === 0) ? (
                     <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
                         <div className="p-4 bg-slate-50 rounded-full mb-3">
@@ -249,7 +250,7 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
         setChatLoading(true);
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/ia/chat_ciudadano`, {
+            const response = await fetch(`${API_BASE_URL}/ia/chat_ciudadano`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: input })
@@ -290,6 +291,7 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
                     {chatOpen && (
                         <button
                             onClick={() => setChatOpen(false)}
+                            aria-label="Cerrar consulta al analista"
                             className="bg-slate-100 hover:bg-slate-200 p-2 rounded-xl text-slate-500 transition-all"
                         >
                             <X size={20} />
@@ -324,6 +326,7 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
                                 <div className="h-8 w-px bg-slate-200"></div>
                                 <button
                                     onClick={() => setChatOpen(true)}
+                                    aria-label="Consultar analista SISC"
                                     className="flex items-center gap-2 text-xs font-black text-white hover:opacity-90 transition-all bg-primary px-4 py-2.5 rounded-xl shadow-md"
                                 >
                                     <Activity size={14} className="animate-pulse" />
@@ -332,6 +335,7 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
                             </div>
                             <button
                                 onClick={onTechnicalReport}
+                                aria-label="Descargar análisis detallado"
                                 className="flex items-center gap-2 text-xs text-slate-400 font-bold hover:text-primary transition-colors group"
                             >
                                 <FileText size={14} />
@@ -379,6 +383,7 @@ export const AIInsightWidget = ({ insight, loading, provider, onTechnicalReport 
                                 <button
                                     type="submit"
                                     disabled={!input.trim() || chatLoading}
+                                    aria-label="Enviar consulta al analista"
                                     className="absolute right-3 top-1/2 -translate-y-1/2 bg-primary p-2 rounded-xl text-white hover:opacity-90 disabled:bg-slate-300 transition-all"
                                 >
                                     <ArrowUpRight size={18} strokeWidth={3} />

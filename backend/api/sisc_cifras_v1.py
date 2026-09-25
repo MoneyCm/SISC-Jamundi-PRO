@@ -247,6 +247,22 @@ def generate_v1(
             created_at=existing.created_at or datetime.utcnow(),
         )
 
+    from services.indicator_catalog import METHODOLOGY_VERSION as _MV
+    from services.publication_guards import require_methodology, require_period, verify_official_figures
+    require_methodology(_MV)
+    require_period(filters.period.start, filters.period.end)
+    # Fijación de entrega ANTES del cálculo: todo el cálculo y la publicación usan
+    # esta entrega. Si ingresa otra mientras se procesa, se aborta con 409.
+    _fixed = None
+    try:
+        from db.models_hechos_seguridad import IngestionRun as _Run
+        _fixed = db.query(_Run).filter(_Run.fuente_codigo == "POLICIA_SEMANAL", _Run.status == "COMPLETED").order_by(_Run.fecha_fin.desc().nullslast()).first()
+    except Exception:
+        _fixed = None
+    if "POLICIA_SEMANAL" in (filters.sources or []) and not _fixed:
+        raise HTTPException(status_code=422, detail="Publicar exige entrega fija COMPLETED de POLICIA_SEMANAL.")
+    _delivery = str(_fixed.id) if _fixed else None
+
     try:
         publication = SiscCifrasService.generate_publication(
             db,
@@ -290,6 +306,21 @@ def generate_v1(
         raise HTTPException(500, detail="Error generando PDF.")
 
     publication_id = publication.get("id")
+    if _delivery:
+        # Si ingresó otra entrega durante el cálculo, no se publica a medias: 409 y reintento.
+        try:
+            from db.models_hechos_seguridad import IngestionRun as _Run2
+            _now = db.query(_Run2).filter(_Run2.fuente_codigo == "POLICIA_SEMANAL", _Run2.status == "COMPLETED").order_by(_Run2.fecha_fin.desc().nullslast()).first()
+        except Exception:
+            _now = _fixed
+        if _now is not None and str(_now.id) != _delivery:
+            raise HTTPException(status_code=409, detail="Ingresó una nueva entrega durante la generación; reintente la publicación sobre la entrega vigente.")
+        verified = verify_official_figures(db, period_start=filters.period.start, period_end=filters.period.end,
+                                           source_version_id=_delivery, methodology_version=_MV)
+        _by_code = {i.get("indicator_code"): i for i in publication.get("indicators", [])}
+        _total_pub = (_by_code.get("seguridad.total") or {}).get("value")
+        if _total_pub is not None and int(_total_pub) != int(verified["SEGURIDAD_TOTAL"]["value"]):
+            raise HTTPException(status_code=422, detail=f"La publicación no coincide con el servidor (boletín {_total_pub}, servidor {verified['SEGURIDAD_TOTAL']['value']}).")
     row = SiscCifrasPublication(
         id=publication_id,
         title=publication.get("title", "SISC EN CIFRAS"),
@@ -310,6 +341,8 @@ def generate_v1(
         suppressed_cells=suppressed_cells,
         catalog_versions_used=catalog_versions,
         query_hash=query_hash,
+        methodology_version=_MV,
+        source_version_ids={"POLICIA_SEMANAL": _delivery} if _delivery else None,
     )
     try:
         db.add(row)

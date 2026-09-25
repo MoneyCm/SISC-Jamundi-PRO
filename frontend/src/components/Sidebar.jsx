@@ -1,5 +1,6 @@
 import React from 'react';
-import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck } from 'lucide-react';
+import { INSTITUTIONAL_PAGE_LABELS } from '../utils/pageLabels';
+import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -15,6 +16,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'sources', label: 'Centro de fuentes', icon: Layers, category: 'OPERACIONES', show: isUploader || isSteward || isDataOwner || isAnalyst || isDirective },
         { id: 'police_explorer', label: 'Explorador Policial', icon: BarChart2, category: 'ESTRATEGIA', show: isAnalyst || isDirective || isSteward || isDataOwner },
         { id: 'sisc_cifras', label: 'SISC en cifras', icon: Newspaper, category: 'SALIDA', show: isAnalyst || isDirective },
+        { id: 'boletin_replica', label: 'Boletín institucional', icon: FileText, category: 'SALIDA', show: isAnalyst || isDirective },
 
         { id: 'users', label: 'Gestión Usuarios', icon: ShieldAlert, category: 'ADMINISTRACIÓN', show: isAdmin },
         { id: 'access_requests', label: 'Solicitudes de acceso', icon: ClipboardCheck, category: 'ADMINISTRACIÓN', show: canApproveAccess },
@@ -26,6 +28,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'map', label: 'Mapa territorial', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'intelligence', label: 'Contexto comparado', icon: Globe2, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'alerts', label: 'Alertas Tempranas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'inspecciones', label: 'Inspecciones MIP', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
 
         { id: 'reports', label: 'Reportes', icon: FileText, category: 'SALIDA', show: isDirective || isAnalyst },
@@ -98,7 +101,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
                                             >
                                                 <div className="flex items-center space-x-3">
                                                     <Icon size={18} className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-white transition-colors'} />
-                                                    <span className={`text-sm ${isActive ? 'font-black' : 'font-bold'}`}>{item.label}</span>
+                                                    <span className={`text-sm ${isActive ? 'font-black' : 'font-bold'}`}>{(!isPublic && INSTITUTIONAL_PAGE_LABELS[item.id]) || item.label}</span>
                                                 </div>
                                                 {isActive && <ChevronRight size={14} className="text-white/70" />}
                                             </button>

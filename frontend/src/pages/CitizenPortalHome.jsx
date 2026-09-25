@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import CitizenFilterBar from '../components/public/CitizenFilterBar';
 import PublicPortalHeader from '../components/public/PublicPortalHeader';
+import NeighborhoodStory from '../components/public/NeighborhoodStory';
 import {
     buildCitizenInsights, DEFAULT_PUBLIC_FILTERS, filtersToSearchParams,
     formatNumber, formatVariation, parsePublicFilters, variationTone,
@@ -151,10 +152,15 @@ const CitizenPortalHome = ({ onNavigate, onLoginClick }) => {
     const maxConducta = Math.max(1, ...(data?.conductas || []).slice(0, 5).map((item) => Number(item.value || 0)));
     const filterOptions = data?.filters?.available || {};
 
+    const neighborhoodUrl = selectedNeighborhood
+        ? `${window.location.origin}${window.location.pathname}?${filtersToSearchParams({ ...appliedFilters, territorio: selectedNeighborhood }, 'hub')}#mi-barrio`
+        : '';
+    // El porcentaje del municipio solo es válido si el tablero general no está filtrado por territorio.
+    const municipalTotal = !appliedFilters.territorio ? Number(data?.kpis?.total_hechos || 0) : null;
+
     const shareNeighborhood = async () => {
         if (!selectedNeighborhood) return;
-        const params = filtersToSearchParams({ ...appliedFilters, territorio: selectedNeighborhood }, 'hub');
-        const url = `${window.location.origin}${window.location.pathname}?${params}#mi-barrio`;
+        const url = neighborhoodUrl;
         try {
             if (navigator.share) {
                 await navigator.share({ title: `SISC Jamundí: ${selectedNeighborhood}`, text: 'Consulta agregada y protegida del territorio.', url });
@@ -233,7 +239,9 @@ const CitizenPortalHome = ({ onNavigate, onLoginClick }) => {
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                                 <KpiCard icon={Database} label="Casos agregados" value={formatNumber(data.kpis?.total_hechos)} helper="Casos únicos registrados en el periodo consultado." />
                                 <KpiCard icon={variationTone(variation) === 'down' ? TrendingDown : TrendingUp} label="Cambio del periodo" value={formatVariation(variation)} helper={comparisonHelper(data)} tone={variationTone(variation) === 'up' ? 'red' : variationTone(variation) === 'down' ? 'green' : 'slate'} />
-                                <KpiCard icon={ShieldAlert} label="Homicidios" value={formatNumber(data.kpis?.homicidios)} helper={`${data.kpis?.tasa_homicidios || 0} por cada 100.000 habitantes en el periodo.`} tone="red" />
+                                <KpiCard icon={ShieldAlert} label="Homicidios" value={formatNumber(data.kpis?.homicidios)} helper={data.kpis?.tasa_homicidios == null
+                                    ? 'Sin proyección de población disponible para calcular la tasa.'
+                                    : `${Number(data.kpis.tasa_homicidios).toLocaleString('es-CO', { maximumFractionDigits: 1 })} por cada 100.000 habitantes en el periodo consultado (no es una tasa anual).`} tone="red" />
                                 <KpiCard icon={BarChart3} label="Conducta más registrada" value={formatNumber(topConducta?.value)} helper={topConducta?.name || 'Sin conducta publicable'} tone="amber" />
                                 <KpiCard icon={MapPinned} label="Mayor concentración" value={formatNumber(topTerritory?.total)} helper={topTerritory ? `${topTerritory.name}. Registros agregados, no nivel de riesgo.` : 'Sin territorio publicable'} tone="slate" />
                             </div>
@@ -305,14 +313,12 @@ const CitizenPortalHome = ({ onNavigate, onLoginClick }) => {
                                             <div><p className="text-xs font-black uppercase tracking-wide text-[#281FD0]">Perfil territorial agregado</p><h3 className="mt-1 text-2xl font-black text-slate-950">{selectedNeighborhood}</h3><p className="mt-1 text-sm font-semibold text-slate-500">{profileData.zones?.[0]?.name || 'Zona sin clasificar'}</p></div>
                                             <div className="text-right"><p className="text-4xl font-black tabular-nums text-slate-950">{formatNumber(profileData.kpis?.total_hechos)}</p><p className="text-xs font-bold text-slate-500">casos en el periodo</p></div>
                                         </div>
-                                        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                                            <div className="border-l-4 border-[#281FD0] pl-4"><p className="text-xs font-bold text-slate-500">Cambio comparado</p><p className="mt-1 text-2xl font-black text-slate-950">{formatVariation(profileData.kpis?.variation_pct)}</p><p className="mt-1 text-xs font-semibold text-slate-500">{comparisonHelper(profileData)}</p></div>
-                                            <div><p className="text-xs font-black uppercase tracking-wide text-slate-500">Conductas más registradas</p><ol className="mt-2 space-y-2">{profileData.conductas?.slice(0, 3).map((item, index) => <li key={item.code || item.name} className="flex justify-between gap-4 text-sm"><span className="font-bold text-slate-700">{index + 1}. {item.name}</span><strong>{formatNumber(item.value)}</strong></li>)}</ol></div>
+                                        <div className="mt-5">
+                                            <NeighborhoodStory name={selectedNeighborhood} profile={profileData} municipalTotal={municipalTotal} shareUrl={neighborhoodUrl} onNavigate={onNavigate} />
                                         </div>
-                                        <p className="mt-6 inline-flex items-start gap-2 bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-600"><Info size={16} className="mt-0.5 shrink-0 text-[#281FD0]" /> El perfil no contiene direcciones, coordenadas puntuales, personas ni expedientes.</p>
                                     </div>
                                 ) : (
-                                    <div className="flex min-h-56 items-center justify-center text-center"><div><MapPinned size={34} className="mx-auto text-slate-300" /><p className="mt-3 font-black text-slate-800">Selecciona un territorio</p><p className="mt-1 text-sm font-semibold text-slate-500">Verás el total, la comparación y las conductas principales.</p></div></div>
+                                    <div className="flex min-h-56 items-center justify-center text-center"><div><MapPinned size={34} className="mx-auto text-slate-300" /><p className="mt-3 font-black text-slate-800">Selecciona un territorio</p><p className="mt-1 text-sm font-semibold text-slate-500">Verás en palabras sencillas qué pasó, qué días concentran más casos y qué puedes hacer.</p></div></div>
                                 )}
                             </div>
                         </div>

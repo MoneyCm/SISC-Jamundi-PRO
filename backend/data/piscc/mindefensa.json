@@ -1,0 +1,186 @@
+{
+  "mes_corte": "Junio",
+  "anio_act": 2026,
+  "indicadores": [
+    {
+      "delito": "Homicidios",
+      "anterior": 66,
+      "actual": 68,
+      "diffAbs": 2,
+      "varPct": "+3.0%",
+      "estado": "SUBE",
+      "ultimo_registro": "30/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Hurtos a Personas",
+      "anterior": 253,
+      "actual": 177,
+      "diffAbs": -76,
+      "varPct": "-30.0%",
+      "estado": "BAJA",
+      "ultimo_registro": "26/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Hurtos a Comercio",
+      "anterior": 37,
+      "actual": 32,
+      "diffAbs": -5,
+      "varPct": "-13.5%",
+      "estado": "BAJA",
+      "ultimo_registro": "19/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Hurtos a Residencias",
+      "anterior": 35,
+      "actual": 31,
+      "diffAbs": -4,
+      "varPct": "-11.4%",
+      "estado": "BAJA",
+      "ultimo_registro": "23/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Hurtos de Vehículos",
+      "anterior": 102,
+      "actual": 106,
+      "diffAbs": 4,
+      "varPct": "+3.9%",
+      "estado": "SUBE",
+      "ultimo_registro": "30/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Extorsión",
+      "anterior": 15,
+      "actual": 16,
+      "diffAbs": 1,
+      "varPct": "+6.7%",
+      "estado": "SUBE",
+      "ultimo_registro": "14/05/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Secuestro",
+      "anterior": 2,
+      "actual": 4,
+      "diffAbs": 2,
+      "varPct": "+100.0%",
+      "estado": "SUBE",
+      "ultimo_registro": "24/02/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Terrorismo",
+      "anterior": 20,
+      "actual": 13,
+      "diffAbs": -7,
+      "varPct": "-35.0%",
+      "estado": "BAJA",
+      "ultimo_registro": "13/05/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Delitos Sexuales",
+      "anterior": 59,
+      "actual": 53,
+      "diffAbs": -6,
+      "varPct": "-10.2%",
+      "estado": "BAJA",
+      "ultimo_registro": "23/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Violencia Intrafamiliar",
+      "anterior": 92,
+      "actual": 152,
+      "diffAbs": 60,
+      "varPct": "+65.2%",
+      "estado": "SUBE",
+      "ultimo_registro": "25/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Lesiones Personales",
+      "anterior": 199,
+      "actual": 153,
+      "diffAbs": -46,
+      "varPct": "-23.1%",
+      "estado": "BAJA",
+      "ultimo_registro": "25/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Homicidios Tránsito",
+      "anterior": 5,
+      "actual": 13,
+      "diffAbs": 8,
+      "varPct": "+160.0%",
+      "estado": "SUBE",
+      "ultimo_registro": "24/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Lesiones Tránsito",
+      "anterior": 110,
+      "actual": 151,
+      "diffAbs": 41,
+      "varPct": "+37.3%",
+      "estado": "SUBE",
+      "ultimo_registro": "22/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Masacres",
+      "anterior": 3,
+      "actual": 0,
+      "diffAbs": -3,
+      "varPct": "-100.0%",
+      "estado": "BAJA",
+      "ultimo_registro": "10/06/2025",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Abigeato",
+      "anterior": 0,
+      "actual": 2,
+      "diffAbs": 2,
+      "varPct": "+100%",
+      "estado": "SUBE",
+      "ultimo_registro": "12/04/2026",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Trata de Personas",
+      "anterior": 0,
+      "actual": 0,
+      "diffAbs": 0,
+      "varPct": "N/A",
+      "estado": "IGUAL",
+      "ultimo_registro": "20/08/2024",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Piratería Terrestre",
+      "anterior": 0,
+      "actual": 0,
+      "diffAbs": 0,
+      "varPct": "N/A",
+      "estado": "IGUAL",
+      "ultimo_registro": "11/12/2022",
+      "barrios_top": "Sin datos de barrio"
+    },
+    {
+      "delito": "Delitos Informáticos",
+      "anterior": 129,
+      "actual": 109,
+      "diffAbs": -20,
+      "varPct": "-15.5%",
+      "estado": "BAJA",
+      "ultimo_registro": "28/06/2026",
+      "barrios_top": "Sin datos de barrio"
+    }
+  ]
+}

@@ -163,13 +163,13 @@ const formatDate = (value) => value
   : 'Sin corte';
 
 const PERIOD_OPTIONS = [
-  { value: 'last_7_days', label: 'Ultimos 7 dias' },
-  { value: 'last_30_days', label: 'Ultimos 30 dias' },
-  { value: 'year_to_date', label: 'Ano a la fecha' },
+  { value: 'last_7_days', label: 'Últimos 7 días' },
+  { value: 'last_30_days', label: 'Últimos 30 días' },
+  { value: 'year_to_date', label: 'Año a la fecha' },
   { value: 'custom', label: 'Rango personalizado' },
 ];
 
-const INITIAL_FILTERS = { periodMode: 'last_30_days', startDate: '', endDate: '', conducta: '' };
+const INITIAL_FILTERS = { periodMode: 'year_to_date', startDate: '', endDate: '', conducta: '' };
 
 const OperationalTerritoryMap = () => {
   const [draftFilters, setDraftFilters] = useState(INITIAL_FILTERS);
@@ -212,8 +212,10 @@ const OperationalTerritoryMap = () => {
   const map = data?.map || {};
   const territories = data?.territories || [];
   const territory = useMemo(
-    () => territories.find((item) => item.name === selectedTerritory) || null,
-    [territories, selectedTerritory]
+    () => (map.points || []).find((item) => item.name === selectedTerritory)
+      || territories.find((item) => item.name === selectedTerritory)
+      || null,
+    [map.points, territories, selectedTerritory]
   );
   const latestCutoff = data?.metadata?.latest_event_date;
 
@@ -232,7 +234,7 @@ const OperationalTerritoryMap = () => {
           <div>
             <div className="flex items-center gap-2 text-[#281FD0]"><MapPinned size={18} /><p className="text-xs font-black uppercase tracking-wide">Centro de mando SISC</p></div>
             <h1 className="mt-2 text-2xl font-black text-slate-950">Mapa operativo territorial</h1>
-            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">Concentracion agregada por territorio oficial. No representa direcciones ni ubicaciones exactas de hechos.</p>
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">Concentración agregada por territorio oficial. No representa direcciones ni ubicaciones exactas de hechos.</p>
           </div>
           <div className="flex items-center gap-2 border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800"><ShieldCheck size={16} /> Base maestra consolidada</div>
         </div>
@@ -271,7 +273,7 @@ const OperationalTerritoryMap = () => {
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex items-center justify-between gap-3"><dt className="font-semibold text-slate-600">Territorios en mapa</dt><dd className="font-black text-slate-950">{formatNumber(map.points?.length)}</dd></div>
               <div className="flex items-center justify-between gap-3"><dt className="font-semibold text-slate-600">Omitidos por privacidad</dt><dd className="font-black text-slate-950">{formatNumber(map.suppressed_count)}</dd></div>
-              <div className="flex items-center justify-between gap-3"><dt className="font-semibold text-slate-600">Sin poligono oficial</dt><dd className="font-black text-slate-950">{formatNumber(map.unmapped_count)}</dd></div>
+              <div className="flex items-center justify-between gap-3"><dt className="font-semibold text-slate-600">Sin polígono oficial</dt><dd className="font-black text-slate-950">{formatNumber(map.unmapped_count)}</dd></div>
             </dl>
           </section>
         </aside>
@@ -280,16 +282,16 @@ const OperationalTerritoryMap = () => {
           {error && <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"><AlertTriangle className="mt-0.5 shrink-0" size={18} />{error}</div>}
           <section className="border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-3 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
-              <div><h2 className="text-lg font-black text-slate-950">Distribucion por territorio oficial</h2><p className="mt-1 text-sm font-semibold text-slate-500">{formatDate(data?.metadata?.period_start)} - {formatDate(data?.metadata?.period_end)} | Corte disponible: {formatDate(latestCutoff)}</p></div>
+              <div><h2 className="text-lg font-black text-slate-950">Distribución por territorio oficial</h2><p className="mt-1 text-sm font-semibold text-slate-500">{formatDate(data?.metadata?.period_start)} - {formatDate(data?.metadata?.period_end)} | Corte disponible: {formatDate(latestCutoff)}</p></div>
               <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">{data?.metadata?.source || 'Fuente en consulta'}</div>
             </div>
             <TerritoryMap map={map} selectedTerritory={selectedTerritory} onSelect={setSelectedTerritory} className="h-[560px]" />
-            <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 text-xs font-semibold leading-5 text-slate-600 md:grid-cols-3"><p><strong className="text-slate-900">Metodo:</strong> el color indica volumen agregado, no riesgo individual.</p><p><strong className="text-slate-900">Privacidad:</strong> minimo {formatNumber(map.min_location_count || 3)} casos por territorio.</p><p><strong className="text-slate-900">Cartografia:</strong> solo poligonos oficiales verificados.</p></div>
+            <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 text-xs font-semibold leading-5 text-slate-600 md:grid-cols-3"><p><strong className="text-slate-900">Método:</strong> el color indica volumen agregado, no riesgo individual.</p><p><strong className="text-slate-900">Privacidad:</strong> mínimo {formatNumber(map.min_location_count || 3)} casos por territorio.</p><p><strong className="text-slate-900">Cartografía:</strong> solo polígonos oficiales verificados.</p></div>
           </section>
 
           {territory && <section className="border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-[11px] font-black uppercase tracking-wide text-[#281FD0]">Territorio seleccionado</p>
-            <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-between"><div><h2 className="text-2xl font-black text-slate-950">{territory.name}</h2><p className="mt-1 text-sm font-semibold text-slate-600">Concentracion de registros agregados en el periodo consultado.</p></div><p className="text-3xl font-black text-slate-950">{formatNumber(territory.total)} <span className="text-sm text-slate-500">casos</span></p></div>
+            <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-between"><div><h2 className="text-2xl font-black text-slate-950">{territory.name}</h2><p className="mt-1 text-sm font-semibold text-slate-600">Concentración de registros agregados en el periodo consultado.</p></div><p className="text-3xl font-black text-slate-950">{formatNumber(territory.total)} <span className="text-sm text-slate-500">casos</span></p></div>
             {territory.conductas?.length > 0 && <p className="mt-4 text-sm font-semibold text-slate-700">Conductas registradas: {territory.conductas.slice(0, 4).join(', ')}.</p>}
           </section>}
 

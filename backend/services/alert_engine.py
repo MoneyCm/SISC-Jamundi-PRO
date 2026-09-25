@@ -44,6 +44,15 @@ def is_public_territory_name(value):
 
 
 class AlertEngine:
+    """LEGADO.
+
+    - get_unified_counts mezcla filas legacy (Event, por fila) con hechos modernos
+      (COUNT DISTINCT hecho_key): unidades distintas. Solo para resúmenes ejecutivos
+      con períodos explícitos iguales; jamás para cifras oficiales semanales.
+    - calculate_alerts usa ventanas desiguales (8 vs 7 días) y trata pre=0 de forma
+      inconsistente. Vía oficial: services.alert_rules + GET /ia/alertas-semanales
+      (consulta) / POST (ejecución) + /api/alerts-tray (bandeja).
+    """
     @staticmethod
     def get_unified_counts(db: Session, start_date, end_date, category=None):
         """

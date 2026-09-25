@@ -108,21 +108,37 @@ export const buildCitizenInsights = (data, limit = 4) => {
         });
     }
 
+    // Solo semanas completas (lunes a domingo): una semana en curso siempre "baja".
     const weekly = data.weekly_trend || [];
-    if (weekly.length) {
-        const latest = weekly[weekly.length - 1];
-        const prior = weekly.length > 1 ? weekly[weekly.length - 2] : null;
+    const hasCompleteness = weekly.some((item) => item.complete !== undefined);
+    const completeWeeks = hasCompleteness ? weekly.filter((item) => item.complete) : weekly;
+    const ongoing = hasCompleteness ? weekly.filter((item) => !item.complete).slice(-1)[0] : null;
+    if (completeWeeks.length) {
+        const latest = completeWeeks[completeWeeks.length - 1];
+        const candidate = completeWeeks.length > 1 ? completeWeeks[completeWeeks.length - 2] : null;
+        // Solo se compara con la semana inmediatamente anterior (sin semanas vacías de por medio).
+        // Sin fechas de inicio (datos anteriores) se asume que la lista ya es consecutiva.
+        const consecutive = !latest.start || !candidate?.start
+            || (new Date(`${latest.start}T12:00:00`) - new Date(`${candidate.start}T12:00:00`)) === 7 * 86400000;
+        const prior = candidate && consecutive ? candidate : null;
         const difference = prior ? Number(latest.total || 0) - Number(prior.total || 0) : null;
+        const notes = [];
+        if (latest.preliminary) notes.push('Cifra preliminar: puede aumentar con reportes tardíos.');
+        if (ongoing) notes.push(`La semana ${ongoing.name} sigue en curso y no se compara.`);
         insights.push({
             id: 'latest-week',
-            eyebrow: 'Último corte semanal',
+            eyebrow: 'Última semana completa',
             title: `${latest.name}: ${formatNumber(latest.total)} casos`,
-            summary: difference === null
-                ? 'No hay una semana anterior completa en la consulta para comparar.'
-                : difference === 0
-                    ? 'Sin cambio frente a la semana anterior incluida en la consulta.'
-                    : `${formatNumber(Math.abs(difference))} casos ${difference > 0 ? 'más' : 'menos'} que la semana anterior incluida en la consulta.`,
-            tone: variationTone(difference),
+            summary: [
+                difference === null
+                    ? 'No hay una semana anterior completa en la consulta para comparar.'
+                    : difference === 0
+                        ? 'Igual que la semana anterior.'
+                        : `${formatNumber(Math.abs(difference))} casos ${difference > 0 ? 'más' : 'menos'} que la semana anterior.`,
+                ...notes,
+            ].join(' '),
+            // Con cifras preliminares no se colorea como mejora o deterioro.
+            tone: latest.preliminary ? 'neutral' : variationTone(difference),
         });
     }
 
