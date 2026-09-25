@@ -29,7 +29,6 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
 
-        { id: 'reports', label: 'Reportes', icon: FileText, category: 'SALIDA', show: isDirective || isAnalyst },
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },
         { id: 'audit', label: 'Auditoría', icon: Activity, category: 'ADMINISTRACIÓN', show: isAdmin },
     ];

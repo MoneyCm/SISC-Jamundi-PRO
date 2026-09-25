@@ -16,7 +16,7 @@ export const INSTITUTIONAL_PAGE_LABELS = {
     alerts: 'Alertas tempranas',
     council_commitments: 'Compromisos y acuerdos',
     inspecciones: 'Inspecciones de Policía',
-    reports: 'Reportes',
+    reports: 'Boletín institucional',
     data: 'Descarga CSV/XLS',
     audit: 'Auditoría',
     monitoring: 'Monitoreo de fuentes',

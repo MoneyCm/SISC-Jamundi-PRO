@@ -8,7 +8,6 @@ import { apiJson, clearStoredSession, SESSION_EXPIRED_EVENT } from './utils/apiC
 
 const Dashboard = lazy(() => import('./pages/DashboardV2'));
 const MapPage = lazy(() => import('./pages/MapPage'));
-const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const DataPage = lazy(() => import('./pages/DataPage'));
 const PublicDashboard = lazy(() => import('./pages/PublicDataExplorer'));
 const PublicInformation = lazy(() => import('./pages/PublicInformation'));
@@ -294,8 +293,6 @@ const App = () => {
         return <AuditLog />;
       case 'map':
         return <MapPage />;
-      case 'reports':
-        return <ReportsPage />;
       case 'data':
         return <DataPage userRoles={userRoles} />;
       case 'sources':
@@ -307,6 +304,7 @@ const App = () => {
       case 'sisc_cifras':
         return <SiscCifras />;
       case 'ingesta_universal': // Compatibilidad: la carga ahora vive en Boletín institucional.
+      case 'reports': // Compatibilidad: el generador antiguo se reemplazó por el Boletín (con revisión editorial).
       case 'boletin_replica':
         return <BoletinReplica onOpenArchive={() => setActivePage('technical_bulletins')} />;
       case 'technical_bulletins':
