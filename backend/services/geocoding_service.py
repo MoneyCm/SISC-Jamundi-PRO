@@ -174,15 +174,18 @@ class GeocodingService:
         """Load official urban and rural polygons, retaining each source for traceability."""
         territories = {}
 
-        def add_features(features, source):
+        def add_features(features, source, overwrite=True):
             for feature in features or []:
                 properties = feature.get("properties") or {}
                 name = properties.get("Nombre") or properties.get("NOMBRE") or properties.get("nombre") or properties.get("name")
                 geometry = feature.get("geometry")
                 if not name or not geometry:
                     continue
+                key = GeocodingService.normalize_name(name)
+                if not overwrite and key in territories:
+                    continue
                 point = shape(geometry).representative_point()
-                territories[GeocodingService.normalize_name(name)] = {
+                territories[key] = {
                     "name": _display_name(name),
                     "geometry": geometry,
                     "coords": (point.y, point.x),
@@ -199,12 +202,16 @@ class GeocodingService:
             except (json.JSONDecodeError, OSError) as exc:
                 logger.warning("No se pudo cargar cartografia %s: %s", geojson_path, exc)
 
-        for source, url in REMOTE_GEOJSON_URLS:
+        # Las capas remotas solo se consultan si se activan: la del IGAC trae las veredas de todo el
+        # país (86 MB, ~15 s) y la de la CVC no responde. Aunque se activen, nunca reemplazan un
+        # polígono oficial local: una vereda homónima de otro municipio no puede tomar su lugar.
+        remote_sources = REMOTE_GEOJSON_URLS if os.getenv("SISC_REMOTE_CARTOGRAPHY", "").strip() == "1" else []
+        for source, url in remote_sources:
             try:
                 request = Request(url, headers={"Accept": "application/geo+json, application/json"})
                 with urlopen(request, timeout=4) as response:
                     payload = json.loads(response.read().decode("utf-8"))
-                add_features(payload.get("features", []), source)
+                add_features(payload.get("features", []), source, overwrite=False)
                 logger.info("Cartografia remota cargada: %s", source)
             except Exception as exc:
                 logger.warning("No se pudo consultar cartografia remota %s: %s", source, exc)
