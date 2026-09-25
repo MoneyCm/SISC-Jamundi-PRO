@@ -709,6 +709,8 @@ async def get_public_rnmc_summary(db: Session = Depends(get_db)):
     base_filters = [
         RNMCMeasure.source_id == "INSPECCION_MEDIDAS_RNMC",
         RNMCMeasure.municipio.ilike("%JAMUNDI%"),
+        # Una fecha posterior a hoy no puede ser el corte de una publicación.
+        func.date(RNMCMeasure.fecha_actuacion) <= date.today(),
     ]
     latest_date = db.query(func.max(RNMCMeasure.fecha_actuacion)).filter(*base_filters).scalar()
     if not latest_date:
@@ -939,6 +941,39 @@ async def get_report_history(
     return reports
 
 # --- ALERT FEED ENDPOINTS ---
+
+# Si la última carga de comparendos tiene más de estos días, la lista de alertas no refleja la situación actual.
+RNMC_STALE_DAYS = 45
+
+
+@router.get("/alerts/rnmc/coverage")
+def rnmc_alert_coverage(db: Session = Depends(get_db), current_user: User = Depends(institutional_access)):
+    """Hasta qué fecha llegan los comparendos que alimentan las alertas del SISC.
+
+    Sin esto, una lista vacía se lee como "todo bajo control" aunque los datos lleven meses sin cargarse.
+    """
+    from datetime import date as _date
+    from sqlalchemy import func
+
+    today = _date.today()
+    total = db.query(func.count(RNMCMeasure.id)).scalar() or 0
+    valid_max = db.query(func.max(RNMCMeasure.fecha_actuacion)).filter(func.date(RNMCMeasure.fecha_actuacion) <= today).scalar()
+    first = db.query(func.min(RNMCMeasure.fecha_actuacion)).scalar()
+    last_load = db.query(func.max(RNMCMeasure.fecha_ingesta)).scalar()
+    future = db.query(func.count(RNMCMeasure.id)).filter(func.date(RNMCMeasure.fecha_actuacion) > today).scalar() or 0
+    last_alert = db.query(func.max(IntelligenceAlert.updated_at)).filter(IntelligenceAlert.source == "RNMC").scalar()
+    days_since_load = (today - last_load.date()).days if last_load else None
+    return {
+        "records": total,
+        "first_date": first.date().isoformat() if first else None,
+        "last_date": valid_max.date().isoformat() if valid_max else None,
+        "last_load": last_load.date().isoformat() if last_load else None,
+        "days_since_load": days_since_load,
+        "stale": days_since_load is None or days_since_load > RNMC_STALE_DAYS,
+        "future_dated": future,
+        "last_alert_update": last_alert.isoformat() if last_alert else None,
+    }
+
 
 @router.get("/alerts")
 async def list_alerts(

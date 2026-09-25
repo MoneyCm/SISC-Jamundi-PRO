@@ -73,7 +73,7 @@ const SatRadarPanel = () => {
         <section className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                    <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-[#281FD0]"><Radar size={15} /> Radar Defensoría × SISC</p>
+                    <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-[#281FD0]"><Radar size={15} /> Alertas tempranas de la Defensoría del Pueblo × hechos del SISC</p>
                     <h2 className="mt-2 text-2xl font-black text-slate-950">¿Se está cumpliendo lo que advirtió la Defensoría?</h2>
                     <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600">
                         Cruza los territorios y conductas de las Alertas Tempranas para Jamundí con los hechos de la sábana policial y los homicidios de Medicina Legal.

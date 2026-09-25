@@ -333,7 +333,9 @@ def executive_block(rows: List[CouncilCommitment], today: Optional[date] = None)
     data = summary(rows, today)
     items = [serialize(row, today) for row in rows]
     results = [item for item in items if item["status"] == "CUMPLIDO"]
-    return {**data, "results": results[:5]}
+    # Los atrasados se listan aparte: en "attention" pueden quedar fuera detrás de los repetidos.
+    overdue_items = sorted((item for item in items if "ATRASADO" in item["flags"]), key=_priority_key)
+    return {**data, "results": results[:5], "overdue_items": overdue_items[:3]}
 
 
 # ---------------------------------------------------------------------------

@@ -237,6 +237,10 @@ class RNMCIngestor:
         
         inserted = 0
         updated = 0
+        # Una actuación con fecha posterior a hoy es un error de captura o un registro de prueba:
+        # no se carga, porque movería el \"corte\" público y los conteos hacia fechas que no han llegado.
+        rejected_future = []
+        today = date.today()
         
         for _, row_raw in df.iterrows():
             row = row_raw.to_dict()
@@ -251,6 +255,9 @@ class RNMCIngestor:
             
             # Fechas
             f_act = self._parse_date(row.get('FECHA_ACTUACION'))
+            if f_act is not None and f_act.date() > today:
+                rejected_future.append({"expediente": str(row.get('EXPEDIENTE', ''))[-4:], "fecha_actuacion": f_act.date().isoformat()})
+                continue
             f_ini = self._parse_date(row.get('FECHA_INICIO'))
             f_fin = self._parse_date(row.get('FECHA_FIN'))
             f_pago = self._parse_date(row.get('FECHA_PAGO'))
@@ -299,7 +306,7 @@ class RNMCIngestor:
             records_to_upsert.append(record)
 
         if not records_to_upsert:
-            return {"inserted": 0, "updated": 0, "total": 0}
+            return {"inserted": 0, "updated": 0, "total": 0, "rejected_future": rejected_future}
 
         # PERFORMANCE: Pre-cargar registros existentes para evitar N+1 selects
         fingerprints = [r["event_fingerprint"] for r in records_to_upsert]
@@ -352,5 +359,7 @@ class RNMCIngestor:
         return {
             "inserted": inserted,
             "updated": updated,
-            "total": len(records_to_upsert)
+            "total": len(records_to_upsert),
+            # Solo los últimos 4 caracteres del expediente, para ubicarlo sin exponerlo.
+            "rejected_future": rejected_future,
         }

@@ -12,6 +12,7 @@ export const ACCENT_FIXES = [
   [/\bParticipacion\b/g, 'Participación'], [/\binformacion\b/g, 'información'],
   [/\bPolicia\b/g, 'Policía'], [/\bComisarias\b/g, 'Comisarías'], [/\bInspeccion\b/g, 'Inspección'],
   [/\brevision\b/g, 'revisión'],
+  [/\bvehiculos\b/g, 'vehículos'], [/\bvehiculo\b/g, 'vehículo'], [/\bVia\b/g, 'Vía'],
 ];
 
 export const accentuate = (text = '') =>

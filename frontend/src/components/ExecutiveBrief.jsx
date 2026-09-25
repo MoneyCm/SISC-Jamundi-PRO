@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Download, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { buildExecutiveBrief, executiveBriefSvg, jpegPdf } from '../utils/executiveBrief';
+import ExecutiveLight from './ExecutiveLight';
 
 async function renderCanvas(svg) {
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
@@ -62,10 +63,11 @@ export default function ExecutiveBrief({ publication, isCurrent, authHeaders }) 
   };
 
   return <section className="space-y-4" aria-label="Parte ejecutivo SISC">
+    {followup && <ExecutiveLight publication={publication} council={followup.council} isCurrent={isCurrent} authHeaders={authHeaders} escudo={escudo} />}
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-white px-6 py-5">
         <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#281FD0]">Redacción estadística automatizada</p>
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-3xl font-black uppercase tracking-tight text-slate-900">SISC en cifras</h2><p className="mt-1 text-sm font-semibold text-slate-500">Parte ejecutivo · lectura institucional compartida</p></div><span className="rounded-md bg-[#FFE000] px-3 py-2 text-[10px] font-black uppercase text-slate-950">Borrador institucional</span></div>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-3xl font-black uppercase tracking-tight text-slate-900">SISC en cifras</h2><p className="mt-1 text-sm font-semibold text-slate-500">Parte ejecutivo · versión completa (una página)</p></div><span className="rounded-md bg-[#FFE000] px-3 py-2 text-[10px] font-black uppercase text-slate-950">Borrador institucional</span></div>
       </div>
       <div className="p-6">
       <p className="text-sm font-semibold text-slate-600">Una lectura para decidir y hacer seguimiento · {publication.period?.start} al {publication.period?.end}</p>
