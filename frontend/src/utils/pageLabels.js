@@ -16,6 +16,7 @@ export const INSTITUTIONAL_PAGE_LABELS = {
     intelligence: 'Contexto comparado',
     alerts: 'Alertas',
     council_commitments: 'Compromisos y acuerdos',
+    narrative_alerts: 'Alertas Narrativas',
     inspecciones: 'Inspecciones de Policía',
     reports: 'Boletín institucional',
     data: 'Descarga CSV/XLS',
