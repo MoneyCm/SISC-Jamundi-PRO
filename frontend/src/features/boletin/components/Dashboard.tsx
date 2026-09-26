@@ -20,7 +20,7 @@ import type {
   SiscSourceStatus
 } from '../types/stats';
 import { deduplicateCrimeRows, sourceRowRecordKey } from '../lib/sabanaHistory';
-import { computePisccTracking, type ExternalPisccSource } from '../lib/pisccGoals';
+import { toPisccTracking, type BackendPisccGoals } from '../lib/pisccGoals';
 import { withinBulletinCutoff } from '../lib/bulletinPeriod';
 import OfficialQueryPanel from './OfficialQueryPanel';
 import CentralHistoryPanel from './CentralHistoryPanel';
@@ -143,6 +143,13 @@ export const getPeriodDateRange = (
     start: toIsoDate(new Date(year, 0, 1)),
     end: toIsoDate(new Date(year, 12, 0)),
   };
+};
+
+const pisccCutoffDescription = (periodType: PeriodType, periodValue: string | number): string => {
+  if (periodType === 'semanal') return `Semana ${periodValue}`;
+  if (periodType === 'mensual') return `Mes de ${periodValue}`;
+  if (periodType === 'semestral') return `Semestre ${periodValue}`;
+  return 'Año completo';
 };
 
 const SOURCE_STATUS_LABELS: Record<SiscSourceStatus['coverage_status'], string> = {
@@ -539,24 +546,31 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
   const [siscPublication, setSiscPublication] = useState<SiscPublication | null>(null);
   const [siscLoading, setSiscLoading] = useState(false);
   const [siscError, setSiscError] = useState<string | null>(null);
-  const [externalPisccSources, setExternalPisccSources] = useState<Record<string, ExternalPisccSource>>({});
+  const [pisccGoals, setPisccGoals] = useState<BackendPisccGoals | null>(null);
   const [pisccSourceNotice, setPisccSourceNotice] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
-    setExternalPisccSources({});
-    setPisccSourceNotice('Consultando fuentes externas del PISCC…');
+    setPisccGoals(null);
+    setPisccSourceNotice('Consultando las metas del PISCC…');
     const cutoff = getPeriodDateRange(selectedYear, periodType, selectedPeriodValue).end;
-    fetch(`/api/piscc-sources?cutoff=${encodeURIComponent(cutoff)}`, { signal: controller.signal })
-      .then(async res => { const data = await res.json(); if (!res.ok) throw new Error(data.error || 'No se pudieron consultar las fuentes PISCC.'); return data; })
+    const params = new URLSearchParams({ cutoff });
+    // Misma entrega policial que el resto del boletín, si ya se fijó.
+    if (officialSelection.sourceVersionId) params.set('source_version_id', officialSelection.sourceVersionId);
+    fetch(`/api/piscc-sources?${params}`, { signal: controller.signal })
+      .then(async res => { const data = await res.json(); if (!res.ok) throw new Error(data.error || data.detail || 'No se pudieron consultar las metas del PISCC.'); return data; })
       .then(data => {
         if (controller.signal.aborted) return;
-        if (data?.sources) setExternalPisccSources(data.sources as Record<string, ExternalPisccSource>);
+        if (!data?.goals) {
+          setPisccSourceNotice('El servidor no devolvió las metas del PISCC: reinicie el backend o revise sus registros. La página PISCC no se incluirá.');
+          return;
+        }
+        setPisccGoals(data.goals);
         setPisccSourceNotice((data.notices || []).join(' '));
       })
-      .catch(error => { if (!controller.signal.aborted) setPisccSourceNotice(error.message || 'Fuentes PISCC no disponibles.'); });
+      .catch(error => { if (!controller.signal.aborted) setPisccSourceNotice(error.message || 'Metas del PISCC no disponibles.'); });
     return () => controller.abort();
-  }, [selectedYear, periodType, selectedPeriodValue]);
+  }, [selectedYear, periodType, selectedPeriodValue, officialSelection.sourceVersionId]);
 
   const handleExcelUpload = (file: File) => {
 
@@ -1290,9 +1304,9 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
       totalesPorConductaYTD,
       conciliacion,
       versionBoletin,
-      pisccTracking: computePisccTracking(rawExcelData, baseYear, prevYear, periodType, selectedPeriodValue, externalPisccSources)
+      pisccTracking: pisccGoals ? toPisccTracking(pisccGoals, baseYear, prevYear, pisccCutoffDescription(periodType, selectedPeriodValue)) : undefined
     };
-  }, [rawExcelData, selectedYear, periodType, selectedPeriodValue, selectedConducta, history, uploadedFileName, uploadedFileHash, externalPisccSources]);
+  }, [rawExcelData, selectedYear, periodType, selectedPeriodValue, selectedConducta, history, uploadedFileName, uploadedFileHash, pisccGoals]);
   /* eslint-enable react-hooks/preserve-manual-memoization */
 
   const selectedPeriodRange = getPeriodDateRange(selectedYear, periodType, selectedPeriodValue);

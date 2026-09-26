@@ -6,10 +6,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from db.models_intelligence import RNMCMeasure
+from services.piscc_goals import GOALS
 
 
 SNAPSHOT = Path(__file__).resolve().parents[1] / "data" / "piscc" / "mindefensa.json"
-GOALS = {"secuestro": 3, "extorsion": 55, "vif": 180, "convivencia": 4000}
 
 
 def _parse_date(value):

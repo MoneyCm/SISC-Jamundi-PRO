@@ -225,6 +225,22 @@ def knowledge_signals(db: Session, today: date, include_reserved: bool) -> List[
     return rows
 
 
+def piscc_signals(db: Session, today: date) -> List[Dict[str, Any]]:
+    from services.piscc_goals import build_goals, short_text
+
+    data = build_goals(db, today)
+    off = [item for item in data["indicators"] if item["id"] in data["off_track"]]
+    if not off:
+        measured = sum(1 for item in data["indicators"] if item["status"] != "SIN_DATOS")
+        return [signal("DECISIONES", "piscc-metas", "OK", "Metas del PISCC en trayectoria",
+                       f"{measured} de {len(data['indicators'])} indicadores de resultado medidos; ninguno se aparta de su meta.",
+                       "observatory")]
+    title = _plural(len(off), "meta del PISCC presenta desviación", "metas del PISCC presentan desviación")
+    return [signal("DECISIONES", "piscc-metas", "MEDIA", title,
+                   "; ".join(short_text(item) for item in off) + ". Cada cifra con su fuente y su corte.",
+                   "observatory", len(off))]
+
+
 def _safe(builder: Callable[..., List[Dict[str, Any]]], group: str, label: str, *args) -> List[Dict[str, Any]]:
     try:
         return builder(*args)
@@ -248,6 +264,7 @@ def overview(db: Session, today: Optional[date] = None, include_reserved: bool =
         (alert_signals, "TERRITORIO", "alertas"),
         (council_signals, "DECISIONES", "compromisos"),
         (intervention_signals, "DECISIONES", "intervenciones"),
+        (piscc_signals, "DECISIONES", "metas del PISCC"),
     ):
         signals.extend(_safe(builder, group, label, db, today))
     signals.extend(_safe(knowledge_signals, "CONOCIMIENTO", "estudios", db, today, include_reserved))

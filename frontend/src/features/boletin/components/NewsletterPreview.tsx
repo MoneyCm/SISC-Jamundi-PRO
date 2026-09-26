@@ -629,7 +629,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                 DIAGNÓSTICO ESTRATÉGICO PARA CONSEJO DE SEGURIDAD
               </span>
               <span className="text-[9px] bg-white/20 px-2 py-0.5 rounded font-mono">
-                Avance: {stats.pisccTracking.cutoffDescription} ({stats.pisccTracking.semanasTranscurridas}/52 sem)
+                Avance: {stats.pisccTracking.cutoffDescription}{stats.pisccTracking.semanasTranscurridas ? ` (${stats.pisccTracking.semanasTranscurridas}/52 sem)` : ''}
               </span>
             </div>
             <p className="text-[10.5px] font-medium leading-relaxed">
@@ -655,13 +655,12 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {stats.pisccTracking.indicadores.map((ind, idx) => {
-                  const isAvailable = ind.disponibleEnSabana;
-                  const hasData = ind.countBase !== null && ind.countPrev !== null;
+                  const hasData = ind.countBase !== null;
                   const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70';
 
                   let statusBadge = (
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[8.5px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
-                      Fuente externa
+                      {ind.status === 'preliminar' ? 'Preliminar' : 'Sin datos'}
                     </span>
                   );
                   if (ind.status === 'favorable') {
@@ -673,13 +672,13 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                   } else if (ind.status === 'alerta') {
                     statusBadge = (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[8.5px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
-                        🟡 Alerta de Trayectoria
+                        🟡 Desviación de la meta
                       </span>
                     );
                   } else if (ind.status === 'critico') {
                     statusBadge = (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[8.5px] font-bold bg-rose-50 text-rose-800 border border-rose-300">
-                        🔴 Desviación Crítica
+                        🔴 Meta superada en el año
                       </span>
                     );
                   }
@@ -688,11 +687,9 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                     <tr key={ind.id} className={`${rowBg} hover:bg-blue-50/40 transition-colors`}>
                       <td className="px-2.5 py-1.5 font-semibold text-gray-800">
                         {ind.indicador}
-                        {!isAvailable && (
-                          <span className="block text-[8px] font-normal text-gray-500">
-                            Fuente: {ind.fuenteExterna ?? ind.fuenteDescripcion}{ind.fechaCorteExterno ? ` · Corte: ${ind.fechaCorteExterno}` : ''}
-                          </span>
-                        )}
+                        <span className="block text-[8px] font-normal text-gray-500">
+                          Fuente: {ind.fuenteDescripcion}{ind.fechaCorte ? ` · Corte: ${formatIsoDate(ind.fechaCorte, true)}` : ''}{ind.corteAtrasado ? ' (corte atrasado)' : ''}
+                        </span>
                       </td>
                       <td className="px-1.5 py-1.5 text-center text-gray-600">{ind.unidad}</td>
                       <td className="px-1.5 py-1.5 text-center font-semibold text-gray-700 bg-gray-50/50">
@@ -702,7 +699,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                         {ind.meta2027.toLocaleString('es-CO')}
                       </td>
                       <td className="px-1.5 py-1.5 text-center text-gray-600">
-                        {hasData ? ind.countPrev!.toLocaleString('es-CO') : '—'}
+                        {ind.countPrev !== null ? ind.countPrev.toLocaleString('es-CO') : '—'}
                       </td>
                       <td className="px-1.5 py-1.5 text-center font-black text-gray-900 bg-gray-100/50">
                         {hasData ? ind.countBase!.toLocaleString('es-CO') : '—'}
@@ -731,17 +728,19 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                 Criterio Metodológico de Proyección
               </h3>
               <p className="text-[9px] text-gray-600 leading-relaxed">
-                La proyección anual se estima extrapolando la tasa semanal acumulada a las 52 semanas del año (<code className="text-gray-800 font-semibold">[Casos / Semanas transcurridas] × 52</code>). Permite anticipar desvíos tempranos frente a las metas cuatrienales fijadas por la administración municipal.
+                Homicidios, hurto a motocicletas y lesiones se cuentan en hechos únicos de la sábana policial; las demás, con su fuente y su corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
               </p>
             </div>
 
             <div className="bg-gray-50 border border-gray-200 p-2.5 rounded-md">
               <h3 className="text-[9.5px] font-extrabold uppercase text-gray-800 mb-1 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
-                Recomendación para el Consejo de Seguridad
+                Indicadores fuera de trayectoria
               </h3>
               <p className="text-[9px] text-gray-600 leading-relaxed">
-                Focalizar los planes de patrullaje focalizado y desarme en el <strong>Hurto a Motocicletas</strong> (desviación crítica sobre la meta cuatrienal) y sostener el control territorial de contención sobre el <strong>Homicidio</strong> para consolidar la trayectoria hacia la meta de 105 casos.
+                {stats.pisccTracking.fueraDeTrayectoria.length
+                  ? <>Se apartan de la meta: <strong>{stats.pisccTracking.fueraDeTrayectoria.join(', ')}</strong>. Las recomendaciones del Observatorio sobre estos indicadores se presentan al Consejo de Seguridad.</>
+                  : 'Ningún indicador medido se aparta de su meta al corte de este boletín.'}
               </p>
             </div>
           </div>
@@ -758,7 +757,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
 
           {/* FOOTER */}
           <div className="absolute bottom-[40px] left-[50px] right-[50px] border-t border-gray-200 pt-3 flex justify-between items-center text-[9px] text-gray-400">
-            <p><strong>Fuente:</strong> SIEDCO Policía Nacional | Plan Integral de Seguridad y Convivencia Ciudadana (PISCC).</p>
+            <p><strong>Fuente:</strong> Sábana policial (hechos únicos), MinDefensa y RNMC | Plan Integral de Seguridad y Convivencia Ciudadana (PISCC), tabla 16.</p>
             <p><strong>Página {showInstitutionalPage ? 4 : 3}</strong> | Observatorio del Delito - Alcaldía de Jamundí</p>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, CheckCircle2, ChevronDown, ChevronUp, Lightbulb, 
 import { localToday } from '../utils/localDate';
 import { apiJson } from '../utils/apiClient';
 import AnomalyRadar from '../components/AnomalyRadar';
+import PisccGoals from '../components/PisccGoals';
 import TerritoryProfile from '../components/TerritoryProfile';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
 
@@ -35,7 +36,7 @@ const inputClass = 'w-full border border-slate-300 bg-white px-3 py-2 text-sm fo
 
 // --- Situación ------------------------------------------------------------------------------
 
-const SignalCard = ({ item, onNavigate, onStudy, onTab }) => {
+const SignalCard = ({ item, onNavigate, onStudy, onTab, onGoals }) => {
     const style = LEVEL_STYLES[item.level] || LEVEL_STYLES.INFO;
     return (
         <article className={`flex flex-col gap-2 border-l-4 bg-white p-4 shadow-sm ${style.bar}`}>
@@ -55,6 +56,11 @@ const SignalCard = ({ item, onNavigate, onStudy, onTab }) => {
                         Ver en Anomalías <ArrowRight size={15} />
                     </button>
                 )}
+                {item.key === 'piscc-metas' && onGoals && (
+                    <button onClick={onGoals} className="inline-flex items-center gap-1 text-sm font-black text-[#281FD0] hover:underline">
+                        Ver metas del PISCC <ArrowRight size={15} />
+                    </button>
+                )}
                 {['ALTA', 'MEDIA'].includes(item.level) && item.key.startsWith('radar') && onStudy && (
                     <button onClick={() => onStudy(item)} className="inline-flex items-center gap-1 text-sm font-bold text-slate-600 hover:text-slate-950">
                         <BookOpen size={15} /> Abrir estudio
@@ -65,7 +71,7 @@ const SignalCard = ({ item, onNavigate, onStudy, onTab }) => {
     );
 };
 
-const Situation = ({ overview, onNavigate, onStudy, onTab }) => {
+const Situation = ({ overview, onNavigate, onStudy, onTab, onGoals }) => {
     const groups = useMemo(() => groupSignals(overview), [overview]);
     const counts = overview.counts || {};
     return (
@@ -85,7 +91,7 @@ const Situation = ({ overview, onNavigate, onStudy, onTab }) => {
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                         {group.signals.map((item) => (
-                            <SignalCard key={item.key} item={item} onNavigate={onNavigate} onStudy={onStudy} onTab={onTab} />
+                            <SignalCard key={item.key} item={item} onNavigate={onNavigate} onStudy={onStudy} onTab={onTab} onGoals={onGoals} />
                         ))}
                     </div>
                 </section>
@@ -381,6 +387,7 @@ const TABS = [
     { id: 'situacion', label: 'Situación actual' },
     { id: 'estudios', label: 'Estudios' },
     { id: 'recomendaciones', label: 'Recomendaciones' },
+    { id: 'piscc', label: 'Metas PISCC' },
     { id: 'anomalias', label: 'Anomalías', internal: true },
     { id: 'territorios', label: 'Territorios', internal: true },
 ];
@@ -457,7 +464,7 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             {error && <p role="alert" className="bg-red-50 p-3 text-sm font-bold text-red-800">{error}</p>}
 
             {tab === 'situacion' && (overview
-                ? <Situation overview={overview} onNavigate={onNavigate} onStudy={canEdit ? studyFromSignal : null} onTab={canEdit ? setTab : null} />
+                ? <Situation overview={overview} onNavigate={onNavigate} onStudy={canEdit ? studyFromSignal : null} onTab={canEdit ? setTab : null} onGoals={() => setTab('piscc')} />
                 : loading && <p className="flex items-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={16} className="animate-spin" /> Reuniendo señales de los módulos…</p>)}
 
             {tab === 'estudios' && (
@@ -466,6 +473,8 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             )}
 
             {tab === 'anomalias' && canEdit && <AnomalyRadar onStudy={studyFromSignal} onTerritory={(name) => { setTerritory(name); setTab('territorios'); }} />}
+
+            {tab === 'piscc' && <PisccGoals />}
 
             {tab === 'territorios' && canEdit && <TerritoryProfile initialName={territory} onOpenCommitments={() => onNavigate?.('council_commitments')} />}
 
