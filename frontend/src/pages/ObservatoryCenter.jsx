@@ -4,6 +4,7 @@ import { localToday } from '../utils/localDate';
 import { apiJson } from '../utils/apiClient';
 import AnomalyRadar from '../components/AnomalyRadar';
 import PisccGoals from '../components/PisccGoals';
+import PisccActions from '../components/PisccActions';
 import TerritoryProfile from '../components/TerritoryProfile';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
 
@@ -383,6 +384,24 @@ const RecommendationCard = ({ item, canEdit, onSaved, onNavigate }) => {
 
 // --- Página ---------------------------------------------------------------------------------
 
+// Metas PISCC: resultados (tabla 16) y plan de acción (43 acciones, seguimiento semestral).
+const PisccPanel = ({ canEdit }) => {
+    const [view, setView] = useState('resultados');
+    return (
+        <div className="space-y-4">
+            <div className="inline-flex border border-slate-300 bg-white" role="group">
+                {[['resultados', 'Resultados (tabla 16)'], ['acciones', 'Plan de acción (43 acciones)']].map(([id, label]) => (
+                    <button key={id} onClick={() => setView(id)} aria-pressed={view === id}
+                        className={`px-4 py-2 text-sm font-black ${view === id ? 'bg-[#281FD0] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                        {label}
+                    </button>
+                ))}
+            </div>
+            {view === 'resultados' ? <PisccGoals /> : <PisccActions canEdit={canEdit} />}
+        </div>
+    );
+};
+
 const TABS = [
     { id: 'situacion', label: 'Situación actual' },
     { id: 'estudios', label: 'Estudios' },
@@ -474,7 +493,7 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
 
             {tab === 'anomalias' && canEdit && <AnomalyRadar onStudy={studyFromSignal} onTerritory={(name) => { setTerritory(name); setTab('territorios'); }} />}
 
-            {tab === 'piscc' && <PisccGoals />}
+            {tab === 'piscc' && <PisccPanel canEdit={canEdit} />}
 
             {tab === 'territorios' && canEdit && <TerritoryProfile initialName={territory} onOpenCommitments={() => onNavigate?.('council_commitments')} />}
 

@@ -125,6 +125,80 @@ def get_piscc_goals(db: Session = Depends(get_db), user: User = Depends(institut
     return build_goals(db)
 
 
+class PisccReportIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    value: Optional[float] = Field(default=None, ge=0)
+    status: str = "EN_EJECUCION"
+    reporting_entity: Optional[str] = Field(default=None, max_length=200)
+    evidence: Optional[str] = Field(default=None, max_length=2000)
+    note: Optional[str] = Field(default=None, max_length=2000)
+    received_on: Optional[date] = None
+    expected_version: Optional[int] = Field(default=None, ge=0)  # None = primer reporte del semestre
+
+
+def _piscc_semester(semester: Optional[str]) -> str:
+    from services import piscc_actions
+
+    semester = semester or piscc_actions.semester_of(date.today())
+    if not piscc_actions.valid_semester(semester):
+        raise HTTPException(422, "Semestre fuera del PISCC 2024-2027. Use el formato 2026-1 o 2026-2.")
+    return semester
+
+
+@router.get("/piscc-actions")
+def get_piscc_actions(semester: Optional[str] = Query(default=None), db: Session = Depends(get_db),
+                      user: User = Depends(institutional_access)):
+    """Plan de acción del PISCC: avance de las 43 acciones en el semestre, por vector y entidad."""
+    from services.piscc_actions import build_tracking
+
+    return build_tracking(db, _piscc_semester(semester))
+
+
+@router.get("/piscc-actions/export")
+def export_piscc_actions(semester: Optional[str] = Query(default=None), db: Session = Depends(get_db),
+                         user: User = Depends(institutional_access)):
+    """CSV del seguimiento semestral, para el reporte al SisPT."""
+    from fastapi.responses import Response
+    from services.piscc_actions import build_tracking, export_csv
+
+    semester = _piscc_semester(semester)
+    return Response(export_csv(build_tracking(db, semester)), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="PISCC_seguimiento_{semester}.csv"'})
+
+
+@router.put("/piscc-actions/{code}/{semester}")
+async def save_piscc_report(code: str, semester: str, payload: PisccReportIn, request: Request,
+                            db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    from db.models_piscc import ACTION_STATUSES, PisccActionReport
+    from services.piscc_actions import load_catalog
+
+    semester = _piscc_semester(semester)
+    if code not in {item["code"] for item in load_catalog()["actions"]}:
+        raise HTTPException(404, "La acción no existe en el plan de acción del PISCC.")
+    if payload.status not in ACTION_STATUSES:
+        raise HTTPException(422, f"Estado no válido. Use: {', '.join(ACTION_STATUSES)}.")
+    row = db.query(PisccActionReport).filter_by(action_code=code, semester=semester).first()
+    if row is None:
+        if payload.expected_version is not None:
+            raise HTTPException(409, "El reporte que editaba ya no existe. Recargue la página.")
+        row = PisccActionReport(action_code=code, semester=semester, created_by=user.username)
+        db.add(row)
+    elif row.version != payload.expected_version:
+        raise HTTPException(409, "Otra persona modificó este reporte. Recárguelo antes de guardar.")
+    else:
+        row.version += 1
+        row.updated_by = user.username
+    for field, value in payload.model_dump(exclude={"expected_version"}).items():
+        setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    await log_audit(db, "PISCC_ACTION_REPORT_SAVED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"action": code, "semester": semester, "value": row.value, "status": row.status},
+                    level=1, request=request)
+    from services.piscc_actions import serialize_report
+    return serialize_report(row)
+
+
 @router.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
     """Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas."""

@@ -1,0 +1,417 @@
+{
+  "plan": "PISCC Jamundí 2024-2027",
+  "source": "Documento final PISCC, 22 de septiembre de 2025, capítulo 8.1, tablas 11 a 14 (páginas 49 a 60 del documento)",
+  "transcription": {
+    "method": "Transcrito desde la imagen de cada página",
+    "verified": false,
+    "verified_by": null,
+    "verified_on": null
+  },
+  "vectors": [
+    {
+      "code": "I",
+      "name": "Control institucional del territorio"
+    },
+    {
+      "code": "II",
+      "name": "Nuevas capacidades para la gestión territorial de la seguridad"
+    },
+    {
+      "code": "III",
+      "name": "Prevención del delito, acceso a la justicia y construcción de paz"
+    },
+    {
+      "code": "IV",
+      "name": "Gobernanza de la seguridad"
+    }
+  ],
+  "actions": [
+    {
+      "code": "I-01",
+      "vector": "I",
+      "responsible": "Policía Metropolitana – Tercera Brigada del Ejército Nacional – Fiscalía General de la Nación",
+      "action": "Afectar estructuras criminales que vulneran la vida, la integridad y el patrimonio de los habitantes de Jamundí.",
+      "indicator": "Número de estructuras multicrimen afectadas.",
+      "goal": 24,
+      "page": 49
+    },
+    {
+      "code": "I-02",
+      "vector": "I",
+      "responsible": "Gobernación del Valle del Cauca",
+      "action": "Ampliar infraestructura militar para fortalecer el control institucional del territorio en el área rural de Jamundí.",
+      "indicator": "Número de infraestructura militar construidas.",
+      "goal": 1,
+      "page": 49
+    },
+    {
+      "code": "I-03",
+      "vector": "I",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Adoptar documento técnico que defina una visión de futuro en materia de seguridad y convivencia, orientado a la prevención de delitos de alto impacto y reducción de comportamientos contrarios a la convivencia.",
+      "indicator": "Número de planes Integrales de Seguridad y Convivencia - PISCC con enfoque de género.",
+      "goal": 4,
+      "page": 49
+    },
+    {
+      "code": "I-04",
+      "vector": "I",
+      "responsible": "Policía Metropolitana – Tercera Brigada del Ejército Nacional",
+      "action": "Realizar puestos de control en zonas urbanas y rurales para garantizar un acceso seguro a la ciudad y proteger a los ciudadanos de posibles amenazas o delitos.",
+      "indicator": "Número de puestos de control urbanos y rurales desplegados.",
+      "goal": 200,
+      "page": 49
+    },
+    {
+      "code": "I-05",
+      "vector": "I",
+      "responsible": "Policía Metropolitana de Santiago de Cali – Tercera Brigada del Ejército Nacional",
+      "action": "Desplegar estrategias integrales para el control y prevención de los delitos de alto impacto en los polígonos y corredores de mayores concentraciones delictivas.",
+      "indicator": "Número de estrategias locales contra el delito desplegadas anualmente.",
+      "goal": 4,
+      "page": 50
+    },
+    {
+      "code": "I-06",
+      "vector": "I",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Suministrar dotaciones institucionales para llevar a cabo las operaciones propias del Ejército Nacional.",
+      "indicator": "Número dotación entregados para llevar a cabo las operaciones propias del Ejército Nacional.",
+      "goal": 1,
+      "page": 50
+    },
+    {
+      "code": "I-07",
+      "vector": "I",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Fortalecer administrativa, técnica, humana y financieramente el complejo carcelario del municipio de Jamundí – COJAM.",
+      "indicator": "Número de convenios interinstitucionales establecidos.",
+      "goal": 1,
+      "page": 50
+    },
+    {
+      "code": "I-08",
+      "vector": "I",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Promover iniciativas de fortalecimiento a los instrumentos de seguridad ciudadana en el municipio.",
+      "indicator": "Número de iniciativas de seguridad implementadas.",
+      "goal": 40,
+      "page": 50
+    },
+    {
+      "code": "I-09",
+      "vector": "I",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Garantizar la adquisición de suministros para el fortalecimiento de las capacidades.",
+      "indicator": "Número de organismos de seguridad apoyados en el fortalecimiento de capacidades.",
+      "goal": 3,
+      "page": 50
+    },
+    {
+      "code": "I-10",
+      "vector": "I",
+      "responsible": "Secretaría de Seguridad y Convivencia – GAULA Ejército Nacional – GAULA Policía Metropolitana",
+      "action": "Implementar una campaña integral de prevención y lucha contra la extorsión promoviendo la denuncia de este flagelo y debilitando el poder de coerción de las estructuras criminales.",
+      "indicator": "Número de campañas de prevención contra la extorsión desplegadas.",
+      "goal": 48,
+      "page": 50
+    },
+    {
+      "code": "II-01",
+      "vector": "II",
+      "responsible": "Secretaría de Seguridad y Convivencia – Gobernación del Valle – Ministerio del Interior",
+      "action": "Diseñar, implementar y brindar sostenibilidad al sistema de cámaras para el fortalecimiento de la seguridad del municipio Jamundí.",
+      "indicator": "Un sistema de videovigilancia en funcionamiento.",
+      "goal": 1,
+      "page": 51
+    },
+    {
+      "code": "II-02",
+      "vector": "II",
+      "responsible": "Fiscalía General de la Nación",
+      "action": "Elaborar informes de análisis sobre tendencias delictivas que permitan comprender mejor los patrones de criminalidad y diseñar estrategias más efectivas para su prevención y control.",
+      "indicator": "Número de informes desarrollados sobre dinámicas delictivas y analítica forense.",
+      "goal": 4,
+      "page": 52
+    },
+    {
+      "code": "II-03",
+      "vector": "II",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Implementar el sistema de información para el Observatorio de justicia y análisis estadístico de la política criminal.",
+      "indicator": "Un Observatorio del delito implementado.",
+      "goal": 1,
+      "page": 52
+    },
+    {
+      "code": "II-04",
+      "vector": "II",
+      "responsible": "Secretaría de Seguridad y Convivencia – Ministerio del Interior",
+      "action": "Adecuar y mantener en óptimas condiciones la infraestructura del Centro Administrativo Municipal e instalaciones destinados a la seguridad y justicia local, mediante su financiación y sostenimiento continuo.",
+      "indicator": "Número de proyectos de infraestructura adecuados.",
+      "goal": 1,
+      "page": 52
+    },
+    {
+      "code": "II-05",
+      "vector": "II",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Brindar apoyo en la financiación de la seguridad ciudadana en el municipio de Jamundí – Pago de recompensas.",
+      "indicator": "Número de protocolos de pago para recompensas adoptado.",
+      "goal": 1,
+      "page": 52
+    },
+    {
+      "code": "II-06",
+      "vector": "II",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Crear la Secretaría de Seguridad y Convivencia en el municipio de Jamundí.",
+      "indicator": "Número de entidades de gestión territorial de la seguridad y convivencia creada.",
+      "goal": 1,
+      "page": 52
+    },
+    {
+      "code": "III-01",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Adoptar un programa de conmutación de comparendos por comportamientos contrarios a la convivencia a través del trabajo comunitario Ley 1801 de 2016 – Programa de la sanción a la acción.",
+      "indicator": "Número de programas de conmutación de comparendos adoptados.",
+      "goal": 1,
+      "page": 53
+    },
+    {
+      "code": "III-02",
+      "vector": "III",
+      "responsible": "Fiscalía General de la Nación",
+      "action": "Implementar taller de prevención de delitos como violencia sexual, intrafamiliar, escolar, maltrato animal, lesiones personales, trata de personas y reclutamiento de menores, en instituciones educativas.",
+      "indicator": "Número de talleres en prevención del delito realizados en instituciones educativas.",
+      "goal": 30,
+      "page": 54
+    },
+    {
+      "code": "III-03",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia – Secretaría de Desarrollo Social",
+      "action": "Implementar iniciativas ciudadanas que promuevan la convivencia y la seguridad ciudadana.",
+      "indicator": "Número de proyectos de convivencia y seguridad ciudadana apoyados financieramente.",
+      "goal": 1,
+      "page": 54
+    },
+    {
+      "code": "III-04",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia – Policía Metropolitana",
+      "action": "Implementar programa de gestión comunitaria de la seguridad – Zonas Seguras.",
+      "indicator": "Número de programas de gestión comunitarias de la seguridad implementados.",
+      "goal": 1,
+      "page": 54
+    },
+    {
+      "code": "III-05",
+      "vector": "III",
+      "responsible": "Secretaría de Salud",
+      "action": "Implementar una estrategia integral de promoción y cuidado de la salud mental para fortalecer el tejido social y transformar los entornos comunitarios.",
+      "indicator": "Número de estrategias de cuidado de la salud mental y convivencia implementadas.",
+      "goal": 1,
+      "page": 54
+    },
+    {
+      "code": "III-06",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Brindar apoyo a los procesos de seguridad ciudadana con equipo jurídico físico social para la prevención del delito y defensa de los derechos de los ciudadanos del municipio de Jamundí.",
+      "indicator": "Número de ciudadanos con servicio de justicia prestados.",
+      "goal": 100,
+      "page": 54
+    },
+    {
+      "code": "III-07",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Promover el acceso a la justicia y la defensa de los derechos de los ciudadanos del municipio de Jamundí.",
+      "indicator": "Campaña de promoción del acceso a la justicia y defensa de derechos.",
+      "goal": 1,
+      "page": 55
+    },
+    {
+      "code": "III-08",
+      "vector": "III",
+      "responsible": "IMDERE",
+      "action": "Organizar y conocer espacios de encuentros deportivos y recreativos que promuevan estilos de vida saludables, con un enfoque diferencial que contemple la diversidad de género, población y territorio.",
+      "indicator": "Número de iniciativas que promuevan estilos de vida saludable a través del deporte.",
+      "goal": 4,
+      "page": 55
+    },
+    {
+      "code": "III-09",
+      "vector": "III",
+      "responsible": "Secretaría de Gobierno",
+      "action": "Generar mecanismos de prevención y cuidado dirigidos a víctimas de violencia de género, niños, niñas, adolescentes y personas adultas mayores afectadas por el conflicto armado, garantizando su especial protección por parte del Estado.",
+      "indicator": "Número de estrategias de prevención para víctimas de la violencia de género pertenecientes a grupos vulnerables.",
+      "goal": 1,
+      "page": 55
+    },
+    {
+      "code": "III-10",
+      "vector": "III",
+      "responsible": "Secretaría de Gobierno",
+      "action": "Suministrar bienes y/o productos (alimentarios y/o no alimentarios) con el fin de neutralizar o superar las circunstancias que generan riesgo en el marco del conflicto armado interno y así evitar la ocurrencia de violaciones de Derechos Humanos e infracciones al Derecho Internacional Humanitario.",
+      "indicator": "Número de hogares víctimas del conflicto armado que reciben ayuda humanitaria.",
+      "goal": 375,
+      "page": 55
+    },
+    {
+      "code": "III-11",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia – Oficina de Equidad de Género",
+      "action": "Desarrollar una iniciativa de formación para funcionarios públicos en enfoque de género, para mejorar la respuesta institucional con perspectiva inclusiva.",
+      "indicator": "Número de iniciativas de formación implementadas.",
+      "goal": 1,
+      "page": 55
+    },
+    {
+      "code": "III-12",
+      "vector": "III",
+      "responsible": "Secretaría de Desarrollo Social – Oficina de Equidad de Género",
+      "action": "Desarrollo de acciones orientadas a divulgar y promover los mecanismos de atención, protección y ejercicio de los derechos de las mujeres, población LGTBI y personas y comunidades en riesgo, así como la prevención de su vulneración.",
+      "indicator": "Rutas de atención implementadas.",
+      "goal": 4,
+      "page": 56
+    },
+    {
+      "code": "III-13",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Desplegar estrategias de atención y apoyo para mujeres víctimas de violencia de género, que incluyen atención integral, espacios de apoyo grupal, asistencia de vivienda temporal y la implementación de ecosistemas de cuidado.",
+      "indicator": "Número de estrategias de atención a mujeres y hogares víctimas de violencia implementadas.",
+      "goal": 1,
+      "page": 56
+    },
+    {
+      "code": "III-14",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Campaña de promoción de métodos de resolución de conflictos y prevención de la violencia por medios digitales e impresos.",
+      "indicator": "Número campañas comunicativas elaboradas y difundidas.",
+      "goal": 4,
+      "page": 56
+    },
+    {
+      "code": "III-15",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia – Policía Metropolitana – Secretaría de Educación – Secretaría de Salud",
+      "action": "Implementar un programa de prevención en entornos educativos sobre prevención del reclutamiento, consumo de SPA y resolución pacífica de conflictos.",
+      "indicator": "Número de programas de prevención de violencia en entornos educativos implementados.",
+      "goal": 1,
+      "page": 56
+    },
+    {
+      "code": "III-16",
+      "vector": "III",
+      "responsible": "Secretaría de Gobierno",
+      "action": "Realizar la materialización de medidas correctivas de acuerdo a la Ley 1801 de 2016 e implementar jornadas móviles de conciliación y resolución de conflictos en el municipio.",
+      "indicator": "Número de jornadas móviles de conciliación realizadas.",
+      "goal": 4,
+      "page": 57
+    },
+    {
+      "code": "III-17",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Diseñar e implementar una campaña integral de tenencia responsable de animales de compañía, orientada a promover la corresponsabilidad ciudadana, el respeto por los seres sintientes y el cuidado del entorno, con énfasis en la convivencia armónica en zonas residenciales.",
+      "indicator": "Número de campañas sobre tenencia responsable de animales de compañía implementadas con enfoque de cultura ciudadana.",
+      "goal": 1,
+      "page": 57
+    },
+    {
+      "code": "III-18",
+      "vector": "III",
+      "responsible": "Secretaría de Seguridad y Convivencia – Secretaría de Medio Ambiente",
+      "action": "Realizar una jornada de actualización normativa dirigida a inspectores de Policía y personal uniformado que presta servicio en el municipio de Jamundí, acerca de la legislación contra el maltrato animal.",
+      "indicator": "Número de jornadas de actualización normativa dirigidas a inspectores de policía y personal uniformado de la Policía Nacional sobre la legislación contra el maltrato animal.",
+      "goal": 1,
+      "page": 57
+    },
+    {
+      "code": "IV-01",
+      "vector": "IV",
+      "responsible": "AMSO",
+      "action": "Generar un modelo de gobernanza colaborativa en seguridad para enfrentar riesgos y amenazas comunes en la ciudad-región.",
+      "indicator": "Número de modelos de gobernanza colaborativa en seguridad para la ciudad-región adoptados.",
+      "goal": 1,
+      "page": 58
+    },
+    {
+      "code": "IV-02",
+      "vector": "IV",
+      "responsible": "Secretaría de Seguridad y Convivencia – AMSO",
+      "action": "Fortalecer las capacidades institucionales para la prevención y contención del delito en el municipio.",
+      "indicator": "Número de proyectos impulsados para fortalecer las capacidades de prevención y control del delito.",
+      "goal": 3,
+      "page": 58
+    },
+    {
+      "code": "IV-03",
+      "vector": "IV",
+      "responsible": "Gobernación del Valle del Cauca",
+      "action": "Renovar equipos de comunicación de la Policía Metropolitana.",
+      "indicator": "Número de equipos de comunicación entregados a los organismos de seguridad y justicia.",
+      "goal": 1,
+      "page": 59
+    },
+    {
+      "code": "IV-04",
+      "vector": "IV",
+      "responsible": "Gobernación del Valle del Cauca",
+      "action": "Adquirir sistema de inhibición de señal de dispositivos remotamente tripulados que representan una amenaza a la seguridad del municipio de Jamundí en el área rural y urbana – Escudo antidrones para fuerza pública.",
+      "indicator": "Número de sistemas antidrones adquiridos.",
+      "goal": 2,
+      "page": 59
+    },
+    {
+      "code": "IV-05",
+      "vector": "IV",
+      "responsible": "AMSO – Secretaría de Seguridad y Convivencia",
+      "action": "Implementar programa de prevención social de la violencia para jóvenes en riesgo.",
+      "indicator": "Número de programas de prevención de violencia en jóvenes en riesgo.",
+      "goal": 1,
+      "page": 59
+    },
+    {
+      "code": "IV-06",
+      "vector": "IV",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Generar alianzas interinstitucionales para la implementación de consultorios jurídicos y prácticas de futuros profesionales.",
+      "indicator": "Número de alianzas con entidades municipales y universidades para la implementación de programas de consultoría jurídica y prácticas profesionales.",
+      "goal": 1,
+      "page": 59
+    },
+    {
+      "code": "IV-07",
+      "vector": "IV",
+      "responsible": "AMSO – Secretaría de Seguridad y Convivencia",
+      "action": "Fortalecer la infraestructura de seguridad de la Policía Metropolitana para mejorar la cobertura del servicio de seguridad en el área metropolitana.",
+      "indicator": "Número de infraestructura de seguridad fortalecidas en el área metropolitana.",
+      "goal": 1,
+      "page": 59
+    },
+    {
+      "code": "IV-08",
+      "vector": "IV",
+      "responsible": "AMSO – Secretaría de Seguridad y Convivencia",
+      "action": "Integrar la Red Regional de Observatorios de Seguridad con el fin de generar intercambio de conocimiento y experiencias en materia de seguridad y convivencia ciudadana.",
+      "indicator": "Número de alianzas con la Red Regional de Observatorios de Seguridad realizadas.",
+      "goal": 1,
+      "page": 59
+    },
+    {
+      "code": "IV-09",
+      "vector": "IV",
+      "responsible": "Secretaría de Seguridad y Convivencia",
+      "action": "Realizar espacios para institucionalizar el diálogo social entre actores públicos y comunitarios, fomentar la construcción de confianza, la rendición de cuentas y garantizar la apropiación de las medidas de seguridad desde un enfoque territorial, participativo e intercultural.",
+      "indicator": "Número de espacios de diálogo en seguridad realizados.",
+      "goal": 10,
+      "page": 60
+    }
+  ]
+}
