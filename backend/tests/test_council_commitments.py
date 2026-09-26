@@ -150,6 +150,10 @@ def test_recurrence_counts_sessions_once_and_keeps_history_out_of_open_commitmen
     assert "motos" not in {topic["key"] for topic in result["topics"]}  # una mención de paso no es tema
     assert topics_in("Instalar cámaras en el parque") == ["camaras"]
     assert theme_for("Censo de damnificados por el desplazamiento") == "Protección y derechos humanos"
+    # "Sobrevuelo de drones" y "desplazamiento de vehículos" en la jornada electoral son asunto electoral.
+    assert theme_for("Expedir las medidas electorales sobre sobrevuelo de drones y desplazamiento de vehículos") == "Seguridad electoral"
+    assert "desplazamiento" not in topics_in("Restringir el desplazamiento de vehículos pesados")
+    assert theme_for("Remitir registros sobre hostigamientos, ataques y drones") == "Orden público y grupos armados"
 
 
 def test_historical_reads_cannot_be_confirmed():
