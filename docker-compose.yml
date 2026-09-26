@@ -23,6 +23,8 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql://sisc_user:sisc_password@db:5432/sisc_jamundi
+      # Fechas de "hoy" en hora de Colombia (sin esto, desde las 7 p. m. el backend ya está en el día siguiente).
+      TZ: America/Bogota
     ports:
       - "8000:8000"
     depends_on:

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, CheckCircle2, ChevronDown, ChevronUp, Lightbulb, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { localToday } from '../utils/localDate';
 import { apiJson } from '../utils/apiClient';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
 
@@ -352,7 +353,7 @@ const RecommendationCard = ({ item, canEdit, onSaved, onNavigate }) => {
                         <div className="grid gap-2 md:grid-cols-3">
                             <input value={note} onChange={(event) => setNote(event.target.value)} className={`${inputClass} md:col-span-2`}
                                 placeholder={['ACEPTADA', 'RECHAZADA'].includes(step) ? 'Quién decidió y en qué instancia (obligatorio)' : 'Nota (opcional)'} />
-                            <input type="date" value={onDate} max={new Date().toISOString().slice(0, 10)} onChange={(event) => setOnDate(event.target.value)} className={inputClass} aria-label="Fecha" />
+                            <input type="date" value={onDate} max={localToday()} onChange={(event) => setOnDate(event.target.value)} className={inputClass} aria-label="Fecha" />
                             {['ACEPTADA', 'EN_EJECUCION'].includes(step) && (
                                 <input value={commitment} onChange={(event) => setCommitment(event.target.value)} className={inputClass}
                                     placeholder="Compromiso que la ejecuta (p. ej. CS-2026-018)" />

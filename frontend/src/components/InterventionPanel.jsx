@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus, Target, Trash2 } from 'lucide-react';
+import { localToday } from '../utils/localDate';
 import { apiJson } from '../utils/apiClient';
 import { allowedStages, describeWindow, missingFor, STAGE_LABELS } from '../utils/interventions';
 
 const inputClass = 'mt-1 w-full border border-slate-300 bg-white px-2 py-2 text-sm font-semibold normal-case text-slate-800';
 const labelClass = 'block text-[11px] font-black uppercase tracking-wide text-slate-500';
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localToday();
 const WINDOW_STYLES = { MEDIDO: 'text-slate-900', PENDIENTE: 'text-slate-500', ESPERANDO_DATOS: 'text-amber-800', SIN_BASE: 'text-slate-500' };
 
 const DOC_FIELDS = ['problem', 'assessment', 'recommendation', 'decision', 'responsible', 'decision_date', 'deadline',

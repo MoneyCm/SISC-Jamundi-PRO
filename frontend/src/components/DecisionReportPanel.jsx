@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Download, Loader2, X } from 'lucide-react';
+import { localToday } from '../utils/localDate';
 import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
 
 const KIND_LABELS = { RECOMENDACION: 'Recomendación del Observatorio', TERRITORIO: 'Situación territorial', COMPROMISO: 'Compromiso estancado' };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localToday();
 
 const change = (cell) => {
     if (cell.previous === null || cell.previous === undefined) return 'sin base';
