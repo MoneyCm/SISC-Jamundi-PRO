@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.auth import institutional_access, log_audit, require_role
@@ -197,6 +198,149 @@ async def save_piscc_report(code: str, semester: str, payload: PisccReportIn, re
                     level=1, request=request)
     from services.piscc_actions import serialize_report
     return serialize_report(row)
+
+
+class DataRequestsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    entity_ids: List[UUID] = Field(min_length=1, max_length=50)
+    what: str = Field(min_length=3, max_length=300)
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    requested_on: date
+    due_on: Optional[date] = None
+    channel: Optional[str] = Field(default=None, max_length=60)
+
+
+class DataRequestUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    status: str
+    received_on: Optional[date] = None
+    note: Optional[str] = Field(default=None, max_length=2000)
+    expected_version: int = Field(ge=0)
+
+
+class DataEntityIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=3, max_length=200)
+    program: str = "OTRA"
+    cadence: str = "SEMANAL"
+    contact: Optional[str] = Field(default=None, max_length=300)
+    active: bool = True
+
+
+def _check_entity(payload: DataEntityIn) -> None:
+    from db.models_data_requests import CADENCES, PROGRAMS
+
+    if payload.program not in PROGRAMS:
+        raise HTTPException(422, f"Programa no válido. Use: {', '.join(PROGRAMS)}.")
+    if payload.cadence not in CADENCES:
+        raise HTTPException(422, f"Periodicidad no válida. Use: {', '.join(CADENCES)}.")
+
+
+@router.get("/data-requests")
+def get_data_requests(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Solicitudes de datos a Inspecciones, Comisarías y otras dependencias, con su estado."""
+    from services.data_requests import board
+
+    return board(db, include_inactive=True)
+
+
+@router.post("/data-requests", status_code=201)
+async def create_data_requests(payload: DataRequestsIn, request: Request, db: Session = Depends(get_db),
+                               user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Registra la misma solicitud para varias dependencias (la rutina del lunes)."""
+    from datetime import timedelta
+
+    from db.models_data_requests import DataEntity, DataRequest
+    from services.data_requests import DEFAULT_DUE_DAYS, serialize_request
+
+    if payload.period_start and payload.period_end and payload.period_start > payload.period_end:
+        raise HTTPException(422, "El periodo pedido empieza después de terminar.")
+    due_on = payload.due_on or payload.requested_on + timedelta(days=DEFAULT_DUE_DAYS)
+    if due_on < payload.requested_on:
+        raise HTTPException(422, "El plazo no puede ser anterior a la fecha de la solicitud.")
+    entities = db.query(DataEntity).filter(DataEntity.id.in_(payload.entity_ids)).all()
+    if len(entities) != len(set(payload.entity_ids)):
+        raise HTTPException(404, "Alguna dependencia no existe.")
+    rows = []
+    for entity in entities:
+        row = DataRequest(entity_id=entity.id, what=payload.what, period_start=payload.period_start,
+                          period_end=payload.period_end, requested_on=payload.requested_on, due_on=due_on,
+                          channel=payload.channel, created_by=user.username)
+        db.add(row)
+        rows.append((row, entity.name))
+    db.commit()
+    await log_audit(db, "DATA_REQUESTS_CREATED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"entities": [name for _, name in rows], "what": payload.what}, level=1, request=request)
+    return [serialize_request(row, name) for row, name in rows]
+
+
+@router.put("/data-requests/{request_id}")
+async def update_data_request(request_id: UUID, payload: DataRequestUpdate, request: Request,
+                              db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    from db.models_data_requests import REQUEST_STATUSES, DataEntity, DataRequest
+    from services.data_requests import serialize_request
+
+    if payload.status not in REQUEST_STATUSES:
+        raise HTTPException(422, f"Estado no válido. Use: {', '.join(REQUEST_STATUSES)}.")
+    row = db.get(DataRequest, request_id)
+    if not row:
+        raise HTTPException(404, "La solicitud no existe.")
+    if row.version != payload.expected_version:
+        raise HTTPException(409, "Otra persona modificó esta solicitud. Recargue la página.")
+    received_on = payload.received_on
+    if payload.status in ("RECIBIDA", "INCOMPLETA"):
+        received_on = received_on or date.today()
+        if received_on < row.requested_on:
+            raise HTTPException(422, "La fecha de recibo no puede ser anterior a la solicitud.")
+    else:
+        received_on = None
+    row.status, row.received_on, row.note = payload.status, received_on, payload.note
+    row.version += 1
+    row.updated_by = user.username
+    db.commit()
+    db.refresh(row)
+    entity = db.get(DataEntity, row.entity_id)
+    await log_audit(db, "DATA_REQUEST_UPDATED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"entity": entity.name, "status": row.status}, level=1, request=request)
+    return serialize_request(row, entity.name)
+
+
+@router.post("/data-entities", status_code=201)
+async def create_data_entity(payload: DataEntityIn, request: Request, db: Session = Depends(get_db),
+                             user: User = Depends(require_role(ANALYSIS_ROLES))):
+    from db.models_data_requests import DataEntity
+
+    _check_entity(payload)
+    if db.query(DataEntity.id).filter(func.lower(DataEntity.name) == payload.name.lower()).first():
+        raise HTTPException(409, "Ya existe una dependencia con ese nombre.")
+    row = DataEntity(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    await log_audit(db, "DATA_ENTITY_CREATED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"name": row.name}, level=1, request=request)
+    return {"id": str(row.id), "name": row.name}
+
+
+@router.put("/data-entities/{entity_id}")
+async def update_data_entity(entity_id: UUID, payload: DataEntityIn, request: Request, db: Session = Depends(get_db),
+                             user: User = Depends(require_role(ANALYSIS_ROLES))):
+    from db.models_data_requests import DataEntity
+
+    _check_entity(payload)
+    row = db.get(DataEntity, entity_id)
+    if not row:
+        raise HTTPException(404, "La dependencia no existe.")
+    clash = db.query(DataEntity.id).filter(func.lower(DataEntity.name) == payload.name.lower(),
+                                           DataEntity.id != row.id).first()
+    if clash:
+        raise HTTPException(409, "Ya existe una dependencia con ese nombre.")
+    for field, value in payload.model_dump().items():
+        setattr(row, field, value)
+    db.commit()
+    await log_audit(db, "DATA_ENTITY_UPDATED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"name": row.name, "cadence": row.cadence, "active": row.active}, level=1, request=request)
+    return {"id": str(row.id), "name": row.name}
 
 
 @router.get("/anomalies")

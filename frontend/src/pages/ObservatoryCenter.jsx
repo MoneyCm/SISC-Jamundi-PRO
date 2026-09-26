@@ -5,6 +5,7 @@ import { apiJson } from '../utils/apiClient';
 import AnomalyRadar from '../components/AnomalyRadar';
 import PisccGoals from '../components/PisccGoals';
 import PisccActions from '../components/PisccActions';
+import DataRequests from '../components/DataRequests';
 import TerritoryProfile from '../components/TerritoryProfile';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
 
@@ -57,7 +58,12 @@ const SignalCard = ({ item, onNavigate, onStudy, onTab, onGoals }) => {
                         Ver en Anomalías <ArrowRight size={15} />
                     </button>
                 )}
-                {item.key === 'piscc-metas' && onGoals && (
+                {item.key.startsWith('solicitudes') && onTab && (
+                    <button onClick={() => onTab('solicitudes')} className="inline-flex items-center gap-1 text-sm font-black text-[#281FD0] hover:underline">
+                        Ver solicitudes de datos <ArrowRight size={15} />
+                    </button>
+                )}
+                {item.key.startsWith('piscc') && onGoals && (
                     <button onClick={onGoals} className="inline-flex items-center gap-1 text-sm font-black text-[#281FD0] hover:underline">
                         Ver metas del PISCC <ArrowRight size={15} />
                     </button>
@@ -409,6 +415,7 @@ const TABS = [
     { id: 'piscc', label: 'Metas PISCC' },
     { id: 'anomalias', label: 'Anomalías', internal: true },
     { id: 'territorios', label: 'Territorios', internal: true },
+    { id: 'solicitudes', label: 'Solicitudes de datos', internal: true },
 ];
 
 const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
@@ -494,6 +501,8 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             {tab === 'anomalias' && canEdit && <AnomalyRadar onStudy={studyFromSignal} onTerritory={(name) => { setTerritory(name); setTab('territorios'); }} />}
 
             {tab === 'piscc' && <PisccPanel canEdit={canEdit} />}
+
+            {tab === 'solicitudes' && canEdit && <DataRequests />}
 
             {tab === 'territorios' && canEdit && <TerritoryProfile initialName={territory} onOpenCommitments={() => onNavigate?.('council_commitments')} />}
 
