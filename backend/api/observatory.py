@@ -117,6 +117,14 @@ def get_overview(db: Session = Depends(get_db), user: User = Depends(institution
     return service.overview(db, include_reserved=_sees_reserved(user))
 
 
+@router.get("/anomalies")
+def get_anomalies(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas."""
+    from services.anomaly_radar import build_anomalies
+
+    return build_anomalies(db)
+
+
 @router.get("/studies")
 def list_studies(status: Optional[str] = Query(default=None), db: Session = Depends(get_db),
                  user: User = Depends(institutional_access)):
