@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, CheckCircle2, ChevronDown, ChevronUp, Lightbulb, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { localToday } from '../utils/localDate';
 import { apiJson } from '../utils/apiClient';
+import AnomalyRadar from '../components/AnomalyRadar';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
 
 const LEVEL_STYLES = {
@@ -33,7 +34,7 @@ const inputClass = 'w-full border border-slate-300 bg-white px-3 py-2 text-sm fo
 
 // --- Situación ------------------------------------------------------------------------------
 
-const SignalCard = ({ item, onNavigate, onStudy }) => {
+const SignalCard = ({ item, onNavigate, onStudy, onTab }) => {
     const style = LEVEL_STYLES[item.level] || LEVEL_STYLES.INFO;
     return (
         <article className={`flex flex-col gap-2 border-l-4 bg-white p-4 shadow-sm ${style.bar}`}>
@@ -48,6 +49,11 @@ const SignalCard = ({ item, onNavigate, onStudy }) => {
                         Ver en {PAGE_LABELS[item.page] || 'el módulo'} <ArrowRight size={15} />
                     </button>
                 )}
+                {item.key.startsWith('anomalia') && onTab && (
+                    <button onClick={() => onTab('anomalias')} className="inline-flex items-center gap-1 text-sm font-black text-[#281FD0] hover:underline">
+                        Ver en Anomalías <ArrowRight size={15} />
+                    </button>
+                )}
                 {['ALTA', 'MEDIA'].includes(item.level) && item.key.startsWith('radar') && onStudy && (
                     <button onClick={() => onStudy(item)} className="inline-flex items-center gap-1 text-sm font-bold text-slate-600 hover:text-slate-950">
                         <BookOpen size={15} /> Abrir estudio
@@ -58,7 +64,7 @@ const SignalCard = ({ item, onNavigate, onStudy }) => {
     );
 };
 
-const Situation = ({ overview, onNavigate, onStudy }) => {
+const Situation = ({ overview, onNavigate, onStudy, onTab }) => {
     const groups = useMemo(() => groupSignals(overview), [overview]);
     const counts = overview.counts || {};
     return (
@@ -78,7 +84,7 @@ const Situation = ({ overview, onNavigate, onStudy }) => {
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                         {group.signals.map((item) => (
-                            <SignalCard key={item.key} item={item} onNavigate={onNavigate} onStudy={onStudy} />
+                            <SignalCard key={item.key} item={item} onNavigate={onNavigate} onStudy={onStudy} onTab={onTab} />
                         ))}
                     </div>
                 </section>
@@ -374,6 +380,7 @@ const TABS = [
     { id: 'situacion', label: 'Situación actual' },
     { id: 'estudios', label: 'Estudios' },
     { id: 'recomendaciones', label: 'Recomendaciones' },
+    { id: 'anomalias', label: 'Anomalías', internal: true },
 ];
 
 const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
@@ -434,7 +441,7 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             </header>
 
             <nav role="tablist" className="flex flex-wrap gap-2 border-b border-slate-200">
-                {TABS.map(({ id, label }) => (
+                {TABS.filter((item) => canEdit || !item.internal).map(({ id, label }) => (
                     <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
                         className={`-mb-px border-b-4 px-4 py-2 text-sm font-black ${tab === id ? 'border-[#281FD0] text-[#281FD0]' : 'border-transparent text-slate-500 hover:text-slate-900'}`}>
                         {label}
@@ -447,13 +454,15 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             {error && <p role="alert" className="bg-red-50 p-3 text-sm font-bold text-red-800">{error}</p>}
 
             {tab === 'situacion' && (overview
-                ? <Situation overview={overview} onNavigate={onNavigate} onStudy={canEdit ? studyFromSignal : null} />
+                ? <Situation overview={overview} onNavigate={onNavigate} onStudy={canEdit ? studyFromSignal : null} onTab={canEdit ? setTab : null} />
                 : loading && <p className="flex items-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={16} className="animate-spin" /> Reuniendo señales de los módulos…</p>)}
 
             {tab === 'estudios' && (
                 <Studies studies={studies} canEdit={canEdit} draft={studyDraft} onDraftDone={() => setStudyDraft(null)}
                     onChanged={load} onRecommend={(study) => { setRecommendFor(study); setTab('recomendaciones'); }} />
             )}
+
+            {tab === 'anomalias' && canEdit && <AnomalyRadar onStudy={studyFromSignal} />}
 
             {tab === 'recomendaciones' && (
                 <div className="space-y-4">

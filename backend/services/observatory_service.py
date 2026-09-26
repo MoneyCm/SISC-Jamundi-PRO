@@ -118,6 +118,20 @@ def territory_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     return rows
 
 
+def anomaly_signals(db: Session, today: date) -> List[Dict[str, Any]]:
+    from services.anomaly_radar import build_anomalies
+
+    data = build_anomalies(db)
+    if data["status"] != "OK":
+        return []
+    rows = []
+    for item in data["anomalies"][:3]:
+        group = "DATOS" if item["rule"] == "R3" else "TERRITORIO"
+        rows.append(signal(group, f"anomalia-{item['rule'].lower()}-{len(rows)}", item["level"],
+                           f"Anomalía: {item['title']}", item["detail"], "observatory"))
+    return rows
+
+
 def alert_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     from db.models_alerts import IntelligenceAlert
 
@@ -230,6 +244,7 @@ def overview(db: Session, today: Optional[date] = None, include_reserved: bool =
         (mip_signals, "DATOS", "comparendos"),
         (bulletin_signals, "DATOS", "boletín"),
         (territory_signals, "TERRITORIO", "radar"),
+        (anomaly_signals, "TERRITORIO", "anomalías"),
         (alert_signals, "TERRITORIO", "alertas"),
         (council_signals, "DECISIONES", "compromisos"),
         (intervention_signals, "DECISIONES", "intervenciones"),
