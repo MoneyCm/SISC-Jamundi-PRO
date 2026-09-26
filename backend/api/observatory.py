@@ -343,6 +343,56 @@ async def update_data_entity(entity_id: UUID, payload: DataEntityIn, request: Re
     return {"id": str(row.id), "name": row.name}
 
 
+class CouncilSessionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    session_date: date
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+@router.get("/calendar")
+def get_calendar(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Calendario operativo: qué toca esta semana y cuándo es el próximo Consejo."""
+    from services.operating_calendar import build
+
+    return build(db)
+
+
+@router.post("/council-sessions", status_code=201)
+async def create_council_session(payload: CouncilSessionIn, request: Request, db: Session = Depends(get_db),
+                                 user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Fija la fecha exacta de una sesión del Consejo (reemplaza la estimación de ese mes)."""
+    from db.models_calendar import CouncilSession
+    from services.operating_calendar import COUNCIL
+
+    same_month = db.query(CouncilSession).filter(
+        CouncilSession.instance == COUNCIL,
+        func.extract("year", CouncilSession.session_date) == payload.session_date.year,
+        func.extract("month", CouncilSession.session_date) == payload.session_date.month).first()
+    if same_month:
+        raise HTTPException(409, f"Ya hay una sesión registrada ese mes ({same_month.session_date:%d/%m/%Y}). Bórrela antes de fijar otra.")
+    row = CouncilSession(instance=COUNCIL, session_date=payload.session_date, note=payload.note, created_by=user.username)
+    db.add(row)
+    db.commit()
+    await log_audit(db, "COUNCIL_SESSION_SET", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"session_date": payload.session_date.isoformat()}, level=1, request=request)
+    return {"id": str(row.id), "session_date": row.session_date.isoformat()}
+
+
+@router.delete("/council-sessions/{session_id}", status_code=204)
+async def delete_council_session(session_id: UUID, request: Request, db: Session = Depends(get_db),
+                                 user: User = Depends(require_role(ANALYSIS_ROLES))):
+    from db.models_calendar import CouncilSession
+
+    row = db.get(CouncilSession, session_id)
+    if not row:
+        raise HTTPException(404, "La sesión no existe.")
+    day = row.session_date.isoformat()
+    db.delete(row)
+    db.commit()
+    await log_audit(db, "COUNCIL_SESSION_REMOVED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"session_date": day}, level=1, request=request)
+
+
 @router.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
     """Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas."""

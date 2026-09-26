@@ -6,6 +6,7 @@ import AnomalyRadar from '../components/AnomalyRadar';
 import PisccGoals from '../components/PisccGoals';
 import PisccActions from '../components/PisccActions';
 import DataRequests from '../components/DataRequests';
+import WeekCalendar from '../components/WeekCalendar';
 import TerritoryProfile from '../components/TerritoryProfile';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
 
@@ -488,6 +489,8 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             </nav>
 
             {error && <p role="alert" className="bg-red-50 p-3 text-sm font-bold text-red-800">{error}</p>}
+
+            {tab === 'situacion' && canEdit && <WeekCalendar onTab={setTab} onNavigate={onNavigate} />}
 
             {tab === 'situacion' && (overview
                 ? <Situation overview={overview} onNavigate={onNavigate} onStudy={canEdit ? studyFromSignal : null} onTab={canEdit ? setTab : null} onGoals={() => setTab('piscc')} />
