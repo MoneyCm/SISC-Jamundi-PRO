@@ -62,7 +62,7 @@ cifras de otro periodo.
 
 | Día | Persona A: datos | Persona B: análisis | Pantalla |
 |---|---|---|---|
-| **Lunes** | Revisa el Centro de fuentes. Pide datos a Inspecciones (y a Comisarías si toca esa semana). Carga lo que haya llegado | Lee la portada "Jamundí hoy" y anota qué señales requieren atención | Centro de fuentes · Centro de análisis |
+| **Lunes** | Revisa el Centro de fuentes. Pide datos a Inspecciones (y a Comisarías si toca esa semana) y lo registra en Solicitudes de datos. Carga lo que haya llegado y lo marca como recibido | Lee la portada "Jamundí hoy" y anota qué señales requieren atención | Centro de fuentes · Centro de análisis |
 | **Martes** | Carga la sábana de la Policía si llegó. Revisa calidad, duplicados y geocodificación | Revisa el radar de anomalías y abre las fichas de los territorios señalados | Ingesta · Calidad del dato · Radar · Territorios |
 | **Miércoles** | Concilia las fuentes (tres fuentes). Responde PQRS pendientes | **Triage** (sección 5): decide si alguna señal pasa a estudio, a recomendación o a alerta para la Secretaria | Conciliación · Estudios · Recomendaciones |
 | **Jueves** | Revisa el borrador del boletín contra las fuentes | Arma el **boletín semanal** y lo pasa a revisión editorial | Boletín institucional |
@@ -211,7 +211,7 @@ En orden de prioridad:
 1. ~~**Los 7 indicadores de resultado del PISCC** en el Centro de análisis, con señal de desviación en la portada.~~ Hecho, y el boletín usa el mismo cálculo.
 2. ~~**Boletín mensual**~~ Hecho: Medicina Legal en las ediciones mensual, semestral y anual; recordatorio en la portada; web pública separada por edición. Falta la Fiscalía (hoy hay un solo registro cargado).
 3. ~~**Seguimiento semestral de las 43 acciones**~~ Hecho: catálogo, reporte por acción y semestre con soporte, tablero por vector, pendientes por entidad, CSV para el SisPT y avisos en la portada. Falta verificar la transcripción.
-4. **Solicitudes de datos con estado:** registrar qué se pidió a Inspecciones y Comisarías, cuándo, y si llegó. Así la portada muestra "Comisaría Segunda sin reportar hace 3 semanas".
+4. ~~**Solicitudes de datos con estado**~~ Hecho: Centro de análisis → Solicitudes de datos (qué se pidió, a quién, plazo, si llegó, último corte cargado) y avisos en la portada ("Comisaría Segunda sin reportar hace 3 semanas", "Toca pedir datos a N dependencias"). Faltan las demás inspecciones: hoy solo está la Tercera, la única con datos cargados.
 5. **Calendario operativo en la portada:** qué toca esta semana según las secciones 3 y 4 (por ejemplo, "Consejo en 5 días: informe de decisión pendiente").
 6. **Estudios más completos:** agregar factores asociados, fecha de revisión posterior, notas cualitativas (entrevistas, recorridos) y el tope de 2 estudios abiertos.
 7. **Memoria institucional:** archivo consultable de estudios cerrados, recomendaciones rechazadas con su motivo y evaluaciones de intervenciones.

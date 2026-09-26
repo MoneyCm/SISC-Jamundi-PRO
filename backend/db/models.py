@@ -18,6 +18,7 @@ def create_tables():
         from db.models_council import CouncilActRead, CouncilCommitment, CouncilCommitmentUpdate
         from db.models_observatory import ObservatoryStudy, ObservatoryRecommendation
         from db.models_piscc import PisccActionReport
+        from db.models_data_requests import DataEntity, DataRequest
         from db.models_auth import User, Role, Permission, AuditLog, AccessRequest
         from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion, InspeccionFinanza
         from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator, InstitutionalAgentRun, InstitutionalAgentFinding

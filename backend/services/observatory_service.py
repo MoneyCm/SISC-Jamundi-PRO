@@ -269,6 +269,13 @@ def piscc_signals(db: Session, today: date) -> List[Dict[str, Any]]:
                    "observatory", len(off))]
 
 
+def data_request_signals(db: Session, today: date) -> List[Dict[str, Any]]:
+    from services.data_requests import signals
+
+    return [signal("DATOS", f"solicitudes-{index}", item["level"], item["title"], item["detail"], "observatory",
+                   item.get("count")) for index, item in enumerate(signals(db, today))]
+
+
 def piscc_action_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     from services.piscc_actions import signals
 
@@ -294,6 +301,7 @@ def overview(db: Session, today: Optional[date] = None, include_reserved: bool =
         (source_signals, "DATOS", "fuentes"),
         (mip_signals, "DATOS", "comparendos"),
         (bulletin_signals, "DATOS", "boletín"),
+        (data_request_signals, "DATOS", "solicitudes de datos"),
         (territory_signals, "TERRITORIO", "radar"),
         (anomaly_signals, "TERRITORIO", "anomalías"),
         (alert_signals, "TERRITORIO", "alertas"),
