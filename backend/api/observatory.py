@@ -117,6 +117,14 @@ def get_overview(db: Session = Depends(get_db), user: User = Depends(institution
     return service.overview(db, include_reserved=_sees_reserved(user))
 
 
+@router.get("/piscc-goals")
+def get_piscc_goals(db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    """Metas de resultado del PISCC (tabla 16) frente a lo corrido del año, cada una con su fuente y corte."""
+    from services.piscc_goals import build_goals
+
+    return build_goals(db)
+
+
 @router.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
     """Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas."""
