@@ -1,3 +1,5 @@
+import { localToday } from './localDate.js';
+
 const CORE_PERIOD_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC'];
 
 const latestCutoff = (sources = []) => sources
@@ -8,7 +10,7 @@ const latestCutoff = (sources = []) => sources
 
 export const latestSiscCifrasCutoff = (
   sources = [],
-  fallbackDate = new Date().toISOString().slice(0, 10),
+  fallbackDate = localToday(),
 ) => {
   const coreSources = sources.filter((source) => CORE_PERIOD_SOURCES.includes(source?.code));
   return latestCutoff(coreSources) || latestCutoff(sources) || fallbackDate;
@@ -17,7 +19,7 @@ export const latestSiscCifrasCutoff = (
 export const suggestedSiscCifrasPeriod = (
   sources = [],
   edition = 'weekly',
-  fallbackDate = new Date().toISOString().slice(0, 10),
+  fallbackDate = localToday(),
 ) => {
   const endIso = latestSiscCifrasCutoff(sources, fallbackDate);
   const end = new Date(`${endIso}T12:00:00`);
@@ -32,7 +34,7 @@ export const suggestedSiscCifrasPeriod = (
   }
   else start.setDate(start.getDate() - 6);
 
-  return { start: start.toISOString().slice(0, 10), end: endIso };
+  return { start: localToday(start), end: endIso };
 };
 
 export const institutionalSiscCifrasPeriods = (sources = [], fallbackDate) => {

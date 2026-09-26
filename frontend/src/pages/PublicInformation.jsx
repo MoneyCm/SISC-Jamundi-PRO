@@ -17,6 +17,7 @@ import {
 import PublicPortalHeader from '../components/public/PublicPortalHeader';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { downloadCsvFile, downloadJsonFile, downloadXlsxFile } from '../utils/publicDataDownloads';
+import { localToday } from '../utils/localDate';
 
 const SECTIONS = [
     { id: 'transparency-info', label: 'Transparencia', icon: ShieldCheck },
@@ -131,13 +132,13 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
     const cutoff = data.metadata?.ultima_fecha || 'Corte no disponible';
 
     const downloadIndicators = () => downloadCsvFile(
-        `sisc_indicadores_${new Date().toISOString().slice(0, 10)}.csv`,
+        `sisc_indicadores_${localToday()}.csv`,
         ['indicador', 'valor', 'fecha_corte', 'fuente'],
         indicatorRows.map(([indicator, value]) => [indicator, value, cutoff, source])
     );
 
     const downloadDistribution = () => downloadCsvFile(
-        `sisc_distribucion_${new Date().toISOString().slice(0, 10)}.csv`,
+        `sisc_distribucion_${localToday()}.csv`,
         ['delito', 'casos', 'fecha_corte', 'fuente'],
         data.distribution.map((item) => [item.name, item.value, cutoff, source])
     );
@@ -151,7 +152,7 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
     }), [cutoff, data.distribution, indicatorRows, source]);
 
     const downloadOpenDataJson = () => {
-        downloadJsonFile(`sisc_datos_abiertos_${new Date().toISOString().slice(0, 10)}.json`, openDataPackage);
+        downloadJsonFile(`sisc_datos_abiertos_${localToday()}.json`, openDataPackage);
     };
 
     const downloadOpenDataXlsx = async () => {
@@ -160,7 +161,7 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
         setExportStatus('');
         try {
             await downloadXlsxFile(
-                `sisc_datos_abiertos_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `sisc_datos_abiertos_${localToday()}.xlsx`,
                 [
                     { name: 'Indicadores', rows: openDataPackage.indicators },
                     { name: 'Distribucion', rows: openDataPackage.distribution },

@@ -34,6 +34,7 @@ import {
     TrendChart,
 } from '../components/OperationalDashboardWidgets';
 import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
+import { localToday } from '../utils/localDate';
 
 const METRIC_DEFINITIONS = [
     { key: 'homicidios', label: 'Homicidios', icon: Skull },
@@ -45,7 +46,7 @@ const METRIC_DEFINITIONS = [
 ];
 
 const parseIso = (value) => new Date(`${value}T00:00:00`);
-const toIso = (value) => value.toISOString().slice(0, 10);
+const toIso = (value) => localToday(value);
 const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
 const monthRangeFromCutoff = (value) => {

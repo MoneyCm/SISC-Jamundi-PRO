@@ -12,6 +12,7 @@ import {
     XCircle
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import { localToday } from '../utils/localDate';
 
 const PROGRAMS = [
     { value: 'COMISARIAS', label: 'Comisarías de Familia' },
@@ -36,7 +37,7 @@ const readError = async (response) => {
 };
 
 const InstitutionalAgents = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const month = today.slice(0, 7);
     const fileRef = useRef(null);
     const [form, setForm] = useState({

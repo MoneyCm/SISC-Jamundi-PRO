@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { institutionalSiscCifrasPeriods, suggestedSiscCifrasPeriod } from '../utils/siscCifrasPeriod';
+import { localToday } from '../utils/localDate';
 import { siscCifrasSelectionKey } from '../utils/siscCifrasPublication';
 import ExecutiveBrief from '../components/ExecutiveBrief';
 import { briefPublicationPolicy } from '../utils/executiveBrief';
@@ -73,11 +74,11 @@ const isPublicTerritoryName = (value = '') => {
     && !NON_PUBLIC_TERRITORY_VALUES.has(clean)
     && !NON_PUBLIC_TERRITORY_PATTERNS.some((pattern) => clean.includes(pattern));
 };
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => localToday();
 const sevenDaysAgoIso = () => {
   const d = new Date();
   d.setDate(d.getDate() - 6);
-  return d.toISOString().slice(0, 10);
+  return localToday(d);
 };
 
 const authHeaders = () => {

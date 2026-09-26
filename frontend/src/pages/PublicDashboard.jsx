@@ -39,6 +39,7 @@ import { MapContainer, TileLayer, GeoJSON, Popup, Tooltip as MapTooltip, CircleM
 import 'leaflet/dist/leaflet.css';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { getCachedPublicDashboard, loadPublicDashboard } from '../utils/publicDashboardCache';
+import { localToday } from '../utils/localDate';
 
 const COLORS = ['#281FD0', '#384CF5', '#FFB600', '#3A3A44', '#0f766e', '#b91c1c', '#7c3aed', '#475569'];
 const numberFmt = new Intl.NumberFormat('es-CO');
@@ -240,7 +241,7 @@ const PublicDashboard = ({ onLoginClick, onBack }) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `sisc_datos_abiertos_agregados_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = `sisc_datos_abiertos_agregados_${localToday()}.csv`;
         link.click();
         URL.revokeObjectURL(url);
     };
