@@ -1,0 +1,572 @@
+{
+  "environment": "local sisc_staging",
+  "proxy": "127.0.0.1:3100",
+  "backend": "127.0.0.1:8001",
+  "test_data": true,
+  "case": {
+    "id": "8fbd4326-be26-4a3d-afd2-2ee5d7839dd6",
+    "alert_id": "f61d13fe-6b22-4058-b614-7735cc8b46a4",
+    "version": 4,
+    "status": "EVALUADA",
+    "document": {
+      "status": "FINALIZADA",
+      "problem": "Prueba staging: seguimiento municipal de homicidios",
+      "deadline": "2026-07-01",
+      "decision": "Acta de prueba staging, sin decisión institucional real.",
+      "evidence": [
+        {
+          "url": "https://example.org/acta-staging",
+          "description": "Referencia ficticia del ejercicio de aceptación"
+        }
+      ],
+      "assessment": "Ejercicio de aceptación con datos de prueba; sin atribución causal.",
+      "evaluation": {
+        "note": "Cambio observado entre períodos; esta comparación no demuestra que la intervención lo haya causado.",
+        "after": {
+          "unit": "hechos registrados",
+          "value": 1,
+          "period": {
+            "end": "2026-07-05",
+            "start": "2026-07-01"
+          },
+          "indicator": "HOMICIDIO",
+          "territory": "JAMUNDI",
+          "unit_code": "HECHO",
+          "query_hash": "6d7ae38c0cc7c77bbfa663fe3a5ae76467fd95cd7c8b85a9c8671a3b799695db",
+          "exploratory": false,
+          "reproducible": true,
+          "quality_status": "VALIDATED",
+          "publication_note": "Cálculo reproducible sobre entrega fijada.",
+          "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+          "methodology_version": "1"
+        },
+        "before": {
+          "unit": "hechos registrados",
+          "value": 0,
+          "period": {
+            "end": "2026-06-28",
+            "start": "2026-06-24"
+          },
+          "indicator": "HOMICIDIO",
+          "territory": "JAMUNDI",
+          "unit_code": "HECHO",
+          "query_hash": "49b9e11a5ef9adbd4245f2046bb737bafe1ff778d4f365015ed61c74de5c79a5",
+          "exploratory": false,
+          "reproducible": true,
+          "quality_status": "PRELIMINARY",
+          "publication_note": "Cálculo reproducible sobre entrega fijada.",
+          "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+          "methodology_version": "1"
+        },
+        "coverage": "COMPLETA_DECLARADA",
+        "assessment": "Comparación de prueba con cobertura declarada. No permite concluir efecto causal de los controles.",
+        "difference": 1,
+        "variation_pct": null
+      },
+      "started_on": "2026-06-29",
+      "responsible": "Secretaría — ejercicio de validación",
+      "completed_on": "2026-06-30",
+      "intervention": "Registro de controles simulados para aceptación del módulo.",
+      "decision_date": "2026-06-28",
+      "alert_snapshot": {
+        "id": "f61d13fe-6b22-4058-b614-7735cc8b46a4",
+        "title": "Alerta semanal HOMICIDIO (P2)",
+        "evidence": {
+          "unit": "HECHO",
+          "cutoff": "2026-07-05",
+          "rule_id": "WEEKLY_COMPLETE_V1",
+          "coverage": "COMPLETA",
+          "thresholds": {
+            "aparicion": {
+              "tier": "P2",
+              "min_current": 1,
+              "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+            },
+            "p1_min_current": 3,
+            "p2_min_current": 2,
+            "p1_min_increase_pct": 50,
+            "p2_min_increase_pct": 25
+          },
+          "applied_rule": {
+            "rule": "APARICION_DE_CASOS",
+            "tier": "P2",
+            "min_current": 1,
+            "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+          },
+          "query_hashes": {
+            "current": "0323cf121104d948a3170e1a50a3eafa30194c9ce2dcebb9e6cd9ee6fce0a98f",
+            "previous": "9c6ea1925773fb7c578df94f15516240eae102827b8288e16828cadf4f5a08e0"
+          },
+          "current_value": 1,
+          "rules_version": "R1",
+          "variation_pct": null,
+          "current_period": {
+            "days": 7,
+            "start": "2026-06-29",
+            "end_exclusive": "2026-07-06"
+          },
+          "previous_value": 0,
+          "previous_period": {
+            "days": 7,
+            "start": "2026-06-22",
+            "end_exclusive": "2026-06-29"
+          },
+          "threshold_status": "PROPUESTOS_PENDIENTES_OBSERVATORIO",
+          "declared_coverage": {
+            "end": "2026-07-05",
+            "start": "2026-06-22"
+          },
+          "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+          "methodology_version": "1"
+        },
+        "entity_ref": {
+          "indicator": "HOMICIDIO",
+          "territory": "JAMUNDI"
+        },
+        "review_state": "DESCARTADA"
+      },
+      "recommendation": "Controles focalizados y seguimiento semanal."
+    },
+    "created_at": "2026-09-08T20:57:57.993653+00:00",
+    "revisions": [
+      {
+        "version": 0,
+        "action": "CREACION",
+        "username": "visual_analyst",
+        "created_at": "2026-09-08T20:57:57.993653+00:00",
+        "document": {
+          "status": "BORRADOR",
+          "problem": "Prueba staging: seguimiento municipal de homicidios",
+          "deadline": null,
+          "decision": "",
+          "evidence": [],
+          "assessment": "Ejercicio de aceptación con datos de prueba; sin atribución causal.",
+          "started_on": null,
+          "responsible": "",
+          "completed_on": null,
+          "intervention": "",
+          "decision_date": null,
+          "alert_snapshot": {
+            "id": "f61d13fe-6b22-4058-b614-7735cc8b46a4",
+            "title": "Alerta semanal HOMICIDIO (P2)",
+            "evidence": {
+              "unit": "HECHO",
+              "cutoff": "2026-07-05",
+              "rule_id": "WEEKLY_COMPLETE_V1",
+              "coverage": "COMPLETA",
+              "thresholds": {
+                "aparicion": {
+                  "tier": "P2",
+                  "min_current": 1,
+                  "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+                },
+                "p1_min_current": 3,
+                "p2_min_current": 2,
+                "p1_min_increase_pct": 50,
+                "p2_min_increase_pct": 25
+              },
+              "applied_rule": {
+                "rule": "APARICION_DE_CASOS",
+                "tier": "P2",
+                "min_current": 1,
+                "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+              },
+              "query_hashes": {
+                "current": "0323cf121104d948a3170e1a50a3eafa30194c9ce2dcebb9e6cd9ee6fce0a98f",
+                "previous": "9c6ea1925773fb7c578df94f15516240eae102827b8288e16828cadf4f5a08e0"
+              },
+              "current_value": 1,
+              "rules_version": "R1",
+              "variation_pct": null,
+              "current_period": {
+                "days": 7,
+                "start": "2026-06-29",
+                "end_exclusive": "2026-07-06"
+              },
+              "previous_value": 0,
+              "previous_period": {
+                "days": 7,
+                "start": "2026-06-22",
+                "end_exclusive": "2026-06-29"
+              },
+              "threshold_status": "PROPUESTOS_PENDIENTES_OBSERVATORIO",
+              "declared_coverage": {
+                "end": "2026-07-05",
+                "start": "2026-06-22"
+              },
+              "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+              "methodology_version": "1"
+            },
+            "entity_ref": {
+              "indicator": "HOMICIDIO",
+              "territory": "JAMUNDI"
+            },
+            "review_state": "DESCARTADA"
+          },
+          "recommendation": ""
+        }
+      },
+      {
+        "version": 1,
+        "action": "ACTUALIZACION",
+        "username": "visual_analyst",
+        "created_at": "2026-09-08T20:58:05.186280+00:00",
+        "document": {
+          "status": "DECIDIDA",
+          "problem": "Prueba staging: seguimiento municipal de homicidios",
+          "deadline": "2026-07-01",
+          "decision": "Acta de prueba staging, sin decisión institucional real.",
+          "evidence": [],
+          "assessment": "Ejercicio de aceptación con datos de prueba; sin atribución causal.",
+          "started_on": null,
+          "responsible": "Secretaría — ejercicio de validación",
+          "completed_on": null,
+          "intervention": "",
+          "decision_date": "2026-06-28",
+          "alert_snapshot": {
+            "id": "f61d13fe-6b22-4058-b614-7735cc8b46a4",
+            "title": "Alerta semanal HOMICIDIO (P2)",
+            "evidence": {
+              "unit": "HECHO",
+              "cutoff": "2026-07-05",
+              "rule_id": "WEEKLY_COMPLETE_V1",
+              "coverage": "COMPLETA",
+              "thresholds": {
+                "aparicion": {
+                  "tier": "P2",
+                  "min_current": 1,
+                  "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+                },
+                "p1_min_current": 3,
+                "p2_min_current": 2,
+                "p1_min_increase_pct": 50,
+                "p2_min_increase_pct": 25
+              },
+              "applied_rule": {
+                "rule": "APARICION_DE_CASOS",
+                "tier": "P2",
+                "min_current": 1,
+                "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+              },
+              "query_hashes": {
+                "current": "0323cf121104d948a3170e1a50a3eafa30194c9ce2dcebb9e6cd9ee6fce0a98f",
+                "previous": "9c6ea1925773fb7c578df94f15516240eae102827b8288e16828cadf4f5a08e0"
+              },
+              "current_value": 1,
+              "rules_version": "R1",
+              "variation_pct": null,
+              "current_period": {
+                "days": 7,
+                "start": "2026-06-29",
+                "end_exclusive": "2026-07-06"
+              },
+              "previous_value": 0,
+              "previous_period": {
+                "days": 7,
+                "start": "2026-06-22",
+                "end_exclusive": "2026-06-29"
+              },
+              "threshold_status": "PROPUESTOS_PENDIENTES_OBSERVATORIO",
+              "declared_coverage": {
+                "end": "2026-07-05",
+                "start": "2026-06-22"
+              },
+              "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+              "methodology_version": "1"
+            },
+            "entity_ref": {
+              "indicator": "HOMICIDIO",
+              "territory": "JAMUNDI"
+            },
+            "review_state": "DESCARTADA"
+          },
+          "recommendation": "Controles focalizados y seguimiento semanal."
+        }
+      },
+      {
+        "version": 2,
+        "action": "ACTUALIZACION",
+        "username": "visual_analyst",
+        "created_at": "2026-09-08T20:58:10.864081+00:00",
+        "document": {
+          "status": "EN_EJECUCION",
+          "problem": "Prueba staging: seguimiento municipal de homicidios",
+          "deadline": "2026-07-01",
+          "decision": "Acta de prueba staging, sin decisión institucional real.",
+          "evidence": [],
+          "assessment": "Ejercicio de aceptación con datos de prueba; sin atribución causal.",
+          "started_on": "2026-06-29",
+          "responsible": "Secretaría — ejercicio de validación",
+          "completed_on": null,
+          "intervention": "Registro de controles simulados para aceptación del módulo.",
+          "decision_date": "2026-06-28",
+          "alert_snapshot": {
+            "id": "f61d13fe-6b22-4058-b614-7735cc8b46a4",
+            "title": "Alerta semanal HOMICIDIO (P2)",
+            "evidence": {
+              "unit": "HECHO",
+              "cutoff": "2026-07-05",
+              "rule_id": "WEEKLY_COMPLETE_V1",
+              "coverage": "COMPLETA",
+              "thresholds": {
+                "aparicion": {
+                  "tier": "P2",
+                  "min_current": 1,
+                  "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+                },
+                "p1_min_current": 3,
+                "p2_min_current": 2,
+                "p1_min_increase_pct": 50,
+                "p2_min_increase_pct": 25
+              },
+              "applied_rule": {
+                "rule": "APARICION_DE_CASOS",
+                "tier": "P2",
+                "min_current": 1,
+                "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+              },
+              "query_hashes": {
+                "current": "0323cf121104d948a3170e1a50a3eafa30194c9ce2dcebb9e6cd9ee6fce0a98f",
+                "previous": "9c6ea1925773fb7c578df94f15516240eae102827b8288e16828cadf4f5a08e0"
+              },
+              "current_value": 1,
+              "rules_version": "R1",
+              "variation_pct": null,
+              "current_period": {
+                "days": 7,
+                "start": "2026-06-29",
+                "end_exclusive": "2026-07-06"
+              },
+              "previous_value": 0,
+              "previous_period": {
+                "days": 7,
+                "start": "2026-06-22",
+                "end_exclusive": "2026-06-29"
+              },
+              "threshold_status": "PROPUESTOS_PENDIENTES_OBSERVATORIO",
+              "declared_coverage": {
+                "end": "2026-07-05",
+                "start": "2026-06-22"
+              },
+              "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+              "methodology_version": "1"
+            },
+            "entity_ref": {
+              "indicator": "HOMICIDIO",
+              "territory": "JAMUNDI"
+            },
+            "review_state": "DESCARTADA"
+          },
+          "recommendation": "Controles focalizados y seguimiento semanal."
+        }
+      },
+      {
+        "version": 3,
+        "action": "ACTUALIZACION",
+        "username": "visual_analyst",
+        "created_at": "2026-09-08T20:58:29.781786+00:00",
+        "document": {
+          "status": "FINALIZADA",
+          "problem": "Prueba staging: seguimiento municipal de homicidios",
+          "deadline": "2026-07-01",
+          "decision": "Acta de prueba staging, sin decisión institucional real.",
+          "evidence": [
+            {
+              "url": "https://example.org/acta-staging",
+              "description": "Referencia ficticia del ejercicio de aceptación"
+            }
+          ],
+          "assessment": "Ejercicio de aceptación con datos de prueba; sin atribución causal.",
+          "started_on": "2026-06-29",
+          "responsible": "Secretaría — ejercicio de validación",
+          "completed_on": "2026-06-30",
+          "intervention": "Registro de controles simulados para aceptación del módulo.",
+          "decision_date": "2026-06-28",
+          "alert_snapshot": {
+            "id": "f61d13fe-6b22-4058-b614-7735cc8b46a4",
+            "title": "Alerta semanal HOMICIDIO (P2)",
+            "evidence": {
+              "unit": "HECHO",
+              "cutoff": "2026-07-05",
+              "rule_id": "WEEKLY_COMPLETE_V1",
+              "coverage": "COMPLETA",
+              "thresholds": {
+                "aparicion": {
+                  "tier": "P2",
+                  "min_current": 1,
+                  "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+                },
+                "p1_min_current": 3,
+                "p2_min_current": 2,
+                "p1_min_increase_pct": 50,
+                "p2_min_increase_pct": 25
+              },
+              "applied_rule": {
+                "rule": "APARICION_DE_CASOS",
+                "tier": "P2",
+                "min_current": 1,
+                "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+              },
+              "query_hashes": {
+                "current": "0323cf121104d948a3170e1a50a3eafa30194c9ce2dcebb9e6cd9ee6fce0a98f",
+                "previous": "9c6ea1925773fb7c578df94f15516240eae102827b8288e16828cadf4f5a08e0"
+              },
+              "current_value": 1,
+              "rules_version": "R1",
+              "variation_pct": null,
+              "current_period": {
+                "days": 7,
+                "start": "2026-06-29",
+                "end_exclusive": "2026-07-06"
+              },
+              "previous_value": 0,
+              "previous_period": {
+                "days": 7,
+                "start": "2026-06-22",
+                "end_exclusive": "2026-06-29"
+              },
+              "threshold_status": "PROPUESTOS_PENDIENTES_OBSERVATORIO",
+              "declared_coverage": {
+                "end": "2026-07-05",
+                "start": "2026-06-22"
+              },
+              "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+              "methodology_version": "1"
+            },
+            "entity_ref": {
+              "indicator": "HOMICIDIO",
+              "territory": "JAMUNDI"
+            },
+            "review_state": "DESCARTADA"
+          },
+          "recommendation": "Controles focalizados y seguimiento semanal."
+        }
+      },
+      {
+        "version": 4,
+        "action": "EVALUACION",
+        "username": "visual_analyst",
+        "created_at": "2026-09-08T20:58:40.919396+00:00",
+        "document": {
+          "status": "FINALIZADA",
+          "problem": "Prueba staging: seguimiento municipal de homicidios",
+          "deadline": "2026-07-01",
+          "decision": "Acta de prueba staging, sin decisión institucional real.",
+          "evidence": [
+            {
+              "url": "https://example.org/acta-staging",
+              "description": "Referencia ficticia del ejercicio de aceptación"
+            }
+          ],
+          "assessment": "Ejercicio de aceptación con datos de prueba; sin atribución causal.",
+          "evaluation": {
+            "note": "Cambio observado entre períodos; esta comparación no demuestra que la intervención lo haya causado.",
+            "after": {
+              "unit": "hechos registrados",
+              "value": 1,
+              "period": {
+                "end": "2026-07-05",
+                "start": "2026-07-01"
+              },
+              "indicator": "HOMICIDIO",
+              "territory": "JAMUNDI",
+              "unit_code": "HECHO",
+              "query_hash": "6d7ae38c0cc7c77bbfa663fe3a5ae76467fd95cd7c8b85a9c8671a3b799695db",
+              "exploratory": false,
+              "reproducible": true,
+              "quality_status": "VALIDATED",
+              "publication_note": "Cálculo reproducible sobre entrega fijada.",
+              "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+              "methodology_version": "1"
+            },
+            "before": {
+              "unit": "hechos registrados",
+              "value": 0,
+              "period": {
+                "end": "2026-06-28",
+                "start": "2026-06-24"
+              },
+              "indicator": "HOMICIDIO",
+              "territory": "JAMUNDI",
+              "unit_code": "HECHO",
+              "query_hash": "49b9e11a5ef9adbd4245f2046bb737bafe1ff778d4f365015ed61c74de5c79a5",
+              "exploratory": false,
+              "reproducible": true,
+              "quality_status": "PRELIMINARY",
+              "publication_note": "Cálculo reproducible sobre entrega fijada.",
+              "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+              "methodology_version": "1"
+            },
+            "coverage": "COMPLETA_DECLARADA",
+            "assessment": "Comparación de prueba con cobertura declarada. No permite concluir efecto causal de los controles.",
+            "difference": 1,
+            "variation_pct": null
+          },
+          "started_on": "2026-06-29",
+          "responsible": "Secretaría — ejercicio de validación",
+          "completed_on": "2026-06-30",
+          "intervention": "Registro de controles simulados para aceptación del módulo.",
+          "decision_date": "2026-06-28",
+          "alert_snapshot": {
+            "id": "f61d13fe-6b22-4058-b614-7735cc8b46a4",
+            "title": "Alerta semanal HOMICIDIO (P2)",
+            "evidence": {
+              "unit": "HECHO",
+              "cutoff": "2026-07-05",
+              "rule_id": "WEEKLY_COMPLETE_V1",
+              "coverage": "COMPLETA",
+              "thresholds": {
+                "aparicion": {
+                  "tier": "P2",
+                  "min_current": 1,
+                  "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+                },
+                "p1_min_current": 3,
+                "p2_min_current": 2,
+                "p1_min_increase_pct": 50,
+                "p2_min_increase_pct": 25
+              },
+              "applied_rule": {
+                "rule": "APARICION_DE_CASOS",
+                "tier": "P2",
+                "min_current": 1,
+                "justification": "Sin semana previa con casos no existe base para un porcentaje; 1+ hechos en semana completa cubierta generan P2 preventiva (homicidio de alto impacto), 3+ escalan a P1 por volumen."
+              },
+              "query_hashes": {
+                "current": "0323cf121104d948a3170e1a50a3eafa30194c9ce2dcebb9e6cd9ee6fce0a98f",
+                "previous": "9c6ea1925773fb7c578df94f15516240eae102827b8288e16828cadf4f5a08e0"
+              },
+              "current_value": 1,
+              "rules_version": "R1",
+              "variation_pct": null,
+              "current_period": {
+                "days": 7,
+                "start": "2026-06-29",
+                "end_exclusive": "2026-07-06"
+              },
+              "previous_value": 0,
+              "previous_period": {
+                "days": 7,
+                "start": "2026-06-22",
+                "end_exclusive": "2026-06-29"
+              },
+              "threshold_status": "PROPUESTOS_PENDIENTES_OBSERVATORIO",
+              "declared_coverage": {
+                "end": "2026-07-05",
+                "start": "2026-06-22"
+              },
+              "source_version_id": "5e7ceba9-ba0a-4850-9e17-53e7465c4f62",
+              "methodology_version": "1"
+            },
+            "entity_ref": {
+              "indicator": "HOMICIDIO",
+              "territory": "JAMUNDI"
+            },
+            "review_state": "DESCARTADA"
+          },
+          "recommendation": "Controles focalizados y seguimiento semanal."
+        }
+      }
+    ]
+  }
+}

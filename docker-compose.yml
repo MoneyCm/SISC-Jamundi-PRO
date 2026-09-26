@@ -3,7 +3,8 @@ version: '3.8'
 services:
   db:
     image: postgis/postgis:15-3.3
-    container_name: sisc_db
+    container_name: sisc_db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: sisc_user
       POSTGRES_PASSWORD: sisc_password
@@ -16,7 +17,8 @@ services:
 
   backend:
     build: ./backend
-    container_name: sisc_backend
+    container_name: sisc_backend
+    restart: unless-stopped
     env_file:
       - ./backend/.env
     environment:
@@ -30,7 +32,8 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: sisc_frontend
+    container_name: sisc_frontend
+    restart: unless-stopped
     ports:
       - "5173:5173"
     environment:
@@ -44,3 +47,4 @@ services:
 
 volumes:
   postgres_data:
+

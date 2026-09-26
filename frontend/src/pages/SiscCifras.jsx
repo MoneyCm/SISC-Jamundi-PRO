@@ -6,6 +6,10 @@ import {
 import { API_BASE_URL } from '../utils/apiConfig';
 import { institutionalSiscCifrasPeriods, suggestedSiscCifrasPeriod } from '../utils/siscCifrasPeriod';
 import { siscCifrasSelectionKey } from '../utils/siscCifrasPublication';
+import ExecutiveBrief from '../components/ExecutiveBrief';
+import { briefPublicationPolicy } from '../utils/executiveBrief';
+import EditorialReview from '../components/EditorialReview';
+import { accentuate } from '../utils/accentuate';
 
 const QUICK_EDITIONS = [
   { id: 'weekly', label: 'Semanal' },
@@ -21,12 +25,16 @@ const FOCUS_EDITIONS = [
 ];
 
 const COMPARISON_MODES = [
-  { id: 'auto', label: 'Automatica' },
+  { id: 'auto', label: 'Automática' },
   { id: 'previous_period', label: 'Periodo anterior' },
-  { id: 'year_over_year', label: 'Ano anterior' },
+  { id: 'year_over_year', label: 'Año anterior' },
 ];
 
 const DEFAULT_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'];
+// Página oficial donde la Secretaría publica el Boletín institucional completo (PDF).
+export const BOLETIN_WEB_URL = import.meta.env?.VITE_BOLETIN_WEB_URL
+  || 'https://www.jamundi.gov.co/Dependencias-1/Paginas/Secretaria-de-Seguridad-y-Convivencia.aspx';
+const BOLETIN_WEB_LABEL = 'jamundi.gov.co › Secretaría de Seguridad y Convivencia';
 const DOMAIN_COLORS = {
   SEGURIDAD: '#281FD0',
   CONVIVENCIA: '#3A30F1',
@@ -264,18 +272,20 @@ const buildWhatsappText = (publication) => {
     .map((source) => `${source.name}: corte ${source.last_cutoff_date || 'sin corte'}`);
   const body = insightLines.length
     ? insightLines.join('\n')
-    : '- Boletin generado sin hallazgos publicables. Revise disponibilidad y calidad de datos.';
+    : '- Boletín generado sin hallazgos publicables. Revise disponibilidad y calidad de datos.';
 
   return [
     'SISC EN CIFRAS',
-    `Jamundi | ${period}`,
+    `Jamundí | ${period}`,
     `Comparado con: ${label}`,
     '',
     body,
     '',
     `Fuentes: ${sourceLines.join(' | ') || 'SISC'}`,
-    'Secretaria de Seguridad y Convivencia',
-    'Cifras agregadas para informacion ciudadana.',
+    'Secretaría de Seguridad y Convivencia',
+    'Cifras agregadas para información ciudadana.',
+    '',
+    `Boletín completo: ${BOLETIN_WEB_URL}`,
   ].join('\n');
 };
 
@@ -300,8 +310,10 @@ const buildTikTokPrompt = (publication) => {
     .slice(0, 5)
     .map((indicator) => {
       const detail = indicatorPublicDetail(indicator);
-      const comparison = indicator.variation_percentage === null || indicator.variation_percentage === undefined
-        ? 'Sin comparacion disponible.'
+      const comparison = indicator.metadata?.small_base
+        ? `${fmt(indicator.comparison_value)} en el ${label}.`
+        : indicator.variation_percentage === null || indicator.variation_percentage === undefined
+        ? 'Sin comparación disponible.'
         : `${Number(indicator.variation_percentage) > 0 ? '+' : ''}${Number(indicator.variation_percentage).toFixed(1)}% frente al ${label}.`;
       return `- ${indicatorDisplayName(indicator)}: ${fmt(indicator.value)} ${indicator.unit || 'registros'}. ${comparison}${detail ? ` Nota: ${detail}` : ''}`;
     });
@@ -316,7 +328,7 @@ const buildTikTokPrompt = (publication) => {
     '',
     'DATOS VERIFICADOS. Usa exclusivamente estos datos; no inventes ni redondees cifras:',
     `- Periodo analizado: ${period}.`,
-    `- Comparacion: ${label} (${comparisonPeriod}).`,
+    `- Comparación: ${label} (${comparisonPeriod}).`,
     ...(dataLines.length ? dataLines : ['- No hay hallazgos publicables para este periodo.']),
     '',
     'FUENTES Y CORTES. Menciona las fuentes al cierre y no sumes sus valores entre si:',
@@ -324,16 +336,16 @@ const buildTikTokPrompt = (publication) => {
     '',
     'GUION VISUAL:',
     '0-3 s: titulo "SISC EN CIFRAS" y periodo en pantalla.',
-    '3-8 s: presenta la cifra principal con un numero grande y el indicador completo.',
-    '8-16 s: presenta hasta dos cambios relevantes, un dato por escena, indicando la base de comparacion.',
+    '3-8 s: presenta la cifra principal con un número grande y el indicador completo.',
+    '8-16 s: presenta hasta dos cambios relevantes, un dato por escena, indicando la base de comparación.',
     '16-21 s: explica en una frase sencilla lo que significa la cifra, sin atribuir causas que los datos no demuestran.',
-    '21-25 s: cierre "Consulta las cifras completas en el SISC Jamundi" y fuentes con fecha de corte.',
+    '21-25 s: cierre "Boletín completo en jamundi.gov.co, Secretaría de Seguridad y Convivencia" y fuentes con fecha de corte.',
     '',
     'REGLAS OBLIGATORIAS:',
     '- Usa texto grande, alto contraste, transiciones suaves y subtitulos sincronizados.',
     '- No muestres victimas, personas identificables, escenas violentas ni ubicaciones sensibles.',
     '- No conviertas comparendos, actuaciones de Inspecciones o atenciones de Comisarias en delitos.',
-    '- Si una fuente indica corte parcial o sin comparacion, dilo de forma visible y no hagas inferencias.',
+    '- Si una fuente indica corte parcial o sin comparación, dilo de forma visible y no hagas inferencias.',
     '- No incluyas logos ajenos. Mantiene el tono institucional, claro y cercano.',
   ].join('\n');
 };
@@ -404,26 +416,26 @@ const publicMeasureName = (text = '') => {
     return '';
   }
   if (upper.includes('PROHIBICION DE INGRESO') || upper.includes('PROHIBICIÃ“N DE INGRESO')) {
-    return 'Restricciones de ingreso a eventos publicos';
+    return 'Restricciones de ingreso a eventos públicos';
   }
   if (upper.includes('MULTA') && upper.includes('GENERAL') && upper.includes('TIPO 4')) {
-    return 'Comparendos con multa de mayor cuantia';
+    return 'Comparendos con multa de mayor cuantía';
   }
   if (upper.includes('MULTA') && upper.includes('GENERAL') && upper.includes('TIPO 3')) {
-    return 'Comparendos con multa de cuantia alta';
+    return 'Comparendos con multa de cuantía alta';
   }
   if (upper.includes('MULTA') && upper.includes('GENERAL') && upper.includes('TIPO 2')) {
-    return 'Comparendos con multa de cuantia media';
+    return 'Comparendos con multa de cuantía media';
   }
   if (upper.includes('MULTA') && upper.includes('GENERAL') && upper.includes('TIPO 1')) {
-    return 'Comparendos con multa de menor cuantia';
+    return 'Comparendos con multa de menor cuantía';
   }
   if (upper.includes('MULTA') && upper.includes('GENERAL')) {
     return 'Comparendos por convivencia ciudadana';
   }
   if (upper.includes('AMONEST')) return 'Amonestaciones por convivencia ciudadana';
   if (upper.includes('PARTICIP') && (upper.includes('PROGRAMA') || upper.includes('COMUNIT'))) {
-    return 'Participacion en programas comunitarios';
+    return 'Participación en programas comunitarios';
   }
   if (upper.includes('REPAR') || upper.includes('DANO') || upper.includes('DAÃ‘O')) {
     return 'Reparacion por danos a la convivencia';
@@ -435,11 +447,11 @@ const publicMeasureName = (text = '') => {
 };
 
 const publicFacingText = (text = '') => publicMeasureName(text)
-  .replace(/MULTA\s+GENERAL\s+TIPO\s+4/gi, 'Comparendos con multa de mayor cuantia')
-  .replace(/MULTA\s+GENERAL\s+TIPO\s+3/gi, 'Comparendos con multa de cuantia alta')
-  .replace(/MULTA\s+GENERAL\s+TIPO\s+2/gi, 'Comparendos con multa de cuantia media')
-  .replace(/MULTA\s+GENERAL\s+TIPO\s+1/gi, 'Comparendos con multa de menor cuantia')
-  .replace(/PROHIBICI[OÃ“]N DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS/gi, 'Restricciones de ingreso a eventos publicos')
+  .replace(/MULTA\s+GENERAL\s+TIPO\s+4/gi, 'Comparendos con multa de mayor cuantía')
+  .replace(/MULTA\s+GENERAL\s+TIPO\s+3/gi, 'Comparendos con multa de cuantía alta')
+  .replace(/MULTA\s+GENERAL\s+TIPO\s+2/gi, 'Comparendos con multa de cuantía media')
+  .replace(/MULTA\s+GENERAL\s+TIPO\s+1/gi, 'Comparendos con multa de menor cuantía')
+  .replace(/PROHIBICI[OÃ“]N DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS/gi, 'Restricciones de ingreso a eventos públicos')
   .replace(/MULTA\s+GENERAL/gi, 'Comparendos por convivencia ciudadana');
 
 const indicatorDisplayName = (indicator = {}) => publicMeasureName(indicator.indicator_name || indicator.title || '');
@@ -481,31 +493,32 @@ const indicatorSourceLabel = (indicator = {}) => {
   return indicator.source || '';
 };
 
-const comparisonLabel = (publication) => publication?.comparison_label || 'mismo periodo del ano anterior';
+
+const comparisonLabel = (publication) => accentuate(publication?.comparison_label || 'mismo periodo del ano anterior');
 const comparisonShortLabel = (publication) => {
   const label = comparisonLabel(publication).toLowerCase();
-  if (label.includes('ano anterior')) return 'mismo periodo AA';
+  if (label.includes('ano anterior') || label.includes('año anterior')) return 'mismo periodo AA';
   if (label.includes('periodo anterior')) return 'periodo anterior';
   return label;
 };
 const normalizeComparisonText = (text = '', label = 'mismo periodo del ano anterior') => String(text)
   .replace(/frente al periodo anterior/gi, `frente al ${label}`)
-  .replace(/frente al mismo periodo del ano anterior/gi, `frente al ${label}`)
+  .replace(/frente al mismo periodo del a[nñ]o anterior/gi, `frente al ${label}`)
   .replace(/vs periodo anterior/gi, `vs ${label}`)
   .replace(/vs mismo periodo AA/gi, `vs ${label}`);
 
-const publicInsightText = (text = '', label = 'mismo periodo del ano anterior') =>
-  publicFacingText(normalizeComparisonText(text, label));
+const publicInsightText = (text = '', label = 'mismo periodo del año anterior') =>
+  accentuate(publicFacingText(normalizeComparisonText(text, label)));
 
 const editionLabel = (publication) => {
   const type = publication?.edition_type;
-  if (type === 'monthly') return 'BOLETIN MENSUAL';
-  if (type === 'semester') return 'BOLETIN SEMESTRAL';
-  if (type === 'annual') return 'BOLETIN ANUAL';
+  if (type === 'monthly') return 'BOLETÍN MENSUAL';
+  if (type === 'semester') return 'BOLETÍN SEMESTRAL';
+  if (type === 'annual') return 'BOLETÍN ANUAL';
   if (type === 'security') return 'SEGURIDAD';
   if (type === 'convivencia') return 'CONVIVENCIA';
   if (type === 'territory') return 'TERRITORIO';
-  return 'BOLETIN SEMANAL';
+  return 'BOLETÍN SEMANAL';
 };
 
 const slideNumberLabel = (slide, publication) => {
@@ -680,7 +693,7 @@ const slideToSvg = (slide, publication, assets = {}) => {
   `;
 
   const insightText = publicInsightText(
-    slide.featured || insights[0]?.detail || 'Boletin generado para revision institucional.',
+    slide.featured || insights[0]?.detail || 'Boletín generado para revisión institucional.',
     comparisonLabel(publication)
   );
   const lecturaSvg = slide.type === 'cover' ? `
@@ -702,8 +715,13 @@ const slideToSvg = (slide, publication, assets = {}) => {
     maxLines: 3,
     lineHeight: 38,
   });
+  // Con bases pequeñas el backend no publica porcentaje: se muestra la comparación absoluta.
+  const smallBaseBlock = blocks.find((b) => b.small_base && b.comparison_value !== undefined && b.comparison_value !== null);
   const topVariation = blocks.find((b) => b.variation !== undefined && b.variation !== null)?.variation
-    ?? rows.find((row) => row.variation_percentage !== undefined && row.variation_percentage !== null)?.variation_percentage;
+    ?? rows.find((row) => !row.metadata?.small_base && row.variation_percentage !== undefined && row.variation_percentage !== null)?.variation_percentage;
+  const trendLabel = topVariation === undefined && smallBaseBlock
+    ? `${fmt(smallBaseBlock.value)} vs ${fmt(smallBaseBlock.comparison_value)} ${comparisonShortLabel(publication)}`
+    : trendText(topVariation);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
     <defs>
@@ -733,7 +751,7 @@ const slideToSvg = (slide, publication, assets = {}) => {
     <rect x="318" y="266" width="92" height="38" rx="19" fill="#FFE000" opacity="0.92"/>
     <text x="364" y="291" text-anchor="middle" font-size="15" font-weight="900" fill="#000000" font-family="Calibri, Arial, sans-serif">${escapeSvg(slideNumber)}</text>
     <rect x="76" y="314" width="430" height="34" rx="17" fill="#FFFFFF" opacity="0.16"/>
-    <text x="100" y="337" font-size="16" font-weight="900" fill="#FFFFFF" font-family="Calibri, Arial, sans-serif">${escapeSvg(trendText(topVariation))}</text>
+    <text x="100" y="337" font-size="16" font-weight="900" fill="#FFFFFF" font-family="Calibri, Arial, sans-serif">${escapeSvg(trendLabel)}</text>
     <rect x="52" y="360" width="976" height="818" rx="36" fill="#FFFFFF" opacity="0.74" filter="url(#shadow)"/>
     <rect x="52" y="360" width="976" height="818" rx="36" fill="#FFFFFF" opacity="0.72"/>
     ${slide.type === 'cover' ? blockSvg : slide.type === 'changes' ? (changesSvg || emptyChangesSvg) : (indicatorSvg || emptyIndicatorSvg)}
@@ -744,8 +762,8 @@ const slideToSvg = (slide, publication, assets = {}) => {
     ${insightSvg}
     <rect x="76" y="1128" width="928" height="94" rx="26" fill="#FFFFFF" stroke="#D9E2F0" stroke-width="2"/>
     ${escudo ? `<image href="${escudo}" x="96" y="1144" width="58" height="58"/>` : ''}
-    <text x="${escudo ? 172 : 96}" y="1172" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaria de Seguridad y Convivencia</text>
-    <text x="${escudo ? 172 : 96}" y="1204" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Informacion publica agregada y anonimizada. Conserva fuentes y cortes.</text>
+    <text x="${escudo ? 172 : 96}" y="1172" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaría de Seguridad y Convivencia</text>
+    <text x="${escudo ? 172 : 96}" y="1204" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Boletín completo: ${escapeSvg(BOLETIN_WEB_LABEL)}</text>
     <text x="76" y="1286" font-size="20" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">SISC EN CIFRAS | Serie visual ${escapeSvg(edition.toLowerCase())}</text>
     <text x="1004" y="1286" text-anchor="end" font-size="18" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">${escapeSvg(slideNumber)}</text>
   </svg>`;
@@ -761,7 +779,7 @@ const summaryToSvg = (publication, assets = {}) => {
   const label = comparisonLabel(publication);
   const period = publication?.period ? `${publication.period.start} - ${publication.period.end}` : 'periodo seleccionado';
   const featured = publicInsightText(
-    cover.featured || insights[0]?.detail || 'Boletin generado para revision institucional.',
+    cover.featured || insights[0]?.detail || 'Boletín generado para revisión institucional.',
     label
   );
 
@@ -814,7 +832,7 @@ const summaryToSvg = (publication, assets = {}) => {
     <text x="76" y="168" font-size="66" font-weight="900" fill="#FFFFFF" font-family="Calibri, Arial, sans-serif">SISC EN CIFRAS</text>
     <text x="80" y="230" font-size="29" font-weight="900" fill="#FFFFFF" opacity="0.94" font-family="Calibri, Arial, sans-serif">Jamundi | ${escapeSvg(period)}</text>
     <rect x="76" y="262" width="540" height="46" rx="23" fill="#FFFFFF" opacity="0.16"/>
-    <text x="100" y="292" font-size="18" font-weight="900" fill="#FFFFFF" font-family="Calibri, Arial, sans-serif">Comparacion: ${escapeSvg(label)}</text>
+    <text x="100" y="292" font-size="18" font-weight="900" fill="#FFFFFF" font-family="Calibri, Arial, sans-serif">Comparación: ${escapeSvg(label)}</text>
 
     <rect x="52" y="350" width="976" height="1410" rx="38" fill="#FFFFFF" opacity="0.78" filter="url(#summaryShadow)"/>
     <rect x="52" y="350" width="976" height="1410" rx="38" fill="#FFFFFF" opacity="0.76"/>
@@ -836,8 +854,8 @@ const summaryToSvg = (publication, assets = {}) => {
 
     <rect x="76" y="1644" width="928" height="94" rx="26" fill="#FFFFFF" stroke="#D9E2F0" stroke-width="2"/>
     ${escudo ? `<image href="${escudo}" x="96" y="1660" width="58" height="58"/>` : ''}
-    <text x="${escudo ? 172 : 96}" y="1688" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaria de Seguridad y Convivencia</text>
-    <text x="${escudo ? 172 : 96}" y="1720" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Informacion publica agregada y anonimizada. Conserva fuentes y cortes.</text>
+    <text x="${escudo ? 172 : 96}" y="1688" font-size="24" font-weight="900" fill="#3A3A44" font-family="Calibri, Arial, sans-serif">Fuente: SISC | Secretaría de Seguridad y Convivencia</text>
+    <text x="${escudo ? 172 : 96}" y="1720" font-size="18" font-weight="800" fill="#64748B" font-family="Calibri, Arial, sans-serif">Boletín completo: ${escapeSvg(BOLETIN_WEB_LABEL)}</text>
     <text x="76" y="1838" font-size="22" font-weight="900" fill="#64748B" font-family="Calibri, Arial, sans-serif">SISC EN CIFRAS | Imagen resumen para chat</text>
   </svg>`;
 };
@@ -845,7 +863,7 @@ const summaryToSvg = (publication, assets = {}) => {
 const SlidePreview = ({ slide, publication }) => {
   const color = DOMAIN_COLORS[slide.title] || '#281FD0';
   const featured = publicInsightText(
-    slide.featured || slide.insights?.[0]?.detail || 'Boletin generado para revision institucional.',
+    slide.featured || slide.insights?.[0]?.detail || 'Boletín generado para revisión institucional.',
     comparisonLabel(publication)
   );
   const edition = editionLabel(publication);
@@ -873,7 +891,7 @@ const SlidePreview = ({ slide, publication }) => {
           <div className="grid grid-cols-2 gap-3">
             {slide.blocks?.map((block) => (
               <div key={block.domain} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: DOMAIN_COLORS[block.domain] || color }}>{block.domain}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: DOMAIN_COLORS[block.domain] || color }}>{accentuate(block.domain)}</p>
                 <p className="mt-2 text-3xl font-black text-slate-950">{fmt(block.value)}</p>
                 <p className="text-xs font-bold text-slate-500">{block.unit}</p>
                 <p className="mt-2 text-[10px] font-bold text-slate-400">Corte: {block.cutoff_date || 'sin corte'}</p>
@@ -908,8 +926,8 @@ const SlidePreview = ({ slide, publication }) => {
         <div className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
           <img src="/assets/escudo-limpio.png" alt="Escudo" className="h-9 w-9 object-contain" />
           <div>
-            <p className="text-[11px] font-black text-slate-900">Fuente: SISC | Secretaria de Seguridad y Convivencia</p>
-            <p className="text-[10px] font-bold text-slate-500">Informacion publica agregada y anonimizada.</p>
+            <p className="text-[11px] font-black text-slate-900">Fuente: SISC | Secretaría de Seguridad y Convivencia</p>
+            <p className="text-[10px] font-bold text-slate-500">Boletín completo: <a href={BOLETIN_WEB_URL} target="_blank" rel="noopener noreferrer" className="text-[#281FD0] underline">{BOLETIN_WEB_LABEL}</a></p>
           </div>
         </div>
       </div>
@@ -918,6 +936,8 @@ const SlidePreview = ({ slide, publication }) => {
 };
 
 const SiscCifras = ({ publicMode = false }) => {
+  const [outputMode, setOutputMode] = useState('statistics');
+  const executiveMode = !publicMode && outputMode === 'executive';
   const [edition, setEdition] = useState('weekly');
   const [comparisonMode, setComparisonMode] = useState('auto');
   const [periodStart, setPeriodStart] = useState(sevenDaysAgoIso());
@@ -934,6 +954,7 @@ const SiscCifras = ({ publicMode = false }) => {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [periodSuggested, setPeriodSuggested] = useState(false);
   const [institutionalPeriod, setInstitutionalPeriod] = useState('');
+  const [latestPublished, setLatestPublished] = useState(null);
 
   const publicSources = useMemo(
     () => sources.filter((source) => source.publication_level === 'PUBLICO'),
@@ -967,7 +988,10 @@ const SiscCifras = ({ publicMode = false }) => {
     }
   };
 
-  const publicationRequest = (saveHistory = !publicMode) => ({
+  // Fuera del portal público, un boletín solo se comparte cuando ya fue aprobado y publicado.
+  const shareBlocked = !publicMode && publication?.status !== 'PUBLISHED';
+
+  const publicationRequest = (saveHistory = briefPublicationPolicy(publicMode, executiveMode).save_history) => ({
       edition_type: edition,
       period_start: periodStart,
       period_end: periodEnd,
@@ -975,7 +999,7 @@ const SiscCifras = ({ publicMode = false }) => {
       source_codes: selectedSources,
       max_insights: 5,
       save_history: saveHistory,
-      publish_automatically: saveHistory,
+      publish_automatically: false,
     });
 
   const generate = async () => {
@@ -998,7 +1022,8 @@ const SiscCifras = ({ publicMode = false }) => {
         sourceCodes: selectedSources,
       }));
       setActiveSlide(0);
-      if (data.status === 'PUBLISHED') setShareStatus('Boletin generado y publicado automaticamente en el portal ciudadano.');
+      if (data.status === 'PUBLISHED') setShareStatus('Boletín publicado en el portal ciudadano.');
+      else if (data.governance?.history_saved) setShareStatus('Borrador guardado. Revise la sección «Revisión antes de publicar» y apruébelo para publicarlo.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1043,7 +1068,7 @@ const SiscCifras = ({ publicMode = false }) => {
         headers: authHeaders(),
         body: JSON.stringify(publicationRequest(false)),
       });
-      if (!response.ok) throw new Error(await responseError(response, 'No se pudo generar el PDF del boletin.'));
+      if (!response.ok) throw new Error(await responseError(response, 'No se pudo generar el PDF del boletín.'));
       const blob = await response.blob();
       if (download) {
         downloadBlob(blob, `SISC_en_Cifras_${periodStart}_${periodEnd}.pdf`, 'application/pdf');
@@ -1094,7 +1119,7 @@ const SiscCifras = ({ publicMode = false }) => {
       }
       const zip = await createZipBlob(files);
       downloadBlob(zip, carouselFilename(publication), 'application/zip');
-      setShareStatus(`${publication.slides.length} PNG guardados en un ZIP. Extraelo y adjunta las imagenes en orden en WhatsApp.`);
+      setShareStatus(`${publication.slides.length} PNG guardados en un ZIP. Extráelo y adjunta las imágenes en orden en WhatsApp.`);
     } catch (err) {
       setShareStatus(err.message);
     }
@@ -1121,7 +1146,7 @@ const SiscCifras = ({ publicMode = false }) => {
       await navigator.clipboard.writeText(text);
       setShareStatus('Texto copiado. Ya puedes pegarlo en WhatsApp.');
     } catch (_) {
-      setShareStatus('No se pudo copiar automaticamente. Selecciona el texto de la caja de WhatsApp.');
+      setShareStatus('No se pudo copiar automáticamente. Selecciona el texto de la caja de WhatsApp.');
     }
   };
 
@@ -1131,9 +1156,9 @@ const SiscCifras = ({ publicMode = false }) => {
     const prompt = buildTikTokPrompt(publication);
     try {
       await navigator.clipboard.writeText(prompt);
-      setShareStatus('Guion de video copiado. Pegalo en Gemini para crear la pieza vertical.');
+      setShareStatus('Guion de video copiado. Pégalo en Gemini para crear la pieza vertical.');
     } catch (_) {
-      setShareStatus('No fue posible copiar automaticamente. Selecciona el guion y copialo desde la pantalla.');
+      setShareStatus('No fue posible copiar automáticamente. Selecciona el guion y cópialo desde la pantalla.');
     }
   };
 
@@ -1159,7 +1184,7 @@ const SiscCifras = ({ publicMode = false }) => {
         setShareStatus('Carrusel listo para compartir.');
       } else if (navigator.share) {
         await navigator.share({ title: 'SISC en cifras', text });
-        setShareStatus('Texto compartido. Descarga el ZIP del carrusel para adjuntar las imagenes.');
+        setShareStatus('Texto compartido. Descarga el ZIP del carrusel para adjuntar las imágenes.');
       } else {
         const zip = await createZipBlob(files.map((file) => ({ name: file.name, blob: file })));
         downloadBlob(zip, carouselFilename(publication), 'application/zip');
@@ -1173,7 +1198,41 @@ const SiscCifras = ({ publicMode = false }) => {
 
   useEffect(() => {
     fetchSources();
+    fetch(`${API_BASE_URL}/sisc-cifras/publications/public?limit=1`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((rows) => setLatestPublished(rows?.[0] || null))
+      .catch(() => setLatestPublished(null));
   }, []);
+
+  // Usa el boletín ya publicado tal como quedó guardado: mismo periodo y mismas cifras que la web.
+  // No se vuelve a calcular, porque una sábana recargada después podría cambiar algún número.
+  const applyLatestPublished = () => {
+    if (!latestPublished?.publication_json) return;
+    const stored = latestPublished.publication_json;
+    const sourceCodes = latestPublished.source_codes?.length ? latestPublished.source_codes : selectedSources;
+    const mode = stored.comparison_mode || 'auto';
+    setEdition(latestPublished.edition_type);
+    setPeriodStart(latestPublished.period_start);
+    setPeriodEnd(latestPublished.period_end);
+    setComparisonMode(mode);
+    setSelectedSources(sourceCodes);
+    setInstitutionalPeriod('');
+    setPublication({ ...stored, status: 'PUBLISHED' });
+    setPublicationSelectionKey(siscCifrasSelectionKey({
+      edition: latestPublished.edition_type,
+      periodStart: latestPublished.period_start,
+      periodEnd: latestPublished.period_end,
+      comparisonMode: mode,
+      sourceCodes,
+    }));
+    setActiveSlide(0);
+    setError(null);
+    setShareStatus('Cargado el boletín publicado: mismo periodo y mismas cifras que el PDF de la web.');
+  };
+
+  const showsPublishedBulletin = Boolean(
+    latestPublished && publication?.id && publication.id === latestPublished.id && publicationIsCurrent
+  );
 
   useEffect(() => {
     if (!sources.length) return;
@@ -1205,10 +1264,10 @@ const SiscCifras = ({ publicMode = false }) => {
       <div className="border-b border-slate-200 bg-white px-6 py-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#281FD0]">Redaccion estadistica automatizada</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#281FD0]">Redacción estadística automatizada</p>
             <h1 className="mt-1 text-3xl font-black uppercase tracking-tight text-slate-900">SISC en cifras</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className={executiveMode ? 'hidden' : 'flex flex-wrap items-center gap-2'}>
             <button onClick={fetchSources} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50">
               <RefreshCw size={15} /> Fuentes
             </button>
@@ -1233,19 +1292,43 @@ const SiscCifras = ({ publicMode = false }) => {
             <button onClick={copyWhatsappText} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <Copy size={15} /> Copiar texto
             </button>
-            <button onClick={shareWhatsappCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:opacity-40">
+            <button onClick={shareWhatsappCarousel} disabled={!publicationIsCurrent || shareBlocked} title={shareBlocked ? 'Apruebe el boletín para compartirlo' : undefined} className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:opacity-40">
               <MessageCircle size={15} /> Compartir
             </button>
           </div>
         </div>
       </div>
 
+      {!publicMode && <div className="flex flex-wrap gap-2 border-b border-slate-200 bg-white px-6 py-3" role="group" aria-label="Formato de salida">
+        {[['statistics', 'Publicación estadística'], ['executive', 'Parte ejecutivo']].map(([value, label]) => <button key={value} disabled={loading} aria-pressed={outputMode === value} onClick={() => setOutputMode(value)} className={`min-h-11 rounded-lg px-5 py-2 text-sm font-bold ${outputMode === value ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-700'}`}>{label}</button>)}
+      </div>}
       <div className="grid gap-6 p-6 xl:grid-cols-[360px_1fr]">
         <aside className="space-y-5">
+          {!publicMode && latestPublished && (
+            <section className={`rounded-lg border-2 p-5 shadow-sm ${showsPublishedBulletin ? 'border-emerald-400 bg-emerald-50' : 'border-[#281FD0] bg-white'}`} aria-label="Último boletín publicado">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">Último boletín publicado</p>
+              <p className="mt-1 text-base font-black text-slate-900">
+                {latestPublished.period_start} al {latestPublished.period_end}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-600">
+                Publicado {latestPublished.published_at ? `el ${String(latestPublished.published_at).slice(0, 10)}` : ''}. Para redes y WhatsApp use estas mismas cifras: así coinciden con el PDF de la web.
+              </p>
+              {showsPublishedBulletin ? (
+                <p className="mt-3 text-xs font-black text-emerald-800">✓ Mostrando el boletín publicado: mismas cifras que la web.</p>
+              ) : (
+                <button onClick={applyLatestPublished} disabled={loading} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:opacity-40">
+                  Usar este boletín (mismas cifras)
+                </button>
+              )}
+              <a href={BOLETIN_WEB_URL} target="_blank" rel="noopener noreferrer" className="mt-2 block text-center text-[11px] font-bold text-[#281FD0] underline">
+                Ver la página de la web donde se publica
+              </a>
+            </section>
+          )}
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-2 text-slate-900">
               <CalendarDays size={18} />
-              <h2 className="text-sm font-black uppercase tracking-wide">Modo rapido</h2>
+              <h2 className="text-sm font-black uppercase tracking-wide">Modo rápido</h2>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {QUICK_EDITIONS.map((item) => (
@@ -1303,10 +1386,10 @@ const SiscCifras = ({ publicMode = false }) => {
               </label>
             </div>
             <button onClick={() => applySuggestedPeriod()} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-[#281FD0]/30 bg-[#281FD0]/5 px-3 text-xs font-black text-[#281FD0] hover:bg-[#281FD0]/10">
-              <CalendarDays size={15} /> Usar ultimo corte disponible
+              <CalendarDays size={15} /> Usar último corte disponible
             </button>
             <div className="mt-5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Comparacion</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Comparación</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {COMPARISON_MODES.map((item) => (
                   <button
@@ -1325,7 +1408,7 @@ const SiscCifras = ({ publicMode = false }) => {
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#FFE000] px-4 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-sm hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
-              Generar SISC en cifras
+              {executiveMode ? 'Generar parte ejecutivo' : 'Generar SISC en cifras'}
             </button>
           </section>
 
@@ -1360,15 +1443,17 @@ const SiscCifras = ({ publicMode = false }) => {
             <section className="flex min-h-[560px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white">
               <div className="max-w-md text-center">
                 <BarChart3 className="mx-auto text-[#281FD0]" size={52} />
-                <h2 className="mt-4 text-xl font-black uppercase text-slate-900">Semanal para seguimiento / Mensual para balance</h2>
-                <p className="mt-2 text-sm font-semibold text-slate-500">Genera laminas y un boletin PDF publico con comparacion automatica, trazabilidad de fuentes y datos anonimizados.</p>
+                <h2 className="mt-4 text-xl font-black uppercase text-slate-900">{executiveMode ? 'Una página para decidir y hacer seguimiento' : 'Semanal para seguimiento / Mensual para balance'}</h2>
+                <p className="mt-2 text-sm font-semibold text-slate-500">{executiveMode ? 'Selecciona el período y genera el parte: cifras, propuestas, compromisos y cierres documentados. Uso institucional; no se publica automáticamente.' : 'Genera láminas y un boletín PDF con comparación automática, trazabilidad de fuentes y datos anonimizados. Antes de publicarse, una persona lo revisa y lo aprueba.'}</p>
               </div>
             </section>
+          ) : executiveMode ? (
+            <ExecutiveBrief publication={publication} isCurrent={publicationIsCurrent && !loading} authHeaders={authHeaders} />
           ) : (
             <>
               {!publicationIsCurrent && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
-                  La configuracion cambio. Genera SISC en cifras de nuevo antes de descargar o compartir.
+                  La configuración cambió. Genera SISC en cifras de nuevo antes de descargar o compartir.
                 </div>
               )}
               <section className="grid gap-4 lg:grid-cols-4">
@@ -1377,7 +1462,7 @@ const SiscCifras = ({ publicMode = false }) => {
                   <p className="mt-2 text-3xl font-black text-slate-900">{publication.insights?.length || 0}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Laminas</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Láminas</p>
                   <p className="mt-2 text-3xl font-black text-slate-900">{publication.slides?.length || 0}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -1386,7 +1471,7 @@ const SiscCifras = ({ publicMode = false }) => {
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado</p>
-                  <p className="mt-2 flex items-center gap-2 text-lg font-black text-emerald-700"><CheckCircle2 size={20} /> {publication.status === 'PUBLISHED' ? 'Publicado automaticamente' : 'Vista previa publica'}</p>
+                  <p className={`mt-2 flex items-center gap-2 text-lg font-black ${publication.status === 'PUBLISHED' ? 'text-emerald-700' : 'text-amber-700'}`}><CheckCircle2 size={20} /> {publication.status === 'PUBLISHED' ? 'Publicado' : publication.governance?.history_saved ? 'Borrador: pendiente de aprobación' : 'Vista previa'}</p>
                 </div>
               </section>
 
@@ -1403,10 +1488,26 @@ const SiscCifras = ({ publicMode = false }) => {
                 </div>
 
                 <div className="space-y-4">
+                  {!publicMode && (
+                    <EditorialReview
+                      publication={publication}
+                      authHeaders={authHeaders}
+                      canApprove={!publicMode}
+                      onPublished={(result) => {
+                        setPublication((current) => ({
+                          ...current,
+                          status: result.status,
+                          published_at: result.published_at,
+                          governance: { ...(current.governance || {}), ...(result.governance || {}) },
+                        }));
+                        setShareStatus('Boletín aprobado y publicado en el portal ciudadano.');
+                      }}
+                    />
+                  )}
                   <section className="rounded-lg border border-slate-200 bg-white p-5">
                     <div className="mb-4 flex items-center gap-2">
                       <MessageCircle size={18} className="text-emerald-600" />
-                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Publicacion y video</h2>
+                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Publicación y video</h2>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-3 text-xs font-black uppercase text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
@@ -1423,7 +1524,7 @@ const SiscCifras = ({ publicMode = false }) => {
                       </button>
                       {!publicMode && publication.status === 'PUBLISHED' && (
                         <div className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-100 px-3 py-3 text-xs font-black uppercase text-emerald-800">
-                          <CheckCircle2 size={15} /> Publicado automaticamente
+                          <CheckCircle2 size={15} /> Publicado en el portal
                         </div>
                       )}
                       <button onClick={downloadSummaryImage} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 py-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:cursor-not-allowed disabled:opacity-40">
@@ -1432,7 +1533,7 @@ const SiscCifras = ({ publicMode = false }) => {
                       <button onClick={copyWhatsappText} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-100 px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
                         <Copy size={15} /> Copiar texto
                       </button>
-                      <button onClick={shareWhatsappCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-3 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">
+                      <button onClick={shareWhatsappCarousel} disabled={!publicationIsCurrent || shareBlocked} title={shareBlocked ? 'Apruebe el boletín para compartirlo' : undefined} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-3 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">
                         <MessageCircle size={15} /> Compartir
                       </button>
                       <button onClick={copyTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-40">
@@ -1448,10 +1549,10 @@ const SiscCifras = ({ publicMode = false }) => {
                     {pdfUrl && (
                       <div className="mt-4 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
                         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Vista previa del boletin PDF</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Vista previa del boletín PDF</p>
                           <button onClick={printPdf} className="inline-flex items-center gap-1 text-xs font-black text-[#281FD0] hover:text-[#1f18a8]"><Printer size={14} /> Imprimir</button>
                         </div>
-                        <iframe title="Vista previa del boletin SISC" src={pdfUrl} className="h-[680px] w-full bg-white" />
+                        <iframe title="Vista previa del boletín SISC" src={pdfUrl} className="h-[680px] w-full bg-white" />
                       </div>
                     )}
                     <textarea
@@ -1486,7 +1587,7 @@ const SiscCifras = ({ publicMode = false }) => {
                             <span className="rounded bg-white px-2 py-1 text-[10px] font-black text-slate-500">score {insight.relevance_score}</span>
                           </div>
                           <p className="mt-2 text-sm font-semibold text-slate-600">{publicInsightText(insight.detail, comparisonLabel(publication))}</p>
-                          <p className="mt-2 text-[11px] font-bold text-slate-400">{insight.domain} | {insight.source} | Corte {insight.cutoff_date || 'sin corte'}</p>
+                          <p className="mt-2 text-[11px] font-bold text-slate-400">{accentuate(insight.domain)} | {insight.source} | Corte {insight.cutoff_date || 'sin corte'}</p>
                         </div>
                       ))}
                     </div>
@@ -1504,7 +1605,7 @@ const SiscCifras = ({ publicMode = false }) => {
                       ))}
                     </div>
                     <p className="mt-4 rounded-md bg-amber-50 p-3 text-xs font-bold text-amber-800">
-                      Publicacion automatica de informacion agregada y anonimizada. Esta vista conserva fuentes, cortes, advertencias y trazabilidad para su correcta interpretacion.
+                      Publicación automática de información agregada y anonimizada. Esta vista conserva fuentes, cortes, advertencias y trazabilidad para su correcta interpretación.
                     </p>
                   </section>
                 </div>

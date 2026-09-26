@@ -8,7 +8,6 @@ import { apiJson, clearStoredSession, SESSION_EXPIRED_EVENT } from './utils/apiC
 
 const Dashboard = lazy(() => import('./pages/DashboardV2'));
 const MapPage = lazy(() => import('./pages/MapPage'));
-const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const DataPage = lazy(() => import('./pages/DataPage'));
 const PublicDashboard = lazy(() => import('./pages/PublicDataExplorer'));
 const PublicInformation = lazy(() => import('./pages/PublicInformation'));
@@ -25,16 +24,18 @@ const DataQuality = lazy(() => import('./pages/DataQuality'));
 const SiscAIChatbot = lazy(() => import('./components/SiscAIChatbot'));
 
 
-const UniversalIngesta = lazy(() => import('./pages/UniversalIngesta'));
-const InstitutionalAgents = lazy(() => import('./pages/InstitutionalAgents'));
 const StatsModule = lazy(() => import('./pages/StatsModule'));
-const SourceCenter = lazy(() => import('./pages/SourceCenter'));
+const SourceCenter = lazy(() => import('./pages/SourceCenterHub'));
 const PoliceWeeklyExplorer = lazy(() => import('./pages/PoliceWeeklyExplorer'));
 const SiscCifras = lazy(() => import('./pages/SiscCifras'));
+const BoletinReplica = lazy(() => import('./features/boletin/BoletinReplica'));
+const ReplicaBulletinArchive = lazy(() => import('./components/ObservatoryBulletins'));
 const ObservatoryBulletinsPage = lazy(() => import('./pages/ObservatoryBulletinsPage'));
 const RegionalContext = lazy(() => import('./pages/RegionalContext'));
 const RNMCModule = lazy(() => import('./pages/RNMCModule'));
 const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
+const CouncilCommitments = lazy(() => import('./pages/CouncilCommitments'));
+const ObservatoryCenter = lazy(() => import('./pages/ObservatoryCenter'));
 const UsersManagement = lazy(() => import('./pages/UsersManagementV2'));
 const AccessRequests = lazy(() => import('./pages/AccessRequests'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
@@ -61,6 +62,9 @@ const PUBLIC_PAGE_META = {
   pqr: ['Ventanilla PQR | SISC Jamundí', 'Sistema de PQR y trámites de la Alcaldía de Jamundí.'],
 };
 
+const ANALYSIS_ROLES = ['ANALYST', 'DIRECTIVE', 'FUNC_ADMIN', 'TI_ADMIN'];
+const landingPage = (roles = []) => (roles.some((role) => ANALYSIS_ROLES.includes(role)) ? 'observatory' : 'dashboard');
+
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [userRoles, setUserRoles] = useState([]);
@@ -69,14 +73,20 @@ const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [sessionNotice, setSessionNotice] = useState('');
   const [appMode, setAppMode] = useState('loading'); // Nuevo estado inicial
-  const [activePage, setActivePage] = useState('dashboard');
+  // Análisis y dirección entran al Centro de análisis (qué merece atención); los demás, al Inicio.
+  const [activePage, setActivePage] = useState(() => {
+    try {
+      return landingPage(JSON.parse(localStorage.getItem('userRoles') || '[]'));
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [publicActivePage, setPublicActivePage] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('page') || 'hub';
   });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReportId, setSelectedReportId] = useState(null);
-  const [selectedDataset, setSelectedDataset] = useState({ code: 'POLICIA_SEMANAL', label: 'Policía Jamundí - Base Semanal' });
   const [rnmcFilters, setRnmcFilters] = useState(null);
 
   const navigatePublic = (page, options = {}) => {
@@ -94,10 +104,6 @@ const App = () => {
     }, 0);
   };
 
-  const handleIngestDataset = (code, label) => {
-    setSelectedDataset({ code, label });
-    setActivePage('ingesta_universal');
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -186,7 +192,7 @@ const App = () => {
     setIsAuthenticated(true);
     setSessionNotice('');
     setAppMode('authenticated');
-    setActivePage('dashboard');
+    setActivePage(landingPage(roles || []));
     localStorage.setItem('token', newToken);
     localStorage.setItem('userRoles', JSON.stringify(roles || []));
     localStorage.setItem('dataLevel', (dl || 1).toString());
@@ -298,18 +304,22 @@ const App = () => {
         return <AuditLog />;
       case 'map':
         return <MapPage />;
-      case 'reports':
-        return <ReportsPage />;
       case 'data':
         return <DataPage userRoles={userRoles} />;
       case 'sources':
       case 'monitoring':
       case 'police_monitor':
-        return <SourceCenter onIngest={handleIngestDataset} userRoles={userRoles} />;
+        return <SourceCenter onOpenBulletin={() => setActivePage('boletin_replica')} userRoles={userRoles} />;
       case 'police_explorer':
         return <PoliceWeeklyExplorer />;
       case 'sisc_cifras':
         return <SiscCifras />;
+      case 'ingesta_universal': // Compatibilidad: la carga ahora vive en Boletín institucional.
+      case 'reports': // Compatibilidad: el generador antiguo se reemplazó por el Boletín (con revisión editorial).
+      case 'boletin_replica':
+        return <BoletinReplica onOpenArchive={() => setActivePage('technical_bulletins')} />;
+      case 'technical_bulletins':
+        return <><button className="mb-4 rounded border px-4 py-2" onClick={() => setActivePage('boletin_replica')}>Volver al generador</button><ReplicaBulletinArchive /></>;
 
       case 'intelligence':
         return <IntelligenceModule />;
@@ -319,6 +329,10 @@ const App = () => {
         return <StatsModule userRoles={userRoles} dataLevel={dataLevel} />;
       case 'alerts':
         return <AlertsFeed onPageChange={setActivePage} setExternalFilters={setRnmcFilters} />;
+      case 'council_commitments':
+        return <CouncilCommitments />;
+      case 'observatory':
+        return <ObservatoryCenter userRoles={userRoles} onNavigate={setActivePage} />;
       case 'rnmc':
         return <RNMCModule externalFilters={rnmcFilters} clearExternalFilters={() => setRnmcFilters(null)} />;
       case 'dq':
@@ -326,16 +340,9 @@ const App = () => {
       case 'inspecciones':
         return <InspeccionesModule />;
       case 'police_audit':
-        return <PoliceIngestionAudit runId={selectedReportId} onBack={() => setActivePage('ingesta_universal')} />;
+        return <PoliceIngestionAudit runId={selectedReportId} onBack={() => setActivePage('boletin_replica')} />;
       case 'institutional_agents':
-        return <InstitutionalAgents />;
-      case 'ingesta_universal':
-        return <UniversalIngesta
-          setActivePage={setActivePage}
-          setReportId={setSelectedReportId}
-          datasetCode={selectedDataset?.code || "POLICIA_SEMANAL"}
-          label={selectedDataset?.label || "Policía Jamundí - Base Semanal"}
-        />;
+        return <SourceCenter initialSection="deliveries" userRoles={userRoles} onOpenBulletin={() => setActivePage('boletin_replica')} />;
       default:
         return <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;
     }

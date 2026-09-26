@@ -129,3 +129,56 @@ def test_analyst_can_save_audited_publication(monkeypatch):
     assert generate.call_args.kwargs["save_history"] is True
     assert generate.call_args.kwargs["created_by"] == "analista"
     audit.assert_awaited_once()
+
+
+def _publish_setup(monkeypatch, checks):
+    """Boletín institucional publicando directo, con la revisión editorial simulada."""
+    from uuid import uuid4
+    import services.publication_guards as guards
+    import services.publication_review as review_module
+
+    publication_id = str(uuid4())
+    generate = MagicMock(return_value={"id": publication_id, "status": "DRAFT", "governance": {"history_saved": True}})
+    monkeypatch.setattr(sisc_cifras.SiscCifrasService, "generate_publication", generate)
+    monkeypatch.setattr(sisc_cifras, "log_audit", AsyncMock())
+    monkeypatch.setattr(review_module, "review_publication", lambda publication: checks)
+    monkeypatch.setattr(guards, "enforce_publication_integrity", lambda db, row: {"ok": True})
+    row = SimpleNamespace(id=publication_id, status="DRAFT", edition_type="weekly",
+                          period_start=date(2026, 9, 6), period_end=date(2026, 9, 12), publication_json={})
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = row
+    db.query.return_value.filter.return_value.all.return_value = []
+    return db, row
+
+
+def _publish(db, acknowledged=False):
+    return asyncio.run(sisc_cifras.generate_sisc_cifras(
+        sisc_cifras.GenerateSiscCifrasRequest(save_history=True, publish_automatically=True,
+                                             warnings_acknowledged=acknowledged),
+        _request(), db, _user("ANALYST"),
+    ))
+
+
+def test_bulletin_with_blocking_review_is_not_published(monkeypatch):
+    db, row = _publish_setup(monkeypatch, [{"code": "SEMANA_PRELIMINAR", "level": "BLOQUEA", "title": "Semana preliminar", "detail": "x"}])
+    with pytest.raises(HTTPException) as error:
+        _publish(db)
+    assert error.value.status_code == 422
+    assert "No se publicó" in error.value.detail and "Semana preliminar" in error.value.detail
+    assert row.status == "DRAFT"
+
+
+def test_bulletin_warnings_must_be_acknowledged(monkeypatch):
+    checks = [{"code": "BASE_PEQUENA", "level": "REVISAR", "title": "Base pequeña", "detail": "x"}]
+    db, row = _publish_setup(monkeypatch, checks)
+    with pytest.raises(HTTPException) as error:
+        _publish(db, acknowledged=False)
+    assert "Confirme" in error.value.detail and row.status == "DRAFT"
+
+    result = _publish(db, acknowledged=True)
+    assert result["status"] == "PUBLISHED" and row.status == "PUBLISHED"
+    approval = result["governance"]["approval"]
+    assert approval["approved_by"] == "analista"
+    assert approval["warnings_acknowledged"] == ["BASE_PEQUENA"]
+    assert approval["channel"] == "BOLETIN_INSTITUCIONAL"
+    assert result["governance"]["automatic_publication"] is False

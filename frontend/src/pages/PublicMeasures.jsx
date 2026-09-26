@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { API_BASE_URL } from '../utils/apiConfig';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const number = (value) => new Intl.NumberFormat('es-CO').format(Number(value || 0));
 const percent = (value) => (value >= 0 ? '+' : '') + value.toFixed(1).replace('.', ',') + '%';
 

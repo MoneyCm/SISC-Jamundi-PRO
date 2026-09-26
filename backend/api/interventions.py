@@ -7,14 +7,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 from sqlalchemy.orm import Session
 
-from api.auth import analyst_or_admin, institutional_access
+from api.auth import institutional_access, require_role
 from db.models import get_db, User
 from db.models_alerts import IntelligenceAlert
+from db.models_council import CouncilCommitment
 from db.models_hechos_seguridad import IngestionRun
 from db.models_interventions import InterventionCase, InterventionRevision
+from services import intervention_followup
 from services.indicator_calculation import calculate_indicator
+from services.indicator_catalog import FOLLOWUP_INDICATORS, get_indicator_meta
 
 router = APIRouter()
+# Quien sigue alertas y compromisos documenta sus intervenciones (la dirección decide).
+analyst_or_admin = require_role(["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"])
 NOTE = "Cambio observado entre períodos; esta comparación no demuestra que la intervención lo haya causado."
 TRANSITIONS = {
     "BORRADOR": {"BORRADOR", "DECIDIDA"},
@@ -45,9 +50,13 @@ class CaseDocument(BaseModel):
     completed_on: date | None = None
     evidence: list[Evidence] = Field(default_factory=list, max_length=30)
     status: Literal["BORRADOR", "DECIDIDA", "EN_EJECUCION", "FINALIZADA"] = "BORRADOR"
+    # Qué debería cambiar si la intervención funciona (municipal, en hechos). Opcional.
+    indicator: str | None = None
 
     @model_validator(mode="after")
     def validate_stage(self):
+        if self.indicator and self.indicator not in FOLLOWUP_INDICATORS:
+            raise ValueError("Indicador no disponible para seguimiento.")
         if self.status != "BORRADOR":
             if not all([self.recommendation, self.decision, self.responsible, self.decision_date, self.deadline]):
                 raise ValueError("La decisión exige recomendación, decisión, responsable, fecha y plazo.")
@@ -68,8 +77,15 @@ class CaseDocument(BaseModel):
 
 class CreateCase(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    alert_id: UUID
+    alert_id: UUID | None = None
+    commitment_code: str | None = Field(default=None, max_length=40)
     document: CaseDocument
+
+    @model_validator(mode="after")
+    def one_origin(self):
+        if bool(self.alert_id) == bool(self.commitment_code):
+            raise ValueError("La intervención nace de una alerta o de un compromiso (uno de los dos).")
+        return self
 
 
 class UpdateCase(BaseModel):
@@ -103,8 +119,16 @@ class Evaluation(BaseModel):
 
 
 def serialize(row):
-    return {"id": str(row.id), "alert_id": str(row.alert_id), "version": row.version,
+    return {"id": str(row.id), "alert_id": str(row.alert_id) if row.alert_id else None,
+            "commitment_code": row.commitment_code, "version": row.version,
             "status": row.status, "document": row.document, "created_at": row.created_at}
+
+
+def commitment_snapshot(item: CouncilCommitment) -> dict:
+    return {"code": item.code, "text": item.text, "responsible": item.responsible, "instance": item.instance,
+            "origin_act": item.origin_act, "origin_date": item.origin_date.isoformat() if item.origin_date else None,
+            "deadline_date": item.deadline_date.isoformat() if item.deadline_date else None,
+            "theme": item.theme, "territory": item.territory, "status": item.status}
 
 
 def load_case(db, case_id, expected_version=None):
@@ -128,22 +152,51 @@ def persist_revision(db, row, user, action):
 
 
 @router.get("/")
-def list_cases(alert_id: UUID, db: Session = Depends(get_db), user: User = Depends(institutional_access)):
-    rows = db.query(InterventionCase).filter(InterventionCase.alert_id == alert_id).order_by(InterventionCase.created_at.desc()).all()
-    return {"items": [serialize(r) for r in rows]}
+def list_cases(alert_id: UUID | None = None, commitment_code: str | None = None,
+               db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    if not alert_id and not commitment_code:
+        raise HTTPException(422, "Indique la alerta o el compromiso.")
+    q = db.query(InterventionCase)
+    q = q.filter(InterventionCase.alert_id == alert_id) if alert_id else q.filter(
+        InterventionCase.commitment_code == commitment_code.strip().upper())
+    return {"items": [serialize(r) for r in q.order_by(InterventionCase.created_at.desc()).all()]}
+
+
+@router.get("/indicators")
+def followup_indicators(user: User = Depends(institutional_access)):
+    return [{"code": code, "label": get_indicator_meta(code).get("label", code)} for code in FOLLOWUP_INDICATORS]
+
+
+@router.get("/by-commitment")
+def cases_by_commitment(db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    """Estado de las intervenciones de cada compromiso, para marcarlo en la lista."""
+    result: dict = {}
+    rows = db.query(InterventionCase.commitment_code, InterventionCase.status).filter(
+        InterventionCase.commitment_code.isnot(None)).all()
+    for code, status in rows:
+        result.setdefault(code, []).append(status)
+    return result
 
 
 @router.post("/", status_code=201)
 def create_case(payload: CreateCase, db: Session = Depends(get_db), user: User = Depends(analyst_or_admin)):
-    alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == payload.alert_id).first()
-    if not alert:
-        raise HTTPException(404, "Alerta no encontrada.")
     if payload.document.status != "BORRADOR":
         raise HTTPException(422, "El expediente se crea como borrador.")
     doc = payload.document.model_dump(mode="json")
-    doc["alert_snapshot"] = {"id": str(alert.id), "title": alert.title, "evidence": alert.metrics,
-                             "entity_ref": alert.entity_ref, "review_state": alert.review_state}
-    row = InterventionCase(alert_id=alert.id, document=doc, status="BORRADOR", version=0)
+    if payload.alert_id:
+        alert = db.query(IntelligenceAlert).filter(IntelligenceAlert.id == payload.alert_id).first()
+        if not alert:
+            raise HTTPException(404, "Alerta no encontrada.")
+        doc["alert_snapshot"] = {"id": str(alert.id), "title": alert.title, "evidence": alert.metrics,
+                                 "entity_ref": alert.entity_ref, "review_state": alert.review_state}
+        row = InterventionCase(alert_id=alert.id, document=doc, status="BORRADOR", version=0)
+    else:
+        code = payload.commitment_code.strip().upper()
+        item = db.query(CouncilCommitment).filter(CouncilCommitment.code == code).first()
+        if not item:
+            raise HTTPException(404, "Compromiso no encontrado.")
+        doc["commitment_snapshot"] = commitment_snapshot(item)
+        row = InterventionCase(commitment_code=item.code, document=doc, status="BORRADOR", version=0)
     db.add(row)
     db.flush()
     return persist_revision(db, row, user, "CREACION")
@@ -163,7 +216,10 @@ def update_case(case_id: UUID, payload: UpdateCase, db: Session = Depends(get_db
     if payload.document.status not in TRANSITIONS[row.status]:
         raise HTTPException(422, "Transición inválida o expediente evaluado e inmutable.")
     doc = payload.document.model_dump(mode="json")
-    doc["alert_snapshot"] = row.document["alert_snapshot"]
+    # El origen congelado al crear el expediente no se edita.
+    for key in ("alert_snapshot", "commitment_snapshot"):
+        if key in row.document:
+            doc[key] = row.document[key]
     row.document = doc
     row.status = payload.document.status
     row.version += 1
@@ -176,10 +232,9 @@ def comparison(db, row, payload):
     doc = row.document
     if payload.before_end >= date.fromisoformat(doc["started_on"]) or payload.after_start <= date.fromisoformat(doc["completed_on"]):
         raise HTTPException(422, "El período inicial debe preceder al inicio y el posterior seguir al fin de la intervención.")
-    entity = doc["alert_snapshot"]["entity_ref"]
-    indicator = entity.get("indicator")
-    if indicator not in {"HOMICIDIO", "SEGURIDAD_TOTAL"} or entity.get("territory") != "JAMUNDI":
-        raise HTTPException(422, "La comparación disponible admite HOMICIDIO/SEGURIDAD_TOTAL para JAMUNDI; no extrapola a barrios.")
+    indicator = intervention_followup.case_indicator(doc)
+    if not indicator:
+        raise HTTPException(422, "Elija el indicador municipal a comparar; la comparación no extrapola a barrios.")
     run = db.query(IngestionRun).filter(IngestionRun.id == payload.source_version_id).first()
     if not run or run.status != "COMPLETED" or run.fuente_codigo != "POLICIA_SEMANAL":
         raise HTTPException(422, "Se exige una entrega policial completada.")
@@ -195,6 +250,13 @@ def comparison(db, row, payload):
     return {"before": before, "after": after, "difference": delta,
             "variation_pct": round(delta / before["value"] * 100, 2) if before["value"] else None,
             "coverage": "COMPLETA_DECLARADA", "assessment": payload.assessment, "note": NOTE}
+
+
+@router.get("/{case_id}/followup")
+def case_followup(case_id: UUID, db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    """Seguimiento a 30, 60 y 90 días desde el inicio: se calcula al consultar, sobre la entrega vigente."""
+    row = load_case(db, case_id)
+    return intervention_followup.followup(db, row.document)
 
 
 @router.post("/{case_id}/evaluate")

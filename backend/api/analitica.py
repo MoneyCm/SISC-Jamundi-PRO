@@ -22,7 +22,8 @@ import io
 import json
 import os
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Dict, Optional, List
+import re
 
 from api.auth import get_current_user, get_optional_user, institutional_access, log_audit
 
@@ -113,6 +114,9 @@ def _public_conducta_label(code: str) -> str:
 
 def _is_publishable_location(name: Optional[str]) -> bool:
     normalized = (name or '').strip().upper()
+    # "JAMUNDI" solo es el municipio, no un barrio o vereda publicable.
+    if normalized in {'JAMUNDI', 'JAMUNDÍ'}:
+        return False
     return bool(normalized) and not any(marker in normalized for marker in PUBLIC_INVALID_LOCATION_MARKERS)
 
 
@@ -210,7 +214,50 @@ def _public_count(
     return row.total or 0
 
 
-def _public_filter_clause(source: dict, conducta: Optional[str], zona: Optional[str], territorio: Optional[str]):
+def _public_territory_name(raw_name: str) -> str:
+    """Nombre ciudadano de un lugar de la sábana.
+
+    Las variantes policiales de un mismo territorio ("CGTO POTRERITO", "POTRERITO (24-S-02)",
+    "CGTO POTRERITO (24-S2-1)") se unifican en el nombre del polígono oficial ("Potrerito").
+    Los lugares sin polígono conservan su nombre, sin códigos de sector y en formato título.
+    """
+    from services.geocoding_service import GeocodingService, _display_name
+
+    territory = GeocodingService.get_official_territory(raw_name)
+    if territory and territory.get("name"):
+        return territory["name"]
+    clean = re.sub(r"\s*\([^)]*\)\s*$", "", str(raw_name or "")).strip()
+    clean = re.sub(r"^(CGTO|CORREGIMIENTO)\s+", "", clean)
+    clean = re.sub(r"\s+E\d+$", "", clean)
+    if not clean:
+        return str(raw_name or "")
+    display = _display_name(clean)
+    return re.sub(r"^Via\b", "Vía", display)
+
+
+def _public_territory_catalog(db: Session, source: dict) -> Dict[str, str]:
+    """Mapa nombre crudo (canónico) -> nombre ciudadano, para todos los lugares de la fuente."""
+    location = _canonical_location_sql(source['location_expr'])
+    rows = db.execute(text(f"""
+        SELECT DISTINCT {location} AS name
+        FROM {source['source_table']}
+        WHERE 1=1 {source['snapshot_filter']}
+    """)).fetchall()
+    return {row.name: _public_territory_name(row.name) for row in rows if row.name}
+
+
+def _public_territory_sql(source: dict, catalog: Dict[str, str]) -> str:
+    """Expresión SQL que traduce cada lugar crudo a su nombre ciudadano unificado."""
+    location = _canonical_location_sql(source['location_expr'])
+    branches = " ".join(
+        f"WHEN {_sql_literal(raw)} THEN {_sql_literal(display)}"
+        for raw, display in sorted(catalog.items()) if raw != display
+    )
+    return f"(CASE {location} {branches} ELSE {location} END)" if branches else location
+
+
+def _public_filter_clause(source: dict, conducta: Optional[str], zona: Optional[str], territorio: Optional[str],
+                          territory_sql: Optional[str] = None, territory_catalog: Optional[Dict[str, str]] = None):
     clauses = []
     params = {}
     canonical_expr = _canonical_conducta_sql(source['conducta_col'])
@@ -229,8 +276,17 @@ def _public_filter_clause(source: dict, conducta: Optional[str], zona: Optional[
         clauses.append(f"AND UPPER({source['zone_expr']}) = :zona")
         params['zona'] = zona.strip().upper()
     if territorio:
-        clauses.append(f"AND {_canonical_location_sql(source['location_expr'])} = :territorio")
-        params['territorio'] = territorio.strip().upper()
+        requested = territorio.strip()
+        if territory_sql and territory_catalog is not None:
+            # Acepta el nombre ciudadano ("Potrerito") y, por enlaces antiguos, el nombre crudo.
+            display = territory_catalog.get(requested.upper(), requested)
+            by_upper = {name.upper(): name for name in set(territory_catalog.values())}
+            display = by_upper.get(display.upper(), display)
+            clauses.append(f"AND {territory_sql} = :territorio")
+            params['territorio'] = display
+        else:
+            clauses.append(f"AND {_canonical_location_sql(source['location_expr'])} = :territorio")
+            params['territorio'] = requested.upper()
     return '\n'.join(clauses), params
 
 
@@ -320,7 +376,11 @@ def get_public_dashboard(
     if period_start > period_end:
         raise HTTPException(status_code=400, detail='El periodo solicitado es posterior al corte disponible.')
     previous_start, previous_end = _comparison_period(period_start, period_end, comparison)
-    filter_sql, filter_params = _public_filter_clause(source, conducta, zona, territorio)
+    territory_catalog = _public_territory_catalog(db, source)
+    territory_sql = _public_territory_sql(source, territory_catalog)
+    filter_sql, filter_params = _public_filter_clause(
+        source, conducta, zona, territorio, territory_sql=territory_sql, territory_catalog=territory_catalog
+    )
 
     base_params = {"start": period_start, "end": period_end, **filter_params}
     if source["snapshot_id"]:
@@ -341,7 +401,8 @@ def get_public_dashboard(
     """), base_params).first()
 
     canonical_expr = _canonical_conducta_sql(source['conducta_col'])
-    canonical_location_expr = _canonical_location_sql(source['location_expr'])
+    # Los territorios se agrupan por su nombre ciudadano unificado (ver _public_territory_name).
+    canonical_location_expr = territory_sql
     hom_stmt = text(f"""
         SELECT COUNT(DISTINCT {source['identity_expr']}) AS total
         FROM {source['source_table']}
@@ -352,7 +413,8 @@ def get_public_dashboard(
     """)
     homicidios = db.execute(hom_stmt, base_params).first().total or 0
     population = _jamundi_population(period_end)
-    tasa_homicidios = rate_per_100k(homicidios, population)
+    # La población es municipal: con filtro de territorio o zona la tasa no sería válida.
+    tasa_homicidios = None if (territorio or zona) else rate_per_100k(homicidios, population)
 
     monthly = db.execute(text(f"""
         SELECT TO_CHAR(date_trunc('month', {source['date_col']}), 'YYYY-MM') AS bucket,
@@ -368,6 +430,7 @@ def get_public_dashboard(
     weekly = db.execute(text(f"""
         SELECT EXTRACT(YEAR FROM {source['date_col']})::int AS anio,
                EXTRACT(WEEK FROM {source['date_col']})::int AS semana,
+               MIN(date_trunc('week', {source['date_col']}))::date AS week_start,
                COUNT(DISTINCT {source['identity_expr']}) AS total
         FROM {source['source_table']}
         WHERE {source['date_col']} BETWEEN :start AND :end
@@ -376,6 +439,18 @@ def get_public_dashboard(
         GROUP BY 1, 2
         ORDER BY 1, 2
     """), base_params).fetchall()
+
+    # Día de la semana (1 = lunes). La fecha del hecho es confiable; la hora no se publica.
+    weekday_rows = db.execute(text(f"""
+        SELECT EXTRACT(ISODOW FROM {source['date_col']})::int AS dia,
+               COUNT(DISTINCT {source['identity_expr']}) AS total
+        FROM {source['source_table']}
+        WHERE {source['date_col']} BETWEEN :start AND :end
+        {source['snapshot_filter']}
+        {filter_sql}
+        GROUP BY 1
+    """), base_params).fetchall()
+    weekday_totals = {row.dia: int(row.total) for row in weekday_rows}
 
     current_conductas = db.execute(text(f"""
         SELECT {canonical_expr} AS code,
@@ -509,7 +584,7 @@ def get_public_dashboard(
     suppressed_locations = 0
     excluded_non_territorial_count = 0
     territories = []
-    map_points = []
+    map_points_by_territory = {}
     unmapped_locations = 0
     unmapped_locations_list = []
     def pending_reason(name):
@@ -542,22 +617,40 @@ def get_public_dashboard(
             "conductas": [_public_conducta_label(code) for code in split_values(row.conductas)],
         }
         territories.append(item)
-        territory = GeocodingService.get_official_territory(row.name) if include_map else None
+        territory = None
+        if include_map:
+            raw_names = [raw for raw, display in territory_catalog.items() if display == row.name] or [row.name]
+            territory = next(
+                (found for found in (GeocodingService.get_official_territory(raw) for raw in raw_names) if found), None
+            )
         if territory:
+            # Varias denominaciones de la sabana (p. ej. "CGTO POTRERITO" y "POTRERITO (24-S-02)")
+            # resuelven al mismo poligono: se agregan en un solo territorio para no apilar capas.
+            territory_key = territory.get("name") or row.name
+            existing = map_points_by_territory.get(territory_key)
+            if existing:
+                existing["total"] += row.total
+                existing["aliases"].append(row.name)
+                existing["zones"] = sorted(set(existing["zones"]) | set(item["zones"]))
+                existing["conductas"] = sorted(set(existing["conductas"]) | set(item["conductas"]))
+                continue
             lat, lng = territory["coords"]
-            map_points.append({
-                "name": row.name,
+            map_points_by_territory[territory_key] = {
+                "name": territory_key,
                 "total": row.total,
+                "aliases": [row.name],
                 "lat": lat,
                 "lng": lng,
                 "geometry": territory["geometry"],
                 "source": territory.get("source", "cartografia oficial"),
                 "zones": item["zones"],
                 "conductas": item["conductas"],
-            })
+            }
         elif include_map:
             unmapped_locations += 1
             unmapped_locations_list.append({"name": row.name, "total": row.total, "reason": pending_reason(row.name), "zones": item["zones"], "conductas": item["conductas"]})
+
+    map_points = sorted(map_points_by_territory.values(), key=lambda point: point["total"], reverse=True)
 
     run = source["run"]
     report_start = period_start.isoformat()
@@ -622,7 +715,19 @@ def get_public_dashboard(
         },
         "monthly_trend": [{"name": row.bucket, "total": row.total} for row in monthly],
         "comparison_monthly_trend": [{"name": row.bucket, "total": row.total} for row in comparison_monthly],
-        "weekly_trend": [{"name": f"S{row.semana:02d}", "year": row.anio, "semana": row.semana, "total": row.total} for row in weekly],
+        # complete: la semana (lunes a domingo) termina dentro del periodo consultado.
+        # preliminary: cae en los últimos días de la entrega policial, que se completan con reportes tardíos.
+        "weekday": [{"day": day, "total": weekday_totals.get(day, 0)} for day in range(1, 8)],
+        "weekly_trend": [
+            {
+                "name": f"S{row.semana:02d}", "year": row.anio, "semana": row.semana, "total": row.total,
+                "start": row.week_start.isoformat() if row.week_start else None,
+                "end": (row.week_start + timedelta(days=6)).isoformat() if row.week_start else None,
+                "complete": bool(row.week_start and row.week_start + timedelta(days=6) <= period_end),
+                "preliminary": bool(row.week_start and row.week_start + timedelta(days=6) > max_date - timedelta(days=7)),
+            }
+            for row in weekly
+        ],
         "conductas": conductas,
         "priority_kpis": conductas[:4],
         "zones": [{"name": row.zona or "SIN DATO", "value": row.total} for row in zones],

@@ -51,3 +51,17 @@ test('insights are deterministic and explain the comparison base', () => {
 test('missing comparison produces an honest label', () => {
     assert.equal(formatVariation(null), 'Sin base comparable');
 });
+
+test('weekly insight uses the last complete week and skips non-consecutive weeks', () => {
+    const base = { metadata: {}, kpis: { total_hechos: 10, previous_total: 10 }, conductas: [], territories: [] };
+    const week = (name, start, total, complete = true, preliminary = false) => ({ name, start, total, complete, preliminary });
+    const ongoing = buildCitizenInsights({ ...base, weekly_trend: [week('S35', '2026-08-24', 30), week('S36', '2026-08-31', 16, true, true), week('S37', '2026-09-07', 11, false, true)] }, 4)
+        .find((item) => item.id === 'latest-week');
+    assert.equal(ongoing.title, 'S36: 16 casos');
+    assert.match(ongoing.summary, /14 casos menos/);
+    assert.match(ongoing.summary, /preliminar/);
+    assert.match(ongoing.summary, /S37 sigue en curso/);
+    const gap = buildCitizenInsights({ ...base, weekly_trend: [week('S32', '2026-08-03', 2), week('S34', '2026-08-17', 1)] }, 4)
+        .find((item) => item.id === 'latest-week');
+    assert.match(gap.summary, /No hay una semana anterior completa/);
+});

@@ -1,0 +1,72 @@
+{
+  "schema_version": "1",
+  "fuente": "Defensoría del Pueblo - Sistema de Alertas Tempranas (SAT)",
+  "repositorio": "https://alertasstg.blob.core.windows.net/alertas/",
+  "nota_metodologica": "Registro curado a partir del texto de los documentos oficiales. Solo se incluyen territorios y conductas que el documento nombra de forma explícita para Jamundí. La advertencia de la Defensoría es cualitativa: el SISC la contrasta con hechos registrados, no la reemplaza ni la califica.",
+  "verificado_el": "2026-09-24",
+  "alertas": [
+    {
+      "id": "AT-005-24",
+      "numero": "005-24",
+      "tipo": "Inminencia",
+      "fecha_emision": "2024-02-21",
+      "estado": "Vigente según el documento; subsume las AT 037-18, 006-19 y 015-20",
+      "url": "https://alertasstg.blob.core.windows.net/alertas/005-24.pdf",
+      "actor": "Frente Jaime Martínez (Bloque Occidental Comandante Jacobo Arenas, Estado Mayor Central)",
+      "ambito": "Media y alta montaña de Jamundí y, en menor medida, su parte plana",
+      "territorios_oficiales": [
+        "Timba", "Potrerito", "Robles", "San Antonio", "San Vicente", "Puente Vélez",
+        "Villa Colombia", "Ampudia", "La Liberia", "La Meseta", "Paso de la Bolsa"
+      ],
+      "resguardos": ["Pueblo Nuevo", "Kwes Kiwe Nasa"],
+      "sectores_sisc": [
+        {"patron": "MIRAVALLE", "etiqueta": "Miravalle", "motivo": "Pancartas del Frente Jaime Martínez (19/01/2024)"},
+        {"patron": "LA ESTRELLA", "etiqueta": "La Estrella", "motivo": "Pancartas del Frente Jaime Martínez (19/01/2024)"},
+        {"patron": "VIA JAMUNDI/POTRERITO", "etiqueta": "Vía Jamundí - Potrerito - Río Claro", "motivo": "Corredor hacia territorio advertido"},
+        {"patron": "VIA JAMUNDI/TIMBA", "etiqueta": "Vía Jamundí - Timba", "motivo": "Corredor hacia territorio advertido"},
+        {"patron": "VIA JAMUNDI-VILLACOLOMBIA", "etiqueta": "Vía Jamundí - Villa Colombia", "motivo": "Corredor hacia territorio advertido"},
+        {"patron": "RIO CLARO", "etiqueta": "Río Claro", "motivo": "Sector policial en la zona rural advertida"},
+        {"patron": "GATO DE MONTE", "etiqueta": "Gato de Monte", "motivo": "Sector policial en la zona rural advertida"},
+        {"patron": "ALTO VELEZ", "etiqueta": "Alto Vélez", "motivo": "Sector policial vecino de Puente Vélez"},
+        {"patron": "TIMBITA", "etiqueta": "Timbita", "motivo": "Sector policial vecino de Timba"}
+      ],
+      "conductas_advertidas": [
+        {"conducta": "Homicidio", "codigo_siedco": "HOMICIDIO"},
+        {"conducta": "Hurto de bienes para exigir pago por su devolución (vehículos, maquinaria, camiones)", "codigo_siedco": "HURTO_VEHICULOS"},
+        {"conducta": "Hurto", "codigo_siedco": "HURTO_PERSONAS"},
+        {"conducta": "Extorsión", "codigo_siedco": null, "fuente_sugerida": "Fiscalía SPOA"},
+        {"conducta": "Secuestro y retenciones ilegales", "codigo_siedco": null, "fuente_sugerida": "Fiscalía SPOA"},
+        {"conducta": "Desaparición", "codigo_siedco": null, "fuente_sugerida": "Medicina Legal"},
+        {"conducta": "Desplazamiento forzado y confinamiento", "codigo_siedco": null, "fuente_sugerida": "Unidad para las Víctimas (RUV)"},
+        {"conducta": "Reclutamiento, uso y utilización de NNA", "codigo_siedco": null, "fuente_sugerida": "ICBF / Unidad para las Víctimas"},
+        {"conducta": "Restricciones a la movilidad, horarios y retenes ilegales", "codigo_siedco": null, "fuente_sugerida": "Personería / Defensoría"}
+      ],
+      "hechos_citados": [
+        "112 personas asesinadas en Jamundí en 2023 según la Fiscalía; 44 en zona rural.",
+        "19/01/2024: hurto de dos camiones en Timba con exigencia de pago por su devolución.",
+        "26/01/2024: hurto de maquinaria con exigencia de una suma millonaria.",
+        "02/01/2024: presunto secuestro de dos jóvenes en Puente Vélez, liberados tras un pago."
+      ]
+    },
+    {
+      "id": "AT-013-25",
+      "numero": "013-25",
+      "tipo": "Electoral (procesos 2025 y 2026)",
+      "fecha_emision": "2025-10-07",
+      "estado": "Nivel de riesgo para Jamundí: Inmediata",
+      "url": "https://alertasstg.blob.core.windows.net/alertas/013-25.pdf",
+      "actor": "Estado Mayor Central (Frente Jaime Martínez)",
+      "ambito": "Municipio completo; Jamundí figura como zona de control hegemónico",
+      "territorios_oficiales": [],
+      "resguardos": [],
+      "sectores_sisc": [],
+      "conductas_advertidas": [
+        {"conducta": "Gobernanza armada ilegal e instrumentalización de liderazgos comunitarios", "codigo_siedco": null, "fuente_sugerida": "Defensoría / Personería"}
+      ],
+      "hechos_citados": [
+        "Jamundí clasificado con nivel de riesgo 'Inmediata', el más alto de la escala electoral.",
+        "Incluido entre las zonas de control hegemónico del Estado Mayor Central en el Valle del Cauca."
+      ]
+    }
+  ]
+}

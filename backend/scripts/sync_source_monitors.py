@@ -134,6 +134,76 @@ def sync_once():
     return 1 if failures else 0
 
 
+MONITOR_MINDEFENSA_DIR = Path(r"C:\Proyectos\monitor-mindefensa")
+REFERENCE_STATE_FILE = BACKEND.parent / "mindefensa_reference_sync_state.json"
+
+
+def _load_reference_exporter(monitor_dir):
+    """Importa el exportador del monitor sin exigir sus dependencias de registro."""
+    import importlib
+    import logging
+    import types
+    try:
+        import loguru  # noqa: F401
+    except ImportError:
+        shim = types.ModuleType("logger")
+        shim.log = logging.getLogger("monitor-mindefensa")
+        sys.modules.setdefault("logger", shim)
+    if str(monitor_dir) not in sys.path:
+        sys.path.append(str(monitor_dir))
+    return importlib.import_module("reference_exporter").ReferenceExporter
+
+
+def sync_mindefensa_reference():
+    """Carga en la base local los libros nacionales de MinDefensa que haya descargado el monitor.
+
+    Solo procesa archivos nuevos o modificados desde la última carga. No usa
+    usuario ni contraseña: escribe directamente en la base local.
+    """
+    import os
+    from datetime import date
+    monitor_dir = Path(os.getenv("MINDEFENSA_MONITOR_DIR", str(MONITOR_MINDEFENSA_DIR)))
+    books_dir = monitor_dir / "mindefensa_xlsx"
+    if not books_dir.is_dir():
+        print(f"MINDEFENSA_REFERENCIA: carpeta no encontrada ({books_dir})", flush=True)
+        return 0
+
+    from db.session import SessionLocal, engine
+    from services.mindefensa_reference_service import persist_reference_payload
+    if engine.url.host not in {"localhost", "127.0.0.1", "::1", "db"}:
+        raise RuntimeError("Synchronization is restricted to the local database")
+
+    ReferenceExporter = _load_reference_exporter(monitor_dir)
+    try:
+        state = json.loads(REFERENCE_STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+
+    exporter = ReferenceExporter()
+    failures = 0
+    for book in sorted(books_dir.glob("*.xlsx")):
+        if "_SL" in book.stem.upper() or not ReferenceExporter.is_priority_file(book):
+            continue
+        stamp = f"{book.stat().st_mtime_ns}:{book.stat().st_size}"
+        if state.get(book.name) == stamp:
+            continue
+        cutoff = date.fromtimestamp(book.stat().st_mtime).isoformat()
+        try:
+            payload = exporter._build_payload(book, cutoff)
+            with SessionLocal() as db:
+                result = persist_reference_payload(db, payload)
+                db.commit()
+            state[book.name] = stamp
+            REFERENCE_STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"MINDEFENSA_REFERENCIA: {book.name} cargado ({result['records']} agregados, "
+                  f"años {result['coverage_years']})", flush=True)
+        except Exception as error:
+            failures += 1
+            detail = str(error).strip().splitlines()[0][:300] if str(error).strip() else ""
+            print(f"MINDEFENSA_REFERENCIA: {book.name} fallido ({type(error).__name__}: {detail})", flush=True)
+    return 1 if failures else 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--watch', action='store_true')
@@ -145,6 +215,11 @@ def main():
     load_dotenv(BACKEND / '.env')
     while True:
         result = sync_once()
+        try:
+            result = max(result, sync_mindefensa_reference())
+        except Exception as error:
+            print(f"MINDEFENSA_REFERENCIA: sincronizacion fallida ({type(error).__name__})", flush=True)
+            result = 1
         if not args.watch:
             return result
         time.sleep(args.interval)

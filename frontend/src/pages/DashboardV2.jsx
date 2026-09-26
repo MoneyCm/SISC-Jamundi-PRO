@@ -20,6 +20,7 @@ import {
     UserMinus,
     Users,
 } from 'lucide-react';
+import AdminWorkspace from '../components/AdminWorkspace';
 import DashboardFilters from '../components/DashboardFiltersV2';
 import InstitutionalManagementSummary from '../components/InstitutionalManagementSummary';
 import TerritoryMap from '../components/Map/TerritoryMap';
@@ -76,7 +77,8 @@ const getReferenceRange = (range, mode) => {
 };
 
 const metricComparison = (current, previous) => {
-    const currentValue = Number(current || 0);
+    if (current == null || previous == null) return { changeText: 'Sin datos comparables', trend: 'neutral' };
+    const currentValue = Number(current);
     const previousValue = Number(previous || 0);
     if (previousValue === 0) return { changeText: currentValue === 0 ? 'Sin variación' : 'Sin base comparable', trend: 'neutral' };
     const percent = ((currentValue - previousValue) / previousValue) * 100;
@@ -109,7 +111,9 @@ const downloadResponse = async (response, filename) => {
 
 const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const isInstitutional = dataLevel >= 2;
+    const isAdmin = userRoles.some((role) => ['TI_ADMIN', 'FUNC_ADMIN'].includes(role));
     const [sourceStatus, setSourceStatus] = useState(null);
+    const [initializationAttempt, setInitializationAttempt] = useState(0);
     const [range, setRange] = useState(null);
     const [comparisonMode, setComparisonMode] = useState('previous_year');
     const [currentKpis, setCurrentKpis] = useState({});
@@ -118,8 +122,13 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const [distribution, setDistribution] = useState([]);
     const [recent, setRecent] = useState([]);
     const [mapData, setMapData] = useState(null);
+    const [territoryOpen, setTerritoryOpen] = useState(false);
     const [alerts, setAlerts] = useState([]);
     const [alertsUpdatedAt, setAlertsUpdatedAt] = useState(null);
+    // Bandeja central (motor nuevo): evaluaciones persistidas y vigentes.
+    // No se ejecuta ninguna evaluación al abrir el tablero; el GET que calcula
+    // solo se usa como previsualización del estado actual (sin persistir).
+    const [trayStatus, setTrayStatus] = useState(null);
     const [aiInsight, setAiInsight] = useState('');
     const [aiProvider, setAiProvider] = useState('');
     const [inbox, setInbox] = useState(null);
@@ -137,10 +146,13 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     useEffect(() => {
         let cancelled = false;
         const initialize = async () => {
+            setLoading(true);
+            setError('');
             try {
                 const status = await apiJson('/analitica/estadisticas/ultima-actualizacion');
                 if (cancelled) return;
                 const referenceDate = parseIso(status.ultima_fecha);
+                if (Number.isNaN(referenceDate.getTime())) throw new Error('La fuente no informa un corte válido.');
                 setSourceStatus(status);
                 setRange({
                     start: toIso(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)),
@@ -155,13 +167,19 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
         };
         initialize();
         return () => { cancelled = true; };
-    }, []);
+    }, [initializationAttempt]);
 
     const loadDashboard = useCallback(async (selectedRange, mode) => {
         if (!selectedRange?.start || !selectedRange?.end) return;
         const requestId = ++requestIdRef.current;
         setLoading(true);
         setError('');
+        setCurrentKpis({});
+        setPreviousKpis({});
+        setTrend([]);
+        setDistribution([]);
+        setRecent([]);
+        setMapData(null);
         const referenceRange = getReferenceRange(selectedRange, mode);
         const query = `start_date=${selectedRange.start}&end_date=${selectedRange.end}`;
         const referenceQuery = `start_date=${referenceRange.start}&end_date=${referenceRange.end}`;
@@ -180,7 +198,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             }
             const [current, previous, trendRows, distributionRows, recentRows = [], territorialDashboard = {}] = await Promise.all(baseRequests);
             if (requestId !== requestIdRef.current) return;
-            if (current?.error_fallback) throw new Error('La fuente respondió sin indicadores válidos.');
+            if (current?.error_fallback || previous?.error_fallback) throw new Error('La fuente respondió sin indicadores válidos.');
             setCurrentKpis(current || {});
             setPreviousKpis(previous || {});
             setTrend(Array.isArray(trendRows) ? trendRows : []);
@@ -201,6 +219,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
         const requestId = ++managementRequestIdRef.current;
         setManagementLoading(true);
         setManagementError('');
+        setManagementSummary(null);
         try {
             const query = new URLSearchParams({
                 period_start: selectedRange.start,
@@ -266,10 +285,17 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
         let cancelled = false;
         const loadExtras = async () => {
             setExtrasLoading(true);
+            setTrayStatus('LOADING');
+            setAlerts([]);
+            setAlertsUpdatedAt(null);
+            setAiInsight('');
+            setAiProvider('');
+            setInbox(null);
             const query = `start_date=${range.start}&end_date=${range.end}`;
             const results = await Promise.allSettled([
                 apiJson(`/ia/insights?${query}`),
-                apiJson('/ia/alertas'),
+                // Bandeja central: solo vigentes OPEN (SUPERSEDED queda en historial).
+                apiJson('/alerts-tray/?limit=3'),
                 apiJson('/participacion/admin/bandeja'),
             ]);
             if (cancelled) return;
@@ -278,8 +304,37 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 setAiProvider(results[0].value.provider || 'IA');
             }
             if (results[1].status === 'fulfilled') {
-                setAlerts(results[1].value.alertas || []);
-                setAlertsUpdatedAt(results[1].value.timestamp || null);
+                const items = (results[1].value.items || []).map((item) => ({
+                    id: item.id,
+                    nivel: item.tier,
+                    titulo: item.title,
+                    mensaje: item.reason,
+                    periodo: item.evidence?.current_period,
+                    comparacion: item.evidence ? `${item.evidence.previous_value} → ${item.evidence.current_value} ${item.evidence.unit || ''}` : '',
+                    cobertura: item.evidence?.coverage,
+                    corte: item.evidence?.cutoff,
+                    revision: item.review_state,
+                    createdAt: item.created_at,
+                }));
+                setAlerts(items);
+                setAlertsUpdatedAt(items[0]?.createdAt || null);
+                if (items.length > 0) {
+                    setTrayStatus('ALERTA');
+                } else {
+                    // Sin vigentes: previsualización de solo lectura para distinguir
+                    // SIN_ALERTA de SIN_COBERTURA (no persiste evaluaciones).
+                    try {
+                        const preview = await apiJson('/ia/alertas-semanales?indicator=HOMICIDIO');
+                        if (cancelled) return;
+                        setTrayStatus(preview.status === 'SIN_ALERTA' ? 'SIN_ALERTA' : preview.status === 'SIN_COBERTURA' ? 'SIN_COBERTURA' : 'NEEDS_REVIEW');
+                    } catch {
+                        if (cancelled) return;
+                        setTrayStatus('ERROR');
+                    }
+                }
+            } else {
+                setAlerts([]);
+                setTrayStatus('ERROR');
             }
             if (results[2].status === 'fulfilled') setInbox(results[2].value.items || []);
             setExtrasLoading(false);
@@ -291,10 +346,11 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const referenceRange = useMemo(() => range ? getReferenceRange(range, comparisonMode) : null, [range, comparisonMode]);
     const metrics = useMemo(() => METRIC_DEFINITIONS.map((definition) => ({
         ...definition,
-        value: currentKpis[definition.key] || 0,
-        previous: previousKpis[definition.key] || 0,
+        value: currentKpis[definition.key] ?? null,
+        previous: previousKpis[definition.key] ?? null,
         ...metricComparison(currentKpis[definition.key], previousKpis[definition.key]),
-    })), [currentKpis, previousKpis]);
+        ...(loading ? { changeText: 'Consultando', trend: 'neutral' } : {}),
+    })), [currentKpis, previousKpis, loading]);
 
     const comparisonLabel = comparisonMode === 'previous_year'
         ? 'mismo periodo del año anterior'
@@ -303,7 +359,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const exportCsv = () => {
         const rows = [
             ['Indicador', 'Periodo actual', 'Periodo de referencia', 'Comparación'],
-            ...metrics.map((metric) => [metric.label, metric.value, metric.previous, metric.changeText]),
+            ...metrics.map((metric) => [metric.label, metric.value ?? 'No disponible', metric.previous ?? 'No disponible', metric.changeText]),
         ];
         const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n')}`;
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -332,12 +388,18 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
         }
     };
 
-    if (!range && loading) {
-        return <div className="min-h-[55vh] flex items-center justify-center text-slate-600"><LoaderCircle size={24} className="animate-spin mr-3 text-primary" />Cargando corte institucional...</div>;
+    if (!range) {
+        return <div className="max-w-[1600px] mx-auto space-y-5">
+            {isAdmin && <AdminWorkspace userRoles={userRoles} onNavigate={onNavigate} />}
+            <div role="status" className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-600">
+                {loading ? <p className="flex items-center justify-center gap-3"><LoaderCircle size={20} className="animate-spin" />Consultando el corte de los indicadores…</p> : <><p>{error || 'No hay un corte disponible.'}</p><button onClick={() => setInitializationAttempt((value) => value + 1)} className="mt-4 rounded-lg bg-primary px-4 py-2 font-bold text-white">Reintentar consulta</button></>}
+            </div>
+        </div>;
     }
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-5 pb-12">
+            {isAdmin && <AdminWorkspace userRoles={userRoles} onNavigate={onNavigate} />}
             <header className="flex flex-col 2xl:flex-row 2xl:items-end justify-between gap-4">
                 <div>
                     <p className="text-xs font-bold uppercase text-primary">Secretaría de Seguridad y Convivencia</p>
@@ -347,7 +409,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 <div className="flex flex-col lg:flex-row lg:items-center gap-3">
                     <DashboardFilters range={range} referenceDate={sourceStatus?.ultima_fecha ? parseIso(sourceStatus.ultima_fecha) : new Date()} comparisonMode={comparisonMode} onRangeChange={setRange} onComparisonChange={setComparisonMode} />
                     <div className="relative">
-                        <button onClick={() => setExportOpen(!exportOpen)} className="w-full lg:w-auto inline-flex items-center justify-center gap-2 bg-primary text-white rounded-lg px-4 py-2.5 text-sm font-bold"><Download size={17} />Exportar<ChevronDown size={15} /></button>
+                        <button disabled={loading || !Object.keys(currentKpis).length} onClick={() => setExportOpen(!exportOpen)} className="disabled:opacity-50 disabled:cursor-not-allowed w-full lg:w-auto inline-flex items-center justify-center gap-2 bg-primary text-white rounded-lg px-4 py-2.5 text-sm font-bold"><Download size={17} />Exportar<ChevronDown size={15} /></button>
                         {exportOpen && <><button aria-label="Cerrar exportación" onClick={() => setExportOpen(false)} className="fixed inset-0 z-40 cursor-default" /><div className="absolute right-0 top-full mt-2 z-50 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-2"><button onClick={() => exportPdf(true)} disabled={Boolean(exporting)} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left disabled:opacity-50"><Brain size={17} className="text-primary" /><span><span className="block text-sm font-bold">Boletín ejecutivo</span><span className="block text-[10px] text-slate-500">PDF con lectura asistida</span></span></button><button onClick={() => exportPdf(false)} disabled={Boolean(exporting)} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left disabled:opacity-50"><FileText size={17} className="text-slate-600" /><span><span className="block text-sm font-bold">Resumen detallado</span><span className="block text-[10px] text-slate-500">PDF comparativo</span></span></button><button onClick={exportCsv} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left"><FileSpreadsheet size={17} className="text-emerald-700" /><span><span className="block text-sm font-bold">Indicadores CSV</span><span className="block text-[10px] text-slate-500">Datos de esta vista</span></span></button></div></>}
                     </div>
                 </div>
@@ -378,7 +440,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
 
             {isInstitutional ? (
                 <section className="grid xl:grid-cols-2 gap-4">
-                    <AlertsPanel alerts={alerts} updatedAt={alertsUpdatedAt} onOpen={() => onNavigate?.('alerts')} />
+                    <AlertsPanel alerts={alerts} updatedAt={alertsUpdatedAt} trayStatus={trayStatus} onOpen={() => onNavigate?.('alerts')} />
                     <AIAnalysisPanel insight={aiInsight} provider={aiProvider} loading={extrasLoading} onOpen={() => onNavigate?.('intelligence')} onDownload={() => exportPdf(false)} />
                 </section>
             ) : <EmptyInstitutionalPanel />}
@@ -389,13 +451,13 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             </section>
 
             {isInstitutional && (
-                <section className="grid xl:grid-cols-3 gap-4">
+                <details onToggle={(event) => setTerritoryOpen(event.currentTarget.open)} className="group rounded-xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer text-sm font-bold text-slate-800">Explorar territorio y registros recientes<span className="ml-2 text-xs font-normal text-slate-500">Abrir detalle</span></summary><section className="mt-4 grid xl:grid-cols-3 gap-4">
                     <article className="xl:col-span-2 bg-white border border-slate-200 rounded-lg overflow-hidden h-[480px] flex flex-col">
                         <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-3"><div><h3 className="font-black text-slate-900">Mapa territorial agregado</h3><p className="text-xs text-slate-500">Concentracion por territorio oficial para el periodo seleccionado.</p></div><MapPinned size={20} className="text-primary" /></div>
-                        <div className="flex-1 min-h-0"><TerritoryMap map={mapData} /></div>
+                        <div className="flex-1 min-h-0">{territoryOpen && <TerritoryMap map={mapData} />}</div>
                     </article>
                     <RecentRecords data={recent} onOpen={() => onNavigate?.('data')} />
-                </section>
+                </section></details>
             )}
 
             <section className="grid xl:grid-cols-3 gap-4">
@@ -407,7 +469,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 )}
                 <article className="bg-slate-900 text-white rounded-lg p-5">
                     <h3 className="font-black">Accesos de trabajo</h3><p className="text-xs text-slate-400 mt-1 mb-4">Herramientas relacionadas con este resumen.</p>
-                    <div className="space-y-2"><button onClick={() => onNavigate?.('sources')} className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold"><Database size={17} className="text-emerald-400" />Centro de fuentes</button><button onClick={() => onNavigate?.('reports')} className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold"><FileText size={17} className="text-yellow-300" />Reportes técnicos</button><button onClick={() => onNavigate?.('sisc_cifras')} className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold"><FileSpreadsheet size={17} className="text-blue-300" />SISC en cifras</button></div>
+                    <div className="space-y-2"><button onClick={() => onNavigate?.('sources')} className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold"><Database size={17} className="text-emerald-400" />Centro de fuentes</button><button onClick={() => onNavigate?.('boletin_replica')} className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold"><FileText size={17} className="text-yellow-300" />Boletín institucional</button><button onClick={() => onNavigate?.('sisc_cifras')} className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold"><FileSpreadsheet size={17} className="text-blue-300" />SISC en cifras</button></div>
                 </article>
             </section>
         </div>

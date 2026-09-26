@@ -13,7 +13,7 @@ class IntelligenceService:
         """
         Genera un resumen ágil de delitos de alto impacto con fecha de corte y análisis IA.
         """
-        from api.ia import call_gemini, call_mistral, AI_PROVIDER
+        from api.ia import redactar_verificado
 
         delitos_objetivo = {
             'HOMICIDIO': ['HOMICIDIO', 'HOMICIDIO INTENCIONAL', 'HOMICIDIO DOLOSO', 'Homicidio'],
@@ -75,15 +75,15 @@ class IntelligenceService:
                 REGLA: No uses preámbulos, ve directo al análisis estratégico. Usa tono de inteligencia militar/civil.
                 """
 
-                ai_insight = "Análisis no disponible"
-                try:
-                    if AI_PROVIDER == "MISTRAL":
-                        ai_insight = await call_mistral(contexto)
-                    else:
-                        ai_insight = await call_gemini(contexto)
-                    ai_insight = ai_insight.strip().replace('"', '')
-                except Exception as e:
-                    logger.error(f"Error IA en brief {display_name}: {e}")
+                datos = (
+                    f"{display_name}: {prev_year} {prev} casos; {latest_year} {actual} casos; "
+                    f"variacion {var_pct}%."
+                )
+                resultado = await redactar_verificado(
+                    contexto, datos,
+                    respaldo=f"{display_name}: {actual} casos en {latest_year} frente a {prev} en {prev_year}.",
+                )
+                ai_insight = (resultado["text"] or "").strip().replace('"', '')
 
                 briefs.append({
                     "delito": display_name,

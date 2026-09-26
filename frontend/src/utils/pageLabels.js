@@ -1,0 +1,32 @@
+// Nombre único de cada página interna: lo usan la barra lateral y el encabezado,
+// para que el título siempre coincida con la opción que se eligió.
+export const INSTITUTIONAL_PAGE_LABELS = {
+    observatory: 'Centro de análisis',
+    dashboard: 'Inicio',
+    sources: 'Centro de fuentes',
+    police_explorer: 'Explorador policial',
+    sisc_cifras: 'SISC en cifras',
+    boletin_replica: 'Boletín institucional',
+    users: 'Gestión de usuarios',
+    access_requests: 'Solicitudes de acceso',
+    ingesta_universal: 'Boletín institucional',
+    institutional_agents: 'Centro de fuentes · Entregas institucionales',
+    stats: 'Estadísticas',
+    map: 'Mapa territorial',
+    intelligence: 'Contexto comparado',
+    alerts: 'Alertas tempranas',
+    council_commitments: 'Compromisos y acuerdos',
+    inspecciones: 'Inspecciones de Policía',
+    reports: 'Boletín institucional',
+    data: 'Descarga CSV/XLS',
+    audit: 'Auditoría',
+    monitoring: 'Monitoreo de fuentes',
+    police_monitor: 'Monitor policial',
+    technical_bulletins: 'Boletines técnicos',
+    regional_context: 'Contexto regional',
+    rnmc: 'Medidas correctivas (RNMC)',
+    dq: 'Calidad de datos',
+    police_audit: 'Auditoría policial',
+};
+
+export const pageLabel = (pageId) => INSTITUTIONAL_PAGE_LABELS[pageId] || 'Centro de mando';

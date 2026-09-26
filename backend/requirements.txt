@@ -22,3 +22,4 @@ requests==2.31.0
 beautifulsoup4==4.12.2
 markdown2==2.4.13
 reportlab==4.0.8
+pypdf==5.9.0

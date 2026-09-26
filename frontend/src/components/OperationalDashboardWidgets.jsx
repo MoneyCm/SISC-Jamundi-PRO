@@ -54,7 +54,7 @@ export const MetricCard = ({ metric }) => {
             </div>
             <div>
                 <p className="text-[11px] font-bold uppercase text-slate-500 mt-4">{metric.label}</p>
-                <div className="flex items-end justify-between gap-2"><p className="text-3xl font-black text-slate-900">{Number(metric.value || 0).toLocaleString('es-CO')}</p><p className="text-[10px] text-slate-500 text-right">Referencia: {Number(metric.previous || 0).toLocaleString('es-CO')}</p></div>
+                <div className="flex items-end justify-between gap-2"><p className="text-3xl font-black text-slate-900">{metric.value == null ? '—' : Number(metric.value).toLocaleString('es-CO')}</p><p className="text-[10px] text-slate-500 text-right">Referencia: {metric.previous == null ? 'No disponible' : Number(metric.previous).toLocaleString('es-CO')}</p></div>
             </div>
         </article>
     );
@@ -119,17 +119,28 @@ export const DistributionChart = ({ data = [] }) => {
     );
 };
 
-export const AlertsPanel = ({ alerts = [], updatedAt, onOpen }) => {
+export const AlertsPanel = ({ alerts = [], updatedAt, onOpen, trayStatus }) => {
     const visibleAlerts = alerts
         .filter((alert) => !TERRITORY_PLACEHOLDERS.some((value) => `${alert.titulo || ''} ${alert.mensaje || ''}`.toUpperCase().includes(value)))
         .slice(0, 3);
+    const statusBanner = !trayStatus || trayStatus === 'LOADING'
+        ? { cls: 'border-slate-200 bg-slate-50', title: 'Consultando alertas', detail: 'Verificando las alertas vigentes y la cobertura de información.' }
+        : trayStatus === 'NEEDS_REVIEW'
+        ? { cls: 'border-amber-200 bg-amber-50', title: 'Evaluación por revisar', detail: 'La consulta requiere revisión. Abre la bandeja para verificar el estado.' }
+        : trayStatus === 'ERROR'
+        ? { cls: 'border-red-200 bg-red-50', title: 'No fue posible consultar la bandeja', detail: 'Reintente en unos segundos. No se muestran alertas calculadas localmente.' }
+        : trayStatus === 'SIN_COBERTURA'
+            ? { cls: 'border-amber-200 bg-amber-50', title: 'Cobertura desconocida', detail: 'La entrega no declara cobertura para las semanas evaluadas; no se interpreta el cero.' }
+            : null;
     return (
         <article className="bg-white border border-slate-200 rounded-lg p-5 h-full">
-            <div className="flex items-start justify-between gap-3 mb-4"><div><h3 className="font-black text-slate-900">Alertas estadísticas</h3><p className="text-xs text-slate-500">Cambios detectados frente al periodo de referencia.</p></div><AlertTriangle size={20} className="text-amber-600" /></div>
-            {visibleAlerts.length === 0 ? (
-                <div className="border border-emerald-100 bg-emerald-50 rounded-lg p-4 flex gap-3"><CheckCircle2 size={20} className="text-emerald-700 shrink-0" /><div><p className="text-sm font-bold text-emerald-900">Sin alertas priorizadas</p><p className="text-xs text-emerald-800 mt-1">No se generaron advertencias con los datos disponibles.</p></div></div>
-            ) : <div className="divide-y divide-slate-100">{visibleAlerts.map((alert, index) => <div key={`${alert.titulo}-${index}`} className="py-3 first:pt-0"><div className="flex items-center justify-between gap-2"><span className={`text-[10px] font-bold rounded px-2 py-1 ${alert.nivel === 'P1' ? 'bg-red-50 text-red-700' : alert.nivel === 'P2' ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-700'}`}>{alert.nivel || 'Aviso'}</span><span className="text-xs font-bold text-slate-600">{alert.variacion && alert.variacion !== 'N/A' ? alert.variacion : ''}</span></div><p className="text-sm font-bold text-slate-900 mt-2">{alert.titulo || 'Cambio relevante'}</p><p className="text-xs text-slate-600 mt-1 leading-relaxed">{alert.mensaje}</p></div>)}</div>}
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-3"><p className="text-[10px] text-slate-500">Actualizado: {updatedAt ? new Date(updatedAt).toLocaleString('es-CO') : 'según último cálculo'}</p>{onOpen && <button onClick={onOpen} className="text-xs font-bold text-primary inline-flex items-center gap-1">Ver alertas <ArrowRight size={14} /></button>}</div>
+            <div className="flex items-start justify-between gap-3 mb-4"><div><h3 className="font-black text-slate-900">Alertas semanales</h3><p className="text-xs text-slate-500">Alertas vigentes · su periodo se indica en cada aviso.</p></div><AlertTriangle size={20} className="text-amber-600" /></div>
+            {statusBanner ? (
+                <div className={`border rounded-lg p-4 flex gap-3 ${statusBanner.cls}`}><AlertTriangle size={20} className="shrink-0" /><div><p className="text-sm font-bold">{statusBanner.title}</p><p className="text-xs mt-1">{statusBanner.detail}</p></div></div>
+            ) : visibleAlerts.length === 0 ? (
+                <div className="border border-emerald-100 bg-emerald-50 rounded-lg p-4 flex gap-3"><CheckCircle2 size={20} className="text-emerald-700 shrink-0" /><div><p className="text-sm font-bold text-emerald-900">Sin alertas vigentes</p><p className="text-xs text-emerald-800 mt-1">Ninguna evaluación con cobertura completa supera los umbrales propuestos.</p></div></div>
+            ) : <div className="divide-y divide-slate-100">{visibleAlerts.map((alert, index) => <div key={alert.id || `${alert.titulo}-${index}`} className="py-3 first:pt-0"><div className="flex items-center justify-between gap-2"><span className={`text-[10px] font-bold rounded px-2 py-1 ${alert.nivel === 'P1' ? 'bg-red-50 text-red-700' : alert.nivel === 'P2' ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-700'}`}>{alert.nivel || 'Aviso'}</span><span className="text-xs font-bold text-slate-600">{alert.comparacion || ''}</span></div><p className="text-sm font-bold text-slate-900 mt-2">{alert.titulo || 'Cambio relevante'}</p><p className="text-xs text-slate-600 mt-1 leading-relaxed">{alert.mensaje}</p><p className="text-[10px] text-slate-500 mt-1">Periodo {alert.periodo?.start || '?'} al {alert.periodo?.end_exclusive || '?'} · Cobertura {alert.cobertura || '?'} · Corte {alert.corte || '?'} · Revisión {alert.revision || 'PENDIENTE'}</p></div>)}</div>}
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-3"><p className="text-[10px] text-slate-500">Actualizado: {updatedAt ? new Date(updatedAt).toLocaleString('es-CO') : 'según última evaluación'} · Alertas reemplazadas en el historial</p>{onOpen && <button onClick={onOpen} className="text-xs font-bold text-primary inline-flex items-center gap-1">Ver bandeja <ArrowRight size={14} /></button>}</div>
         </article>
     );
 };

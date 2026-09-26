@@ -29,6 +29,7 @@ from services.report_automation_service import ReportAutomationService
 from services.alerts_rnmc import generate_rnmc_alerts
 from services.alerts_prioritizer import compute_action_score, get_scoring_config
 from services.ai_prioritizer import build_ai_rationale
+from services.mindefensa_reference_service import persist_reference_payload
 from services.national_context_service import (
     comparable_reference_rate,
     comparable_national_rate,
@@ -50,6 +51,7 @@ try:
     from weasyprint import HTML, CSS
 except Exception as e:
     print(f"[AVISO] WeasyPrint no disponible en inteligencia: {e}")
+import unicodedata
 import logging
 import hashlib
 import hmac
@@ -57,7 +59,7 @@ import json
 import os
 from datetime import date, datetime
 from io import BytesIO
-from api.ia import call_gemini, call_mistral, AI_PROVIDER, GEMINI_API_KEY, MISTRAL_API_KEY
+from api.ia import redactar_verificado, AI_PROVIDER, GEMINI_API_KEY, MISTRAL_API_KEY
 from sqlalchemy import text, func, desc
 from uuid import UUID
 
@@ -69,7 +71,9 @@ MUNICIPAL_REFERENCE_SOURCE = "MINDEFENSA_MUNICIPAL_TOTAL"
 PRIORITIZED_CRIME_TYPES = (
     "Extorsion",
     "Homicidio Intencional",
+    "Hurto Comercio",
     "Hurto Personas",
+    "Hurto Residencias",
     "Hurto Vehiculos",
     "Lesiones Personales",
     "Violencia Intrafamiliar",
@@ -578,123 +582,19 @@ async def upload_reference_aggregates(
     db.refresh(log_entry)
 
     try:
-        from sqlalchemy.dialects.postgresql import insert
-
-        processor = NationalStatsProcessor()
-        records = []
-        for item in payload.records:
-            code = "NACIONAL" if item.codigo_dane.upper() == "NACIONAL" else normalize_municipality_code(item.codigo_dane)
-            if not code or not 1 <= item.mes <= 12 or item.anio < 2000 or item.cantidad < 0:
-                continue
-            fingerprint_source = f"{COMPACT_REFERENCE_SOURCE}|{payload.tipo_delito}|{code}|{item.anio}|{item.mes}"
-            fingerprint = hashlib.sha256(fingerprint_source.encode()).hexdigest()
-            records.append({
-                "source_id": COMPACT_REFERENCE_SOURCE,
-                "departamento": item.departamento.strip() or "NO INFORMADO",
-                "municipio": item.municipio.strip() or code,
-                "municipio_normalizado": processor.normalize_text(item.municipio or code),
-                "codigo_dane": code,
-                "fecha_hecho": date(item.anio, item.mes, 1),
-                "fecha_corte_mindefensa": payload.source_cutoff,
-                "anio": item.anio,
-                "mes": item.mes,
-                "tipo_delito": payload.tipo_delito,
-                "cantidad": int(item.cantidad),
-                "fuente_archivo": payload.filename,
-                "event_fingerprint": fingerprint,
-                "hash_registro": fingerprint,
-                "fecha_ingesta": datetime.utcnow(),
-            })
-        for item in payload.municipal_totals:
-            code = normalize_municipality_code(item.codigo_dane)
-            if (
-                not code
-                or not 1 <= item.period_end_month <= 12
-                or item.anio < 2000
-                or item.cantidad < 0
-            ):
-                continue
-            fingerprint_source = (
-                f"{MUNICIPAL_REFERENCE_SOURCE}|{payload.tipo_delito}|{code}|{item.anio}"
-            )
-            fingerprint = hashlib.sha256(fingerprint_source.encode()).hexdigest()
-            records.append({
-                "source_id": MUNICIPAL_REFERENCE_SOURCE,
-                "departamento": item.departamento.strip() or "NO INFORMADO",
-                "municipio": item.municipio.strip() or code,
-                "municipio_normalizado": processor.normalize_text(item.municipio or code),
-                "codigo_dane": code,
-                "fecha_hecho": date(item.anio, item.period_end_month, 1),
-                "fecha_corte_mindefensa": payload.source_cutoff,
-                "anio": item.anio,
-                "mes": item.period_end_month,
-                "tipo_delito": payload.tipo_delito,
-                "cantidad": int(item.cantidad),
-                "fuente_archivo": payload.filename,
-                "event_fingerprint": fingerprint,
-                "hash_registro": fingerprint,
-                "fecha_ingesta": datetime.utcnow(),
-            })
-        if not records:
-            raise HTTPException(status_code=422, detail="No hay registros agregados validos.")
-
-        coverage = []
-        for period in payload.coverage:
-            codes = sorted({code for raw_code in period.municipality_codes if (code := normalize_municipality_code(raw_code))})
-            if codes:
-                coverage.append({
-                    "source_id": COMPACT_REFERENCE_SOURCE,
-                    "tipo_delito": payload.tipo_delito,
-                    "anio": period.anio,
-                    "municipality_codes": codes,
-                    "fecha_corte_mindefensa": payload.source_cutoff,
-                    "fuente_archivo": payload.filename,
-                    "fecha_ingesta": datetime.utcnow(),
-                })
-
-        municipal_years = {
-            record["anio"] for record in records
-            if record["source_id"] == MUNICIPAL_REFERENCE_SOURCE
-        }
+        try:
+            result = persist_reference_payload(db, payload)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
         with db.begin_nested():
-            if municipal_years:
-                db.query(NationalCrimeStats).filter(
-                    NationalCrimeStats.source_id == MUNICIPAL_REFERENCE_SOURCE,
-                    NationalCrimeStats.tipo_delito == payload.tipo_delito,
-                    NationalCrimeStats.anio.in_(municipal_years),
-                ).delete(synchronize_session=False)
-            for offset in range(0, len(records), 500):
-                statement = insert(NationalCrimeStats).values(records[offset:offset + 500])
-                statement = statement.on_conflict_do_update(
-                    index_elements=["source_id", "event_fingerprint"],
-                    set_={
-                        "cantidad": statement.excluded.cantidad,
-                        "fecha_corte_mindefensa": statement.excluded.fecha_corte_mindefensa,
-                        "fuente_archivo": statement.excluded.fuente_archivo,
-                        "fecha_ingesta": statement.excluded.fecha_ingesta,
-                    },
-                )
-                db.execute(statement)
-            for item in coverage:
-                statement = insert(NationalReferenceCoverage).values(item)
-                statement = statement.on_conflict_do_update(
-                    index_elements=["source_id", "tipo_delito", "anio"],
-                    set_={
-                        "municipality_codes": statement.excluded.municipality_codes,
-                        "fecha_corte_mindefensa": statement.excluded.fecha_corte_mindefensa,
-                        "fuente_archivo": statement.excluded.fuente_archivo,
-                        "fecha_ingesta": statement.excluded.fecha_ingesta,
-                    },
-                )
-                db.execute(statement)
             log_entry.estado = "COMPLETED"
-            log_entry.registros_insertados = len(records)
+            log_entry.registros_insertados = result["records"]
             log_entry.fecha_fin = datetime.utcnow()
             log_entry.detalles = {
                 "filename": payload.filename,
                 "scope": COMPACT_REFERENCE_SOURCE,
-                "records": len(records),
-                "coverage_years": sorted({item["anio"] for item in coverage}),
+                "records": result["records"],
+                "coverage_years": result["coverage_years"],
                 "authorization_mode": authorization_mode,
             }
         db.commit()
@@ -703,15 +603,15 @@ async def upload_reference_aggregates(
             "REFERENCE_DATA_INGESTED",
             actor_id=str(current_user.id) if current_user else None,
             module="INTELLIGENCE",
-            target={"filename": payload.filename, "records": len(records), "mode": "COMPACT"},
+            target={"filename": payload.filename, "records": result["records"], "mode": "COMPACT"},
             level=2,
             request=request,
         )
         return {
             "status": "COMPLETED",
             "source_id": COMPACT_REFERENCE_SOURCE,
-            "records": len(records),
-            "coverage_years": sorted({item["anio"] for item in coverage}),
+            "records": result["records"],
+            "coverage_years": result["coverage_years"],
         }
     except HTTPException:
         db.rollback()
@@ -809,6 +709,8 @@ async def get_public_rnmc_summary(db: Session = Depends(get_db)):
     base_filters = [
         RNMCMeasure.source_id == "INSPECCION_MEDIDAS_RNMC",
         RNMCMeasure.municipio.ilike("%JAMUNDI%"),
+        # Una fecha posterior a hoy no puede ser el corte de una publicación.
+        func.date(RNMCMeasure.fecha_actuacion) <= date.today(),
     ]
     latest_date = db.query(func.max(RNMCMeasure.fecha_actuacion)).filter(*base_filters).scalar()
     if not latest_date:
@@ -1039,6 +941,46 @@ async def get_report_history(
     return reports
 
 # --- ALERT FEED ENDPOINTS ---
+
+# Si la última carga de comparendos tiene más de estos días, la lista de alertas no refleja la situación actual.
+RNMC_STALE_DAYS = 45
+
+
+@router.get("/alerts/rnmc/coverage")
+def rnmc_alert_coverage(db: Session = Depends(get_db), current_user: User = Depends(institutional_access)):
+    """Hasta qué fecha llegan los comparendos (Inspecciones MIP) que alimentan las alertas del SISC.
+
+    Sin esto, una lista vacía se lee como "todo bajo control" aunque los datos lleven meses sin cargarse.
+    """
+    from datetime import date as _date
+    from sqlalchemy import func
+    from db.models_inspecciones import InspeccionActuacion, InspeccionMedida
+
+    today = _date.today()
+    measures = db.query(func.count(InspeccionMedida.id)).scalar() or 0
+    first = db.query(func.min(InspeccionActuacion.fecha_actuacion)).scalar()
+    valid_max = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(
+        func.date(InspeccionActuacion.fecha_actuacion) <= today).scalar()
+    last_load = db.query(func.max(InspeccionActuacion.created_at)).scalar()
+    future = db.query(func.count(InspeccionActuacion.id)).filter(
+        func.date(InspeccionActuacion.fecha_actuacion) > today).scalar() or 0
+    last_alert = db.query(func.max(IntelligenceAlert.updated_at)).filter(IntelligenceAlert.source == "RNMC").scalar()
+    days_since_load = (today - last_load.date()).days if last_load else None
+    # Vigencia según el dato más reciente, no según el día de carga: cargar hoy un archivo viejo no lo vuelve actual.
+    days_since_data = (today - valid_max.date()).days if valid_max else None
+    return {
+        "records": measures,
+        "first_date": first.date().isoformat() if first else None,
+        "last_date": valid_max.date().isoformat() if valid_max else None,
+        "last_load": last_load.date().isoformat() if last_load else None,
+        "days_since_load": days_since_load,
+        "days_since_data": days_since_data,
+        "stale": days_since_data is None or days_since_data > RNMC_STALE_DAYS,
+        "future_dated": future,
+        "last_alert_update": last_alert.isoformat() if last_alert else None,
+        "source": "Inspecciones MIP",
+    }
+
 
 @router.get("/alerts")
 async def list_alerts(
@@ -1755,6 +1697,17 @@ async def create_alerts_snapshot(
         "source": snapshot.source,
     }
 
+# Debe declararse antes de /alerts/{alert_id}: si no, "scoring-config" se interpreta como UUID (422).
+@router.get("/alerts/scoring-config")
+async def get_alerts_scoring_config(
+    current_user: User = Depends(institutional_access),
+):
+    """
+    Devuelve la configuración actual de scoring (pesos y umbrales) para transparencia en UI.
+    """
+    return get_scoring_config()
+
+
 @router.get("/alerts/{alert_id}")
 async def get_alert_detail(
     alert_id: UUID,
@@ -1897,15 +1850,6 @@ async def export_alerts_pdf(
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
-
-@router.get("/alerts/scoring-config")
-async def get_alerts_scoring_config(
-    current_user: User = Depends(institutional_access),
-):
-    """
-    Devuelve la configuración actual de scoring (pesos y umbrales) para transparencia en UI.
-    """
-    return get_scoring_config()
 
 @router.get("/reports/{report_run_id}")
 async def get_report_detail(
@@ -2290,6 +2234,36 @@ async def get_executive_brief(
         "briefs": briefs
     }
 
+def _mindefensa_source_filter(db: Session, target_municipio: str, anio: int):
+    """Elige una sola fuente MinDefensa para el municipio y año.
+
+    Varias cargas (compacta, referencia, datos.gov, total municipal) guardan las mismas
+    cifras; sumarlas duplica los conteos. Todas las vistas de contexto deben usar esta regla.
+    """
+    # Prefer compact aggregates from the trusted monitor. The legacy full-file
+    # route remains a fallback for historical data already ingested.
+    def has_source(source_id):
+        return db.query(NationalCrimeStats.id).filter(
+            NationalCrimeStats.source_id == source_id,
+            NationalCrimeStats.municipio_normalizado == target_municipio,
+            NationalCrimeStats.anio == anio,
+        ).first() is not None
+
+    reference_source_id = (
+        COMPACT_REFERENCE_SOURCE if has_source(COMPACT_REFERENCE_SOURCE)
+        else "MINDEFENSA_REFERENCE" if has_source("MINDEFENSA_REFERENCE")
+        else None
+    )
+    source_filter = (
+        NationalCrimeStats.source_id == reference_source_id
+        if reference_source_id else (
+            NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+            & (NationalCrimeStats.source_id != MUNICIPAL_REFERENCE_SOURCE)
+        )
+    )
+    return source_filter, reference_source_id
+
+
 @router.get("/stats")
 async def get_national_stats(
     municipio: str = "JAMUNDI",
@@ -2306,32 +2280,7 @@ async def get_national_stats(
     processor = NationalStatsProcessor()
     target_municipio = processor.normalize_text(municipio)
 
-    # Prefer compact aggregates from the trusted monitor. The legacy full-file
-    # route remains a fallback for historical data already ingested.
-    compact_source = NationalCrimeStats.source_id == COMPACT_REFERENCE_SOURCE
-    has_compact_reference = db.query(NationalCrimeStats.id).filter(
-        compact_source,
-        NationalCrimeStats.municipio_normalizado == target_municipio,
-        NationalCrimeStats.anio == anio,
-    ).first() is not None
-    reference_source = NationalCrimeStats.source_id == "MINDEFENSA_REFERENCE"
-    has_reference_data = db.query(NationalCrimeStats.id).filter(
-        reference_source,
-        NationalCrimeStats.municipio_normalizado == target_municipio,
-        NationalCrimeStats.anio == anio,
-    ).first() is not None
-    reference_source_id = (
-        COMPACT_REFERENCE_SOURCE if has_compact_reference
-        else "MINDEFENSA_REFERENCE" if has_reference_data
-        else None
-    )
-    mindefensa_source = (
-        NationalCrimeStats.source_id == reference_source_id
-        if reference_source_id else (
-            NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
-            & (NationalCrimeStats.source_id != MUNICIPAL_REFERENCE_SOURCE)
-        )
-    )
+    mindefensa_source, reference_source_id = _mindefensa_source_filter(db, target_municipio, anio)
     is_compact_reference = reference_source_id == COMPACT_REFERENCE_SOURCE
     
     # 2. Obtener datos locales (Jamundí o el seleccionado)
@@ -2488,6 +2437,11 @@ async def get_national_stats(
         # Variación YoY
         yoy_var = local_total - yoy_total
         yoy_pct = year_over_year(local_total, yoy_total)
+        official_scope_verified = (
+            is_compact_reference
+            and row.tipo_delito in compact_coverage_types
+            and row.tipo_delito in national_totals_by_type
+        )
         national_benchmark = comparable_national_rate(
             year=anio,
             local_code=local_code,
@@ -2495,19 +2449,24 @@ async def get_national_stats(
             national_total=national_totals_by_type.get(row.tipo_delito, 0),
             covered_codes=coverage_codes_by_type.get(row.tipo_delito, set()),
             cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
-            official_scope_verified=(
-                is_compact_reference
-                and row.tipo_delito in compact_coverage_types
-                and row.tipo_delito in national_totals_by_type
-            ),
+            official_scope_verified=official_scope_verified,
         )
+        # El libro nacional de MinDefensa solo lista municipios con casos. Si el
+        # archivo se procesó completo, un municipio de referencia ausente tiene
+        # cero casos y no debe bloquear la comparación territorial.
+        territorial_totals_by_code = dict(territorial_totals_by_code_by_type.get(row.tipo_delito, {}))
+        territorial_covered_codes = set(territorial_codes_by_type.get(row.tipo_delito, set()))
+        if official_scope_verified:
+            for peer_code in territorial_peer_codes:
+                territorial_totals_by_code.setdefault(peer_code, 0)
+            territorial_covered_codes = set(territorial_peer_codes)
         territorial_benchmark = comparable_reference_rate(
             year=anio,
             local_code=local_code,
             local_total=local_total,
             reference_total=territorial_totals_by_type.get(row.tipo_delito, 0),
             expected_codes=territorial_peer_codes,
-            covered_codes=territorial_codes_by_type.get(row.tipo_delito, set()),
+            covered_codes=territorial_covered_codes,
             cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
         )
         territorial_comparison = named_territorial_comparison(
@@ -2515,8 +2474,8 @@ async def get_national_stats(
             target_code=local_code,
             target_total=local_total,
             expected_codes=territorial_peer_codes,
-            totals_by_code=territorial_totals_by_code_by_type.get(row.tipo_delito, {}),
-            covered_codes=territorial_codes_by_type.get(row.tipo_delito, set()),
+            totals_by_code=territorial_totals_by_code,
+            covered_codes=territorial_covered_codes,
             cutoffs=cutoffs_by_type.get(row.tipo_delito, set()),
         )
 
@@ -2568,20 +2527,20 @@ async def get_national_stats(
             "available": True,
             "status": "COMPARABLE_RATES_AVAILABLE",
             "title": "Referencia nacional verificable",
-            "reason": "La tasa nacional se muestra solo en las conductas con cobertura municipal completa para el mismo ano y corte.",
+            "reason": "La tasa nacional se muestra solo en las conductas con cobertura municipal completa para el mismo año y corte.",
         })
     national_context["territorial_reference"] = {
         "available": bool(available_territorial_benchmarks),
         "title": "Municipios de referencia poblacional de Valle del Cauca y Cauca",
         "reason": (
-            "Incluye municipios con una poblacion entre 50% y 200% de la poblacion "
+            "Incluye municipios con una población entre 50% y 200% de la población "
             "DANE del municipio consultado; se publica solo con cobertura y corte completos."
         ),
         "expected_municipalities": len(territorial_peer_codes),
         "conductas_evaluated": len(result_data),
         "conductas_with_complete_coverage": len(available_territorial_benchmarks),
     }
-    national_context["dataset_scope"] = "NATIONAL_REFERENCE" if (has_compact_reference or has_reference_data) else "JAMUNDI_HISTORICAL_FALLBACK"
+    national_context["dataset_scope"] = "NATIONAL_REFERENCE" if reference_source_id else "JAMUNDI_HISTORICAL_FALLBACK"
 
     fp_data = db.query(
         NationalCrimeStats.accion,
@@ -2639,7 +2598,7 @@ async def get_national_municipal_ranking(
     if not included_types:
         return {
             "available": False,
-            "reason": "El monitor aun no ha sincronizado los totales municipales nacionales para esta conducta y ano.",
+            "reason": "El monitor aún no ha sincronizado los totales municipales nacionales para esta conducta y año.",
             "rows": [],
             "pagination": {"page": 1, "page_size": page_size, "total_rows": 0, "total_pages": 0},
             "filters": {"departments": []},
@@ -2791,6 +2750,19 @@ async def get_available_municipios(
 
     return sorted(options_by_code.values(), key=lambda option: option["nombre"])
 
+@router.get("/sat-radar")
+async def get_sat_radar(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
+    """
+    Contrasta las Alertas Tempranas de la Defensoría para Jamundí con los hechos de la sábana policial.
+    Lectura descriptiva: no genera alertas operativas.
+    """
+    from services.sat_radar_service import build_sat_radar
+    return build_sat_radar(db)
+
+
 @router.get("/years")
 async def get_available_years(
     db: Session = Depends(get_db),
@@ -2875,17 +2847,12 @@ async def get_intelligence_insights(
         # 1. Obtener los mismos datos que /stats para dar contexto a la IA
         processor = NationalStatsProcessor()
         target_municipio = processor.normalize_text(municipio)
-        reference_source = NationalCrimeStats.source_id == "MINDEFENSA_REFERENCE"
-        has_reference_data = db.query(NationalCrimeStats.id).filter(
-            reference_source,
-            NationalCrimeStats.municipio_normalizado == target_municipio,
-            NationalCrimeStats.anio == anio,
-        ).first() is not None
-        mindefensa_source = reference_source if has_reference_data else NationalCrimeStats.source_id.ilike("%MINDEFENSA%")
+        mindefensa_source, _ = _mindefensa_source_filter(db, target_municipio, anio)
         
         local_data = db.query(
             NationalCrimeStats.tipo_delito,
-            func.sum(NationalCrimeStats.cantidad).label("total")
+            func.sum(NationalCrimeStats.cantidad).label("total"),
+            func.max(NationalCrimeStats.mes).label("period_end_month"),
         ).filter(
             mindefensa_source,
             NationalCrimeStats.municipio_normalizado == target_municipio,
@@ -2895,22 +2862,32 @@ async def get_intelligence_insights(
         # Nueva Lógica Refinada
         
         # National raw-count averages are not used as a municipal benchmark.
+        # Igual que /stats: el año anterior se recorta a los mismos meses del año consultado,
+        # para no comparar un año en curso (p. ej. enero-junio) contra un año completo.
         yoy_data = db.query(
             NationalCrimeStats.tipo_delito,
+            NationalCrimeStats.mes,
             func.sum(NationalCrimeStats.cantidad).label("total")
         ).filter(
             mindefensa_source,
             NationalCrimeStats.municipio_normalizado == target_municipio,
             NationalCrimeStats.anio == anio - 1
-        ).group_by(NationalCrimeStats.tipo_delito).all()
-        yoy_dict = {row.tipo_delito: int(row.total) for row in yoy_data}
+        ).group_by(NationalCrimeStats.tipo_delito, NationalCrimeStats.mes).all()
+        period_end_by_type = {row.tipo_delito: int(row.period_end_month or 12) for row in local_data}
+        yoy_dict = {}
+        for row in yoy_data:
+            if int(row.mes) <= period_end_by_type.get(row.tipo_delito, 12):
+                yoy_dict[row.tipo_delito] = yoy_dict.get(row.tipo_delito, 0) + int(row.total)
+        period_months = set(period_end_by_type.values())
+        period_end_month = next(iter(period_months)) if len(period_months) == 1 else None
+        periodo_txt = _periodo_texto(anio, period_end_month, period_months)
 
         # Construir resumen local comparable para la IA.
         stats_summary = ""
         for row in local_data:
             previous = yoy_dict.get(row.tipo_delito, 0)
             variation = year_over_year(int(row.total), previous)
-            variation_text = f"{variation}% frente a {anio - 1}" if variation is not None else "sin base comparable en el ano anterior"
+            variation_text = f"{variation}% frente al mismo periodo de {anio - 1}" if variation is not None else "sin base comparable en el año anterior"
             stats_summary += f"- {row.tipo_delito}: {row.total} casos; {variation_text}.\n"
 
         if not stats_summary:
@@ -2918,7 +2895,7 @@ async def get_intelligence_insights(
 
         contexto = f"""
         Eres un redactor tecnico del SISC Jamundi. Redacta una lectura descriptiva
-        de la serie historica local de {municipio} para el ano {anio}.
+        de la serie historica local de {municipio} para {periodo_txt}.
 
         DATOS:
         {stats_summary}
@@ -2931,21 +2908,89 @@ async def get_intelligence_insights(
         5. Usa un tono tecnico, descriptivo y prudente, en maximo 70 palabras, sin Markdown.
         """
 
-        try:
-            # Validar proveedores configurados en api.ia
-            if AI_PROVIDER == "MISTRAL":
-                insight_text = await call_mistral(contexto)
-            else:
-                insight_text = await call_gemini(contexto)
-                
-            return {"insight": insight_text, "provider": AI_PROVIDER}
-        except Exception as e:
-            logger.error(f"Error generando insights de inteligencia (API IA): {e}")
-            return {"insight": "Análisis estratégico no disponible temporalmente debido a un error de conexión con el motor de IA o al alcanzar el límite de la cuota gratuita."}
+        # Respaldo determinístico: la lectura no depende de la IA, y se usa también si la
+        # IA altera una cifra o el sentido de una variación.
+        resultado = await redactar_verificado(
+            contexto,
+            f"Periodo: {periodo_txt}.\n{stats_summary}",
+            respaldo=_lectura_descriptiva_local(municipio, anio, local_data, yoy_dict, period_end_month),
+        )
+        return {
+            "insight": resultado["text"],
+            "provider": "SISC_AUTOMATICO" if resultado["fallback"] else AI_PROVIDER,
+            "model": None if resultado["fallback"] else resultado["model"],
+            "verified": resultado["verified"],
+            "fallback": resultado["fallback"],
+            "verification_notes": resultado["problems"],
+        }
 
     except Exception as general_err:
         logger.error(f"Error estructurando datos locales para insights: {general_err}")
         return {"insight": "Error interno al preparar los datos estratégicos. Por favor verifique la conexión a la base de datos."}
+
+def _etiqueta_delito(codigo) -> str:
+    etiquetas = {
+        "LESIONES_PERSONALES": "lesiones personales",
+        "HOMICIDIO": "homicidios",
+        "HOMICIDIO_INTENCIONAL": "homicidio intencional",
+        "HURTO_VEHICULOS": "hurto de vehículos",
+        "HURTO_PERSONAS": "hurto a personas",
+        "HURTO_RESIDENCIAS": "hurto a residencias",
+        "HURTO_COMERCIO": "hurto a comercio",
+        "HURTO_MOTOCICLETAS": "hurto de motocicletas",
+        "HURTO_AUTOMOTORES": "hurto de automotores",
+        "VIOLENCIA_INTRAFAMILIAR": "violencia intrafamiliar",
+        "EXTORSION": "extorsión",
+        "SECUESTRO": "secuestro",
+        "DELITOS_SEXUALES": "delitos sexuales",
+    }
+    codigo = str(codigo or "")
+    # Las fuentes usan "Hurto Personas" o "HURTO_PERSONAS" para el mismo delito.
+    clave = "_".join(
+        "".join(c for c in unicodedata.normalize("NFD", codigo) if not unicodedata.combining(c)).upper().split()
+    )
+    return etiquetas.get(clave, codigo.replace("_", " ").lower())
+
+
+_MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+          "septiembre", "octubre", "noviembre", "diciembre")
+
+
+def _periodo_texto(anio, period_end_month, months=None) -> str:
+    """'2025' para años completos; 'enero a junio de 2026' para años en curso."""
+    if period_end_month is None:
+        cortes = sorted(months or [])
+        if len(cortes) >= 2:
+            return f"{anio}, con corte a {_MESES[cortes[0] - 1]} o {_MESES[cortes[-1] - 1]} según la conducta"
+        return f"{anio}, con cortes distintos según la conducta"
+    if period_end_month == 1:
+        return f"enero de {anio}"
+    if period_end_month < 12:
+        return f"enero a {_MESES[period_end_month - 1]} de {anio}"
+    return str(anio)
+
+
+def _lectura_descriptiva_local(municipio, anio, local_data, yoy_dict, period_end_month=12) -> str:
+    """Lectura técnica sin IA a partir de los mismos conteos que recibiría el modelo."""
+    filas = sorted(local_data, key=lambda r: int(r.total or 0), reverse=True)
+    referencia = str(anio - 1) if period_end_month == 12 else f"al mismo periodo de {anio - 1}"
+    partes = []
+    for row in filas[:4]:
+        total = int(row.total or 0)
+        previo = yoy_dict.get(row.tipo_delito, 0)
+        variacion = year_over_year(total, previo)
+        cifra = f"{total:,}".replace(",", ".")
+        if variacion is None:
+            partes.append(f"{_etiqueta_delito(row.tipo_delito)}: {cifra} casos, sin base comparable en {anio - 1}")
+        else:
+            signo = "+" if variacion > 0 else ""
+            var_txt = f"{signo}{variacion}".replace(".", ",")
+            partes.append(f"{_etiqueta_delito(row.tipo_delito)}: {cifra} casos ({var_txt}% frente {'a ' if period_end_month == 12 else ''}{referencia})")
+    nombre = str(municipio or "").replace("JAMUNDI", "Jamundí").title() if str(municipio or "").isupper() else municipio
+    periodo = _periodo_texto(anio, period_end_month, {int(r.period_end_month or 12) for r in local_data})
+    inicio = f"Entre {periodo}" if period_end_month and 1 < period_end_month < 12 else f"En {periodo}"
+    return f"{inicio}, la serie de MinDefensa para {nombre} registra " + "; ".join(partes) + ". Lectura descriptiva generada automáticamente por el SISC."
+
 
 @router.get("/public/rnmc-history")
 def public_rnmc_history():

@@ -98,6 +98,20 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "fresh_days": 55,
         "lagged_days": 90,
     },
+    "MEDICINA_LEGAL": {
+        "name": "Medicina Legal (INMLCF)",
+        "institution": "Instituto Nacional de Medicina Legal y Ciencias Forenses",
+        "scope": "Lesiones de causa externa fatales y no fatales filtradas para Jamundí",
+        "purpose": "Capa forense que arbitra homicidios, suicidios y violencia de causa externa",
+        "update_mode": "AUTOMATIC_EXTERNAL",
+        "expected_frequency": "Preliminar mensual mes vencido; definitivas anuales",
+        "source_url": "https://www.datos.gov.co/",
+        "action_type": "OPEN",
+        "action_label": "Abrir fuente oficial",
+        "dataset_code": None,
+        "fresh_days": 55,
+        "lagged_days": 90,
+    },
 }
 
 STATUS_LABELS = {

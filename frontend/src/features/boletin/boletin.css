@@ -1,0 +1,199 @@
+.boletin-replica {
+  container-type: inline-size;
+  container-name: boletin;
+  --color-primary-deep: #281FD0;
+  --color-primary-vibrant: #384CF5;
+  --color-accent-yellow: #FFE000;
+  --color-dark-gray: #3A3A44;
+  --color-slate-blue: #606175;
+  --color-light-slate: #C5C5D2;
+  --color-police-blue: #0E2442;
+  --color-police-green: #2B7A4B;
+  --color-police-accent: #DAA520;
+  --color-ui-bg: #0b0c15;
+  --color-ui-panel-bg: rgba(20, 22, 41, 0.75);
+  --color-ui-border: rgba(255, 255, 255, 0.08);
+  --color-ui-text-primary: #f1f3f9;
+  --color-ui-text-secondary: #9ea4b8;
+  --color-ui-accent: #384CF5;
+  --color-ui-card-bg: rgba(30, 33, 61, 0.45);
+}
+
+.boletin-replica {
+  --background: var(--color-ui-bg);
+  --foreground: var(--color-ui-text-primary);
+  
+  --doc-bg: #ffffff;
+  --doc-text-main: #2a2a2a;
+  --doc-text-muted: #555555;
+  --doc-border: #dddddd;
+}
+
+.boletin-replica {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Base custom styles to keep it exactly like the original where needed */
+.boletin-replica .app-container {
+    display: grid;
+    grid-template-columns: 460px 1fr;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+}
+
+.boletin-replica .control-panel {
+    background-color: var(--color-ui-panel-bg);
+    border-right: 1px solid var(--color-ui-border);
+    backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    box-shadow: 5px 0 25px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+}
+
+.boletin-replica .newsletter-document {
+    background-color: var(--doc-bg);
+    width: 100%;
+    max-width: 900px;
+    height: 1050px;
+    margin: 0 auto;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    position: relative;
+    overflow: hidden;
+    color: var(--doc-text-main);
+    display: flex;
+    flex-direction: column;
+}
+
+@container boletin (max-width: 1100px) {
+  .boletin-replica .app-container {
+    display: block;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .boletin-replica .control-panel {
+    height: auto;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-ui-border);
+  }
+
+  .boletin-replica .app-preview {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 1rem;
+  }
+
+  .boletin-replica .newsletter-document-container.has-document {
+    min-width: 760px;
+  }
+}
+
+@media print {
+  .boletin-replica {
+    background: white;
+    margin: 0;
+    padding: 0;
+  }
+  .boletin-replica .control-panel {
+    display: none !important;
+  }
+  .boletin-replica .app-container {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .boletin-replica .app-container > section {
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    background: transparent !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+  @page boletin-institucional {
+    margin: 0;
+  }
+
+  .boletin-replica .newsletter-document-container {
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .boletin-replica .newsletter-document {
+    page: boletin-institucional;
+    box-shadow: none !important;
+    margin: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+    position: relative !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  
+  .boletin-replica .slide-page {
+    box-sizing: border-box !important;
+  }
+  
+  /* Avoid breaking charts */
+  .boletin-replica .recharts-wrapper {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .boletin-replica table {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Custom Print Helpers */
+  .boletin-replica .hide-on-print {
+    display: none !important;
+  }
+  .boletin-replica .transparent-on-print {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin-bottom: 1rem !important;
+  }
+  .boletin-replica .no-resize-on-print {
+    resize: none !important;
+  }
+}
+
+@media print {
+  body.printing-boletin-replica,
+  body.printing-boletin-replica #root,
+  body.printing-boletin-replica .sisc-layout,
+  body.printing-boletin-replica .sisc-layout-content,
+  body.printing-boletin-replica .sisc-layout-main {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  body.printing-boletin-replica .sisc-layout > aside,
+  body.printing-boletin-replica .sisc-layout-content > header,
+  body.printing-boletin-replica .sisc-layout > div.fixed {
+    display: none !important;
+  }
+}

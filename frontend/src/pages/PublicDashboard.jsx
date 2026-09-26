@@ -101,7 +101,7 @@ const ChartShell = ({ title, subtitle, children, action }) => (
             </div>
             {action}
         </div>
-        <div className="flex-1 min-h-[260px]">{children}</div>
+        <div className="flex-1 min-h-[260px] min-w-0">{children}</div>
     </section>
 );
 
@@ -155,7 +155,7 @@ const AggregatedMap = ({ points = [], suppressed = 0, unmapped = 0, minCount = 1
             </div>
             <div className="h-[500px] relative">
                 <MapContainer center={[3.2606, -76.5364]} zoom={12} zoomControl={false} preferCanvas style={{ height: '100%', width: '100%' }}>
-                    <TileLayer attribution='&copy; OpenStreetMap contributors &copy; CARTO' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" maxZoom={19} />
+                    <TileLayer attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}" maxZoom={18} />
                     {visiblePoints.map((point) => { const intensity = (point.total || 0) / maxTotal; return <GeoJSON key={point.name} data={point.geometry} eventHandlers={{ click: () => onSelectTerritory?.(point) }} style={{ color: '#281FD0', fillColor: intensity >= 0.7 ? '#FFB600' : '#384CF5', fillOpacity: 0.28 + intensity * 0.38, weight: 2 }}>{labelledTerritories.has(point.name) && <MapTooltip permanent direction="center" className="sisc-map-label">{point.name}</MapTooltip>}<Popup><TerritoryPopup point={point} /></Popup></GeoJSON>; })}
                     {showBubbles && visiblePoints.map((point) => <CircleMarker key={`bubble-${point.name}`} center={[point.lat, point.lng]} radius={Math.max(5, Math.min(20, 5 + Math.sqrt(point.total || 0) * 1.2))} pathOptions={{ color: '#FFB600', fillColor: '#FFB600', fillOpacity: 0.24, weight: 1 }} eventHandlers={{ click: () => onSelectTerritory?.(point) }}><Popup><TerritoryPopup point={point} /></Popup></CircleMarker>)}
                 </MapContainer>

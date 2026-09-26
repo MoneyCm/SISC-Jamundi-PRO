@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
 
   // En Docker, las variables de entorno están en process.env
   // Vite's loadEnv solo carga desde archivos .env por defecto
-  const proxyTarget = env.VITE_PROXY_TARGET || process.env.VITE_PROXY_TARGET || 'http://localhost:8000';
+  const proxyTarget = process.env.VITE_PROXY_TARGET || env.VITE_PROXY_TARGET || 'http://localhost:8000';
 
   console.log(`[Vite Config] Mode: ${mode}`);
   console.log(`[Vite Config] Proxy target: ${proxyTarget}`);

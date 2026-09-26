@@ -42,6 +42,7 @@ def test_catalog_has_the_distinct_source_connectors():
         "SIEDCO_PUBLICO",
         "OBSERVATORIO_VALLE",
         "FISCALIA_SPOA_V3",
+        "MEDICINA_LEGAL",
     }
     assert SOURCE_CONNECTORS["POLICIA_JAMUNDI"]["purpose"] == "Fuente operativa principal"
     assert SOURCE_CONNECTORS["POLICIA_NACIONAL"]["purpose"] == "Contraste mensual oficial de la sabana semanal"
@@ -51,6 +52,7 @@ def test_catalog_has_the_distinct_source_connectors():
     assert SOURCE_CONNECTORS["SIEDCO_PUBLICO"]["expected_frequency"] == "Mensual y bajo demanda"
     assert SOURCE_CONNECTORS["OBSERVATORIO_VALLE"]["expected_frequency"] == "Semanal"
     assert SOURCE_CONNECTORS["FISCALIA_SPOA_V3"]["purpose"] == "Capa judicial complementaria del Observatorio del Delito"
+    assert SOURCE_CONNECTORS["MEDICINA_LEGAL"]["purpose"] == "Capa forense que arbitra homicidios, suicidios y violencia de causa externa"
 
 
 def test_freshness_thresholds_are_explicit():

@@ -20,9 +20,20 @@ import {
     Hash
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import SatRadarPanel from '../components/SatRadarPanel';
 
 const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
     const [alerts, setAlerts] = useState([]);
+    // Dos cosas distintas en la misma página: alertas oficiales de la Defensoría y alertas que calcula el SISC.
+    const [view, setView] = useState('defensoria');
+    const [coverage, setCoverage] = useState(null);
+    useEffect(() => {
+        fetch(`${API_BASE_URL}/intelligence/alerts/rnmc/coverage`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+            .then((response) => (response.ok ? response.json() : null))
+            .then(setCoverage)
+            .catch(() => setCoverage(null));
+    }, []);
+    const fmtDay = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : 'sin fecha');
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState({
         status: 'OPEN',
@@ -30,6 +41,8 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
         severity: ''
     });
     const [error, setError] = useState(null);
+    // Distingue "no hay alertas" de "no se pudieron consultar": nunca mostrar "Todo bajo control" tras un fallo.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [snapshotInfo, setSnapshotInfo] = useState(null);
     const [scoringConfig, setScoringConfig] = useState(null);
@@ -49,8 +62,10 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
             const data = await response.json();
             setAlerts(data.items || []);
             setError(null);
+            setLoadFailed(false);
         } catch (err) {
             setError(err.message);
+            setLoadFailed(true);
         } finally {
             setLoading(false);
         }
@@ -254,13 +269,50 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
 
     return (
         <div className="max-w-6xl mx-auto p-6 space-y-8 animate-fade-in pb-40">
+            <div className="grid gap-2 sm:grid-cols-2" role="tablist" aria-label="Tipo de alertas">
+                {[
+                    ['defensoria', 'Alertas tempranas de la Defensoría', 'Oficiales, contrastadas con los hechos registrados'],
+                    ['sisc', `Alertas del SISC${alerts.length ? ` (${alerts.length})` : ''}`, 'Medidas correctivas (RNMC) con rezago o sin pago'],
+                ].map(([id, label, helper]) => (
+                    <button
+                        key={id}
+                        role="tab"
+                        aria-selected={view === id}
+                        onClick={() => setView(id)}
+                        className={`rounded-2xl border-2 px-5 py-4 text-left transition-all ${view === id ? 'border-[#281FD0] bg-[#281FD0] text-white shadow-lg' : 'border-slate-200 bg-white text-slate-800 hover:border-[#281FD0]'}`}
+                    >
+                        <span className="block text-base font-black">{label}</span>
+                        <span className={`mt-1 block text-xs font-semibold ${view === id ? 'text-indigo-100' : 'text-slate-500'}`}>{helper}</span>
+                    </button>
+                ))}
+            </div>
+
+            {/* Contexto: alertas de la Defensoría contrastadas con los hechos registrados */}
+            {view === 'defensoria' && <SatRadarPanel />}
+
+            {view === 'sisc' && (<>
+            {coverage && (
+                <div role="status" className={`rounded-2xl border-2 px-5 py-4 text-sm font-semibold ${coverage.stale ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-200 bg-white text-slate-700'}`}>
+                    {coverage.records === 0
+                        ? 'No hay comparendos (RNMC) cargados: esta lista no puede generar alertas.'
+                        : <>
+                            Comparendos cargados del {fmtDay(coverage.first_date)} al {fmtDay(coverage.last_date)} ({coverage.records} registros).
+                            {' '}Última carga: {fmtDay(coverage.last_load)}.
+                            {coverage.stale && <strong> El dato más reciente tiene {coverage.days_since_data} días: esta lista no refleja la situación actual. Cargue en Inspecciones MIP el reporte de comparendos reciente.</strong>}
+                            {coverage.future_dated > 0 && <> {coverage.future_dated} registro(s) con fecha futura: revisar en la fuente.</>}
+                        </>}
+                </div>
+            )}
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <Bell className="text-[#281FD0]" /> Muro de Priorización
+                        <Bell className="text-[#281FD0]" /> Alertas del SISC (priorización)
                     </h1>
-                    <p className="text-slate-500 font-medium mt-1">Inteligencia Operativa y Ranking de Acción (Fase 3)</p>
+                    <p className="text-slate-500 font-medium mt-1">
+                        Seguimiento de medidas correctivas (RNMC): rezago de más de 30 días "en proceso" y multas ratificadas sin pago.
+                        Las calcula el SISC; no son alertas tempranas de la Defensoría.
+                    </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -372,11 +424,24 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
                     <RefreshCw className="text-blue-500 animate-spin mb-4" size={32} />
                     <p className="text-slate-500 font-bold">Calculando Action Scores (IA Prioritization)...</p>
                 </div>
+            ) : alerts.length === 0 && loadFailed ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100 border-dashed">
+                    <p className="text-slate-900 font-black text-xl">No se pudieron consultar las alertas</p>
+                    <p className="text-slate-500 font-medium">El estado real es desconocido. Intenta de nuevo o revisa el servicio.</p>
+                </div>
             ) : alerts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100 border-dashed">
-                    <CheckCircle2 className="text-emerald-500 mb-4" size={32} />
-                    <p className="text-slate-900 font-black text-xl">¡Todo bajo control!</p>
-                    <p className="text-slate-500 font-medium">No hay alertas abiertas para los criterios seleccionados.</p>
+                    {coverage && !coverage.stale ? <>
+                        <CheckCircle2 className="text-emerald-500 mb-4" size={32} />
+                        <p className="text-slate-900 font-black text-xl">Sin alertas abiertas</p>
+                        <p className="text-slate-500 font-medium">No hay alertas para los criterios seleccionados con los datos al {fmtDay(coverage.last_date)}.</p>
+                    </> : <>
+                        <AlertTriangle className="text-amber-500 mb-4" size={32} />
+                        <p className="text-slate-900 font-black text-xl">Sin alertas, pero con datos desactualizados</p>
+                        <p className="max-w-lg text-center text-slate-500 font-medium">
+                            Que no haya alertas no significa que todo esté bien: los comparendos solo llegan hasta el {coverage ? fmtDay(coverage.last_date) : 'sin fecha'}.
+                        </p>
+                    </>}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 gap-6">
@@ -517,6 +582,7 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
                     </div>
                 </div>
             )}
+            </>)}
         </div>
     );
 };

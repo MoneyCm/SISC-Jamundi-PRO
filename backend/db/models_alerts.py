@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Text, text, Index, Float
+from sqlalchemy import Column, String, DateTime, Text, text, Index, Float, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from .session import Base
@@ -34,6 +34,16 @@ class IntelligenceAlert(Base):
     updated_at = Column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), onupdate=datetime.now)
     expires_at = Column(DateTime(timezone=True), nullable=True)
 
+    # --- Bandeja operativa: revisión humana separada de la evidencia ---
+    review_state = Column(String(20), nullable=False, default="PENDIENTE", index=True)
+    # PENDIENTE | EN_ANALISIS | REVISADA | DESCARTADA. REVISADA = examinada, no resuelta.
+    review_version = Column(Integer, nullable=False, default=0)  # bloqueo optimista
+    # --- Linaje retrospectivo: identidad común por indicador+territorio+período ---
+    lineage_key = Column(String(255), nullable=True, index=True)
+    previous_evaluation_id = Column(UUID(as_uuid=True), nullable=True)
+    superseded_by = Column(UUID(as_uuid=True), nullable=True)
+    supersede_note = Column(Text, nullable=True)
+
     # Indices adicionales
     Index("idx_alerts_status_created", status, created_at.desc())
     Index("idx_alerts_source_status", source, status)
@@ -59,5 +69,30 @@ class IntelligenceAlertSnapshot(Base):
 
     __table_args__ = (
         Index("idx_alert_snapshots_source_created", "source", "created_at"),
+    )
+
+
+class AlertReview(Base):
+    """Revisión humana de una alerta. La evidencia calculada es inmutable;
+    cada valoración queda aquí con autoría y fecha del servidor.
+
+    Estados: PENDIENTE | EN_ANALISIS | REVISADA | DESCARTADA.
+    DESCARTADA exige motivo. REVISADA = examinada, no problema resuelto.
+    """
+
+    __tablename__ = "alert_reviews"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    alert_id = Column(UUID(as_uuid=True), ForeignKey("intelligence_alerts.id"), nullable=False, index=True)
+    action = Column(String(20), nullable=False)  # estado nuevo aplicado
+    prev_state = Column(String(20), nullable=False)
+    new_state = Column(String(20), nullable=False)
+    username = Column(String(120), nullable=False)
+    user_id = Column(String(120), nullable=True)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_alert_reviews_alert_created", "alert_id", "created_at"),
     )
 

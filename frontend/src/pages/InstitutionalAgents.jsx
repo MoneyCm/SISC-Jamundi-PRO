@@ -239,7 +239,7 @@ const InstitutionalAgents = () => {
                                 <Bot size={15} /> Operación asistida
                             </div>
                             <h1 className="font-titles text-3xl font-black tracking-tight md:text-5xl">
-                                Agentes institucionales
+                                Entregas institucionales
                             </h1>
                             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
                                 Carga informes, revisa lo que extrajo el agente y decide qué información puede publicarse.
@@ -335,7 +335,7 @@ const InstitutionalAgents = () => {
                                             className="mt-1"
                                         />
                                         <span>
-                                            <strong>Autorizar Mistral OCR 4.</strong> El PDF será enviado temporalmente al servicio externo para extraer su contenido y luego se solicitará su eliminación.
+                                            <strong>Solo para PDF escaneados: autorizar el OCR de Google Gemini.</strong> Los PDF digitales se leen en el servidor y no salen del SISC. Si el PDF no tiene texto legible, con esta autorización se enviará a Google Gemini, un servicio externo, para transcribirlo.
                                         </span>
                                     </label>
                                 )}                                <button disabled={working || detecting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#176b5b] px-4 py-3 font-black text-white hover:bg-[#115347] disabled:opacity-50">

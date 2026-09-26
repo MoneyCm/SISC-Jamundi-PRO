@@ -97,7 +97,7 @@ const AggregatedMap = ({ map, onSelect }) => {
     return (
         <div className="h-[420px] md:h-[520px]">
             <MapContainer center={[3.2606, -76.5364]} zoom={12} preferCanvas style={{ height: '100%', width: '100%' }}>
-                <TileLayer attribution="&copy; OpenStreetMap contributors &copy; CARTO" url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" maxZoom={19} />
+                <TileLayer attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}" maxZoom={18} />
                 {points.map((point) => {
                     const ratio = Number(point.total || 0) / max;
                     return <GeoJSON key={point.name} data={point.geometry} eventHandlers={{ click: () => onSelect?.(point.name) }} style={{ color: '#281FD0', fillColor: ratio > 0.66 ? '#FFB600' : '#384CF5', fillOpacity: 0.25 + ratio * 0.45, weight: 2 }}><Popup><div className="min-w-44"><strong>{point.name}</strong><p className="mt-1">{formatNumber(point.total)} casos agregados</p><p className="mt-2 text-xs text-slate-600">{point.conductas?.slice(0, 3).join(', ')}</p></div></Popup></GeoJSON>;

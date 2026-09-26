@@ -33,6 +33,20 @@ const OPEN_DATA_DICTIONARY = [
     { field: 'source', description: 'Fuente institucional del dato.' },
 ];
 
+const PublicInfoLoadingRows = () => (
+    <div className="divide-y divide-slate-200 border-y border-slate-200" aria-label="Cargando datos abiertos">
+        {[0, 1, 2].map((item) => (
+            <div key={item} className="py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-3">
+                    <div className="h-4 w-56 animate-pulse rounded bg-slate-200" />
+                    <div className="h-3 w-72 max-w-full animate-pulse rounded bg-slate-100" />
+                </div>
+                <div className="h-11 w-36 animate-pulse rounded bg-slate-200" />
+            </div>
+        ))}
+    </div>
+);
+
 const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNavigate, onLoginClick }) => {
     const [activeSection, setActiveSection] = useState(initialSection);
     const [data, setData] = useState({ kpis: null, distribution: [], metadata: null });
@@ -228,23 +242,27 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
                     <section>
                         <h2 className="text-2xl font-black mb-2">Descargar datos abiertos</h2>
                         <p className="text-slate-600 mb-8">Archivos anonimizados y agregados, listos para análisis y con trazabilidad de fuente y corte.</p>
-                        <div className="divide-y divide-slate-200 border-y border-slate-200">
-                            <div className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                <div><h3 className="font-black">Indicadores consolidados</h3><p className="text-sm text-slate-500 mt-1">{indicatorRows.length} indicadores públicos · corte {cutoff}</p></div>
-                                <button onClick={downloadIndicators} disabled={!indicatorRows.length} className="inline-flex items-center justify-center gap-2 bg-[#281FD0] text-white px-5 py-3 font-bold disabled:opacity-40"><Download size={18} /> Descargar CSV</button>
-                            </div>
-                            <div className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                <div><h3 className="font-black">Distribución por delito</h3><p className="text-sm text-slate-500 mt-1">{data.distribution.length} categorías agregadas · corte {cutoff}</p></div>
-                                <button onClick={downloadDistribution} disabled={!data.distribution.length} className="inline-flex items-center justify-center gap-2 border border-[#281FD0] text-[#281FD0] px-5 py-3 font-bold disabled:opacity-40"><Download size={18} /> Descargar CSV</button>
-                            </div>
-                            <div className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                <div><h3 className="font-black">Paquete completo y diccionario</h3><p className="text-sm text-slate-500 mt-1">Indicadores, categorías, metadatos y definición de campos.</p></div>
-                                <div className="flex flex-wrap gap-2">
-                                    <button onClick={downloadOpenDataJson} disabled={!indicatorRows.length} className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#281FD0] px-4 font-bold text-[#281FD0] disabled:opacity-40"><FileJson2 size={18} /> JSON</button>
-                                    <button onClick={downloadOpenDataXlsx} disabled={!indicatorRows.length || exportingXlsx} className="inline-flex min-h-11 items-center justify-center gap-2 bg-[#281FD0] px-4 font-bold text-white disabled:opacity-40"><FileSpreadsheet size={18} /> {exportingXlsx ? 'Generando' : 'XLSX'}</button>
+                        {loading ? (
+                            <PublicInfoLoadingRows />
+                        ) : (
+                            <div className="divide-y divide-slate-200 border-y border-slate-200">
+                                <div className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                    <div><h3 className="font-black">Indicadores consolidados</h3><p className="text-sm text-slate-500 mt-1">{indicatorRows.length} indicadores públicos · corte {cutoff}</p></div>
+                                    <button onClick={downloadIndicators} disabled={!indicatorRows.length} className="inline-flex items-center justify-center gap-2 bg-[#281FD0] text-white px-5 py-3 font-bold disabled:opacity-40"><Download size={18} /> Descargar CSV</button>
+                                </div>
+                                <div className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                    <div><h3 className="font-black">Distribución por delito</h3><p className="text-sm text-slate-500 mt-1">{data.distribution.length} categorías agregadas · corte {cutoff}</p></div>
+                                    <button onClick={downloadDistribution} disabled={!data.distribution.length} className="inline-flex items-center justify-center gap-2 border border-[#281FD0] text-[#281FD0] px-5 py-3 font-bold disabled:opacity-40"><Download size={18} /> Descargar CSV</button>
+                                </div>
+                                <div className="py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                    <div><h3 className="font-black">Paquete completo y diccionario</h3><p className="text-sm text-slate-500 mt-1">Indicadores, categorías, metadatos y definición de campos.</p></div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button onClick={downloadOpenDataJson} disabled={!indicatorRows.length} className="inline-flex min-h-11 items-center justify-center gap-2 border border-[#281FD0] px-4 font-bold text-[#281FD0] disabled:opacity-40"><FileJson2 size={18} /> JSON</button>
+                                        <button onClick={downloadOpenDataXlsx} disabled={!indicatorRows.length || exportingXlsx} className="inline-flex min-h-11 items-center justify-center gap-2 bg-[#281FD0] px-4 font-bold text-white disabled:opacity-40"><FileSpreadsheet size={18} /> {exportingXlsx ? 'Generando' : 'XLSX'}</button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                         {exportStatus && <p className="mt-4 text-sm font-bold text-slate-700" role="status">{exportStatus}</p>}
                         <p className="mt-6 flex gap-2 text-xs text-slate-500"><Info size={16} className="shrink-0" /> Cite la fuente como “SISC Jamundí / Policía Nacional - SABANA SIEDCO/PONAL” e indique la fecha de descarga.</p>
                     </section>

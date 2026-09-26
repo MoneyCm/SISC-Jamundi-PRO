@@ -30,6 +30,60 @@ OFFICIAL_NAME_ALIASES = {
     "LA PRADERA I": "LA PRADERA",
 }
 
+# Nombres de presentación para polígonos cuya capa oficial trae mayúsculas, errores de
+# digitación o tildes faltantes. Solo cambia lo que se muestra; la geometría no se modifica.
+OFFICIAL_DISPLAY_NAMES = {
+    "BOCAS DEL PALOS": "Bocas del Palo",
+    "VIILA PAZ": "Villa Paz",
+    "PEON": "Peón",
+    "PUENTE VELEZ": "Puente Vélez",
+    "ANGEL MARIA CAMACHO": "Ángel María Camacho",
+    "QUINTAS DE BOLIVAR": "Quintas de Bolívar",
+    "JORGE ELIECER GAITAN": "Jorge Eliécer Gaitán",
+    "BELALCAZAR II": "Belalcázar II",
+    "AMIGOS 2000 - PARAISO DE SARDI": "Amigos 2000 - Paraíso de Sardí",
+}
+
+_LOWERCASE_PARTICLES = {"DE", "DEL", "LA", "LAS", "LOS", "Y", "EL", "EN"}
+_ROMAN_NUMERALS = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"}
+# Palabras que la sábana escribe sin tilde.
+_ACCENTED_WORDS = {
+    "JAMUNDI": "Jamundí", "RIO": "Río", "SIMON": "Simón", "BOLIVAR": "Bolívar", "BELALCAZAR": "Belalcázar",
+    "ALFEREZ": "Alférez", "JARDIN": "Jardín", "ESTACION": "Estación", "VIA": "Vía", "MARIA": "María",
+    "ANGEL": "Ángel", "PEON": "Peón", "VELEZ": "Vélez", "GAITAN": "Gaitán", "ELIECER": "Eliécer",
+    "URBANIZACION": "Urbanización", "INVASION": "Invasión", "SARDI": "Sardí", "JORDAN": "Jordán",
+}
+
+
+def _display_word(word: str, first: bool) -> str:
+    if word in _ROMAN_NUMERALS:
+        return word
+    if not first and word in _LOWERCASE_PARTICLES:
+        return word.lower()
+    return _ACCENTED_WORDS.get(word, word.capitalize())
+
+
+def _display_name(name: str) -> str:
+    """Unifica los nombres en mayúsculas al formato de título usado por la capa urbana."""
+    name = " ".join(str(name).split())
+    override = OFFICIAL_DISPLAY_NAMES.get(GeocodingService.normalize_name(name))
+    if override:
+        return override
+    # Siglas cortas (NN, PTAR) y nombres ya escritos en formato de título se conservan.
+    if name != name.upper() or len(name) <= 4:
+        return name
+    # Se respetan separadores como "/" y "-" ("VIA JAMUNDI/TIMBA" -> "Vía Jamundí/Timba").
+    parts = re.split(r"([ /-])", name)
+    words_seen = 0
+    result = []
+    for part in parts:
+        if part in {" ", "/", "-"} or not part:
+            result.append(part)
+            continue
+        result.append(_display_word(part, words_seen == 0 or (result and result[-1] in {"/", "-"})))
+        words_seen += 1
+    return "".join(result)
+
 
 def _normalize_aliases_payload(payload) -> Dict[str, str]:
     if not isinstance(payload, dict):
@@ -120,15 +174,19 @@ class GeocodingService:
         """Load official urban and rural polygons, retaining each source for traceability."""
         territories = {}
 
-        def add_features(features, source):
+        def add_features(features, source, overwrite=True):
             for feature in features or []:
                 properties = feature.get("properties") or {}
                 name = properties.get("Nombre") or properties.get("NOMBRE") or properties.get("nombre") or properties.get("name")
                 geometry = feature.get("geometry")
                 if not name or not geometry:
                     continue
+                key = GeocodingService.normalize_name(name)
+                if not overwrite and key in territories:
+                    continue
                 point = shape(geometry).representative_point()
-                territories[GeocodingService.normalize_name(name)] = {
+                territories[key] = {
+                    "name": _display_name(name),
                     "geometry": geometry,
                     "coords": (point.y, point.x),
                     "source": source,
@@ -144,12 +202,16 @@ class GeocodingService:
             except (json.JSONDecodeError, OSError) as exc:
                 logger.warning("No se pudo cargar cartografia %s: %s", geojson_path, exc)
 
-        for source, url in REMOTE_GEOJSON_URLS:
+        # Las capas remotas solo se consultan si se activan: la del IGAC trae las veredas de todo el
+        # país (86 MB, ~15 s) y la de la CVC no responde. Aunque se activen, nunca reemplazan un
+        # polígono oficial local: una vereda homónima de otro municipio no puede tomar su lugar.
+        remote_sources = REMOTE_GEOJSON_URLS if os.getenv("SISC_REMOTE_CARTOGRAPHY", "").strip() == "1" else []
+        for source, url in remote_sources:
             try:
                 request = Request(url, headers={"Accept": "application/geo+json, application/json"})
                 with urlopen(request, timeout=4) as response:
                     payload = json.loads(response.read().decode("utf-8"))
-                add_features(payload.get("features", []), source)
+                add_features(payload.get("features", []), source, overwrite=False)
                 logger.info("Cartografia remota cargada: %s", source)
             except Exception as exc:
                 logger.warning("No se pudo consultar cartografia remota %s: %s", source, exc)
