@@ -561,7 +561,11 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
       .then(async res => { const data = await res.json(); if (!res.ok) throw new Error(data.error || data.detail || 'No se pudieron consultar las metas del PISCC.'); return data; })
       .then(data => {
         if (controller.signal.aborted) return;
-        setPisccGoals(data?.goals ?? null);
+        if (!data?.goals) {
+          setPisccSourceNotice('El servidor no devolvió las metas del PISCC: reinicie el backend o revise sus registros. La página PISCC no se incluirá.');
+          return;
+        }
+        setPisccGoals(data.goals);
         setPisccSourceNotice((data.notices || []).join(' '));
       })
       .catch(error => { if (!controller.signal.aborted) setPisccSourceNotice(error.message || 'Metas del PISCC no disponibles.'); });
