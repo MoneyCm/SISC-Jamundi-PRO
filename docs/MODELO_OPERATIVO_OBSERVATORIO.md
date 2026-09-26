@@ -181,11 +181,11 @@ Nada que llegue a la ciudadanía o al Consejo sale sin revisión de una persona.
 | Lesiones personales | 453 | 430 | Sábana policial (hechos únicos) |
 | Comportamientos contrarios a la convivencia | 4.798 | 4.000 | RNMC / Inspecciones |
 
-Se siguen en dos lugares:
-- **Boletín institucional, página "Seguimiento a metas de resultado (tabla 16)"**: se calcula en el navegador al armar el boletín, contando filas del Excel.
-- **Centro de análisis, pestaña "Metas PISCC"** y señal en la portada: se calcula en el servidor con la regla oficial (hechos únicos sobre la entrega policial fija; cada fuente externa con su corte). Metas menores de 20 comparan el acumulado; las demás, el ritmo anual; antes de 8 semanas el resultado es preliminar.
-
-Pendiente: que la página del boletín use el mismo cálculo del servidor, para que ambas cifras coincidan.
+Un solo cálculo, en el servidor, con la regla oficial (hechos únicos sobre la entrega policial fija;
+cada fuente externa con su corte). Metas menores de 20 comparan el acumulado; las demás, el ritmo
+anual; antes de 8 semanas el resultado es preliminar. Se ve en dos lugares:
+- **Boletín institucional**, página "Seguimiento a metas de resultado (tabla 16)", al corte del boletín y con su misma entrega policial.
+- **Centro de análisis**, pestaña "Metas PISCC", y la señal de desviación en la portada.
 
 ### Acciones del PISCC que son responsabilidad directa del Observatorio
 
@@ -209,7 +209,7 @@ Las otras 39 acciones las ejecutan otras entidades; el Observatorio **consolida*
 
 En orden de prioridad:
 
-1. ~~**Los 7 indicadores de resultado del PISCC** en el Centro de análisis, con señal de desviación en la portada.~~ Hecho. Falta que la página del boletín use el mismo cálculo.
+1. ~~**Los 7 indicadores de resultado del PISCC** en el Centro de análisis, con señal de desviación en la portada.~~ Hecho, y el boletín usa el mismo cálculo.
 2. **Boletín mensual:** la misma maquinaria del semanal, con periodo de mes calendario y fuentes de publicación mensual (Medicina Legal, Fiscalía).
 3. **Seguimiento semestral de las 43 acciones:** catálogo de acciones (con la transcripción de la sección 8), carga del avance reportado por cada entidad con su soporte, y el tablero por vector. Exportable al SisPT.
 4. **Solicitudes de datos con estado:** registrar qué se pidió a Inspecciones y Comisarías, cuándo, y si llegó. Así la portada muestra "Comisaría Segunda sin reportar hace 3 semanas".

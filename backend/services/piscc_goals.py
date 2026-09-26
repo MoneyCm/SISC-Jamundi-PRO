@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -75,14 +76,18 @@ def evaluate(count: int, cutoff: date, goal: int) -> Dict[str, Any]:
     return {**result, "status": status, "detail": detail}
 
 
-def _police_rows(db: Session, today: date) -> Dict[str, Dict[str, Any]]:
+def _police_rows(db: Session, today: date, source_version_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    from db.models_hechos_seguridad import IngestionRun
     from services.indicator_calculation import calculate_indicator
     from services.indicator_catalog import METHODOLOGY_VERSION
     from services.intervention_followup import latest_covering_run
 
-    run = latest_covering_run(db)
+    # El boletín fija su entrega; el Centro de análisis usa la última completa.
+    run = db.get(IngestionRun, UUID(source_version_id)) if source_version_id else latest_covering_run(db)
+    if run is not None and run.fuente_codigo != "POLICIA_SEMANAL":
+        run = None
     police = [(key, indicator) for key, _l, _b, _g, indicator in TABLE_16 if indicator]
-    if not run:
+    if not run or not run.cobertura_inicio or not run.cobertura_fin:
         return {key: {"status": "SIN_DATOS", "detail": "No hay una entrega policial completa con cobertura declarada."}
                 for key, _ in police}
     cutoff = min(today, run.cobertura_fin)
@@ -134,12 +139,13 @@ def short_text(item: Dict[str, Any]) -> str:
     return f"{item['label']}: ritmo de ≈{item['projection']} (meta {item['goal_2027']})"
 
 
-def build_goals(db: Session, today: Optional[date] = None) -> Dict[str, Any]:
+def build_goals(db: Session, today: Optional[date] = None, source_version_id: Optional[str] = None) -> Dict[str, Any]:
+    """`today` es la fecha de corte: la del día en el Centro de análisis, el fin del periodo en el boletín."""
     today = today or date.today()
     measured: Dict[str, Dict[str, Any]] = {}
-    for loader, label in ((_police_rows, "sábana policial"), (_external_rows, "fuentes externas")):
+    for loader, label, args in ((_police_rows, "sábana policial", (source_version_id,)), (_external_rows, "fuentes externas", ())):
         try:
-            measured.update(loader(db, today))
+            measured.update(loader(db, today, *args))
         except Exception:
             logger.exception("Metas PISCC: no se pudo leer %s", label)
     indicators: List[Dict[str, Any]] = []

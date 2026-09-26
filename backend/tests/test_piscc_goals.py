@@ -58,3 +58,17 @@ def test_portada_ok_when_all_on_track(monkeypatch):
     monkeypatch.setattr(piscc_goals, "build_goals", lambda db, today: fake)
     [row] = observatory_service.piscc_signals(None, date(2026, 9, 25))
     assert row["level"] == "OK" and "1 de 2" in row["detail"]
+
+
+def test_bulletin_endpoint_passes_cutoff_and_delivery(monkeypatch):
+    from uuid import uuid4
+
+    from api import piscc_sources
+
+    calls = {}
+    monkeypatch.setattr(piscc_sources, "get_piscc_sources", lambda db, cutoff: {"sources": {}, "notices": []})
+    monkeypatch.setattr(piscc_sources, "build_goals", lambda db, cutoff, run: calls.update(cutoff=cutoff, run=run) or {"indicators": []})
+    run = uuid4()
+    body = piscc_sources.piscc_sources(cutoff=date(2026, 8, 31), source_version_id=run, db=None)
+    assert body["goals"] == {"indicators": []}
+    assert calls == {"cutoff": date(2026, 8, 31), "run": str(run)}
