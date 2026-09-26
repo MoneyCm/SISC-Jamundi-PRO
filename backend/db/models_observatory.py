@@ -11,7 +11,12 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from db.session import Base
 
-STUDY_STATUSES = ("ABIERTO", "EN_CURSO", "CERRADO")
+STUDY_STATUSES = ("ABIERTO", "EN_CURSO", "PAUSADO", "CERRADO")
+# Con dos personas en el Observatorio, como máximo dos estudios abiertos a la vez (modelo operativo, sección 1).
+OPEN_STUDY_STATUSES = ("ABIERTO", "EN_CURSO")
+MAX_OPEN_STUDIES = 2
+# Trabajo de campo: sin nombres de personas, solo su rol (líder comunal, comerciante…).
+FIELD_NOTE_KINDS = ("ENTREVISTA", "RECORRIDO", "GRUPO_FOCAL", "REUNION", "OTRO")
 # RESERVADO: solo el equipo de análisis y la dirección lo ven.
 ACCESS_LEVELS = ("INSTITUCIONAL", "RESERVADO")
 RECOMMENDATION_STATUSES = ("PROPUESTA", "PRESENTADA", "ACEPTADA", "RECHAZADA", "EN_EJECUCION", "CUMPLIDA")
@@ -32,6 +37,10 @@ class ObservatoryStudy(Base):
     sources = Column(JSONB, nullable=False, default=list)
     hypotheses = Column(Text)
     findings = Column(Text)
+    associated_factors = Column(Text)  # factores asociados que el estudio identificó
+    review_on = Column(Date)  # revisión posterior: ¿funcionó lo que se recomendó?
+    status_note = Column(Text)  # por qué se pausó (obligatorio al pausar)
+    field_notes = Column(JSONB, nullable=False, default=list)  # entrevistas, recorridos, grupos focales
     status = Column(String(20), nullable=False, default="ABIERTO", index=True)
     access_level = Column(String(20), nullable=False, default="INSTITUCIONAL")
     created_by = Column(String(120), nullable=False)

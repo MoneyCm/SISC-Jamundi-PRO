@@ -222,8 +222,16 @@ def knowledge_signals(db: Session, today: date, include_reserved: bool) -> List[
     studies = db.query(ObservatoryStudy)
     if not include_reserved:
         studies = studies.filter(ObservatoryStudy.access_level != "RESERVADO")
-    active = studies.filter(ObservatoryStudy.status != "CERRADO").count()
+    active = studies.filter(ObservatoryStudy.status.in_(("ABIERTO", "EN_CURSO"))).count()
     rows = []
+    for study in studies.filter(ObservatoryStudy.review_on.isnot(None), ObservatoryStudy.review_on <= today).order_by(
+            ObservatoryStudy.review_on).all():
+        late = (today - study.review_on).days
+        rows.append(signal("CONOCIMIENTO", f"revision-{study.code}", "MEDIA",
+                           f"Toca la revisión posterior del estudio {study.code}",
+                           f"«{study.title}»: ¿se aplicaron sus recomendaciones y qué cambió? "
+                           + (f"Prevista para el {study.review_on:%d/%m/%Y}." if late else "Prevista para hoy."),
+                           "observatory"))
     limit = today - timedelta(days=RECOMMENDATION_UNANSWERED_DAYS)
     unanswered = db.query(ObservatoryRecommendation).filter(
         ObservatoryRecommendation.status == "PRESENTADA", ObservatoryRecommendation.presented_on <= limit).count()
@@ -247,7 +255,8 @@ def knowledge_signals(db: Session, today: date, include_reserved: bool) -> List[
                            "observatory", accepted_unlinked))
     rows.append(signal("CONOCIMIENTO", "estudios", "INFO",
                        _plural(active, "estudio en curso", "estudios en curso") if active else "Ningún estudio abierto",
-                       "Cada estudio responde una pregunta concreta sobre un fenómeno y un territorio."
+                       ("Con dos estudios abiertos se llega al tope del Observatorio: para abrir otro, cierre o pause uno."
+                        if active >= 2 else "Cada estudio responde una pregunta concreta sobre un fenómeno y un territorio.")
                        if active else "Abra un estudio cuando una señal merezca más que una lectura rápida.",
                        "observatory", active))
     return rows
