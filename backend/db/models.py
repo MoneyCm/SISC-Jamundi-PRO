@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Date, Time, ForeignKey, Boolean, Text, text, DateTime
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 import uuid
 from .session import Base, engine, SessionLocal, get_db
 
@@ -120,6 +120,13 @@ def create_tables():
                 conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS suppressed_cells JSONB DEFAULT '[]'::jsonb;"))
                 conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS catalog_versions_used JSONB;"))
                 conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS query_hash VARCHAR(64);"))
+                # Reportes seguros del portal: estado de atención e historial.
+                conn.execute(text("ALTER TABLE secure_reports ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'RECIBIDO';"))
+                conn.execute(text("ALTER TABLE secure_reports ADD COLUMN IF NOT EXISTS gestion JSONB NOT NULL DEFAULT '[]'::jsonb;"))
+                conn.execute(text("ALTER TABLE secure_reports ADD COLUMN IF NOT EXISTS atendido_por VARCHAR(120);"))
+                conn.execute(text("ALTER TABLE secure_reports ADD COLUMN IF NOT EXISTS actualizado_at TIMESTAMPTZ;"))
+                conn.execute(text("ALTER TABLE secure_reports ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 0;"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_secure_reports_estado ON secure_reports (estado);"))
                 # Estudios del Observatorio: factores, revisión posterior, pausa y trabajo de campo.
                 conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS associated_factors TEXT;"))
                 conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS review_on DATE;"))
@@ -196,3 +203,9 @@ class SecureReport(Base):
     nombre = Column(String(100), nullable=True)
     contacto = Column(String(100), nullable=True)
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    # Atención del reporte: RECIBIDO → EN_GESTION → CERRADO (el cierre dice cómo se resolvió).
+    estado = Column(String(20), nullable=False, default="RECIBIDO", server_default="RECIBIDO", index=True)
+    gestion = Column(JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb"))
+    atendido_por = Column(String(120))
+    actualizado_at = Column(DateTime(timezone=True))
+    version = Column(Integer, nullable=False, default=0, server_default="0")
