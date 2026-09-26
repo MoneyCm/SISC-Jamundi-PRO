@@ -103,12 +103,22 @@ ese tiempo dos veces seguidas, se informa a la Secretaria: es un indicador de qu
 
 ## 5. Triage: cuándo una señal se vuelve trabajo
 
+**Cuatro nombres para cuatro cosas distintas** (el SISC los usa siempre así):
+
+| Nombre | Qué es | Quién la produce |
+|---|---|---|
+| **Señal estadística** | Una cifra se sale de lo esperado según las reglas del radar. Pide mirar el dato; no es una alerta ni mide el riesgo. | El radar del SISC, solo |
+| **Situación para análisis** | Una señal que el Observatorio decidió estudiar: se abre un estudio con su pregunta. | El Observatorio (triage) |
+| **Alerta SISC** | Aviso elevado para gestión, con regla explícita: bandeja de Alertas SISC o nota a la Secretaria. | El SISC con revisión del Observatorio |
+| **Alerta Temprana** | Documento oficial de la Defensoría del Pueblo. El SISC no la emite; solo la contrasta con los hechos. | Defensoría del Pueblo |
+
+
 No toda señal merece un estudio. Cada miércoles, B clasifica lo que trajo la portada:
 
 | Si pasa esto… | …entonces | Producto |
 |---|---|---|
-| Anomalía **alta** en un territorio, una sola semana | Se vigila; queda anotada en la ficha | Ninguno (se registra) |
-| Anomalía alta **2 semanas seguidas**, o anomalía y advertencia de la Defensoría en la misma zona | Alerta a la Secretaria en la nota semanal | Nota de alerta |
+| Señal estadística **alta** en un territorio, una sola semana | Se vigila; queda anotada en la ficha | Ninguno (se registra) |
+| Señal alta **2 semanas seguidas**, o señal en una zona con Alerta Temprana de la Defensoría | Alerta SISC a la Secretaria en la nota semanal | Nota de alerta |
 | Un tema **vuelve a las actas** del Consejo en 3 o más sesiones sin resolverse | Se propone un estudio | Estudio |
 | Un indicador del PISCC **proyecta incumplir** su meta | Se propone un estudio corto y una recomendación | Estudio + recomendación |
 | La Secretaria o el Consejo piden un análisis | Estudio, con pregunta escrita y fecha | Estudio |

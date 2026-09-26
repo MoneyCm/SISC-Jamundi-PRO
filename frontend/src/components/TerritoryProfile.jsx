@@ -76,7 +76,7 @@ const Profile = ({ name, onOpenCommitments }) => {
                     </table>
                     <p className={`mt-3 text-sm font-semibold ${facts.recent.anomaly ? 'text-red-700' : 'text-slate-600'}`}>
                         Últimos 28 días: {facts.recent.observed} hechos; lo esperado según los 6 meses anteriores era {String(facts.recent.expected).replace('.', ',')}.
-                        {facts.recent.anomaly ? ' Es una anomalía para el radar.' : ''}
+                        {facts.recent.anomaly ? ' El radar la marca como señal estadística.' : ''}
                     </p>
                 </Section>
                 <Section title="Últimos 12 meses">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AlertTermsLegend from '../components/AlertTermsLegend';
 import {
     Bell,
     AlertTriangle,
@@ -272,8 +273,8 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
         <div className="max-w-6xl mx-auto p-6 space-y-8 animate-fade-in pb-40">
             <div className="grid gap-2 sm:grid-cols-2" role="tablist" aria-label="Tipo de alertas">
                 {[
-                    ['defensoria', 'Alertas tempranas de la Defensoría', 'Oficiales, contrastadas con los hechos registrados'],
-                    ['sisc', `Alertas del SISC${alerts.length ? ` (${alerts.length})` : ''}`, 'Medidas correctivas (RNMC) con rezago o sin pago'],
+                    ['defensoria', 'Alertas Tempranas de la Defensoría', 'Oficiales: el SISC solo las contrasta con los hechos registrados'],
+                    ['sisc', `Alertas SISC${alerts.length ? ` (${alerts.length})` : ''}`, 'Medidas correctivas (RNMC) con rezago o sin pago'],
                 ].map(([id, label, helper]) => (
                     <button
                         key={id}
@@ -287,6 +288,8 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
                     </button>
                 ))}
             </div>
+
+            <AlertTermsLegend highlight={view === 'defensoria' ? 'DEFENSORIA' : 'ALERTA_SISC'} compact />
 
             {/* Contexto: alertas de la Defensoría contrastadas con los hechos registrados */}
             {view === 'defensoria' && <SatRadarPanel />}
@@ -308,11 +311,11 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <Bell className="text-[#281FD0]" /> Alertas del SISC (priorización)
+                        <Bell className="text-[#281FD0]" /> Alertas SISC (priorización)
                     </h1>
                     <p className="text-slate-500 font-medium mt-1">
                         Seguimiento de medidas correctivas (RNMC): rezago de más de 30 días "en proceso" y multas ratificadas sin pago.
-                        Las calcula el SISC; no son alertas tempranas de la Defensoría.
+                        Las calcula el SISC; no son Alertas Tempranas de la Defensoría.
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

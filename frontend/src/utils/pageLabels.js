@@ -14,7 +14,7 @@ export const INSTITUTIONAL_PAGE_LABELS = {
     stats: 'Estadísticas',
     map: 'Mapa territorial',
     intelligence: 'Contexto comparado',
-    alerts: 'Alertas tempranas',
+    alerts: 'Alertas',
     council_commitments: 'Compromisos y acuerdos',
     inspecciones: 'Inspecciones de Policía',
     reports: 'Boletín institucional',

@@ -1,4 +1,4 @@
-"""Radar de anomalías: cifras que se salen de lo esperado, con reglas estadísticas publicadas.
+"""Radar de señales estadísticas: cifras que se salen de lo esperado, con reglas publicadas.
 
 Uso interno. Una anomalía no es una alerta operativa ni una medición del riesgo: dice que
 un conteo es difícil de explicar por azar frente a su propia historia reciente, para que
@@ -43,14 +43,14 @@ RULES = [
     {"code": "R3", "title": "Caídas bruscas del total municipal",
      "text": "Una semana con muchos menos hechos de lo esperado (donde lo normal son 10 o más) se reporta como posible "
              "falta de registro, no como mejora. No se revisa la última semana: los registros tardíos aún la completan."},
-    {"code": "PRUEBA", "title": "Cuándo es anomalía",
+    {"code": "PRUEBA", "title": "Cuándo hay señal estadística",
      "text": "Se calcula la probabilidad de ver esa cifra o una más extrema si nada hubiera cambiado (distribución de Poisson "
              "con la media esperada). Alta: menos de 0,1 %. Media: menos de 1 %. Además, un aumento debe ser al menos el doble "
              "de lo esperado y tener un mínimo de hechos (3 en el municipio, 4 en un territorio). A la historia se le suma "
              "medio hecho, para que un lugar sin hechos previos no parezca imposible con uno solo."},
     {"code": "LIMITES", "title": "Qué no dice",
      "text": "No mide riesgo ni causas, no reemplaza el análisis del Observatorio y no se publica. Con muchas pruebas, algunas "
-             "anomalías serán azar: el radar informa cuántas se esperan. Solo cuenta hechos conocidos por la Policía."},
+             "señales serán azar: el radar informa cuántas se esperan. Solo cuenta hechos conocidos por la Policía."},
 ]
 
 
@@ -213,5 +213,5 @@ def build_anomalies(db: Session, cutoff: Optional[date] = None) -> Dict[str, Any
         # Si nada hubiera cambiado, cada prueba tiene hasta 1 % de dar una anomalía media por azar.
         "expected_false_alarms": round(tests * MEDIUM_P, 1),
         "rules": RULES,
-        "note": "Uso interno. Una anomalía pide mirar el dato; no es una alerta operativa ni mide el riesgo.",
+        "note": "Uso interno. Una señal estadística pide mirar el dato; no es una alerta ni mide el riesgo. Solo la Defensoría del Pueblo emite Alertas Tempranas.",
     }

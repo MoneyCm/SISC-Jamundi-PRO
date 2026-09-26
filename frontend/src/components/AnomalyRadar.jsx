@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { apiJson } from '../utils/apiClient';
+import AlertTermsLegend from './AlertTermsLegend';
 
 const LEVELS = {
     ALTA: { bar: 'border-red-500', chip: 'bg-red-100 text-red-800', label: 'Muy improbable (< 0,1 %)' },
@@ -10,7 +11,7 @@ const RULE_LABELS = { R1: 'Municipio · semana', R2: 'Territorio · 28 días', R
 
 const formatDate = (value) => new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short' }).format(new Date(`${value}T12:00:00`));
 
-/** Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas publicadas. */
+/** Señales estadísticas (uso interno): cifras que se salen de lo esperado, con sus reglas publicadas. */
 const AnomalyRadar = ({ onStudy, onTerritory }) => {
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
@@ -29,7 +30,7 @@ const AnomalyRadar = ({ onStudy, onTerritory }) => {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-3">
                 <p className="text-sm font-semibold text-slate-600">
-                    Corte {formatDate(data.cutoff)} · {data.tests} pruebas · por azar se esperan cerca de {String(data.expected_false_alarms).replace('.', ',')} anomalías medias aunque nada haya cambiado.
+                    Corte {formatDate(data.cutoff)} · {data.tests} pruebas · por azar se esperan cerca de {String(data.expected_false_alarms).replace('.', ',')} señales medias aunque nada haya cambiado.
                 </p>
                 {!data.anomalies.length && (
                     <p className="bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">Ninguna cifra se sale de lo esperado con las reglas vigentes.</p>
@@ -52,7 +53,7 @@ const AnomalyRadar = ({ onStudy, onTerritory }) => {
                             {item.rule === 'R2' && (
                                 <div className="mt-2 flex flex-wrap gap-4">
                                     {onTerritory && <button onClick={() => onTerritory(item.territory)} className="text-sm font-black text-[#281FD0] hover:underline">Ver ficha del territorio</button>}
-                                    {onStudy && <button onClick={() => onStudy({ title: item.title, detail: item.detail })} className="text-sm font-bold text-slate-600 hover:text-slate-950">Abrir estudio</button>}
+                                    {onStudy && <button onClick={() => onStudy({ title: item.title, detail: item.detail })} className="text-sm font-bold text-slate-600 hover:text-slate-950">Pasar a análisis</button>}
                                 </div>
                             )}
                         </article>
@@ -61,6 +62,7 @@ const AnomalyRadar = ({ onStudy, onTerritory }) => {
                 <p className="text-xs font-semibold text-slate-500">{data.note}</p>
             </div>
             <aside className="space-y-3 bg-slate-50 p-4">
+                <AlertTermsLegend highlight="SENAL" compact />
                 <h3 className="text-sm font-black uppercase tracking-wide text-slate-700">Reglas</h3>
                 {data.rules.map((rule) => (
                     <div key={rule.code}>

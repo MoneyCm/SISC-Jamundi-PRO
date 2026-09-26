@@ -75,7 +75,7 @@ function topConductLine(top, total) {
 }
 
 function slideWhereAndRisk(sat) {
-  const title = 'ZONAS EN ALERTA TEMPRANA';
+  const title = 'ZONAS CON ALERTA TEMPRANA (DEFENSORÍA)';
   if (!sat || sat.status !== 'OK') {
     return {
       key: 'donde', title, subtitle: 'Zonas señaladas por la Defensoría del Pueblo', rows: [], alerts: [], comparison: null,
