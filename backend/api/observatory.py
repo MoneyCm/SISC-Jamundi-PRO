@@ -415,6 +415,32 @@ async def delete_council_session(session_id: UUID, request: Request, db: Session
                     target={"session_date": day}, level=1, request=request)
 
 
+@router.get("/memory")
+def get_memory(q: Optional[str] = Query(default=None, max_length=200), kind: Optional[str] = Query(default=None),
+               year: Optional[int] = Query(default=None, ge=2000, le=2100),
+               db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    """Memoria institucional: estudios cerrados, recomendaciones decididas e intervenciones terminadas."""
+    from services.institutional_memory import KINDS, build_memory
+
+    if kind and kind not in KINDS:
+        raise HTTPException(422, f"Tipo no válido. Use: {', '.join(KINDS)}.")
+    return build_memory(db, _sees_reserved(user), q=q, kind=kind, year=year)
+
+
+@router.get("/memory/export")
+def export_memory(q: Optional[str] = Query(default=None, max_length=200), kind: Optional[str] = Query(default=None),
+                  year: Optional[int] = Query(default=None, ge=2000, le=2100),
+                  db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    from fastapi.responses import Response
+    from services.institutional_memory import KINDS, build_memory, export_csv
+
+    if kind and kind not in KINDS:
+        raise HTTPException(422, f"Tipo no válido. Use: {', '.join(KINDS)}.")
+    body = export_csv(build_memory(db, _sees_reserved(user), q=q, kind=kind, year=year))
+    return Response(body, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="memoria_observatorio.csv"'})
+
+
 @router.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
     """Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas."""
