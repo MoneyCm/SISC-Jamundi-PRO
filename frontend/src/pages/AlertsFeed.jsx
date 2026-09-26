@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import SatRadarPanel from '../components/SatRadarPanel';
+import { localToday } from '../utils/localDate';
 
 const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
     const [alerts, setAlerts] = useState([]);
@@ -155,7 +156,7 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `RNMC_Alerts_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            link.download = `RNMC_Alerts_${localToday()}.xlsx`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -192,7 +193,7 @@ const AlertsFeed = ({ onPageChange, setExternalFilters }) => {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `RNMC_Alerts_Ejecutivo_${new Date().toISOString().slice(0, 10)}.pdf`;
+            link.download = `RNMC_Alerts_Ejecutivo_${localToday()}.pdf`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

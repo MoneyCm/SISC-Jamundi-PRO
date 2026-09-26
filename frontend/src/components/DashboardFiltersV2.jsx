@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { CalendarDays, Check, ChevronDown } from 'lucide-react';
+import { localToday } from '../utils/localDate';
 
-const toIso = (value) => value.toISOString().slice(0, 10);
+const toIso = (value) => localToday(value);
 const parseIso = (value) => new Date(`${value}T00:00:00`);
 
 const buildPreset = (preset, referenceDate) => {
