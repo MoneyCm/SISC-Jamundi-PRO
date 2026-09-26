@@ -19,7 +19,7 @@ TOPICS = [
     ("ataques", "Ataques y hostigamientos armados", "Orden público y grupos armados",
      r"HOSTIGAMIENTO|ATAQUES?\b|EXPLOSIV|ARTEFACTO|DISIDENCIA|GRUPOS? ARMADOS?|JAIME MARTINEZ|MINAS? ANTIPERSONA"),
     ("ocupaciones", "Ocupaciones ilegales y predios", "Ocupaciones ilegales",
-     r"OCUPACION(ES)? ILEGAL|INVASION(ES)?|DESALOJO|RECUPERACION DE (LOS )?PREDIOS|\bSAE\b|POSESION"),
+     r"OCUPACION(ES)? ILEGAL|INVASION(ES)?|DESALOJO|RECUPERACION DE (LOS )?PREDIOS|\bSAE\b|POSESION(?! PRESIDENCIAL)"),
     ("caravanas", "Caravanas y patrullajes", "Espacio público y convivencia", r"CARAVANA|PATRULLAJE|PLAN DESARME"),
     ("pie_fuerza", "Pie de fuerza y refuerzos", "Recursos para seguridad", r"PIE DE FUERZA|REFUERZO|\bUNDMO\b|\bUNMDO\b|MAS UNIDADES"),
     ("radios", "Radios y comunicaciones", "Recursos para seguridad", r"\bRADIOS?\b"),
