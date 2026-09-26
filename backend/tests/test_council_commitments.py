@@ -154,6 +154,9 @@ def test_recurrence_counts_sessions_once_and_keeps_history_out_of_open_commitmen
     assert theme_for("Expedir las medidas electorales sobre sobrevuelo de drones y desplazamiento de vehículos") == "Seguridad electoral"
     assert "desplazamiento" not in topics_in("Restringir el desplazamiento de vehículos pesados")
     assert theme_for("Remitir registros sobre hostigamientos, ataques y drones") == "Orden público y grupos armados"
+    # "Posesión presidencial" no es posesión de predios.
+    assert "ocupaciones" not in topics_in("Instalar el PMU durante la posesión presidencial")
+    assert "ocupaciones" in topics_in("Recuperar la posesión de los predios invadidos")
 
 
 def test_historical_reads_cannot_be_confirmed():
