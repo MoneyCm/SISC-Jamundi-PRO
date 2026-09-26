@@ -8,6 +8,7 @@ import PisccActions from '../components/PisccActions';
 import DataRequests from '../components/DataRequests';
 import WeekCalendar from '../components/WeekCalendar';
 import StudyFieldNotes from '../components/StudyFieldNotes';
+import InstitutionalMemory from '../components/InstitutionalMemory';
 import { reviewLabel, studyUpdate } from '../utils/studies';
 import TerritoryProfile from '../components/TerritoryProfile';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
@@ -441,6 +442,7 @@ const TABS = [
     { id: 'estudios', label: 'Estudios' },
     { id: 'recomendaciones', label: 'Recomendaciones' },
     { id: 'piscc', label: 'Metas PISCC' },
+    { id: 'memoria', label: 'Memoria' },
     { id: 'anomalias', label: 'Anomalías', internal: true },
     { id: 'territorios', label: 'Territorios', internal: true },
     { id: 'solicitudes', label: 'Solicitudes de datos', internal: true },
@@ -533,6 +535,8 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             {tab === 'piscc' && <PisccPanel canEdit={canEdit} />}
 
             {tab === 'solicitudes' && canEdit && <DataRequests />}
+
+            {tab === 'memoria' && <InstitutionalMemory />}
 
             {tab === 'territorios' && canEdit && <TerritoryProfile initialName={territory} onOpenCommitments={() => onNavigate?.('council_commitments')} />}
 
