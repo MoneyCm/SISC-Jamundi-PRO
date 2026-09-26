@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ClipboardCopy, Clock, FileText, History, Loader2, RefreshCw, Repeat, Search, Target, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCopy, Clock, FileText, History, Loader2, MessageSquareText, RefreshCw, Repeat, Search, Target, Upload } from 'lucide-react';
 import ActReviewPanel from '../components/ActReviewPanel';
 import RecurringTopics from '../components/RecurringTopics';
 import InterventionPanel from '../components/InterventionPanel';
@@ -158,7 +158,7 @@ const CommitmentCard = ({ item, statuses, onSaved, interventions = [], onInterve
     );
 };
 
-const CouncilCommitments = () => {
+const CouncilCommitments = ({ onNavigate }) => {
     const [items, setItems] = useState([]);
     const [statuses, setStatuses] = useState([]);
     const [themes, setThemes] = useState([]);
@@ -293,6 +293,11 @@ const CouncilCommitments = () => {
                     <button onClick={() => setDecisionReport(true)} className="inline-flex min-h-11 items-center gap-2 bg-[#FFE000] px-4 text-sm font-black text-slate-950 hover:bg-[#FFB600]">
                         <FileText size={17} /> Informe para decisión
                     </button>
+                    {onNavigate && (
+                        <button onClick={() => onNavigate('narrative_alerts')} className="inline-flex min-h-11 items-center gap-2 bg-[#25D366] px-4 text-sm font-black text-slate-950 hover:bg-[#1FB855]">
+                            <MessageSquareText size={17} /> Alertas Narrativas
+                        </button>
+                    )}
                     <button onClick={buildAgenda} className="inline-flex min-h-11 items-center gap-2 border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">
                         <ClipboardCopy size={17} /> Lectura para el próximo Consejo
                     </button>
