@@ -224,6 +224,37 @@ def commitments_agenda(db: Session = Depends(get_db), current_user: User = Depen
     return {"text": service.agenda_text(_all(db))}
 
 
+def _decision_report(db: Session, instance: str, session_date: Optional[date]):
+    from services.council_decision_report import build_report
+
+    if instance not in INSTANCES:
+        raise HTTPException(status_code=422, detail="Instancia no reconocida.")
+    return build_report(db, instance, session_date)
+
+
+@router.get("/decision-report")
+def decision_report(instance: str = Query(default="CONSEJO_SEGURIDAD"), session_date: Optional[date] = Query(default=None),
+                    db: Session = Depends(get_db), current_user: User = Depends(require_role(FOLLOWUP_ROLES))):
+    """Informe para decisión de la instancia (reservado): qué requiere decisión y qué se cumplió."""
+    return _decision_report(db, instance, session_date)
+
+
+@router.get("/decision-report.pdf")
+async def decision_report_pdf(request: Request, instance: str = Query(default="CONSEJO_SEGURIDAD"),
+                              session_date: Optional[date] = Query(default=None), db: Session = Depends(get_db),
+                              current_user: User = Depends(require_role(FOLLOWUP_ROLES))):
+    from fastapi.responses import Response
+    from services.council_decision_report_pdf import build_decision_report_pdf
+
+    report = _decision_report(db, instance, session_date)
+    pdf = build_decision_report_pdf(report)
+    await log_audit(db, "COUNCIL_DECISION_REPORT", actor_id=str(current_user.id), module="COUNCIL",
+                    target={"instance": instance, "session_date": report["session_date"]}, level=2, request=request)
+    filename = f"informe-decision-{INSTANCES[instance]['prefix'].lower()}-{report['session_date']}.pdf"
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
+
+
 @router.get("/{code}/history")
 def commitment_history(code: str, db: Session = Depends(get_db), current_user: User = Depends(institutional_access)):
     row = db.query(CouncilCommitment).filter(CouncilCommitment.code == code).first()

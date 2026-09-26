@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ClipboardCopy, Clock, FileText, History, L
 import ActReviewPanel from '../components/ActReviewPanel';
 import RecurringTopics from '../components/RecurringTopics';
 import InterventionPanel from '../components/InterventionPanel';
+import DecisionReportPanel from '../components/DecisionReportPanel';
 import { STAGE_LABELS } from '../utils/interventions';
 import { apiFetch, apiJson } from '../utils/apiClient';
 
@@ -164,6 +165,7 @@ const CouncilCommitments = () => {
     const [instances, setInstances] = useState([]);
     const [instance, setInstance] = useState('');
     const [reader, setReader] = useState(false);
+    const [decisionReport, setDecisionReport] = useState(false);
     const [pendingReads, setPendingReads] = useState([]);
     const [openReadId, setOpenReadId] = useState(null);
     const [view, setView] = useState('seguimiento');
@@ -288,7 +290,10 @@ const CouncilCommitments = () => {
                     <button onClick={() => { setOpenReadId(null); setReader(true); }} className="inline-flex min-h-11 items-center gap-2 bg-[#281FD0] px-4 text-sm font-black text-white hover:bg-[#1F18A8]">
                         <FileText size={17} /> Leer acta
                     </button>
-                    <button onClick={buildAgenda} className="inline-flex min-h-11 items-center gap-2 bg-[#FFE000] px-4 text-sm font-black text-slate-950 hover:bg-[#FFB600]">
+                    <button onClick={() => setDecisionReport(true)} className="inline-flex min-h-11 items-center gap-2 bg-[#FFE000] px-4 text-sm font-black text-slate-950 hover:bg-[#FFB600]">
+                        <FileText size={17} /> Informe para decisión
+                    </button>
+                    <button onClick={buildAgenda} className="inline-flex min-h-11 items-center gap-2 border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">
                         <ClipboardCopy size={17} /> Lectura para el próximo Consejo
                     </button>
                     <button onClick={() => fileRef.current?.click()} className="inline-flex min-h-11 items-center gap-2 border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">
@@ -304,6 +309,8 @@ const CouncilCommitments = () => {
             {message && (
                 <p role="status" className={`p-3 text-sm font-bold ${message.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-emerald-800'}`}>{message.text}</p>
             )}
+
+            {decisionReport && <DecisionReportPanel instances={instances} onClose={() => setDecisionReport(false)} />}
 
             {reader && (
                 <ActReviewPanel key={openReadId || 'nueva'} instances={instances} readId={openReadId}
