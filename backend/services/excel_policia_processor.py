@@ -8,6 +8,7 @@ import numpy as np
 import json
 import traceback
 from datetime import datetime, date, time
+from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sqlalchemy_text
 from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, IngestionIssue, StagingPoliciaSemanal, SabanaSnapshotRow, CatalogoConductaFuente
@@ -19,6 +20,41 @@ from services.sabana_history import build_coverage, build_record_identity, build
 from services.conducta_homologation import homologar_conducta_policia
 
 logger = logging.getLogger("sisc_policia_processor")
+
+def parse_event_time(hora_hecho, hora_24) -> Optional[time]:
+    """Hora del hecho: HORA_HECHO trae la hora exacta; HORA24 solo la hora entera (0 a 23)."""
+    if isinstance(hora_hecho, datetime):
+        return hora_hecho.time()
+    if isinstance(hora_hecho, time):
+        return hora_hecho
+    match = re.fullmatch(r"\s*(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*", str(hora_hecho or ""))
+    if match:
+        hour, minute, second = int(match[1]), int(match[2]), int(match[3] or 0)
+        if hour < 24 and minute < 60 and second < 60:
+            return time(hour, minute, second)
+    try:
+        hour = int(float(str(hora_24).strip()))
+    except (TypeError, ValueError):
+        return None
+    return time(hour, 0) if 0 <= hour < 24 else None
+
+
+def legacy_fingerprint_time(hora_hecho, hora_24) -> time:
+    """Hora con la que se calculaba la huella antes de corregir la lectura de la hora.
+
+    Leía HORA24 primero y pandas no lo entiende como hora: 21 o "21" daban 00:00.
+    La huella identifica el registro entre entregas, así que se conserva tal cual para que
+    recargar una sábana no duplique hechos ya cargados.
+    """
+    raw_hora = hora_24 or hora_hecho
+    try:
+        if isinstance(raw_hora, time):
+            return raw_hora
+        converted = pd.to_datetime(raw_hora, errors='coerce') if raw_hora else None
+        return converted.time() if not pd.isna(converted) else time(0, 0)
+    except Exception:
+        return time(0, 0)
+
 
 COLUMN_ALIASES = {
     "id_fuente": ["HECHOS_ID", "ID_HECHO", "ID", "HECHO_ID", "COD_HECHO"],
@@ -83,7 +119,7 @@ class PoliciaJamundiProcessor:
 
     def _generate_fingerprint(self, data):
         # Fingerprint expandido para permitir mÃºltiples vÃ­ctimas en el mismo hecho
-        raw = f"{data.get('id_fuente', '')}|{data['conducta_estandar']}|{data['fecha_evento']}|{data['hora_evento']}|{data['barrio_normalizado'] or data['vereda_normalizada']}|{data['sexo']}|{data['edad']}|{data['arma_medio']}"
+        raw = f"{data.get('id_fuente', '')}|{data['conducta_estandar']}|{data['fecha_evento']}|{data.get('hora_huella', data['hora_evento'])}|{data['barrio_normalizado'] or data['vereda_normalizada']}|{data['sexo']}|{data['edad']}|{data['arma_medio']}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
     def _truthy_value(self, value):
@@ -329,20 +365,15 @@ class PoliciaJamundiProcessor:
                         lat, lng = coords if coords else (3.2612, -76.5365) 
 
                         # g. Preparar datos procesados para DeduplicaciÃ³n
-                        raw_hora = data.get("hora_24") or data.get("hora_evento")
-                        try:
-                            if isinstance(raw_hora, time): occ_time = raw_hora
-                            else:
-                                converted_hora = pd.to_datetime(raw_hora, errors='coerce') if raw_hora else None
-                                occ_time = converted_hora.time() if not pd.isna(converted_hora) else time(0,0)
-                        except:
-                            occ_time = time(0,0)
+                        occ_time = parse_event_time(data.get("hora_evento"), data.get("hora_24"))
+                        fingerprint_time = legacy_fingerprint_time(data.get("hora_evento"), data.get("hora_24"))
 
                         processed_data = {
                             "id_fuente": normalize_source_id(data.get("id_fuente")),
                             "conducta_estandar": conducta_est,
                             "fecha_evento": converted_fecha.date(),
-                            "hora_evento": occ_time,
+                            "hora_evento": occ_time or time(0, 0),
+                            "hora_huella": fingerprint_time,
                             "barrio_normalizado": barrio_norm,
                             "vereda_normalizada": vereda_norm,
                             "sexo": self._normalize_text(data.get("sexo", "NO REPORTA")),

@@ -138,8 +138,38 @@ def create_tables():
                 print("Estructura de Base de Datos verificada con éxito.")
             except Exception as e:
                 print(f"Nota: No se pudo verificar la estructura de la tabla: {e}")
+
+        # 4. Hora del hecho: el procesador la guardaba en 00:00; se recupera de la fila original.
+        with engine.connect() as conn:
+            try:
+                conn.execute(text(BACKFILL_HORA_EVENTO_SQL))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(f"Nota: No se pudo recuperar la hora de los hechos: {e}")
     except Exception as e:
         print(f"Error fatal durante create_tables: {e}")
+
+
+# Toma HORA_HECHO (hh:mm:ss) de la entrega más reciente de cada HECHOS_ID. La lectura anterior
+# dejaba 00:00 (y versiones anteriores, 00:HH con la hora como minutos): solo se tocan horas antes de la
+# 01:00 que no coinciden con la fuente, así que es idempotente.
+BACKFILL_HORA_EVENTO_SQL = r"""
+UPDATE hechos_seguridad h SET hora_evento = src.hora
+FROM (
+    SELECT DISTINCT ON (s.payload_json->>'HECHOS_ID')
+           s.payload_json->>'HECHOS_ID' AS id_fuente,
+           (s.payload_json->>'HORA_HECHO')::time AS hora
+    FROM stg_policia_semanal s
+    LEFT JOIN ingestion_runs r ON r.id = s.ingestion_id
+    WHERE s.payload_json->>'HORA_HECHO' ~ '^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$'
+    ORDER BY s.payload_json->>'HECHOS_ID', r.fecha_fin DESC NULLS LAST, s.id DESC
+) src
+WHERE h.fuente_codigo = 'POLICIA_SEMANAL'
+  AND h.id_fuente = src.id_fuente
+  AND h.hora_evento < TIME '01:00'
+  AND h.hora_evento <> src.hora
+"""
 
 # Re-exportar User y Role para compatibilidad con código existente
 from .models_auth import User, Role
