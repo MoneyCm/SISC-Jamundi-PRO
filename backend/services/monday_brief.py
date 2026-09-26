@@ -114,14 +114,36 @@ def analysis_candidates(db: Session, signals) -> Dict[str, Any]:
                   candidates, {"tab": "estudios"})
 
 
-def pending_decisions(signals) -> Dict[str, Any]:
+def citizen_pending(db: Session) -> Optional[str]:
+    """Reportes seguros y propuestas del portal. Los reportes no tienen estado: no se sabe si se atendieron."""
+    from db.models import Proposal, SecureReport
+
+    reports = db.query(SecureReport.created_at).all()
+    proposals = db.query(Proposal.created_at).filter(Proposal.status == "PENDIENTE").all()
+    if not reports and not proposals:
+        return None
+    parts = []
+    if reports:
+        oldest = min(day for (day,) in reports)
+        parts.append(f"{len(reports)} {'reporte seguro' if len(reports) == 1 else 'reportes seguros'} del portal sin registro de atención "
+                     f"(el más antiguo del {oldest:%d/%m/%Y}; el SISC no guarda si se atendieron)")
+    if proposals:
+        parts.append(f"{len(proposals)} {'propuesta ciudadana pendiente' if len(proposals) == 1 else 'propuestas ciudadanas pendientes'}")
+    return "Participación ciudadana: " + "; ".join(parts) + "."
+
+
+def pending_decisions(db: Session, signals) -> Dict[str, Any]:
     picked = [item for item in _by_prefix(signals, "sin-respuesta", "propuestas", "actas", "alertas", "sin-compromiso")
               if item["level"] != "OK"]
-    if not picked:
+    items = [f"{item['title']}. {item['detail']}" for item in picked]
+    citizens = citizen_pending(db)
+    if citizens:
+        items.append(citizens)
+    if not items:
         return answer("decision", "¿Qué está pendiente de decisión?", "OK", "Nada pendiente de decidir.", target={"tab": "recomendaciones"})
-    return answer("decision", "¿Qué está pendiente de decisión?", worst([item["level"] for item in picked]),
-                  f"{len(picked)} asuntos esperan una decisión.", [f"{item['title']}. {item['detail']}" for item in picked],
-                  {"tab": "recomendaciones"})
+    level = worst([item["level"] for item in picked] + (["MEDIA"] if citizens else []))
+    return answer("decision", "¿Qué está pendiente de decisión?", level,
+                  f"{len(items)} asuntos esperan una decisión.", items, {"tab": "recomendaciones"})
 
 
 def overdue_commitments(db: Session, today: date) -> Dict[str, Any]:
@@ -184,7 +206,7 @@ def build(db: Session, today: Optional[date] = None, include_reserved: bool = Tr
         changes(signals, run),
         places(signals),
         analysis_candidates(db, signals),
-        pending_decisions(signals),
+        pending_decisions(db, signals),
         overdue_commitments(db, today),
         interventions_to_evaluate(db, signals),
         products(build_calendar(db, today)),

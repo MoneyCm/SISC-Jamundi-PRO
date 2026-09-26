@@ -449,6 +449,17 @@ def get_monday_brief(db: Session = Depends(get_db), user: User = Depends(require
     return build(db, include_reserved=True)
 
 
+@router.get("/data-caveats")
+def get_data_caveats(start_date: date = Query(...), end_date: date = Query(...), db: Session = Depends(get_db),
+                     user: User = Depends(institutional_access)):
+    """Salvedades de la sábana para un periodo: semanas incompletas, cola preliminar, corte atrasado."""
+    from services.data_caveats import build_caveats
+
+    if start_date > end_date:
+        raise HTTPException(422, "El periodo termina antes de empezar.")
+    return build_caveats(db, start_date, end_date)
+
+
 @router.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
     """Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas."""
