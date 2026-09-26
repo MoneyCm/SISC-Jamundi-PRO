@@ -83,10 +83,11 @@ const SignalCard = ({ item, onNavigate, onStudy, onTab, onGoals }) => {
     );
 };
 
-const Situation = ({ overview, onNavigate, onStudy, onTab, onGoals }) => {
+const Situation = ({ overview, onNavigate, onStudy, onTab, onGoals, collapsed = false }) => {
     const groups = useMemo(() => groupSignals(overview), [overview]);
     const counts = overview.counts || {};
-    return (
+    const total = overview.signals?.length || 0;
+    const body = (
         <div className="space-y-8">
             <div className="flex flex-wrap gap-3 text-sm font-bold">
                 {['ALTA', 'MEDIA', 'OK'].map((level) => (
@@ -110,6 +111,16 @@ const Situation = ({ overview, onNavigate, onStudy, onTab, onGoals }) => {
             ))}
             <p className="text-xs font-semibold text-slate-500">{overview.rule}</p>
         </div>
+    );
+    // Con las ocho preguntas arriba, la lista completa queda a un clic para no repetir lo mismo tres veces.
+    if (!collapsed) return body;
+    return (
+        <details className="bg-white p-4 shadow-sm">
+            <summary className="cursor-pointer text-sm font-black text-slate-700">
+                Ver todas las señales ({total}): {counts.ALTA || 0} para actuar ya · {counts.MEDIA || 0} para esta semana
+            </summary>
+            <div className="mt-4">{body}</div>
+        </details>
     );
 };
 
@@ -525,7 +536,7 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             {tab === 'situacion' && canEdit && <WeekCalendar onTab={setTab} onNavigate={onNavigate} />}
 
             {tab === 'situacion' && (overview
-                ? <Situation overview={overview} onNavigate={onNavigate} onStudy={canEdit ? studyFromSignal : null} onTab={canEdit ? setTab : null} onGoals={() => setTab('piscc')} />
+                ? <Situation overview={overview} onNavigate={onNavigate} onStudy={canEdit ? studyFromSignal : null} onTab={canEdit ? setTab : null} onGoals={() => setTab('piscc')} collapsed={canEdit} />
                 : loading && <p className="flex items-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={16} className="animate-spin" /> Reuniendo señales de los módulos…</p>)}
 
             {tab === 'estudios' && (

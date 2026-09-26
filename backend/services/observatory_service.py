@@ -29,6 +29,7 @@ GROUPS = (
 )
 LEVEL_ORDER = {"ALTA": 0, "MEDIA": 1, "INFO": 2, "OK": 3}
 MIP_STALE_DAYS = 45
+GEO_MISSING = "RNMC_GEO_MISSING"
 BULLETIN_STALE_DAYS = 14
 # El boletín mensual del mes vencido se publica en la primera semana (modelo operativo, sección 4).
 MONTHLY_BULLETIN_DAYS = 7
@@ -164,12 +165,20 @@ def anomaly_signals(db: Session, today: date) -> List[Dict[str, Any]]:
 def alert_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     from db.models_alerts import IntelligenceAlert
 
-    counts = dict(db.query(IntelligenceAlert.severity, func.count(IntelligenceAlert.id))
-                  .filter(IntelligenceAlert.status == "OPEN").group_by(IntelligenceAlert.severity).all())
+    open_alerts = db.query(IntelligenceAlert).filter(IntelligenceAlert.status == "OPEN")
+    # Un comparendo sin ubicación es un problema de calidad del dato, no una alerta de gestión.
+    geo_missing = open_alerts.filter(IntelligenceAlert.alert_type == GEO_MISSING).count()
+    counts = dict(open_alerts.filter(IntelligenceAlert.alert_type != GEO_MISSING)
+                  .with_entities(IntelligenceAlert.severity, func.count(IntelligenceAlert.id))
+                  .group_by(IntelligenceAlert.severity).all())
     high = counts.get("HIGH", 0) + counts.get("CRITICAL", 0)
     total = sum(counts.values())
+    quality = [signal("DATOS", "comparendos-sin-ubicacion", "MEDIA",
+                      _plural(geo_missing, "comparendo sin ubicación geográfica", "comparendos sin ubicación geográfica"),
+                      "No se pueden ubicar en un barrio o vereda: corrija la dirección en Inspecciones para que cuenten en el territorio.",
+                      "inspecciones", geo_missing)] if geo_missing else []
     if not total:
-        return [signal("TERRITORIO", "alertas", "OK", "Sin alertas SISC abiertas", "La bandeja de Alertas SISC está vacía.", "alerts")]
+        return quality + [signal("TERRITORIO", "alertas", "OK", "Sin alertas SISC abiertas", "La bandeja de Alertas SISC está vacía.", "alerts")]
     detail = f"{high} de prioridad alta. Revisarlas es decidir si merecen una intervención o se descartan."
     level = "ALTA" if high else "MEDIA"
     # Las Alertas SISC salen de los comparendos: si la fuente está vieja, no describen el presente.
@@ -180,8 +189,8 @@ def alert_signals(db: Session, today: date) -> List[Dict[str, Any]]:
         level = "MEDIA"
         detail = (f"Calculadas sobre comparendos que llegan hasta el {last.date():%d/%m/%Y} "
                   f"({(today - last.date()).days} días de atraso): actualice la fuente antes de gestionarlas. {high} de prioridad alta.")
-    return [signal("TERRITORIO", "alertas", level,
-                   f"{_plural(total, 'Alerta SISC abierta', 'Alertas SISC abiertas')} sin gestionar", detail, "alerts", total)]
+    return quality + [signal("TERRITORIO", "alertas", level,
+                             f"{_plural(total, 'Alerta SISC abierta', 'Alertas SISC abiertas')} sin gestionar", detail, "alerts", total)]
 
 
 # --- Decisiones ------------------------------------------------------------------------------

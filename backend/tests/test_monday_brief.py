@@ -36,10 +36,13 @@ def test_changes_and_places():
     assert len(places["items"]) == 2 and "Alerta Temprana de la Defensoría" in places["items"][1]
 
 
-def test_pending_decisions_and_products():
+def test_pending_decisions_and_products(monkeypatch):
     signals = [sig("actas", "MEDIA", "19 actas leídas por confirmar", "Revisarlas."), sig("propuestas", "OK", "x")]
-    decisions = mb.pending_decisions(signals)
+    monkeypatch.setattr(mb, "citizen_pending", lambda db: None)
+    decisions = mb.pending_decisions(None, signals)
     assert decisions["items"] == ["19 actas leídas por confirmar. Revisarlas."]
+    monkeypatch.setattr(mb, "citizen_pending", lambda db: "Participación ciudadana: 3 reportes seguros.")
+    assert mb.pending_decisions(None, [])["items"] == ["Participación ciudadana: 3 reportes seguros."]
     calendar = {"items": [
         {"area": "Boletín", "status": "ATRASADO", "title": "Publicar el boletín mensual de agosto", "when": "hasta el día 7", "target": {"page": "boletin_replica"}},
         {"area": "Datos", "status": "PENDIENTE", "title": "Cargar la sábana", "when": "", "target": {}},
@@ -59,6 +62,6 @@ def test_alert_signal_downgrades_on_stale_comparendos(monkeypatch):
         rows = observatory_service.alert_signals(db, date(2031, 1, 1))  # lejos de cualquier comparendo cargado
     finally:
         db.close()
-    [row] = rows
+    row = next(item for item in rows if item["key"] == "alertas")
     if row["level"] != "OK":
         assert row["level"] == "MEDIA" and "actualice la fuente" in row["detail"]

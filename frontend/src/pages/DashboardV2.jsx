@@ -34,6 +34,7 @@ import {
     TrendChart,
 } from '../components/OperationalDashboardWidgets';
 import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
+import DataCaveats from '../components/DataCaveats';
 import { localToday } from '../utils/localDate';
 
 const METRIC_DEFINITIONS = [
@@ -133,6 +134,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     const [aiInsight, setAiInsight] = useState('');
     const [aiProvider, setAiProvider] = useState('');
     const [inbox, setInbox] = useState(null);
+    const [caveats, setCaveats] = useState(null);
     const [managementSummary, setManagementSummary] = useState(null);
     const [managementLoading, setManagementLoading] = useState(true);
     const [managementError, setManagementError] = useState('');
@@ -214,6 +216,15 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
     }, [isInstitutional]);
 
     useEffect(() => { loadDashboard(range, comparisonMode); }, [range, comparisonMode, loadDashboard]);
+    // Salvedades de la sábana (mismas reglas del Centro de análisis): una baja puede ser falta de registro.
+    useEffect(() => {
+        if (!isInstitutional || !range) { setCaveats(null); return undefined; }
+        let cancelled = false;
+        apiJson(`/observatory/data-caveats?start_date=${range.start}&end_date=${range.end}`)
+            .then((result) => { if (!cancelled) setCaveats(result); })
+            .catch(() => { if (!cancelled) setCaveats(null); });
+        return () => { cancelled = true; };
+    }, [isInstitutional, range]);
 
     const loadManagementSummary = useCallback(async (selectedRange, mode) => {
         if (!isInstitutional || !selectedRange?.start || !selectedRange?.end) return;
@@ -426,6 +437,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             {error && <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-sm text-red-800 flex items-start gap-3"><AlertTriangle size={18} className="shrink-0" /><span className="flex-1">{error}</span><button onClick={() => loadDashboard(range, comparisonMode)} className="font-bold inline-flex items-center gap-1"><RefreshCw size={14} />Reintentar</button></div>}
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 className="text-lg font-black text-slate-900">Indicadores prioritarios</h3><p className="text-xs text-slate-500">Comparación con el {comparisonLabel}: {referenceRange ? `${formatDate(referenceRange.start)} – ${formatDate(referenceRange.end)}` : ''}.</p></div>{loading && <span className="text-xs font-bold text-primary inline-flex items-center gap-2"><LoaderCircle size={15} className="animate-spin" />Actualizando</span>}</div>
+            {caveats?.incomplete && <DataCaveats caveats={caveats} onOpen={() => onNavigate?.('observatory')} />}
             <section className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3">{metrics.map((metric) => <MetricCard key={metric.key} metric={metric} />)}</section>
 
             {isInstitutional && (
@@ -441,7 +453,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
 
             {isInstitutional ? (
                 <section className="grid xl:grid-cols-2 gap-4">
-                    <AlertsPanel alerts={alerts} updatedAt={alertsUpdatedAt} trayStatus={trayStatus} onOpen={() => onNavigate?.('alerts')} />
+                    <AlertsPanel alerts={alerts} updatedAt={alertsUpdatedAt} trayStatus={trayStatus} dataIncomplete={Boolean(caveats?.incomplete)} onOpen={() => onNavigate?.('observatory')} />
                     <AIAnalysisPanel insight={aiInsight} provider={aiProvider} loading={extrasLoading} onOpen={() => onNavigate?.('intelligence')} onDownload={() => exportPdf(false)} />
                 </section>
             ) : <EmptyInstitutionalPanel />}
