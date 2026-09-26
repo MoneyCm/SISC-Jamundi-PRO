@@ -125,6 +125,28 @@ def get_anomalies(db: Session = Depends(get_db), user: User = Depends(require_ro
     return build_anomalies(db)
 
 
+@router.get("/territories")
+def get_territories(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Territorios con hechos ubicados, en orden alfabético (no es un ranking)."""
+    from services.territory_profile import list_territories
+
+    return list_territories(db)
+
+
+@router.get("/territories/profile")
+async def get_territory_profile(request: Request, name: str = Query(min_length=2, max_length=200),
+                                db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Ficha territorial (uso interno): hechos, comparendos, alertas, Defensoría, compromisos y estudios."""
+    from services.territory_profile import build_profile
+
+    profile = build_profile(db, name)
+    if not profile:
+        raise HTTPException(404, "No hay un barrio, vereda o sector oficial con ese nombre.")
+    await log_audit(db, "TERRITORY_PROFILE_VIEWED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"territory": profile["name"]}, level=2, request=request)
+    return profile
+
+
 @router.get("/studies")
 def list_studies(status: Optional[str] = Query(default=None), db: Session = Depends(get_db),
                  user: User = Depends(institutional_access)):

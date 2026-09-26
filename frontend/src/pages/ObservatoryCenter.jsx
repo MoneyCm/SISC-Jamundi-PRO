@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, CheckCircle2, ChevronDown, ChevronUp, Lightbulb, 
 import { localToday } from '../utils/localDate';
 import { apiJson } from '../utils/apiClient';
 import AnomalyRadar from '../components/AnomalyRadar';
+import TerritoryProfile from '../components/TerritoryProfile';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
 
 const LEVEL_STYLES = {
@@ -381,6 +382,7 @@ const TABS = [
     { id: 'estudios', label: 'Estudios' },
     { id: 'recomendaciones', label: 'Recomendaciones' },
     { id: 'anomalias', label: 'Anomalías', internal: true },
+    { id: 'territorios', label: 'Territorios', internal: true },
 ];
 
 const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
@@ -391,6 +393,7 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [studyDraft, setStudyDraft] = useState(null);
+    const [territory, setTerritory] = useState('');
     const [recommendFor, setRecommendFor] = useState(undefined);
     const canEdit = userRoles.some((role) => ['ANALYST', 'DIRECTIVE', 'FUNC_ADMIN', 'TI_ADMIN'].includes(role));
 
@@ -462,7 +465,9 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
                     onChanged={load} onRecommend={(study) => { setRecommendFor(study); setTab('recomendaciones'); }} />
             )}
 
-            {tab === 'anomalias' && canEdit && <AnomalyRadar onStudy={studyFromSignal} />}
+            {tab === 'anomalias' && canEdit && <AnomalyRadar onStudy={studyFromSignal} onTerritory={(name) => { setTerritory(name); setTab('territorios'); }} />}
+
+            {tab === 'territorios' && canEdit && <TerritoryProfile initialName={territory} onOpenCommitments={() => onNavigate?.('council_commitments')} />}
 
             {tab === 'recomendaciones' && (
                 <div className="space-y-4">

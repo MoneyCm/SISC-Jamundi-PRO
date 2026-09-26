@@ -11,7 +11,7 @@ const RULE_LABELS = { R1: 'Municipio · semana', R2: 'Territorio · 28 días', R
 const formatDate = (value) => new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short' }).format(new Date(`${value}T12:00:00`));
 
 /** Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas publicadas. */
-const AnomalyRadar = ({ onStudy }) => {
+const AnomalyRadar = ({ onStudy, onTerritory }) => {
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
 
@@ -49,10 +49,11 @@ const AnomalyRadar = ({ onStudy }) => {
                                 <span className={`px-2 py-0.5 text-[11px] font-black ${style.chip}`}>{style.label}</span>
                             </div>
                             <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{item.detail}</p>
-                            {item.rule === 'R2' && onStudy && (
-                                <button onClick={() => onStudy({ title: item.title, detail: item.detail })} className="mt-2 text-sm font-black text-[#281FD0] hover:underline">
-                                    Abrir estudio
-                                </button>
+                            {item.rule === 'R2' && (
+                                <div className="mt-2 flex flex-wrap gap-4">
+                                    {onTerritory && <button onClick={() => onTerritory(item.territory)} className="text-sm font-black text-[#281FD0] hover:underline">Ver ficha del territorio</button>}
+                                    {onStudy && <button onClick={() => onStudy({ title: item.title, detail: item.detail })} className="text-sm font-bold text-slate-600 hover:text-slate-950">Abrir estudio</button>}
+                                </div>
                             )}
                         </article>
                     );
