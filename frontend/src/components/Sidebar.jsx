@@ -28,7 +28,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'intelligence', label: 'Contexto comparado', icon: Globe2, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'alerts', label: 'Alertas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
-        { id: 'narrative_alerts', label: 'Alertas Narrativas', icon: MessageSquareText, category: 'SALIDA', show: isAnalyst || isDirective },
+        { id: 'narrative_alerts', label: 'Alertas Narrativas', icon: MessageSquareText, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
 
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },

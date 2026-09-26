@@ -331,7 +331,7 @@ const App = () => {
       case 'alerts':
         return <AlertsFeed onPageChange={setActivePage} setExternalFilters={setRnmcFilters} />;
       case 'council_commitments':
-        return <CouncilCommitments />;
+        return <CouncilCommitments onNavigate={setActivePage} />;
       case 'narrative_alerts':
         return <NarrativeAlerts />;
       case 'observatory':
