@@ -12,7 +12,8 @@ from api.auth import institutional_access, log_audit, require_role
 from db.models import User, get_db
 from db.models_council import CouncilCommitment
 from db.models_observatory import (
-    ACCESS_LEVELS, PRIORITIES, RECOMMENDATION_STATUSES, STUDY_STATUSES,
+    ACCESS_LEVELS, FIELD_NOTE_KINDS, MAX_OPEN_STUDIES, OPEN_STUDY_STATUSES, PRIORITIES,
+    RECOMMENDATION_STATUSES, STUDY_STATUSES,
     ObservatoryRecommendation, ObservatoryStudy,
 )
 from services import observatory_service as service
@@ -37,6 +38,9 @@ class StudyIn(BaseModel):
     sources: List[str] = Field(default_factory=list, max_length=20)
     hypotheses: Optional[str] = Field(default=None, max_length=5000)
     findings: Optional[str] = Field(default=None, max_length=20000)
+    associated_factors: Optional[str] = Field(default=None, max_length=10000)
+    review_on: Optional[date] = None
+    status_note: Optional[str] = Field(default=None, max_length=2000)
     status: str = "ABIERTO"
     access_level: str = "INSTITUCIONAL"
 
@@ -73,6 +77,21 @@ def _check_study(payload: StudyIn):
         raise HTTPException(422, "El periodo termina antes de empezar.")
     if payload.status == "CERRADO" and not (payload.findings or "").strip():
         raise HTTPException(422, "Un estudio se cierra con sus hallazgos escritos.")
+    if payload.status == "PAUSADO" and not (payload.status_note or "").strip():
+        raise HTTPException(422, "Escriba por qué se pausa el estudio.")
+
+
+def _check_open_limit(db: Session, status: str, exclude_id=None) -> None:
+    """Tope de estudios abiertos: para abrir otro hay que cerrar o pausar uno, de forma explícita."""
+    if status not in OPEN_STUDY_STATUSES:
+        return
+    query = db.query(ObservatoryStudy.code).filter(ObservatoryStudy.status.in_(OPEN_STUDY_STATUSES))
+    if exclude_id is not None:
+        query = query.filter(ObservatoryStudy.id != exclude_id)
+    codes = [code for (code,) in query.order_by(ObservatoryStudy.code).all()]
+    if len(codes) >= MAX_OPEN_STUDIES:
+        raise HTTPException(409, f"Ya hay {len(codes)} estudios abiertos ({', '.join(codes)}), el tope del Observatorio. "
+                                 "Cierre o pause uno, con su motivo, antes de abrir otro.")
 
 
 def serialize_study(row: ObservatoryStudy, recommendations: Optional[list] = None) -> dict:
@@ -82,6 +101,9 @@ def serialize_study(row: ObservatoryStudy, recommendations: Optional[list] = Non
         "period_start": row.period_start.isoformat() if row.period_start else None,
         "period_end": row.period_end.isoformat() if row.period_end else None,
         "sources": row.sources or [], "hypotheses": row.hypotheses, "findings": row.findings,
+        "associated_factors": row.associated_factors,
+        "review_on": row.review_on.isoformat() if row.review_on else None,
+        "status_note": row.status_note, "field_notes": row.field_notes or [],
         "status": row.status, "access_level": row.access_level, "version": row.version,
         "created_by": row.created_by, "updated_by": row.updated_by,
         "created_at": row.created_at.isoformat() if row.created_at else None,
@@ -449,6 +471,7 @@ def get_study(study_id: UUID, db: Session = Depends(get_db), user: User = Depend
 async def create_study(payload: StudyIn, request: Request, db: Session = Depends(get_db),
                        user: User = Depends(require_role(ANALYSIS_ROLES))):
     _check_study(payload)
+    _check_open_limit(db, payload.status)
     row = ObservatoryStudy(code=service.next_code(db, ObservatoryStudy, "OBS"), created_by=user.username,
                            **payload.model_dump())
     db.add(row)
@@ -466,6 +489,10 @@ async def update_study(study_id: UUID, payload: StudyUpdate, request: Request, d
     row = _visible_study(db, study_id, user)
     if row.version != payload.expected_version:
         raise HTTPException(409, "Otra persona modificó este estudio. Recárguelo antes de guardar.")
+    if row.status not in OPEN_STUDY_STATUSES:
+        _check_open_limit(db, payload.status, exclude_id=row.id)
+    if payload.status != "PAUSADO":
+        payload.status_note = None
     for field, value in payload.model_dump(exclude={"expected_version"}).items():
         setattr(row, field, value)
     row.version += 1
@@ -476,6 +503,47 @@ async def update_study(study_id: UUID, payload: StudyUpdate, request: Request, d
                     target={"code": row.code, "status": row.status}, level=1, request=request)
     recommendations = db.query(ObservatoryRecommendation).filter_by(study_id=row.id).order_by(ObservatoryRecommendation.code).all()
     return serialize_study(row, recommendations)
+
+
+class FieldNoteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    kind: str
+    on_date: date
+    place: Optional[str] = Field(default=None, max_length=200)
+    participants: Optional[str] = Field(default=None, max_length=300)  # roles, no nombres
+    summary: str = Field(min_length=10, max_length=5000)
+
+
+@router.post("/studies/{study_id}/field-notes", status_code=201)
+async def add_field_note(study_id: UUID, payload: FieldNoteIn, request: Request, db: Session = Depends(get_db),
+                         user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Trabajo de campo del estudio: entrevista, recorrido, grupo focal o reunión."""
+    import uuid as _uuid
+
+    if payload.kind not in FIELD_NOTE_KINDS:
+        raise HTTPException(422, f"Tipo no válido. Use: {', '.join(FIELD_NOTE_KINDS)}.")
+    row = _visible_study(db, study_id, user)
+    note = {"id": str(_uuid.uuid4()), **payload.model_dump(mode="json"),
+            "by": user.username, "at": datetime.now(timezone.utc).isoformat()}
+    row.field_notes = [*(row.field_notes or []), note]  # lista nueva: SQLAlchemy detecta el cambio
+    db.commit()
+    await log_audit(db, "OBSERVATORY_FIELD_NOTE_ADDED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"code": row.code, "kind": payload.kind}, level=1, request=request)
+    return note
+
+
+@router.delete("/studies/{study_id}/field-notes/{note_id}", status_code=204)
+async def delete_field_note(study_id: UUID, note_id: str, request: Request, db: Session = Depends(get_db),
+                            user: User = Depends(require_role(ANALYSIS_ROLES))):
+    row = _visible_study(db, study_id, user)
+    notes = row.field_notes or []
+    remaining = [note for note in notes if note.get("id") != note_id]
+    if len(remaining) == len(notes):
+        raise HTTPException(404, "La nota no existe.")
+    row.field_notes = remaining
+    db.commit()
+    await log_audit(db, "OBSERVATORY_FIELD_NOTE_REMOVED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"code": row.code}, level=1, request=request)
 
 
 @router.get("/recommendations")

@@ -7,6 +7,8 @@ import PisccGoals from '../components/PisccGoals';
 import PisccActions from '../components/PisccActions';
 import DataRequests from '../components/DataRequests';
 import WeekCalendar from '../components/WeekCalendar';
+import StudyFieldNotes from '../components/StudyFieldNotes';
+import { reviewLabel, studyUpdate } from '../utils/studies';
 import TerritoryProfile from '../components/TerritoryProfile';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
 
@@ -16,7 +18,7 @@ const LEVEL_STYLES = {
     INFO: { bar: 'border-slate-300', chip: 'bg-slate-100 text-slate-600', label: 'Contexto' },
     OK: { bar: 'border-emerald-400', chip: 'bg-emerald-50 text-emerald-800', label: 'Al día' },
 };
-const STUDY_STATUS = { ABIERTO: 'Abierto', EN_CURSO: 'En curso', CERRADO: 'Cerrado' };
+const STUDY_STATUS = { ABIERTO: 'Abierto', EN_CURSO: 'En curso', PAUSADO: 'Pausado', CERRADO: 'Cerrado' };
 const PAGE_LABELS = {
     sources: 'Centro de fuentes', inspecciones: 'Inspecciones', boletin_replica: 'Boletín', alerts: 'Alertas',
     council_commitments: 'Compromisos', observatory: 'Estudios', dashboard: 'Inicio',
@@ -163,20 +165,23 @@ const StudyForm = ({ initial, onSaved, onCancel }) => {
     );
 };
 
-const StudyDetail = ({ study, canEdit, onChanged }) => {
-    const [findings, setFindings] = useState(study.findings || '');
-    const [status, setStatus] = useState(study.status);
+const StudyDetail = ({ study, canEdit, onChanged, onReload }) => {
+    const initial = {
+        findings: study.findings || '', associated_factors: study.associated_factors || '',
+        review_on: study.review_on || '', status: study.status, status_note: study.status_note || '',
+    };
+    const [form, setForm] = useState(initial);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
-    const changed = findings !== (study.findings || '') || status !== study.status;
+    const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+    const changed = Object.keys(initial).some((key) => form[key] !== initial[key]);
     const save = async () => {
         setSaving(true);
         setError('');
         try {
-            const { id, code, version, created_by, updated_by, created_at, updated_at, recommendations, recommendations_count, ...fields } = study;
-            onChanged(await apiJson(`/observatory/studies/${id}`, {
+            onChanged(await apiJson(`/observatory/studies/${study.id}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...fields, findings: findings || null, status, expected_version: version }),
+                body: JSON.stringify(studyUpdate(study, form)),
             }));
         } catch (saveError) {
             setError(saveError.message);
@@ -184,6 +189,7 @@ const StudyDetail = ({ study, canEdit, onChanged }) => {
             setSaving(false);
         }
     };
+    const readOnly = (label, value) => value && <p className="whitespace-pre-line text-sm font-semibold text-slate-700"><b>{label}:</b> {value}</p>;
     return (
         <div className="space-y-4 border-t border-slate-100 pt-4">
             <dl className="grid gap-3 text-sm md:grid-cols-3">
@@ -191,23 +197,39 @@ const StudyDetail = ({ study, canEdit, onChanged }) => {
                 <div><dt className="font-black text-slate-500">Periodo</dt><dd className="font-semibold text-slate-800">{study.period_start ? `${formatDate(study.period_start)} – ${formatDate(study.period_end)}` : '—'}</dd></div>
                 <div><dt className="font-black text-slate-500">Abierto por</dt><dd className="font-semibold text-slate-800">{study.created_by} · {formatDate(study.created_at)}</dd></div>
             </dl>
-            {study.hypotheses && <p className="whitespace-pre-line text-sm font-semibold text-slate-700"><b>Hipótesis:</b> {study.hypotheses}</p>}
+            {readOnly('Hipótesis', study.hypotheses)}
+            {study.status === 'PAUSADO' && readOnly('Pausado porque', study.status_note)}
+            <StudyFieldNotes study={study} canEdit={canEdit} onChanged={onReload} />
             {canEdit ? (
                 <div className="space-y-3">
                     <Field label="Hallazgos" hint="Para cerrar el estudio, escriba lo que encontró.">
-                        <textarea rows={4} value={findings} onChange={(event) => setFindings(event.target.value)} className={inputClass} />
+                        <textarea rows={4} value={form.findings} onChange={set('findings')} className={inputClass} />
                     </Field>
-                    <div className="flex flex-wrap items-end gap-3">
+                    <Field label="Factores asociados" hint="Lo que acompaña o explica el fenómeno: horarios, entornos, economías ilegales, condiciones sociales…">
+                        <textarea rows={3} value={form.associated_factors} onChange={set('associated_factors')} className={inputClass} />
+                    </Field>
+                    <div className="grid gap-3 md:grid-cols-[200px_220px_minmax(0,1fr)] md:items-end">
                         <Field label="Estado">
-                            <select value={status} onChange={(event) => setStatus(event.target.value)} className={inputClass}>
+                            <select value={form.status} onChange={set('status')} className={inputClass}>
                                 {Object.entries(STUDY_STATUS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                             </select>
                         </Field>
-                        <button onClick={save} disabled={!changed || saving} className="min-h-10 bg-[#281FD0] px-4 text-sm font-black text-white disabled:opacity-50">Guardar</button>
+                        <Field label="Revisión posterior" hint="¿Cuándo mirar si lo recomendado funcionó?">
+                            <input type="date" value={form.review_on} onChange={set('review_on')} className={inputClass} />
+                        </Field>
+                        {form.status === 'PAUSADO' && (
+                            <Field label="Por qué se pausa"><input required value={form.status_note} onChange={set('status_note')} className={inputClass} maxLength={2000} /></Field>
+                        )}
                     </div>
+                    <button onClick={save} disabled={!changed || saving} className="min-h-10 bg-[#281FD0] px-4 text-sm font-black text-white disabled:opacity-50">Guardar</button>
                     {error && <p role="alert" className="text-sm font-bold text-red-700">{error}</p>}
                 </div>
-            ) : study.findings && <p className="whitespace-pre-line text-sm font-semibold text-slate-700"><b>Hallazgos:</b> {study.findings}</p>}
+            ) : (
+                <>
+                    {readOnly('Hallazgos', study.findings)}
+                    {readOnly('Factores asociados', study.associated_factors)}
+                </>
+            )}
         </div>
     );
 };
@@ -248,13 +270,18 @@ const Studies = ({ studies, canEdit, draft, onDraftDone, onChanged, onRecommend 
                                 <p className="text-xs font-black text-slate-500">{study.code} · {STUDY_STATUS[study.status]}{study.access_level === 'RESERVADO' ? ' · Reservado' : ''}</p>
                                 <h3 className="mt-1 text-base font-black text-slate-950">{study.title}</h3>
                                 <p className="mt-1 text-sm font-semibold text-slate-600">{study.question}</p>
-                                <p className="mt-1 text-xs font-bold text-slate-500">{study.recommendations_count || 0} recomendaciones</p>
+                                <p className="mt-1 text-xs font-bold text-slate-500">
+                                    {study.recommendations_count || 0} recomendaciones · {(study.field_notes || []).length} notas de campo
+                                    {study.review_on && <span className={study.review_on <= localToday() ? 'ml-1 text-amber-800' : 'ml-1'}>· {reviewLabel(study, localToday())}</span>}
+                                </p>
                             </div>
                             {open === study.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                         </button>
                         {open === study.id && (detail ? (
                             <>
-                                <StudyDetail key={detail.version} study={detail} canEdit={canEdit} onChanged={(updated) => { setDetail(updated); onChanged(); }} />
+                                <StudyDetail key={`${detail.version}-${(detail.field_notes || []).length}`} study={detail} canEdit={canEdit}
+                                    onChanged={(updated) => { setDetail(updated); onChanged(); }}
+                                    onReload={async () => { setDetail(await apiJson(`/observatory/studies/${study.id}`)); onChanged(); }} />
                                 {canEdit && study.status !== 'CERRADO' && (
                                     <button onClick={() => onRecommend(detail)} className="mt-3 inline-flex items-center gap-1 text-sm font-black text-[#281FD0]">
                                         <Lightbulb size={15} /> Redactar recomendación

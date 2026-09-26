@@ -120,6 +120,11 @@ def create_tables():
                 conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS suppressed_cells JSONB DEFAULT '[]'::jsonb;"))
                 conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS catalog_versions_used JSONB;"))
                 conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS query_hash VARCHAR(64);"))
+                # Estudios del Observatorio: factores, revisión posterior, pausa y trabajo de campo.
+                conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS associated_factors TEXT;"))
+                conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS review_on DATE;"))
+                conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS status_note TEXT;"))
+                conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS field_notes JSONB NOT NULL DEFAULT '[]'::jsonb;"))
                 conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_sisc_cifras_query_hash ON sisc_cifras_publications (query_hash) WHERE query_hash IS NOT NULL AND status != 'SUPERSEDED';"))
                 
                 conn.commit()
