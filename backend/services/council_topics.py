@@ -13,6 +13,8 @@ from typing import Dict, Iterable, List, Optional
 # (clave, nombre para mostrar, tema de la hoja de compromisos, patrón)
 TOPICS = [
     ("camaras", "Cámaras y videovigilancia", "Videovigilancia y tecnología", r"\bCAMARAS?\b|VIDEOVIGILANCIA|\bCCTV\b|CENTRO DE MONITOREO"),
+    # Antes que drones: "sobrevuelo de drones en la jornada electoral" es un asunto electoral.
+    ("electoral", "Elecciones", "Seguridad electoral", r"ELECCION|ELECTORAL|JURADOS|REGISTRADURIA|LEY SECA|ESCRUTIN"),
     ("drones", "Drones", "Orden público y grupos armados", r"\bDRON(ES)?\b"),
     ("ataques", "Ataques y hostigamientos armados", "Orden público y grupos armados",
      r"HOSTIGAMIENTO|ATAQUES?\b|EXPLOSIV|ARTEFACTO|DISIDENCIA|GRUPOS? ARMADOS?|JAIME MARTINEZ|MINAS? ANTIPERSONA"),
@@ -25,9 +27,8 @@ TOPICS = [
      r"VEHICULO|CAMIONETA|DOTACION|CHALECO|\bBOTAS\b|NECROMOVIL|COMBUSTIBLE|GASOLINA|BOTIQUIN"),
     ("fonset", "FONSET y presupuesto de seguridad", "Recursos para seguridad", r"FONSET|FONDO (TERRITORIAL )?DE SEGURIDAD|\bPISCC\b|RECOMPENSA"),
     ("desplazamiento", "Desplazamiento y atención humanitaria", "Protección y derechos humanos",
-     r"DESPLAZ|ALBERGUE|REFUGIO|ATENCION HUMANITARIA|AYUDAS? HUMANITARIA|DAMNIFICAD"),
+     r"DESPLAZ(?!AMIENTO DE VEHICULOS)|ALBERGUE|REFUGIO|ATENCION HUMANITARIA|AYUDAS? HUMANITARIA|DAMNIFICAD"),
     ("alertas", "Alertas tempranas", "Alertas tempranas", r"ALERTAS? TEMPRANAS?"),
-    ("electoral", "Elecciones", "Seguridad electoral", r"ELECCION|ELECTORAL|JURADOS|REGISTRADURIA|LEY SECA|ESCRUTIN"),
     ("frentes", "Frentes de seguridad y redes comunitarias", "Articulación comunitaria",
      r"FRENTES? DE SEGURIDAD|REDES? DE (APOYO|INFORMANTES|INTELIGENCIA)|JUNTAS? DE ACCION COMUNAL|\bJAC\b"),
     ("alumbrado", "Alumbrado, poda y entornos", "Movilidad e infraestructura", r"ALUMBRADO|LUMINARIA|\bPODA\b|LOTES? BALDIO"),
