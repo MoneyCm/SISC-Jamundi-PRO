@@ -10,6 +10,7 @@ import WeekCalendar from '../components/WeekCalendar';
 import MondayBrief from '../components/MondayBrief';
 import StudyFieldNotes from '../components/StudyFieldNotes';
 import InstitutionalMemory from '../components/InstitutionalMemory';
+import CitizenReports from '../components/CitizenReports';
 import { reviewLabel, studyUpdate } from '../utils/studies';
 import TerritoryProfile from '../components/TerritoryProfile';
 import { groupSignals, nextRecommendationSteps, RECOMMENDATION_LABELS } from '../utils/observatory';
@@ -458,10 +459,20 @@ const TABS = [
     { id: 'anomalias', label: 'Señales estadísticas', internal: true },
     { id: 'territorios', label: 'Territorios', internal: true },
     { id: 'solicitudes', label: 'Solicitudes de datos', internal: true },
+    { id: 'reportes', label: 'Reportes ciudadanos', internal: true },
 ];
 
 const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
-    const [tab, setTab] = useState('situacion');
+    // Otra página puede pedir abrir una pestaña (p. ej. el Inicio abre "Reportes ciudadanos").
+    const [tab, setTab] = useState(() => {
+        try {
+            const requested = sessionStorage.getItem('sisc.observatory.tab');
+            sessionStorage.removeItem('sisc.observatory.tab');
+            return requested || 'situacion';
+        } catch {
+            return 'situacion';
+        }
+    });
     const [overview, setOverview] = useState(null);
     const [studies, setStudies] = useState([]);
     const [recommendations, setRecommendations] = useState([]);
@@ -549,6 +560,8 @@ const ObservatoryCenter = ({ userRoles = [], onNavigate }) => {
             {tab === 'piscc' && <PisccPanel canEdit={canEdit} />}
 
             {tab === 'solicitudes' && canEdit && <DataRequests />}
+
+            {tab === 'reportes' && canEdit && <CitizenReports />}
 
             {tab === 'memoria' && <InstitutionalMemory />}
 

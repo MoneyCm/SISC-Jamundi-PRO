@@ -115,18 +115,19 @@ def analysis_candidates(db: Session, signals) -> Dict[str, Any]:
 
 
 def citizen_pending(db: Session) -> Optional[str]:
-    """Reportes seguros y propuestas del portal. Los reportes no tienen estado: no se sabe si se atendieron."""
+    """Reportes seguros sin cerrar y propuestas pendientes del portal."""
     from db.models import Proposal, SecureReport
 
-    reports = db.query(SecureReport.created_at).all()
+    reports = db.query(SecureReport.created_at, SecureReport.estado).filter(SecureReport.estado != "CERRADO").all()
     proposals = db.query(Proposal.created_at).filter(Proposal.status == "PENDIENTE").all()
     if not reports and not proposals:
         return None
     parts = []
     if reports:
-        oldest = min(day for (day,) in reports)
-        parts.append(f"{len(reports)} {'reporte seguro' if len(reports) == 1 else 'reportes seguros'} del portal sin registro de atención "
-                     f"(el más antiguo del {oldest:%d/%m/%Y}; el SISC no guarda si se atendieron)")
+        oldest = min(day for day, _ in reports)
+        untouched = sum(1 for _, state in reports if state == "RECIBIDO")
+        parts.append(f"{len(reports)} {'reporte seguro abierto' if len(reports) == 1 else 'reportes seguros abiertos'}, "
+                     f"{untouched} sin gestión (el más antiguo del {oldest:%d/%m/%Y})")
     if proposals:
         parts.append(f"{len(proposals)} {'propuesta ciudadana pendiente' if len(proposals) == 1 else 'propuestas ciudadanas pendientes'}")
     return "Participación ciudadana: " + "; ".join(parts) + "."
