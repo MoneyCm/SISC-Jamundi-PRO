@@ -97,6 +97,16 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
   const inspectionMeasures = inspectionIndicators.filter(indicator => indicator.category === 'Medida').slice(0, 3);
   const hasOperations = Object.values(operations).some(value => value > 0);
   const showInstitutionalPage = Boolean(siscPublication || hasOperations);
+  // Medicina Legal publica por mes vencido: página propia solo fuera del boletín semanal.
+  const medicineIndicators = isWeekly ? [] : siscPublication?.indicators.filter(
+    indicator => indicator.source_code === 'MEDICINA_LEGAL',
+  ) || [];
+  const medicineSource = siscPublication?.sources.find(source => source.code === 'MEDICINA_LEGAL');
+  const showMedicinePage = medicineIndicators.length > 0;
+  const medicinePeriod = typeof medicineIndicators[0]?.metadata.period_label === 'string' ? medicineIndicators[0].metadata.period_label : '';
+  const medicineIsContext = medicineIndicators[0]?.metadata.coverage_type === 'CONTEXT';
+  const pisccSection = 7 + (showInstitutionalPage ? 1 : 0) + (showMedicinePage ? 1 : 0);
+  const pisccPage = 3 + (showInstitutionalPage ? 1 : 0) + (showMedicinePage ? 1 : 0);
 
   const formatIndicatorValue = (indicator: SiscIndicator) => {
     if (indicator.value == null) return '|||';
@@ -112,6 +122,17 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
     return `${sign}${indicator.variation_percentage.toFixed(1)}% vs ${siscPublication?.comparison_label || 'periodo comparable'}`;
   };
 
+  // Medicina Legal se compara con los mismos meses del año anterior; con menos de 30 casos, en casos.
+  const medicineComparison = (indicator: SiscIndicator) => {
+    const previousYear = Number(indicator.period_start.slice(0, 4)) - 1;
+    if (indicator.comparison_value === null) return `Mismos meses de ${previousYear}: menos de 3 o sin dato`;
+    const diff = (indicator.value ?? 0) - indicator.comparison_value;
+    const change = Math.max(indicator.value ?? 0, indicator.comparison_value) < 30 || indicator.variation_percentage === null
+      ? `${diff > 0 ? '+' : ''}${diff} ${Math.abs(diff) === 1 ? 'caso' : 'casos'}`
+      : `${indicator.variation_percentage > 0 ? '+' : ''}${indicator.variation_percentage.toFixed(1).replace('.', ',')} %`;
+    return `Mismos meses de ${previousYear}: ${new Intl.NumberFormat('es-CO').format(indicator.comparison_value)} (${diff === 0 ? 'igual' : change})`;
+  };
+
   const sourceMessage = (source: typeof inspectionSource, fallback: string) => {
     if (!source) return fallback;
     if (source.coverage_status === 'not_applicable') return 'Esta fuente se incorpora en el boletín mensual.';
@@ -123,6 +144,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
     partial: 'Parcial',
     stale: 'Desactualizada',
     missing: 'Sin datos',
+    context: 'Contexto de otro periodo',
     not_applicable: 'No aplica',
   } as const;
 
@@ -131,6 +153,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
     partial: 'border-amber-500 bg-amber-50 text-amber-900',
     stale: 'border-red-400 bg-red-50 text-red-900',
     missing: 'border-gray-400 bg-gray-50 text-gray-700',
+    context: 'border-amber-500 bg-amber-50 text-amber-900',
     not_applicable: 'border-gray-300 bg-gray-50 text-gray-500',
   } as const;
 
@@ -556,7 +579,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
             <section className="mb-3">
               <h3 className="font-extrabold text-xs text-gray-800 mb-2">COBERTURA DEL BOLETÍN</h3>
               <div className="grid grid-cols-3 gap-2">
-                {siscPublication.sources.map(source => (
+                {siscPublication.sources.filter(source => source.coverage_status !== 'not_applicable').map(source => (
                   <div key={source.code} className={`border-l-4 px-2.5 py-2 ${coverageTone[source.coverage_status]}`}>
                     <p className="text-[9px] font-extrabold leading-tight">{source.name}</p>
                     <p className="text-[8px] font-bold mt-1">{coverageLabel[source.coverage_status]}</p>
@@ -588,6 +611,61 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
         </div>
       )}
 
+      {/* PÁGINA MEDICINA LEGAL - SOLO EDICIONES MENSUAL, SEMESTRAL Y ANUAL */}
+      {showMedicinePage && (
+        <div className="newsletter-document bg-white shadow-2xl relative slide-page" style={{ padding: '40px 50px', fontFamily: '"Inter", "Outfit", sans-serif', color: '#333' }}>
+          <div className="flex justify-between items-center border-b-[4px] pb-2 mb-5" style={{ borderColor: colorAmarillo }}>
+            <div className="flex items-center gap-3">
+              <img src="/boletin-escudo.png" alt="Escudo Jamundi" width={40} height={50} className="object-contain" />
+              <div>
+                <h1 className="font-bold text-sm" style={{ color: colorAzul }}>BOLETÍN ESTADÍSTICO DE SEGURIDAD Y CONVIVENCIA</h1>
+                <p className="text-gray-500 text-[9px]">ALCALDÍA MUNICIPAL DE JAMUNDÍ</p>
+              </div>
+            </div>
+            <div className="text-right text-[9px] text-gray-500">
+              <p className="font-bold" style={{ color: colorAzul }}>VIDA E INTEGRIDAD</p>
+              <p>{medicinePeriod}</p>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="border-l-4 pl-3 mb-2" style={{ borderColor: colorAmarillo }}>
+              <h2 className="font-extrabold text-base uppercase" style={{ color: colorAzul }}>{showInstitutionalPage ? '8.' : '7.'} MEDICINA LEGAL — {medicinePeriod.toUpperCase()}</h2>
+            </div>
+            <p className="text-xs text-gray-600">
+              Necropsias y exámenes médico-legales practicados a personas de Jamundí, según las cifras preliminares del Instituto Nacional de Medicina Legal. Se comparan con los mismos meses del año anterior.
+            </p>
+          </div>
+
+          {medicineIsContext && (
+            <div className="mb-4 border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-[10px] text-amber-900">
+              <strong>Otro periodo.</strong> Medicina Legal publica por mes vencido y con rezago; su último periodo disponible es {medicinePeriod}, no el de este boletín.
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {medicineIndicators.map(indicator => (
+              <div key={indicator.id} className="border-l-4 px-3 py-2.5" style={{ borderColor: '#B4234A', backgroundColor: '#FBEFF2' }}>
+                <p className="text-[10px] font-bold leading-tight text-gray-800 min-h-[26px]">{indicator.indicator_name}</p>
+                <p className="text-3xl font-extrabold mt-1" style={{ color: '#7A1731' }}>{indicator.value == null ? '< 3' : formatIndicatorValue(indicator)}</p>
+                <p className="text-[8.5px] text-gray-600 mt-1">{indicator.value == null ? 'Menos de 3 casos: no se detalla' : medicineComparison(indicator)}</p>
+                <p className="text-[8px] text-gray-500">{indicator.unit}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="border border-gray-200 bg-gray-50 px-3 py-2 text-[9px] text-gray-600 mb-3">
+            <strong>Lectura correcta:</strong> Medicina Legal cuenta necropsias y exámenes; la Policía cuenta hechos denunciados. Las dos cifras miden cosas distintas y no deben sumarse ni restarse. Las cifras son preliminares y pueden cambiar cuando la fuente publique las definitivas.
+            {medicineSource?.last_cutoff_date ? ` Datos de la fuente hasta ${formatIsoDate(medicineSource.last_cutoff_date, true)}.` : ''}
+          </div>
+
+          <div className="absolute bottom-[40px] left-[50px] right-[50px] border-t border-gray-200 pt-3 flex justify-between items-center text-[9px] text-gray-400">
+            <p><strong>Fuente:</strong> Instituto Nacional de Medicina Legal y Ciencias Forenses, cifras preliminares.</p>
+            <p><strong>Página {showInstitutionalPage ? 4 : 3}</strong> | Observatorio del Delito - Alcaldía de Jamundí</p>
+          </div>
+        </div>
+      )}
+
       {/* PÁGINA PISCC (TABLA 16) - SEGUIMIENTO CONSEJO DE SEGURIDAD */}
       {includePisccPage && stats.pisccTracking && (
         <div className="newsletter-document bg-white shadow-2xl relative slide-page" style={{ padding: '40px 50px', fontFamily: '"Inter", "Outfit", sans-serif', color: '#333' }}>
@@ -611,7 +689,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
           <div className="mb-3">
             <div className="border-l-4 pl-3 mb-1" style={{ borderColor: colorAmarillo }}>
               <h2 className="font-extrabold text-base uppercase" style={{ color: colorAzul }}>
-                {showInstitutionalPage ? '8.' : '7.'} SEGUIMIENTO A METAS DE RESULTADO — PISCC 2024–2027 (TABLA 16)
+                {pisccSection}. SEGUIMIENTO A METAS DE RESULTADO — PISCC 2024–2027 (TABLA 16)
               </h2>
             </div>
             <p className="text-[11px] text-gray-600 leading-tight">
@@ -758,7 +836,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
           {/* FOOTER */}
           <div className="absolute bottom-[40px] left-[50px] right-[50px] border-t border-gray-200 pt-3 flex justify-between items-center text-[9px] text-gray-400">
             <p><strong>Fuente:</strong> Sábana policial (hechos únicos), MinDefensa y RNMC | Plan Integral de Seguridad y Convivencia Ciudadana (PISCC), tabla 16.</p>
-            <p><strong>Página {showInstitutionalPage ? 4 : 3}</strong> | Observatorio del Delito - Alcaldía de Jamundí</p>
+            <p><strong>Página {pisccPage}</strong> | Observatorio del Delito - Alcaldía de Jamundí</p>
           </div>
         </div>
       )}

@@ -31,7 +31,7 @@ const COMPARISON_MODES = [
   { id: 'year_over_year', label: 'Año anterior' },
 ];
 
-const DEFAULT_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'];
+const DEFAULT_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA', 'MEDICINA_LEGAL'];
 // Página oficial donde la Secretaría publica el Boletín institucional completo (PDF).
 export const BOLETIN_WEB_URL = import.meta.env?.VITE_BOLETIN_WEB_URL
   || 'https://www.jamundi.gov.co/Dependencias-1/Paginas/Secretaria-de-Seguridad-y-Convivencia.aspx';
@@ -40,6 +40,7 @@ const DOMAIN_COLORS = {
   SEGURIDAD: '#281FD0',
   CONVIVENCIA: '#3A30F1',
   'FAMILIA Y PROTECCION': '#FFB600',
+  'VIDA E INTEGRIDAD': '#B4234A',
   TERRITORIO: '#606175',
 };
 
@@ -489,6 +490,7 @@ const indicatorPublicDetail = (indicator = {}) => {
 const indicatorSourceLabel = (indicator = {}) => {
   const source = String(indicator.source || '').toUpperCase();
   if (source.includes('COMISARIAS')) return 'Comisarias de Familia';
+  if (source.includes('MEDICINA')) return 'Medicina Legal';
   if (source.includes('INSPECCIONES') || source.includes('RNMC')) return 'Inspecciones de Policia';
   if (source.includes('POLICIA')) return 'Policia Nacional';
   return indicator.source || '';

@@ -4,6 +4,7 @@ import {
     ArrowRight, MapPin, Clock, Search, Loader2
 } from 'lucide-react';
 import { apiJson } from '../utils/apiClient';
+import { bulletinPeriod, editionLabel, groupByEdition } from '../utils/bulletinEditions';
 
 const fmt = (v) => Number(v || 0).toLocaleString('es-CO');
 
@@ -130,26 +131,30 @@ const ObservatoryBulletins = () => {
                     <p className="text-xs">Genera un boletín con las 3 fuentes para ver la conciliación.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {bulletins.map((b) => {
+                <div className="space-y-8">
+                    {groupByEdition(bulletins).map((group) => (
+                        <div key={group.type} className="space-y-3">
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">{group.group} ({group.items.length})</h3>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {group.items.map((b) => {
                         const tri = b?.publication_json?.governance?.integrity?.tri_fuente_homicidios;
                         return (
                             <article key={b.id} className="bg-white rounded-2xl shadow-lg border border-slate-100 p-5 hover:shadow-xl transition-shadow">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="space-y-1">
-                                        <h3 className="font-black text-slate-900">{b.title}</h3>
+                                        <h3 className="font-black text-slate-900">{editionLabel(b.edition_type)}</h3>
                                         <div className="flex items-center gap-2 text-xs text-slate-500">
                                             <CalendarDays size={14} />
-                                            <span>{b.period_start} → {b.period_end}</span>
+                                            <span>{bulletinPeriod(b)}</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-slate-400">
                                             <Clock size={14} />
-                                            <span>{b.edition_type}</span>
+                                            <span>{b.title}</span>
                                             {b.source_codes?.includes('FISCALIA_SPOA_V3') && (
                                                 <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">SPOA</span>
                                             )}
                                             {b.source_codes?.includes('MEDICINA_LEGAL') && (
-                                                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">ML</span>
+                                                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">Medicina Legal</span>
                                             )}
                                         </div>
                                     </div>
@@ -167,6 +172,9 @@ const ObservatoryBulletins = () => {
                             </article>
                         );
                     })}
+                </div>
+                        </div>
+                    ))}
                 </div>
             )}
         </section>

@@ -79,7 +79,7 @@ ese tiempo dos veces seguidas, se informa a la Secretaria: es un indicador de qu
 
 | Momento | Qué pasa | Responsable | Pantalla |
 |---|---|---|---|
-| Primera semana del mes | **Boletín mensual** del mes vencido, con cifras cerradas de Medicina Legal y de la Fiscalía cuando existan | B, con revisión de A | *Falta el formato mensual* (brecha 2) |
+| Primera semana del mes (hasta el día 7) | **Boletín mensual** del mes vencido, con una página de Medicina Legal (su último mes disponible, señalado si es de otro periodo) | B, con revisión de A | Boletín institucional → Mensual; la portada lo recuerda y lo marca atrasado después del día 7 |
 | Primera semana | Carga mensual de Comisarías si no fue semanal | A | Agentes institucionales |
 | 10 días antes del Consejo | Se revisan las recomendaciones propuestas; se decide cuáles se presentan | B y Dirección | Recomendaciones |
 | 5 días antes | **Informe para decisión del Consejo** (2 páginas, reservado) | B | Compromisos → Informe de decisión |
@@ -131,7 +131,7 @@ Ejemplo:
 |---|---|---|---|---|---|
 | Boletín semanal | Semanal (viernes) | B | Ciudadanía, web de la Alcaldía | **Público** | ✅ Boletín institucional, con revisión editorial |
 | Datos abiertos | Con cada boletín | A | Ciudadanía | **Público** (CC BY 4.0, sin coordenadas exactas ni datos de personas) | ✅ Explorador público |
-| Boletín mensual | Mensual | B | Ciudadanía, Secretaria | **Público** | 🔴 Falta |
+| Boletín mensual | Mensual | B | Ciudadanía, Secretaria | **Público** | ✅ Edición mensual con Medicina Legal; separado de los semanales en la web |
 | Nota semanal a la Secretaria | Semanal | B | Secretaria | **Reservado** | 🟡 La portada tiene el contenido; falta el envío o la vista para imprimir |
 | Informe para decisión del Consejo | Mensual | B | Consejo de Seguridad | **Reservado** | ✅ PDF de 2 páginas |
 | Ficha territorial | Bajo demanda | B | Secretaria, Consejo | **Institucional** | ✅ |
@@ -210,7 +210,7 @@ Las otras 39 acciones las ejecutan otras entidades; el Observatorio **consolida*
 En orden de prioridad:
 
 1. ~~**Los 7 indicadores de resultado del PISCC** en el Centro de análisis, con señal de desviación en la portada.~~ Hecho, y el boletín usa el mismo cálculo.
-2. **Boletín mensual:** la misma maquinaria del semanal, con periodo de mes calendario y fuentes de publicación mensual (Medicina Legal, Fiscalía).
+2. ~~**Boletín mensual**~~ Hecho: Medicina Legal en las ediciones mensual, semestral y anual; recordatorio en la portada; web pública separada por edición. Falta la Fiscalía (hoy hay un solo registro cargado).
 3. **Seguimiento semestral de las 43 acciones:** catálogo de acciones (con la transcripción de la sección 8), carga del avance reportado por cada entidad con su soporte, y el tablero por vector. Exportable al SisPT.
 4. **Solicitudes de datos con estado:** registrar qué se pidió a Inspecciones y Comisarías, cuándo, y si llegó. Así la portada muestra "Comisaría Segunda sin reportar hace 3 semanas".
 5. **Calendario operativo en la portada:** qué toca esta semana según las secciones 3 y 4 (por ejemplo, "Consejo en 5 días: informe de decisión pendiente").

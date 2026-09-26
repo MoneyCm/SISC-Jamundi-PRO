@@ -216,6 +216,14 @@ class SiscCifrasService:
             "coverage": "Agregado municipal",
             "unit": "casos agregados",
         },
+        "MEDICINA_LEGAL": {
+            "name": "Medicina Legal (INMLCF)",
+            "domain": "VIDA E INTEGRIDAD",
+            "dependency": "Instituto Nacional de Medicina Legal y Ciencias Forenses",
+            "periodicity": "Mensual, preliminar, mes vencido",
+            "coverage": "Jamundi",
+            "unit": "necropsias y examenes",
+        },
     }
 
     @staticmethod
@@ -374,6 +382,17 @@ class SiscCifrasService:
                     InstitutionalIndicator.is_public.is_(True),
                     InstitutionalIndicator.value >= InstitutionalIndicator.privacy_threshold,
                 ).count()
+                reported_cutoff = cutoff
+            elif code == "MEDICINA_LEGAL":
+                from services import medicina_legal_bulletin as ml
+
+                snapshots = ml.latest_snapshots(db)
+                latest = ml.latest_month(db, snapshots)
+                cutoff = ml.month_end(latest) if latest else None
+                total = db.query(MedicinaLegalRecord.id).filter(
+                    MedicinaLegalRecord.snapshot_id.in_([snap.id for snap in snapshots.values()]),
+                    MedicinaLegalRecord.codigo_dane_municipio == ml.JAMUNDI_DANE,
+                ).count() if snapshots else 0
                 reported_cutoff = cutoff
             else:
                 cutoff = None
@@ -708,6 +727,10 @@ class SiscCifrasService:
                 result.append(source)
                 continue
 
+            if code == "MEDICINA_LEGAL":
+                result.append(cls._medicina_legal_source(db, source, edition_type, start, end))
+                continue
+
             if code == "POLICIA_SEMANAL":
                 period_records = db.query(hechos_unicos_expr()).filter(
                     HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
@@ -764,12 +787,42 @@ class SiscCifrasService:
             result.append(source)
         return result
 
+    @classmethod
+    def _medicina_legal_source(cls, db: Session, source: Dict[str, Any], edition_type: Optional[str],
+                               start: date, end: date) -> Dict[str, Any]:
+        """Medicina Legal publica por mes vencido: no aplica a la semana; en lo demás, sus meses o su último mes."""
+        from services import medicina_legal_bulletin as ml
+
+        if edition_type not in ml.APPLICABLE_EDITIONS:
+            source.update({"coverage_status": "not_applicable",
+                           "status_note": "Medicina Legal publica por mes vencido; entra en los boletines mensual, semestral y anual."})
+            return source
+        resolved = ml.resolve(db, start, end)
+        if not resolved:
+            source["status_note"] = "No hay cifras preliminares de Medicina Legal cargadas para Jamundi."
+            return source
+        window = resolved["window"]
+        source.update({
+            "period_records": len(ml.INDICATORS),
+            "coverage_status": "aligned" if window.aligned else "context",
+            "included": True,
+            "comparable": True,
+            "publishable": True,
+            "period_label": window.label,
+            "status_note": None if window.aligned else (
+                f"Medicina Legal publica con rezago: se incluye {window.label}, su último periodo disponible."),
+        })
+        return source
+
     @staticmethod
     def available_indicator_codes(source_code: str) -> List[str]:
         if source_code == "POLICIA_SEMANAL":
             return ["seguridad.total", "seguridad.conductas", "seguridad.barrios", "seguridad.tendencia"]
         if source_code == "INSPECCIONES_RNMC":
             return ["convivencia.actuaciones", "convivencia.medidas", "convivencia.estados", "convivencia.territorios"]
+        if source_code == "MEDICINA_LEGAL":
+            from services.medicina_legal_bulletin import INDICATORS
+            return [code for _d, _n, code, *_rest in INDICATORS]
         return ["familia.atenciones", "familia.proteccion", "familia.tipologias"]
 
     @classmethod
@@ -790,7 +843,7 @@ class SiscCifrasService:
         prev_start, prev_end, comparison_label, resolved_comparison_mode = cls.comparison_bounds(
             edition_type, comparison_mode, start, end
         )
-        selected_sources = list(source_codes or ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"])
+        selected_sources = list(source_codes or ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA", "MEDICINA_LEGAL"])
         if not cls.database_available(db):
             return cls.fallback_publication(
                 edition_type=edition_type,
@@ -1089,7 +1142,26 @@ class SiscCifrasService:
                 indicators.extend(family)
             except Exception:
                 pass
+        if "MEDICINA_LEGAL" in source_codes:
+            try:
+                indicators.extend(cls.medicina_legal_indicators(db, start, end))
+            except Exception:
+                pass
         return indicators
+
+    @classmethod
+    def medicina_legal_indicators(cls, db: Session, start: date, end: date) -> List[Indicator]:
+        from services import medicina_legal_bulletin as ml
+
+        return [
+            cls.indicator(
+                source=ml.SOURCE_NAME, source_code=ml.SOURCE_CODE, domain=ml.DOMAIN, category="Medicina Legal",
+                code=row["code"], name=row["name"], value=row["value"], unit=row["unit"],
+                start=row["start"], end=row["end"], comparison_value=row["comparison_value"],
+                cutoff=row["cutoff"], priority=row["priority"], metadata=row["metadata"],
+            )
+            for row in ml.indicator_rows(db, start, end)
+        ]
 
     @staticmethod
     def quality_status(value: float, cutoff: Optional[Any], min_value: int = 1) -> str:

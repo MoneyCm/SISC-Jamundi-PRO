@@ -67,7 +67,7 @@ export interface YtdTableRow {
   diffAbs: number;
 }
 
-export type SiscCoverageStatus = 'aligned' | 'partial' | 'stale' | 'missing' | 'not_applicable';
+export type SiscCoverageStatus = 'aligned' | 'partial' | 'stale' | 'missing' | 'context' | 'not_applicable';
 
 export interface SiscSourceStatus {
   code: string;

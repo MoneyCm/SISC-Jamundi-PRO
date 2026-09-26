@@ -15,26 +15,32 @@ async function request(path: string, options: RequestInit = {}) {
   return json({ ...payload, error, detail: error }, response.status);
 }
 
-const BULLETIN_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA'];
+const BULLETIN_SOURCES = ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA', 'MEDICINA_LEGAL'];
 
 /**
  * Fuentes del Boletín para un periodo. Inspecciones entra solo si sus datos llegan al periodo:
  * sin comparendos de esa semana, incluirla bloquearía la publicación (la revisión editorial lo exige).
  * La sábana policial va siempre; Comisarías entra como contexto de otro periodo, señalado como tal.
+ * Medicina Legal publica por mes vencido: solo en ediciones mensual, semestral y anual.
  */
-export function coveringBulletinSources(sources: { code: string; last_cutoff_date?: string | null }[], periodStart: string): string[] {
+export function coveringBulletinSources(sources: { code: string; last_cutoff_date?: string | null }[], periodStart: string, editionType = 'weekly'): string[] {
   const cutoff = (code: string) => sources.find(source => source.code === code)?.last_cutoff_date || '';
-  return BULLETIN_SOURCES.filter(code => code !== 'INSPECCIONES_RNMC' || (periodStart && cutoff(code) >= periodStart));
+  return BULLETIN_SOURCES.filter(code => {
+    if (code === 'INSPECCIONES_RNMC') return Boolean(periodStart) && cutoff(code) >= periodStart;
+    if (code === 'MEDICINA_LEGAL') return editionType !== 'weekly';
+    return true;
+  });
 }
 
-async function bulletinSourceCodes(periodStart: string, signal?: AbortSignal | null): Promise<string[]> {
+async function bulletinSourceCodes(periodStart: string, editionType: string, signal?: AbortSignal | null): Promise<string[]> {
+  const fallback = BULLETIN_SOURCES.filter(code => code !== 'MEDICINA_LEGAL' || editionType !== 'weekly');
   try {
     const response = await request('/sisc-cifras/sources', { signal: signal || undefined });
-    if (!response.ok) return BULLETIN_SOURCES;
-    return coveringBulletinSources(await response.json(), periodStart);
+    if (!response.ok) return fallback;
+    return coveringBulletinSources(await response.json(), periodStart, editionType);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    return BULLETIN_SOURCES;
+    return fallback;
   }
 }
 
@@ -77,7 +83,7 @@ export async function bulletinFetch(url: string, options: RequestInit = {}): Pro
   if (url === '/api/sisc-publication') {
     if (options.method !== 'POST') return request('/sisc-cifras/publications/public', options);
     const body = JSON.parse(String(options.body));
-    const sourceCodes = await bulletinSourceCodes(String(body.period_start || ''), options.signal);
+    const sourceCodes = await bulletinSourceCodes(String(body.period_start || ''), String(body.edition_type || 'weekly'), options.signal);
     return request('/sisc-cifras/generate', { ...options, body: JSON.stringify({
       edition_type: body.edition_type, period_start: body.period_start, period_end: body.period_end,
       comparison_mode: body.comparison_mode || 'auto', source_codes: sourceCodes,
