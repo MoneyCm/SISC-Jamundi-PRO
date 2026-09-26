@@ -66,7 +66,7 @@ test('slide 2 uses year-to-date territories and only alerts in force', () => {
   assert.equal(where.rows[0].detail, 'Más común: hurto de motos y carros (9 de 35)');
   assert.equal(where.alertCount, 1);
   assert.match(where.subtitle, /Zonas señaladas por la Defensoría/);
-  assert.equal(where.title, 'ZONAS EN ALERTA TEMPRANA');
+  assert.equal(where.title, 'ZONAS CON ALERTA TEMPRANA (DEFENSORÍA)');
   assert.equal(where.comparison.zone.text, '+8 % (antes 60)');
   assert.equal(where.comparison.restValue, 900);
   assert.equal(where.comparison.rest.text, '−4 % (antes 940)');

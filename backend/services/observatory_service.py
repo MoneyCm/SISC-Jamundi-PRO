@@ -1,6 +1,6 @@
 """Centro de Análisis: qué merece atención hoy en Jamundí.
 
-Reúne señales que ya calcula el SISC (fuentes, radar de alertas tempranas, Consejo,
+Reúne señales que ya calcula el SISC (fuentes, cruce con las Alertas Tempranas de la Defensoría, Consejo,
 alertas, intervenciones, boletín) y las del propio Observatorio (estudios y
 recomendaciones). No produce cifras nuevas: cada señal cuenta lo que el módulo
 de origen ya calculó y dice a qué página ir para verlo completo.
@@ -131,7 +131,7 @@ def territory_signals(db: Session, today: date) -> List[Dict[str, Any]]:
 
     radar = build_sat_radar(db)
     if radar.get("status") != "OK":
-        return [signal("TERRITORIO", "radar", "INFO", "Radar de alertas tempranas sin base",
+        return [signal("TERRITORIO", "radar", "INFO", "Cruce con las Alertas Tempranas de la Defensoría sin base",
                        radar.get("reason") or "No hay datos suficientes.", "alerts")]
     cutoff = radar["generated_for"]["cutoff"]
     rows = []
@@ -139,7 +139,8 @@ def territory_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     for item in radar.get("signals", [])[:3]:
         level = "ALTA" if item.get("kind") in ("LETALIDAD", "DIVERGENCIA") else "MEDIA"
         rows.append(signal("TERRITORIO", f"radar-{item.get('kind', '').lower()}", level, item["title"],
-                           f"{item['detail']} Corte: {date.fromisoformat(cutoff):%d/%m/%Y}.", "alerts"))
+                           f"{item['detail']} Corte: {date.fromisoformat(cutoff):%d/%m/%Y}. Contraste del SISC con la "
+                           "Alerta Temprana de la Defensoría, no una alerta nueva.", "alerts"))
     if not rows:
         rows.append(signal("TERRITORIO", "radar", "OK", "Sin divergencias en la zona advertida",
                            "El radar no encuentra cambios que distingan la zona advertida del resto del municipio.", "alerts"))
@@ -156,7 +157,7 @@ def anomaly_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     for item in data["anomalies"][:3]:
         group = "DATOS" if item["rule"] == "R3" else "TERRITORIO"
         rows.append(signal(group, f"anomalia-{item['rule'].lower()}-{len(rows)}", item["level"],
-                           f"Anomalía: {item['title']}", item["detail"], "observatory"))
+                           f"Señal estadística: {item['title']}", item["detail"], "observatory"))
     return rows
 
 

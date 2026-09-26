@@ -403,8 +403,8 @@ export const EarlyWarningWidget = ({ alerts = [] }) => {
     if (publicAlerts.length === 0) return (
         <div className="bg-emerald-50/30 border border-emerald-100 p-6 rounded-[2rem] flex flex-col items-center justify-center text-center">
             <ShieldCheck className="text-emerald-500 mb-2 opacity-40" size={32} />
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Sistema de Alertas Tempranas</p>
-            <p className="text-xs text-emerald-800 font-bold mt-1">Situación Territorial Estable - Sin anomalías detectadas</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Alertas SISC</p>
+            <p className="text-xs text-emerald-800 font-bold mt-1">Sin alertas SISC abiertas (no equivale a una situación estable)</p>
         </div>
     );
 

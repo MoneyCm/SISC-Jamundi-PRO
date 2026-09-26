@@ -59,7 +59,7 @@ const SignalCard = ({ item, onNavigate, onStudy, onTab, onGoals }) => {
                 )}
                 {item.key.startsWith('anomalia') && onTab && (
                     <button onClick={() => onTab('anomalias')} className="inline-flex items-center gap-1 text-sm font-black text-[#281FD0] hover:underline">
-                        Ver en Anomalías <ArrowRight size={15} />
+                        Ver en Señales estadísticas <ArrowRight size={15} />
                     </button>
                 )}
                 {item.key.startsWith('solicitudes') && onTab && (
@@ -74,7 +74,7 @@ const SignalCard = ({ item, onNavigate, onStudy, onTab, onGoals }) => {
                 )}
                 {['ALTA', 'MEDIA'].includes(item.level) && item.key.startsWith('radar') && onStudy && (
                     <button onClick={() => onStudy(item)} className="inline-flex items-center gap-1 text-sm font-bold text-slate-600 hover:text-slate-950">
-                        <BookOpen size={15} /> Abrir estudio
+                        <BookOpen size={15} /> Pasar a análisis
                     </button>
                 )}
             </div>
@@ -443,7 +443,7 @@ const TABS = [
     { id: 'recomendaciones', label: 'Recomendaciones' },
     { id: 'piscc', label: 'Metas PISCC' },
     { id: 'memoria', label: 'Memoria' },
-    { id: 'anomalias', label: 'Anomalías', internal: true },
+    { id: 'anomalias', label: 'Señales estadísticas', internal: true },
     { id: 'territorios', label: 'Territorios', internal: true },
     { id: 'solicitudes', label: 'Solicitudes de datos', internal: true },
 ];
