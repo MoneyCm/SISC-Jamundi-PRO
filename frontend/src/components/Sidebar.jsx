@@ -1,6 +1,6 @@
 import React from 'react';
 import { INSTITUTIONAL_PAGE_LABELS } from '../utils/pageLabels';
-import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks, Compass } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks, Compass, MessageSquareText } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -28,6 +28,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'intelligence', label: 'Contexto comparado', icon: Globe2, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'alerts', label: 'Alertas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        { id: 'narrative_alerts', label: 'Alertas Narrativas', icon: MessageSquareText, category: 'SALIDA', show: isAnalyst || isDirective },
         { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
 
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },

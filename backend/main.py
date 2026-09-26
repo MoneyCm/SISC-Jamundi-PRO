@@ -67,7 +67,30 @@ async def lifespan(app: FastAPI):
     # Lanzar en modo daemon para que no bloquee el apagado si algo sale mal
     logger.info("Lanzando tarea de inicialización en segundo plano...")
     threading.Thread(target=run_migrations_task, daemon=True).start()
-    
+
+    # Alertas Narrativas: cada hora revisa si falta el mensaje del lunes 07:00 o del día 1 a las 07:00.
+    if os.environ.get("NARRATIVE_ALERTS_SCHEDULER", "1") != "0":
+        def narrative_alerts_scheduler():
+            import time as time_module
+            from db.session import SessionLocal
+            from services.narrative_alerts import run_scheduled
+
+            time_module.sleep(120)  # deja terminar la verificación de tablas
+            while True:
+                db = SessionLocal()
+                try:
+                    created = run_scheduled(db)
+                    if created:
+                        logger.info(f"[Alertas Narrativas] Generadas: {', '.join(created)}")
+                except Exception as e_alerts:
+                    db.rollback()
+                    logger.warning(f"[Alertas Narrativas] No se pudo generar: {e_alerts}")
+                finally:
+                    db.close()
+                time_module.sleep(3600)
+
+        threading.Thread(target=narrative_alerts_scheduler, daemon=True, name="narrative-alerts").start()
+
     yield
 
 app = FastAPI(title="SISC Jamundí - Sistema de Información para la Seguridad", version="0.1.0", lifespan=lifespan)
@@ -141,6 +164,8 @@ app.include_router(interventions.router, prefix="/api/interventions", tags=["int
 app.include_router(council_commitments.router, prefix="/api/council-commitments", tags=["council-commitments"])
 from api import observatory
 app.include_router(observatory.router, prefix="/api/observatory", tags=["observatory"])
+from api import narrative_alerts
+app.include_router(narrative_alerts.router, prefix="/api/narrative-alerts", tags=["narrative-alerts"])
 
 # --- Fase 1.5: Router v1 para contrato aprobado ---
 from api import sisc_cifras_v1
