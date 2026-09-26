@@ -269,6 +269,13 @@ def piscc_signals(db: Session, today: date) -> List[Dict[str, Any]]:
                    "observatory", len(off))]
 
 
+def piscc_action_signals(db: Session, today: date) -> List[Dict[str, Any]]:
+    from services.piscc_actions import signals
+
+    return [signal("DECISIONES", "piscc-acciones", item["level"], item["title"], item["detail"], "observatory",
+                   item.get("count")) for item in signals(db, today)]
+
+
 def _safe(builder: Callable[..., List[Dict[str, Any]]], group: str, label: str, *args) -> List[Dict[str, Any]]:
     try:
         return builder(*args)
@@ -293,6 +300,7 @@ def overview(db: Session, today: Optional[date] = None, include_reserved: bool =
         (council_signals, "DECISIONES", "compromisos"),
         (intervention_signals, "DECISIONES", "intervenciones"),
         (piscc_signals, "DECISIONES", "metas del PISCC"),
+        (piscc_action_signals, "DECISIONES", "plan de acción del PISCC"),
     ):
         signals.extend(_safe(builder, group, label, db, today))
     signals.extend(_safe(knowledge_signals, "CONOCIMIENTO", "estudios", db, today, include_reserved))

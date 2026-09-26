@@ -89,9 +89,9 @@ ese tiempo dos veces seguidas, se informa a la Secretaria: es un indicador de qu
 
 ### Ciclo semestral: seguimiento del PISCC (junio y diciembre)
 
-1. **Mes 5 del semestre:** A pide a las entidades del Comité Territorial de Orden Público su avance en las 43 acciones (información cuantitativa y cualitativa, PISCC 9.1).
-2. **Mes 6:** B consolida el avance por vector y por acción, y los 7 indicadores de resultado (sección 8).
-3. Se produce el **Informe semestral de seguimiento del PISCC**, se presenta al Consejo y se reporta en el SisPT.
+1. **Mes 5 del semestre:** A pide a las entidades del Comité Territorial de Orden Público su avance en las 43 acciones (información cuantitativa y cualitativa, PISCC 9.1). La pantalla lista qué entidad debe qué acciones, y la portada lo recuerda en los meses 5 y 6.
+2. **Mes 6:** B registra cada reporte (avance acumulado, estado, soporte) y revisa el avance por vector junto con los 7 indicadores de resultado (sección 8). Si en el primer mes del semestre siguiente faltan reportes, la portada lo marca como atrasado.
+3. Se produce el **Informe semestral de seguimiento del PISCC**, se presenta al Consejo y se reporta en el SisPT (la pantalla exporta un CSV con las 43 acciones).
 
 ### Ciclo anual
 
@@ -138,7 +138,7 @@ Ejemplo:
 | Estudio del Observatorio | Según triage | B | Secretaria, Consejo | Institucional o **reservado** | ✅ Estudios (faltan campos: factores y seguimiento) |
 | Recomendación técnica | Con cada estudio | B | Instancia que decide | Institucional | ✅ Ciclo propuesta → cumplida |
 | Evaluación de intervención | 30, 60 y 90 días | B | Secretaria, Consejo | Institucional | 🟡 El cálculo existe; falta usarlo con casos reales |
-| Informe semestral del PISCC | Semestral | B, con A | Consejo, SisPT, organismos de control | **Público** | 🔴 Falta (brecha 3) |
+| Informe semestral del PISCC | Semestral | B, con A | Consejo, SisPT, organismos de control | **Público** | 🟡 Seguimiento y CSV listos; falta el documento del informe |
 | Respuesta a PQRS | Según solicitud | A | Solicitante | Según el caso | 🟡 Existe el módulo de PQRS |
 | Informe anual | Anual | A y B | Alcaldía, rendición de cuentas | **Público** | 🔴 Falta |
 
@@ -187,21 +187,20 @@ anual; antes de 8 semanas el resultado es preliminar. Se ve en dos lugares:
 - **Boletín institucional**, página "Seguimiento a metas de resultado (tabla 16)", al corte del boletín y con su misma entrega policial.
 - **Centro de análisis**, pestaña "Metas PISCC", y la señal de desviación en la portada.
 
-### Acciones del PISCC que son responsabilidad directa del Observatorio
+### Plan de acción: 43 acciones en 4 vectores
 
-Estas acciones (vectores II y IV) las **cumple el propio Observatorio**, y los productos de la
-sección 6 son su evidencia:
+Catálogo transcrito desde el PISCC (tablas 11 a 14) en `backend/data/piscc/acciones_2024_2027.json`:
+10 acciones del vector I, 6 del II, 18 del III y 9 del IV, cada una con responsable, indicador de
+producto y meta del cuatrienio. **Falta que el Observatorio verifique la transcripción** contra el
+documento; mientras tanto la pantalla lo advierte.
 
-- "Número de informes desarrollados sobre dinámicas delictivas y analítica forense" → boletines, estudios e informes al Consejo.
-- "Un Observatorio del delito implementado" → este modelo operativo, más el SISC en operación.
-- "Implementar el sistema de información para el Observatorio…" → el SISC.
-- "Número de alianzas con la Red Regional de Observatorios de Seguridad" → por gestionar (el Observatorio del Valle ya es una fuente).
+Acciones que tocan directamente al Observatorio:
+- II-03 "Implementar el sistema de información para el Observatorio…" (meta: un Observatorio del delito implementado): el SISC y este modelo operativo son su evidencia.
+- IV-08 "Integrar la Red Regional de Observatorios de Seguridad" (AMSO – Secretaría): por gestionar.
+- II-02 "Elaborar informes de análisis sobre tendencias delictivas" es de la **Fiscalía**, no del Observatorio; los estudios del Observatorio pueden aportarle, pero no cuentan como su meta.
 
-Las otras 39 acciones las ejecutan otras entidades; el Observatorio **consolida** su avance cada semestre.
-
-> Las metas de las 43 acciones no se pueden extraer de forma confiable como texto del PDF: las tablas
-> salen desalineadas. Se pueden transcribir desde la imagen de cada página (capítulo 8.1, tablas 11 a 14),
-> y una persona debe verificarlas antes de construir el tablero.
+Las demás acciones las ejecutan otras entidades; el Observatorio **consolida** su avance cada semestre
+en Centro de análisis → Metas PISCC → Plan de acción.
 
 ---
 
@@ -211,7 +210,7 @@ En orden de prioridad:
 
 1. ~~**Los 7 indicadores de resultado del PISCC** en el Centro de análisis, con señal de desviación en la portada.~~ Hecho, y el boletín usa el mismo cálculo.
 2. ~~**Boletín mensual**~~ Hecho: Medicina Legal en las ediciones mensual, semestral y anual; recordatorio en la portada; web pública separada por edición. Falta la Fiscalía (hoy hay un solo registro cargado).
-3. **Seguimiento semestral de las 43 acciones:** catálogo de acciones (con la transcripción de la sección 8), carga del avance reportado por cada entidad con su soporte, y el tablero por vector. Exportable al SisPT.
+3. ~~**Seguimiento semestral de las 43 acciones**~~ Hecho: catálogo, reporte por acción y semestre con soporte, tablero por vector, pendientes por entidad, CSV para el SisPT y avisos en la portada. Falta verificar la transcripción.
 4. **Solicitudes de datos con estado:** registrar qué se pidió a Inspecciones y Comisarías, cuándo, y si llegó. Así la portada muestra "Comisaría Segunda sin reportar hace 3 semanas".
 5. **Calendario operativo en la portada:** qué toca esta semana según las secciones 3 y 4 (por ejemplo, "Consejo en 5 días: informe de decisión pendiente").
 6. **Estudios más completos:** agregar factores asociados, fecha de revisión posterior, notas cualitativas (entrevistas, recorridos) y el tope de 2 estudios abiertos.
