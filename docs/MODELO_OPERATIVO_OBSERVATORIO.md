@@ -62,7 +62,7 @@ cifras de otro periodo.
 
 | Día | Persona A: datos | Persona B: análisis | Pantalla |
 |---|---|---|---|
-| **Lunes** | Revisa el Centro de fuentes. Pide datos a Inspecciones (y a Comisarías si toca esa semana) y lo registra en Solicitudes de datos. Carga lo que haya llegado y lo marca como recibido | Lee la portada "Jamundí hoy" y anota qué señales requieren atención | Centro de fuentes · Centro de análisis |
+| **Lunes** | Revisa el Centro de fuentes. Pide datos a Inspecciones (y a Comisarías si toca esa semana) y lo registra en Solicitudes de datos. Carga lo que haya llegado y lo marca como recibido | Lee **las ocho preguntas de la semana** arriba de la portada (dato confiable, qué cambió, dónde, qué merece análisis, qué espera decisión, compromisos atrasados, intervención por evaluar, producto de la semana) y decide los candidatos a análisis | Centro de fuentes · Centro de análisis |
 | **Martes** | Carga la sábana de la Policía si llegó. Revisa calidad, duplicados y geocodificación | Revisa el radar de anomalías y abre las fichas de los territorios señalados | Ingesta · Calidad del dato · Radar · Territorios |
 | **Miércoles** | Concilia las fuentes (tres fuentes). Responde PQRS pendientes | **Triage** (sección 5): decide si alguna señal pasa a estudio, a recomendación o a alerta para la Secretaria | Conciliación · Estudios · Recomendaciones |
 | **Jueves** | Revisa el borrador del boletín contra las fuentes | Arma el **boletín semanal** y lo pasa a revisión editorial | Boletín institucional |
@@ -226,3 +226,20 @@ En orden de prioridad:
 6. ~~**Estudios más completos**~~ Hecho: factores asociados, revisión posterior con aviso en la portada, trabajo de campo (entrevistas, recorridos, grupos focales, sin nombres), estado Pausado con motivo y tope de 2 estudios abiertos.
 7. ~~**Memoria institucional**~~ Hecho: pestaña Memoria del Centro de análisis, con búsqueda (sin tildes), filtro por tipo y año, y CSV. Reúne estudios cerrados, recomendaciones rechazadas (con motivo) o cumplidas e intervenciones finalizadas o evaluadas; las finalizadas sin evaluar se muestran como tales.
 8. **Inversión y FONSET:** diferido hasta saber qué información de ejecución presupuestal entrega la Secretaría de Hacienda y con qué frecuencia.
+
+---
+
+## 10. Prueba del lunes
+
+El modelo funciona si un lunes, al abrir el SISC y sin abrir Excel, el Observatorio responde en
+pocos minutos las ocho preguntas de la semana. El Centro de análisis las responde arriba de la
+portada, con lo que ya calculan los módulos, y propone candidatos a análisis con las reglas de
+triage de la sección 5. Decidir cuáles se estudian sigue siendo del Observatorio.
+
+Primera corrida con datos reales (lunes 28/09/2026): dato confiable con reservas (sábana a 16 días,
+comparendos a 126 días), ningún cambio municipal fuera de lo esperado, 4 metas del PISCC desviadas,
+3 lugares en la zona con Alerta Temprana de la Defensoría, 6 candidatos a análisis (entre ellos
+"Videovigilancia y tecnología", pedido 5 veces al Consejo sin cumplirse), 5 compromisos atrasados y
+el boletín mensual de agosto atrasado. Ajuste que salió de la prueba: las Alertas SISC calculadas
+sobre comparendos atrasados ya no aparecen como "actuar ya".
+

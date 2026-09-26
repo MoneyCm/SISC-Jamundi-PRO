@@ -169,11 +169,19 @@ def alert_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     high = counts.get("HIGH", 0) + counts.get("CRITICAL", 0)
     total = sum(counts.values())
     if not total:
-        return [signal("TERRITORIO", "alertas", "OK", "Sin alertas abiertas", "La bandeja de alertas está vacía.", "alerts")]
-    return [signal("TERRITORIO", "alertas", "ALTA" if high else "MEDIA",
-                   f"{_plural(total, 'alerta abierta', 'alertas abiertas')} sin gestionar",
-                   f"{high} de prioridad alta. Revisarlas es decidir si merecen una intervención o se descartan.",
-                   "alerts", total)]
+        return [signal("TERRITORIO", "alertas", "OK", "Sin alertas SISC abiertas", "La bandeja de Alertas SISC está vacía.", "alerts")]
+    detail = f"{high} de prioridad alta. Revisarlas es decidir si merecen una intervención o se descartan."
+    level = "ALTA" if high else "MEDIA"
+    # Las Alertas SISC salen de los comparendos: si la fuente está vieja, no describen el presente.
+    from db.models_inspecciones import InspeccionActuacion
+    last = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(
+        func.date(InspeccionActuacion.fecha_actuacion) <= today).scalar()
+    if last and (today - last.date()).days > MIP_STALE_DAYS:
+        level = "MEDIA"
+        detail = (f"Calculadas sobre comparendos que llegan hasta el {last.date():%d/%m/%Y} "
+                  f"({(today - last.date()).days} días de atraso): actualice la fuente antes de gestionarlas. {high} de prioridad alta.")
+    return [signal("TERRITORIO", "alertas", level,
+                   f"{_plural(total, 'Alerta SISC abierta', 'Alertas SISC abiertas')} sin gestionar", detail, "alerts", total)]
 
 
 # --- Decisiones ------------------------------------------------------------------------------

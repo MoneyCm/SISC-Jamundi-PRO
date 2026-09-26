@@ -441,6 +441,14 @@ def export_memory(q: Optional[str] = Query(default=None, max_length=200), kind: 
                     headers={"Content-Disposition": 'attachment; filename="memoria_observatorio.csv"'})
 
 
+@router.get("/monday")
+def get_monday_brief(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Resumen del lunes: las ocho preguntas del Observatorio, respondidas con lo que ya sabe el SISC."""
+    from services.monday_brief import build
+
+    return build(db, include_reserved=True)
+
+
 @router.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
     """Radar de anomalías (uso interno): cifras que se salen de lo esperado, con sus reglas."""
