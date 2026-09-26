@@ -75,6 +75,8 @@ test('the bulletin leaves out Inspecciones when its data does not reach the peri
     // Semana de septiembre: Inspecciones (corte mayo) queda fuera; Comisarías sigue como contexto.
     assert.deepEqual(coveringBulletinSources(sources, '2026-09-06'), ['POLICIA_SEMANAL', 'COMISARIAS_FAMILIA']);
     assert.deepEqual(coveringBulletinSources(sources, '2026-05-01'), ['POLICIA_SEMANAL', 'INSPECCIONES_RNMC', 'COMISARIAS_FAMILIA']);
+    // Medicina Legal publica por mes vencido: entra en el mensual, no en el semanal.
+    assert.deepEqual(coveringBulletinSources(sources, '2026-08-01', 'monthly'), ['POLICIA_SEMANAL', 'COMISARIAS_FAMILIA', 'MEDICINA_LEGAL']);
 
     const calls = [];
     globalThis.__bulletinTransport = async (path, options) => {

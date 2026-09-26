@@ -30,6 +30,10 @@ GROUPS = (
 LEVEL_ORDER = {"ALTA": 0, "MEDIA": 1, "INFO": 2, "OK": 3}
 MIP_STALE_DAYS = 45
 BULLETIN_STALE_DAYS = 14
+# El boletín mensual del mes vencido se publica en la primera semana (modelo operativo, sección 4).
+MONTHLY_BULLETIN_DAYS = 7
+MONTH_NAMES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+               "septiembre", "octubre", "noviembre", "diciembre")
 # Una recomendación presentada sin decisión en este plazo se señala: nadie la está respondiendo.
 RECOMMENDATION_UNANSWERED_DAYS = 30
 ATTENTION_SOURCE_STATUSES = {"ERROR", "NOT_CONNECTED", "UPDATE_AVAILABLE", "NEEDS_REVIEW", "EXPIRED"}
@@ -84,16 +88,40 @@ def bulletin_signals(db: Session, today: date) -> List[Dict[str, Any]]:
     from db.models_sisc_cifras import SiscCifrasPublication
 
     last = db.query(func.max(SiscCifrasPublication.period_end)).filter(
-        SiscCifrasPublication.status == "PUBLISHED").scalar()
+        SiscCifrasPublication.status == "PUBLISHED", SiscCifrasPublication.edition_type == "weekly").scalar()
     if not last:
-        return [signal("DATOS", "boletin", "MEDIA", "No hay boletín publicado",
-                       "El Boletín institucional todavía no tiene una edición publicada.", "boletin_replica")]
-    days = (today - last).days
-    if days <= BULLETIN_STALE_DAYS:
-        return [signal("DATOS", "boletin", "OK", "Boletín al día",
-                       f"La última edición publicada cubre hasta el {last:%d/%m/%Y}.", "boletin_replica")]
-    return [signal("DATOS", "boletin", "MEDIA", f"Boletín sin publicar hace {days} días",
-                   f"La última edición publicada cubre hasta el {last:%d/%m/%Y}.", "boletin_replica", days)]
+        rows = [signal("DATOS", "boletin", "MEDIA", "No hay boletín semanal publicado",
+                       "El Boletín institucional todavía no tiene una edición semanal publicada.", "boletin_replica")]
+    elif (days := (today - last).days) <= BULLETIN_STALE_DAYS:
+        rows = [signal("DATOS", "boletin", "OK", "Boletín semanal al día",
+                       f"La última edición semanal cubre hasta el {last:%d/%m/%Y}.", "boletin_replica")]
+    else:
+        rows = [signal("DATOS", "boletin", "MEDIA", f"Boletín semanal sin publicar hace {days} días",
+                       f"La última edición semanal cubre hasta el {last:%d/%m/%Y}.", "boletin_replica", days)]
+    return rows + monthly_bulletin_signals(db, today)
+
+
+def monthly_bulletin_signals(db: Session, today: date) -> List[Dict[str, Any]]:
+    """El mensual del mes vencido se publica en la primera semana; después se señala como atrasado."""
+    from db.models_sisc_cifras import SiscCifrasPublication
+
+    month_end = today.replace(day=1) - timedelta(days=1)
+    month_start = month_end.replace(day=1)
+    name = f"{MONTH_NAMES[month_end.month - 1]} de {month_end.year}"
+    published = db.query(SiscCifrasPublication.id).filter(
+        SiscCifrasPublication.status == "PUBLISHED", SiscCifrasPublication.edition_type == "monthly",
+        SiscCifrasPublication.period_start == month_start, SiscCifrasPublication.period_end == month_end,
+    ).first()
+    if published:
+        return [signal("DATOS", "boletin-mensual", "OK", f"Boletín mensual de {name} publicado",
+                       "La edición mensual del mes vencido ya está en la web.", "boletin_replica")]
+    if today.day <= MONTHLY_BULLETIN_DAYS:
+        return [signal("DATOS", "boletin-mensual", "MEDIA", f"Toca el boletín mensual de {name}",
+                       f"Se publica en la primera semana del mes (hasta el día {MONTHLY_BULLETIN_DAYS}). "
+                       "Elija «Mensual» en el Boletín institucional.", "boletin_replica")]
+    return [signal("DATOS", "boletin-mensual", "ALTA", f"Boletín mensual de {name} atrasado",
+                   f"Debía publicarse antes del día {MONTHLY_BULLETIN_DAYS}; van {today.day - MONTHLY_BULLETIN_DAYS} días de retraso.",
+                   "boletin_replica", today.day - MONTHLY_BULLETIN_DAYS)]
 
 
 # --- Territorio ------------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import PublicPortalHeader from '../components/public/PublicPortalHeader';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { downloadCsvFile, downloadJsonFile, downloadXlsxFile } from '../utils/publicDataDownloads';
 import { localToday } from '../utils/localDate';
+import { bulletinPeriod, editionLabel, groupByEdition } from '../utils/bulletinEditions';
 
 const SECTIONS = [
     { id: 'transparency-info', label: 'Transparencia', icon: ShieldCheck },
@@ -279,14 +280,19 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
                             <p className="text-sm text-amber-800 bg-amber-50 border-l-4 border-amber-400 p-4">Aún no se han generado boletines en este repositorio público.</p>
                         ) : (
                             <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-                                <div className="space-y-3">
-                                    {bulletins.map((bulletin) => (
-                                        <button key={bulletin.id} onClick={() => setSelectedBulletin(bulletin.id)} className={`w-full border p-4 text-left transition ${selectedBulletin === bulletin.id ? 'border-[#281FD0] bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">{bulletin.edition_type}</p>
-                                            <p className="mt-1 font-black">{bulletin.title}</p>
-                                            <p className="mt-2 text-xs font-semibold text-slate-500">{bulletin.period_start} a {bulletin.period_end}</p>
-                                            <p className="mt-1 text-xs text-slate-500">Publicado: {bulletin.published_at || bulletin.created_at?.slice(0, 10)}</p>
-                                        </button>
+                                <div className="space-y-6">
+                                    {groupByEdition(bulletins).map((group) => (
+                                        <div key={group.type} className="space-y-3">
+                                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">{group.group} ({group.items.length})</h3>
+                                            {group.items.map((bulletin) => (
+                                                <button key={bulletin.id} onClick={() => setSelectedBulletin(bulletin.id)} className={`w-full border p-4 text-left transition ${selectedBulletin === bulletin.id ? 'border-[#281FD0] bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200'}`}>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-[#281FD0]">{editionLabel(bulletin.edition_type)}</p>
+                                                    <p className="mt-1 font-black">{bulletinPeriod(bulletin)}</p>
+                                                    <p className="mt-2 text-xs font-semibold text-slate-500">{bulletin.title}</p>
+                                                    <p className="mt-1 text-xs text-slate-500">Publicado: {(bulletin.published_at || bulletin.created_at || '').slice(0, 10)}</p>
+                                                </button>
+                                            ))}
+                                        </div>
                                     ))}
                                 </div>
                                 {selectedBulletin && (
