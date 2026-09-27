@@ -134,6 +134,12 @@ def create_tables():
                 conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS review_on DATE;"))
                 conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS status_note TEXT;"))
                 conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS field_notes JSONB NOT NULL DEFAULT '[]'::jsonb;"))
+                # Alertas Narrativas: alerta para el Consejo (sesión) y unicidad controlada por el servicio.
+                conn.execute(text("ALTER TABLE narrative_alerts DROP CONSTRAINT IF EXISTS uq_narrative_alert_period_source;"))
+                conn.execute(text("ALTER TABLE narrative_alerts ADD COLUMN IF NOT EXISTS occasion_date DATE;"))
+                conn.execute(text("ALTER TABLE narrative_alerts ADD COLUMN IF NOT EXISTS occasion_label VARCHAR(120);"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_narrative_alerts_occasion_date ON narrative_alerts (occasion_date);"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_narrative_alerts_period ON narrative_alerts (frequency, period_end);"))
                 conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_sisc_cifras_query_hash ON sisc_cifras_publications (query_hash) WHERE query_hash IS NOT NULL AND status != 'SUPERSEDED';"))
                 
                 conn.commit()

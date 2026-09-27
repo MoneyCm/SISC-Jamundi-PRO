@@ -1,5 +1,6 @@
 """Alertas Narrativas: periodos, criterio de variación significativa, cruce con compromisos y redacción."""
 from datetime import date, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 
@@ -158,6 +159,7 @@ def test_etiquetas_de_lugar():
     assert na.place_label("CGTO EL GUABAL") == "corregimiento El Guabal"
     assert na.place_label("SACHAMATE (URB MUNICIPAL)") == "Sachamate"
     assert na.place_core("CONJUNTO RES. ALFAGUARA") == "ALFAGUARA"
+    assert na.place_label("VIA JAMUNDI/POTRERITO/RIO CLARO") == "Via Jamundi/Potrerito/Rio Claro"
 
 
 def test_validacion_del_texto_editado():
@@ -221,25 +223,165 @@ def db():
 
 
 def fake_compute(source, end=date(2031, 3, 15)):
-    def compute(db, frequency, today=None):
+    def compute(db, frequency, today=None, occasion=None):
         plan = na.periods(frequency, end)
         return {"frequency": frequency, "plan": plan, "cutoff": end, "source_version_id": source,
-                "text": f"{frequency} {source}", "evidence": {}}
+                "text": f"{frequency} {source}", "evidence": {},
+                "occasion_date": occasion[0] if occasion else None, "occasion_label": occasion[1] if occasion else None}
     return compute
 
 
-def test_al_cargar_la_sabana_se_generan_borradores_y_no_se_repite_lo_enviado(db, monkeypatch):
+@pytest.fixture
+def fake_run(monkeypatch):
+    from services import intervention_followup
+
+    monkeypatch.setattr(intervention_followup, "latest_covering_run",
+                        lambda db: SimpleNamespace(cobertura_fin=date(2031, 3, 15)))
+
+
+def test_al_cargar_la_sabana_se_generan_borradores_y_no_se_repite_lo_enviado(db, monkeypatch, fake_run):
     from db.models_narrative_alerts import NarrativeAlert
 
     monkeypatch.setattr(na, "compute", fake_compute("entrega-1"))
-    assert sorted(na.generate_after_upload(db, "cargador")) == ["MENSUAL:2031-02-28", "SEMANAL:2031-03-15"]
+    assert sorted(na.generate_after_upload(db, "cargador")) == [
+        "ANUAL:2030-12-31", "MENSUAL:2031-02-28", "SEMANAL:2031-03-15", "SEMESTRAL:2030-12-31"]
     weekly = db.query(NarrativeAlert).filter_by(source_version_id="entrega-1", frequency="SEMANAL").one()
     assert weekly.trigger == "CARGA" and weekly.created_by == "cargador" and weekly.status == "BORRADOR"
     assert na.generate_after_upload(db, "cargador") == []  # la misma entrega no duplica
 
-    # Se envía la semanal; llega una entrega corregida del mismo periodo.
+    # Se envía la semanal; llega otra entrega con el mismo corte.
     na.mark_sent(db, str(weekly.id), weekly.version, "analista")
     monkeypatch.setattr(na, "compute", fake_compute("entrega-2"))
-    assert na.generate_after_upload(db, "cargador") == ["MENSUAL:2031-02-28"]  # la semanal enviada no se repropone
-    monthly_old = db.query(NarrativeAlert).filter_by(source_version_id="entrega-1", frequency="MENSUAL").one()
-    assert monthly_old.status == "REEMPLAZADO"
+    assert na.generate_after_upload(db, "cargador") == []  # la enviada no se repropone; los balances ya existen
+    monthly = db.query(NarrativeAlert).filter_by(source_version_id="entrega-1", frequency="MENSUAL").one()
+    assert monthly.status == "BORRADOR"
+    # El botón sí genera otra versión del mes con la entrega nueva, y reemplaza el borrador anterior.
+    alert, created = na.generate(db, "MENSUAL", "analista")
+    assert created and alert.source_version_id == "entrega-2"
+    db.refresh(monthly)
+    assert monthly.status == "REEMPLAZADO" and monthly.superseded_by == alert.id
+
+
+def test_alerta_del_consejo_una_por_sesion_y_actualizar_borrador(db, monkeypatch, fake_run):
+    from db.models_narrative_alerts import NarrativeAlertRevision
+
+    monkeypatch.setattr(na, "compute", fake_compute("entrega-1"))
+    session = (date(2031, 3, 27), "27 de marzo", date(2031, 2, 26))
+    alert, created = na.generate(db, "CONSEJO", "SISTEMA", trigger="PROGRAMADA", occasion=session)
+    assert created and alert.occasion_date == date(2031, 3, 27) and alert.period_end == date(2031, 3, 15)
+    assert na.generate(db, "CONSEJO", "SISTEMA", occasion=session)[1] is False
+    # Otra sesión con los mismos datos sí tiene su propia alerta.
+    assert na.generate(db, "CONSEJO", "SISTEMA", occasion=(date(2031, 4, 24), "24 de abril", date(2031, 3, 27)))[1]
+
+    edited = na.edit(db, str(alert.id), "Texto editado a mano", alert.version, "analista")
+    monkeypatch.setattr(na, "compute", fake_compute("entrega-2"))
+    monkeypatch.setattr(na, "council_sessions", lambda db, today: (SimpleNamespace(start=date(2031, 2, 26)), None))
+    refreshed = na.refresh(db, str(alert.id), edited.version, "analista")
+    assert refreshed.text == "CONSEJO entrega-2" and refreshed.source_version_id == "entrega-2"
+    actions = [r.action for r in db.query(NarrativeAlertRevision).filter_by(alert_id=alert.id)
+               .order_by(NarrativeAlertRevision.version)]
+    assert actions == ["GENERADO", "EDITADO", "ACTUALIZADO"]
+    with pytest.raises(PermissionError):
+        na.refresh(db, str(alert.id), 0, "analista")  # versión vieja
+
+
+def test_periodos_consejo_semestral_y_anual():
+    council = na.periods("CONSEJO", CUTOFF)
+    assert council["current"] == (date(2026, 8, 16), CUTOFF)
+    assert council["previous"] == (date(2026, 7, 19), date(2026, 8, 15))
+    semester = na.periods("SEMESTRAL", CUTOFF)
+    assert semester["current"] == (date(2026, 1, 1), date(2026, 6, 30))
+    assert semester["previous"] == (date(2025, 1, 1), date(2025, 6, 30))
+    assert na.periods("SEMESTRAL", date(2026, 3, 1))["current"] == (date(2025, 7, 1), date(2025, 12, 31))
+    assert na.periods("SEMESTRAL", date(2026, 6, 30))["current"] == (date(2026, 1, 1), date(2026, 6, 30))
+    year = na.periods("ANUAL", CUTOFF)
+    assert year["current"] == (date(2025, 1, 1), date(2025, 12, 31)) and year["previous"][0] == date(2024, 1, 1)
+    assert na.periods("ANUAL", date(2025, 12, 31))["current"][0] == date(2025, 1, 1)
+    assert na.period_label("SEMESTRAL", *semester["current"]) == "primer semestre de 2026"
+    assert na.previous_label("SEMESTRAL", semester["previous"][0]) == "el primer semestre de 2025"
+    assert na.previous_label("CONSEJO", council["previous"][0]) == "los 28 días anteriores"
+
+
+def test_base_sin_datos_no_cuenta_como_ceros():
+    plan = na.periods("ANUAL", CUTOFF)  # 2025 frente a 2024; de la base (2021-2024) solo 2024 tiene datos
+    rows = events(date(2025, 5, 1), 30, lugar="X", hora=None) + events(date(2024, 5, 1), 10, lugar="X", hora=None)
+    result = na.evaluate(rows, "ANUAL", plan, data_start=date(2024, 1, 1))
+    assert result["baseline_periods"] == 1
+    assert sorted(t["category"] for t in result["selected"]) == ["HURTO_PERSONAS", "X"]
+
+
+def test_mensaje_largo_con_otras_fuentes_y_limite_de_lineas():
+    plan = na.periods("MENSUAL", CUTOFF)
+    selected = [{"dimension": "DELITO", "category": "HURTO_PERSONAS", "kind": "AUMENTO", "current": 40, "previous": 25}]
+    cross = {"overdue": [], "due_soon": [], "fulfilled_recent": [], "fulfilled_window_days": 30, "open": 0,
+             "related": [[{"code": "CS-1", "state": "ABIERTO", "deadline_date": None}]]}
+    context = [{"line": f"Fuente {n}."} for n in range(1, 10)]
+    lines = na.compose("MENSUAL", plan, CUTOFF, selected, cross, LABELS, context).split("\n")
+    assert len(lines) == 10
+    assert lines[2] == "No hubo otras variaciones significativas frente a julio."
+    assert lines[3:9] == [f"Fuente {n}." for n in range(1, 7)]  # caben 6; las demás se omiten en orden
+    assert lines[-1].startswith("Compromisos del Consejo")
+
+
+def test_encabezados_por_tipo():
+    assert na.header_line("SEMESTRAL", na.periods("SEMESTRAL", CUTOFF), CUTOFF) == (
+        "*SISC Jamundí · Balance semestral* (primer semestre de 2026 frente al mismo semestre de 2025; "
+        "datos policiales al 12/09/2026).")
+    assert na.header_line("ANUAL", na.periods("ANUAL", CUTOFF), CUTOFF).startswith(
+        "*SISC Jamundí · Balance anual* (2025 frente a 2024")
+    council = na.header_line("CONSEJO", na.periods("CONSEJO", CUTOFF), CUTOFF, date(2026, 9, 28), "29 de septiembre")
+    assert council == ("*SISC Jamundí · Alerta para el Consejo de Seguridad* · sesión: 29 de septiembre. Últimos 28 días "
+                       "(16 de agosto al 12 de septiembre); datos policiales al 12/09/2026, con 16 días de retraso.")
+    assert na.against("SEMESTRAL", date(2025, 1, 1)) == "frente al primer semestre de 2025"
+
+
+def test_limite_de_lineas_por_tipo():
+    na.validate_text("\n".join(["x"] * 12), "CONSEJO")
+    with pytest.raises(ValueError, match="máximo es 6"):
+        na.validate_text("\n".join(["x"] * 7), "SEMANAL")
+    with pytest.raises(ValueError, match="máximo es 15"):
+        na.validate_text("\n".join(["x"] * 16), "ANUAL")
+
+
+def test_zona_con_alerta_temprana():
+    alert = {"id": "AT-005-24", "numero": "005-24",
+             "conductas_advertidas": [{"codigo_siedco": "HOMICIDIO"}, {"codigo_siedco": "HURTO_VEHICULOS"},
+                                      {"codigo_siedco": None}]}
+    classify = lambda place: ("AT", "Potrerito") if place == "POTRERITO" else ("URBANO", place)
+    plan = na.periods("MENSUAL", CUTOFF)
+    rows = (events(date(2026, 8, 5), 3, conducta="HOMICIDIO", lugar="POTRERITO")
+            + events(date(2026, 8, 6), 2, conducta="HURTO_VEHICULOS", lugar="POTRERITO")
+            + events(date(2026, 8, 7), 9, conducta="HURTO_PERSONAS", lugar="POTRERITO")  # no advertida
+            + events(date(2026, 8, 8), 4, conducta="HOMICIDIO", lugar="BONANZA")  # fuera de la zona
+            + events(date(2026, 7, 8), 2, conducta="HOMICIDIO", lugar="POTRERITO"))
+    item = na.at_zone_line(rows, plan, "MENSUAL", classify, alert, LABELS)
+    assert item["line"] == ("Zona con Alerta Temprana 005-24 de la Defensoría: 5 hechos de las conductas advertidas "
+                            "(2 en julio), 3 homicidios; más hechos en Potrerito (5).")
+
+
+def test_marca_de_alerta_temprana_en_la_variacion():
+    plan = na.periods("SEMANAL", CUTOFF)
+    line = na.variation_line({"dimension": "BARRIO", "category": "POTRERITO", "kind": "AUMENTO", "current": 9,
+                              "previous": 2, "alerta_temprana": True}, "SEMANAL", plan["previous"][0], LABELS)
+    assert line.endswith("frente a la semana anterior, en territorio con Alerta Temprana de la Defensoría.")
+
+
+def test_alerta_del_consejo_se_genera_el_dia_anterior():
+    tz = na.TZ
+    assert not na.council_due(datetime(2026, 9, 28, 6, 59, tzinfo=tz), date(2026, 9, 29), date(2026, 9, 29))
+    assert na.council_due(datetime(2026, 9, 28, 7, 0, tzinfo=tz), date(2026, 9, 29), date(2026, 9, 29))
+    assert not na.council_due(datetime(2026, 9, 30, 8, 0, tzinfo=tz), date(2026, 9, 29), date(2026, 9, 29))
+
+
+def test_tarea_de_la_alerta_del_consejo_en_el_calendario():
+    from services.operating_calendar import Session_, council_alert_item, narrative_item
+
+    session = Session_(date(2026, 9, 29), date(2026, 9, 29), "REGISTRADA", 2026, 9)
+    assert council_alert_item(None, date(2026, 9, 20), session) is None
+    assert council_alert_item(None, date(2026, 9, 26), session)["status"] == "PENDIENTE"
+    assert council_alert_item({"status": "BORRADOR"}, date(2026, 9, 29), session)["status"] == "ATRASADO"
+    assert council_alert_item({"status": "ENVIADO"}, date(2026, 9, 29), session)["status"] == "HECHO"
+    draft = {"status": "BORRADOR", "period_label": "primer semestre de 2026", "created_on": date(2026, 9, 20),
+             "sent_on": None}
+    assert narrative_item("SEMESTRAL", draft, date(2026, 9, 26))["status"] == "PENDIENTE"
+    assert narrative_item("SEMESTRAL", {**draft, "status": "ENVIADO"}, date(2026, 9, 26)) is None
