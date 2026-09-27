@@ -111,6 +111,10 @@ def create_tables():
                 conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_rnmc_source_fingerprint ON rnmc_measures (source_id, event_fingerprint);"))
                 conn.execute(text("ALTER TABLE institutional_data_batches ADD COLUMN IF NOT EXISTS reporting_basis VARCHAR(20) DEFAULT 'CUMULATIVE';"))
                 
+                # create_all no añade columnas a tablas que ya existen.
+                from db.conciliacion_schema import ensure_conciliacion_schema
+                ensure_conciliacion_schema(conn)
+
                 # --- Fase 1.5: columnas nuevas para contrato v1 ---
                 conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS requested_filters JSONB;"))
                 conn.execute(text("ALTER TABLE sisc_cifras_publications ADD COLUMN IF NOT EXISTS resolved_filters JSONB;"))

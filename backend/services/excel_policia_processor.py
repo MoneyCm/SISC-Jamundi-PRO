@@ -216,6 +216,15 @@ class PoliciaJamundiProcessor:
         return conducta_estandar, categoria_delito
 
     def process(self, contents: bytes, filename: str, run_id: str = None, force: bool = False):
+        from services.ingestion_lock import ingestion_lock
+
+        delivery_key = f'policia:{run_id or hashlib.sha256(contents).hexdigest()}'
+        with ingestion_lock(self.db.get_bind(), delivery_key) as acquired:
+            if not acquired:
+                return {"status": "in_progress", "ingestion_id": str(run_id) if run_id else None}
+            return self._process_locked(contents, filename, run_id=run_id, force=force)
+
+    def _process_locked(self, contents: bytes, filename: str, run_id: str = None, force: bool = False):
         file_hash = hashlib.sha256(contents).hexdigest()
         
         # 1. Verificar si ya se proceso. Si viene de la cola HTTP, usar ese run exacto.
@@ -303,6 +312,7 @@ class PoliciaJamundiProcessor:
                 "repetidas_en_archivo": 0, "filas_snapshot": 0,
             }
             snapshot_keys = set(existing_snapshot_keys)
+            reused_snapshot_keys = set()
             snapshot_coverage = list(existing_snapshot_coverage)
             current_delivery_cutoff = None
             if mapping.get("fecha_evento"):
@@ -315,6 +325,7 @@ class PoliciaJamundiProcessor:
                     self.db.commit()
                     run = self.db.query(IngestionRun).filter(IngestionRun.id == run.id).first()
 
+                claimed_key = None
                 try:
                     with self.db.begin_nested():
                         # a. Guardar Staging
@@ -404,11 +415,18 @@ class PoliciaJamundiProcessor:
                             # Un reintento del mismo proceso no debe volver a insertar su foto historica.
                             stats["duplicadas"] += 1
                             stats["existentes_historico"] += 1
+                            if record_key not in reused_snapshot_keys:
+                                reused_snapshot_keys.add(record_key)
+                                stats["aprobadas"] += 1
+                                stats["filas_snapshot"] += 1
+                            else:
+                                stats["repetidas_en_archivo"] += 1
                             continue
                         if not claim_snapshot_record(snapshot_keys, record_key):
                             stats["repetidas_en_archivo"] += 1
                             stats["duplicadas"] += 1
                             continue
+                        claimed_key = record_key
 
                         semana_num = int(data["semana_num"]) if data.get("semana_num") and str(data["semana_num"]).isdigit() else None
                         processed_data["semana_num"] = semana_num
@@ -513,6 +531,10 @@ class PoliciaJamundiProcessor:
                         snapshot_coverage.append((processed_data["fecha_evento"], semana_num))
 
                 except Exception as e:
+                    # El savepoint revierte la fila: no dejar una identidad fantasma
+                    # que haga saltar una siguiente fila válida con la misma clave.
+                    if claimed_key is not None:
+                        snapshot_keys.discard(claimed_key)
                     logger.error(f"Error procesando fila {idx}: {e}")
                     try:
                         self.db.add(IngestionIssue(ingestion_id=run.id, fila=idx+2, regla="ERROR_SISTEMA", descripcion=str(e)[:250], severidad="ERROR"))
