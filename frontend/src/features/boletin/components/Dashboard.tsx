@@ -19,7 +19,7 @@ import type {
   SiscPublication,
   SiscSourceStatus
 } from '../types/stats';
-import { deduplicateCrimeRows, sourceRowRecordKey } from '../lib/sabanaHistory';
+import { crimeEventKey, deduplicateCrimeRows, sourceRowRecordKey, uniqueCrimeEvents } from '../lib/sabanaHistory';
 import { toPisccTracking, type BackendPisccGoals } from '../lib/pisccGoals';
 import { withinBulletinCutoff } from '../lib/bulletinPeriod';
 import OfficialQueryPanel from './OfficialQueryPanel';
@@ -655,7 +655,8 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
             const barrioIdx = Object.keys(columns).find(k => /BARRIOS HECHO|\bBARRIO\b|\bSECTOR\b/i.test(k));
             const armaIdx = Object.keys(columns).find(k => /ARMAS MEDIOS|\bARMA\b|\bMEDIO\b/i.test(k));
             const diaIdx = Object.keys(columns).find(k => /DIA|DÍA/i.test(k));
-            const hechosIdIdx = Object.keys(columns).find(k => /HECHOS_ID|ID_HECHO|IDENTIFICADOR/i.test(k));
+            // normalizeHeader cambia "_" por espacio: HECHOS_ID llega como "HECHOS ID".
+            const hechosIdIdx = Object.keys(columns).find(k => /HECHOS[ _]ID|ID[ _]HECHO|IDENTIFICADOR/i.test(k));
             const fechaIdx = Object.keys(columns).find(k => /FECHA_HECHO|FECHA/i.test(k));
             const generoIdx = Object.keys(columns).find(k => /GENERO|GÉNERO|SEXO/i.test(k));
             const edadIdx = Object.keys(columns).find(k => /EDAD|EDADES/i.test(k));
@@ -763,6 +764,11 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
   /* eslint-disable react-hooks/preserve-manual-memoization */
   const stats = useMemo<StatsResult | null>(() => {
     if (!rawExcelData || rawExcelData.length === 0) return null;
+    const hechos = uniqueCrimeEvents(rawExcelData);
+    const hechosPorConducta = uniqueCrimeEvents(rawExcelData, true);
+    // Totales: cada hecho una vez aunque tenga varias conductas.
+    const unicos = { current: new Set<string>(), prev: new Set<string>(), currentYTD: new Set<string>(),
+      prevYTD: new Set<string>(), prevImmediate: new Set<string>(), last4: new Set<string>() };
 
     let currentPeriodCount = 0;
     let prevPeriodCount = 0;
@@ -781,7 +787,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
     const tableCountsPeriod: Record<string, { current: number, prev: number, prevImmediate?: number }> = {};
     const tableGroupingKey: keyof CrimeRow = selectedConducta === 'Todos' ? 'CONDUCTA' : 'BARRIO';
 
-    rawExcelData.forEach(row => {
+    hechosPorConducta.forEach(row => {
       // Conducta Filter
       if (selectedConducta !== 'Todos' && row.CONDUCTA.trim().toUpperCase() !== selectedConducta.toUpperCase()) {
           return; // Skip if it doesn't match the selected crime
@@ -875,15 +881,16 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
         }
       }
 
+      const eventKey = crimeEventKey(row);
       if (inCurrentPeriod) {
-          currentPeriodCount++;
-          currentPeriodRows.push(row);
+          if (!unicos.current.has(eventKey)) currentPeriodRows.push(row);
+          unicos.current.add(eventKey);
       }
-      if (inPrevPeriod) prevPeriodCount++;
-      if (inCurrentYTD) currentYTDCount++;
-      if (inPrevYTD) prevYTDCount++;
-      if (inPrevImmediatePeriod) prevImmediatePeriodCount++;
-      if (inLast4Weeks) last4WeeksCount++;
+      if (inPrevPeriod) unicos.prev.add(eventKey);
+      if (inCurrentYTD) unicos.currentYTD.add(eventKey);
+      if (inPrevYTD) unicos.prevYTD.add(eventKey);
+      if (inPrevImmediatePeriod) unicos.prevImmediate.add(eventKey);
+      if (inLast4Weeks) unicos.last4.add(eventKey);
 
       // Table Aggregations
       const keyVal = String(row[tableGroupingKey] || '').trim().toUpperCase();
@@ -903,6 +910,13 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
           }
       }
     });
+
+    currentPeriodCount = unicos.current.size;
+    prevPeriodCount = unicos.prev.size;
+    currentYTDCount = unicos.currentYTD.size;
+    prevYTDCount = unicos.prevYTD.size;
+    prevImmediatePeriodCount = unicos.prevImmediate.size;
+    last4WeeksCount = unicos.last4.size;
 
     const getTop = (arr: CrimeRow[], key: keyof CrimeRow, n: number): TopItem[] => {
         const counts: Record<string, number> = {};
@@ -938,7 +952,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
         chartData = monthsKeys.map(m => ({ name: m, current: 0, prev: 0 }));
     }
 
-    rawExcelData.forEach(row => {
+    hechos.forEach(row => {
         if (selectedConducta !== 'Todos' && row.CONDUCTA.trim().toUpperCase() !== selectedConducta) return;
         const y = row.AÑO;
         const mStr = row.MES?.substring(0,3).toLowerCase();
@@ -1006,7 +1020,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
     const totalesPorConductaSemana: Record<string, number> = {};
     const totalesPorConductaYTD: Record<string, number> = {};
 
-    rawExcelData.forEach(row => {
+    hechos.forEach(row => {
       const year = row.AÑO;
       const week = row.NoSEMANA;
       const month = row.MES;
@@ -1082,7 +1096,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
         const newTotalesSemanaComp: Record<string, number> = {};
         const newTotalesYTDComp: Record<string, number> = {};
 
-        rawExcelData.forEach(row => {
+        hechos.forEach(row => {
           const year = row.AÑO;
           const week = row.NoSEMANA;
           const c = row.CONDUCTA;
@@ -1197,7 +1211,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
 
     // 2. Conductas que explican el resultado
     const totalesPorConductaYTDPrev: Record<string, number> = {};
-    rawExcelData.forEach(row => {
+    hechos.forEach(row => {
       const year = row.AÑO;
       const week = row.NoSEMANA;
       const month = row.MES;
