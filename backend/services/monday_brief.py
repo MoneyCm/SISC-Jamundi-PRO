@@ -185,7 +185,7 @@ def interventions_to_evaluate(db: Session, signals) -> Dict[str, Any]:
 
 
 def products(calendar: Dict[str, Any]) -> Dict[str, Any]:
-    due = [item for item in calendar["items"] if item["status"] != "HECHO" and item["area"] in ("Boletín", "Consejo", "PISCC")]
+    due = [item for item in calendar["items"] if item["status"] != "HECHO" and item["area"] in ("Boletín", "Alerta", "Consejo", "PISCC")]
     if not due:
         return answer("producto", "¿Qué producto se entrega esta semana?", "OK", "Los productos de la semana están al día.")
     items = [f"{item['title']} ({item['when']}){' — atrasado' if item['status'] == 'ATRASADO' else ''}" for item in due]
