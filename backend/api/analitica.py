@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import bindparam, func, or_, text
 from db.models import get_db, Event, EventType, User
 from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, SabanaSnapshotRow
+from services.entrega_vigente import filtro_hechos, filtro_sql
 from services.hechos_metrics import (
     canonical_hecho_key,
     hechos_sin_id_expr,
@@ -191,7 +192,7 @@ def _latest_public_source(db: Session):
         "conducta_col": "conducta_estandar",
         "location_expr": "COALESCE(NULLIF(BTRIM(barrio_normalizado), ''), NULLIF(BTRIM(vereda_normalizada), ''), NULLIF(BTRIM(corregimiento), ''), 'SIN DATO')",
         "zone_expr": "COALESCE(NULLIF(BTRIM(zona), ''), CASE WHEN NULLIF(BTRIM(vereda_normalizada), '') IS NOT NULL OR NULLIF(BTRIM(corregimiento), '') IS NOT NULL THEN 'RURAL' ELSE 'URBANA' END)",
-        "snapshot_filter": " AND fuente_codigo = 'POLICIA_SEMANAL'",
+        "snapshot_filter": " AND fuente_codigo = 'POLICIA_SEMANAL'" + filtro_sql(db),
     }
 
 
@@ -301,6 +302,7 @@ def _hechos_count(db: Session, conductas: list, start: date = None, end: date = 
     q = db.query(hechos_unicos_expr()).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
         HechoSeguridad.conducta_estandar.in_(conductas),
+        filtro_hechos(db),
     )
     if start:
         q = q.filter(HechoSeguridad.fecha_evento >= start)
@@ -309,7 +311,7 @@ def _hechos_count(db: Session, conductas: list, start: date = None, end: date = 
     return q.scalar() or 0
 
 def _hechos_total(db: Session, start: date = None, end: date = None) -> int:
-    q = db.query(hechos_unicos_expr()).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL")
+    q = db.query(hechos_unicos_expr()).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db))
     if start:
         q = q.filter(HechoSeguridad.fecha_evento >= start)
     if end:
@@ -321,7 +323,7 @@ def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
         registros_expr().label("registros"),
         victimas_identificables_expr().label("victimas_identificables"),
         hechos_sin_id_expr().label("registros_sin_id_fuente"),
-    ).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL")
+    ).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db))
     if start:
         q = q.filter(HechoSeguridad.fecha_evento >= start)
     if end:
@@ -872,6 +874,7 @@ def get_tendencia_delictiva(
         FROM {source_table}
         WHERE 1=1
         AND fuente_codigo = 'POLICIA_SEMANAL'
+        {filtro_sql(db)}
     """
     params = {
         "hom_vals": homicidio_vals,
@@ -973,6 +976,8 @@ def get_top_barrios(
         HechoSeguridad.barrio_normalizado.label('barrio'),
         hechos_unicos_expr().label('total')
     ).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+        filtro_hechos(db),
         HechoSeguridad.barrio_normalizado != '',
         HechoSeguridad.barrio_normalizado.isnot(None)
     )
@@ -994,7 +999,9 @@ def get_resumen_estadistico(
     db: Session = Depends(get_db)
 ):
     """Últimos 50 hechos para el feed de actividad reciente del dashboard."""
-    q = db.query(HechoSeguridad).order_by(HechoSeguridad.fecha_evento.desc())
+    q = db.query(HechoSeguridad).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db)
+    ).order_by(HechoSeguridad.fecha_evento.desc())
     if start_date:
         q = q.filter(HechoSeguridad.fecha_evento >= start_date)
     if end_date:
@@ -1206,7 +1213,8 @@ def get_por_semana(
         hechos_unicos_expr().filter(
             HechoSeguridad.conducta_estandar.in_(CONDUCTA_KEYS['HOMICIDIO'])
         ).label('homicidios')
-    ).filter(HechoSeguridad.semana_num.isnot(None))
+    ).filter(HechoSeguridad.semana_num.isnot(None), HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+             filtro_hechos(db))
 
     if anio:
         q = q.filter(func.extract('year', HechoSeguridad.fecha_evento) == anio)
@@ -1232,7 +1240,8 @@ def get_por_zona(
     q = db.query(
         HechoSeguridad.zona.label('zona'),
         hechos_unicos_expr().label('total')
-    ).filter(HechoSeguridad.zona != '', HechoSeguridad.zona.isnot(None))
+    ).filter(HechoSeguridad.zona != '', HechoSeguridad.zona.isnot(None),
+             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db))
 
     if start_date:
         q = q.filter(HechoSeguridad.fecha_evento >= start_date)
