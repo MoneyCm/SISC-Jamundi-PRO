@@ -12,6 +12,7 @@ const STATUS_STYLES = {
     DESCARTADO: 'bg-slate-200 text-slate-500',
     REEMPLAZADO: 'bg-slate-100 text-slate-500',
 };
+const TRIGGER_LABELS = { PROGRAMADA: 'Programado', CARGA: 'Al cargar la sábana' };
 const FILTERS = [{ id: '', label: 'Todas' }, { id: 'SEMANAL', label: 'Semanales' }, { id: 'MENSUAL', label: 'Mensuales' }];
 
 const formatDate = (value) => (value
@@ -273,8 +274,9 @@ const NarrativeAlerts = () => {
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-[#281FD0]">Resumen para WhatsApp</p>
                     <h1 className="mt-1 text-3xl font-black text-slate-950">Alertas Narrativas</h1>
                     <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                        Cada lunes y cada primero de mes el SISC redacta un mensaje de máximo seis líneas con las tres variaciones más significativas
-                        por delito, barrio y franja horaria, y el estado de los compromisos del Consejo. Revíselo, ajústelo si hace falta y envíelo. Uso interno.
+                        Apenas se carga una sábana policial nueva, el SISC redacta un mensaje de máximo seis líneas con las tres variaciones más significativas
+                        por delito, barrio y franja horaria, y el estado de los compromisos del Consejo (semanal y, cuando hay un mes completo nuevo, mensual).
+                        Revíselo, ajústelo si hace falta y envíelo. Uso interno.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -305,7 +307,7 @@ const NarrativeAlerts = () => {
                             </button>
                         ))}
                     </div>
-                    {!items.length && !loading && <p className="text-sm font-semibold text-slate-500">Aún no hay mensajes. Genere uno o espere al próximo lunes.</p>}
+                    {!items.length && !loading && <p className="text-sm font-semibold text-slate-500">Aún no hay mensajes. Genere uno o cargue una sábana nueva.</p>}
                     <ul className="space-y-2">
                         {items.map((item) => (
                             <li key={item.id}>
@@ -317,7 +319,7 @@ const NarrativeAlerts = () => {
                                     </span>
                                     <span className="mt-1 block font-black text-slate-900">{item.period_label}</span>
                                     <span className="block text-xs font-semibold text-slate-500">
-                                        {item.trigger === 'PROGRAMADA' ? 'Programado' : `Generado por ${item.created_by}`} · {formatDateTime(item.created_at)}{item.edited ? ' · editado' : ''}
+                                        {TRIGGER_LABELS[item.trigger] || `Generado por ${item.created_by}`} · {formatDateTime(item.created_at)}{item.edited ? ' · editado' : ''}
                                     </span>
                                 </button>
                             </li>

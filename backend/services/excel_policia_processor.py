@@ -117,6 +117,17 @@ class PoliciaJamundiProcessor:
                 if canonical in mapping: break
         return mapping
 
+    def _generate_narrative_alerts(self):
+        """Borrador de la Alerta Narrativa con la sábana recién cargada. Nunca hace fallar la carga."""
+        try:
+            from services.narrative_alerts import generate_after_upload
+            created = generate_after_upload(self.db, str(self.user_id or "SISTEMA"))
+            if created:
+                logger.info(f"Alertas Narrativas generadas al cargar la sábana: {', '.join(created)}")
+        except Exception as error:
+            self.db.rollback()
+            logger.warning(f"No se pudo generar la Alerta Narrativa tras la carga: {error}")
+
     def _generate_fingerprint(self, data):
         # Fingerprint expandido para permitir mÃºltiples vÃ­ctimas en el mismo hecho
         raw = f"{data.get('id_fuente', '')}|{data['conducta_estandar']}|{data['fecha_evento']}|{data.get('hora_huella', data['hora_evento'])}|{data['barrio_normalizado'] or data['vereda_normalizada']}|{data['sexo']}|{data['edad']}|{data['arma_medio']}"
@@ -543,6 +554,7 @@ class PoliciaJamundiProcessor:
             }
             
             self.db.commit()
+            self._generate_narrative_alerts()
             return {"status": "success", "ingestion_id": str(run.id), "stats": stats}
 
         except Exception as e:

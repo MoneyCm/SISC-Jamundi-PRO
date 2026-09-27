@@ -68,7 +68,8 @@ async def lifespan(app: FastAPI):
     logger.info("Lanzando tarea de inicialización en segundo plano...")
     threading.Thread(target=run_migrations_task, daemon=True).start()
 
-    # Alertas Narrativas: cada hora revisa si falta el mensaje del lunes 07:00 o del día 1 a las 07:00.
+    # Alertas Narrativas: se generan al cargar la sábana; como respaldo, cada hora revisa si falta
+    # el mensaje del lunes 07:00 o del día 1 a las 07:00 (por ejemplo, si el equipo estaba apagado).
     if os.environ.get("NARRATIVE_ALERTS_SCHEDULER", "1") != "0":
         def narrative_alerts_scheduler():
             import time as time_module

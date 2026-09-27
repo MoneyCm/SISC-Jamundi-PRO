@@ -514,6 +514,12 @@ def generate(db: Session, frequency: str, username: str, trigger: str = "MANUAL"
         NarrativeAlert.source_version_id == data["source_version_id"]).first()
     if existing:
         return existing, False
+    # Un periodo ya enviado no se vuelve a proponer, aunque llegue otra entrega que lo cubra.
+    sent = db.query(NarrativeAlert).filter(
+        NarrativeAlert.frequency == frequency, NarrativeAlert.period_end == plan["current"][1],
+        NarrativeAlert.status == "ENVIADO").order_by(NarrativeAlert.sent_at.desc()).first()
+    if sent:
+        return sent, False
     alert = NarrativeAlert(
         frequency=frequency, period_start=plan["current"][0], period_end=plan["current"][1],
         previous_start=plan["previous"][0], previous_end=plan["previous"][1], data_cutoff=data["cutoff"],
@@ -541,6 +547,19 @@ def generate(db: Session, frequency: str, username: str, trigger: str = "MANUAL"
     db.commit()
     db.refresh(alert)
     return alert, True
+
+
+def generate_after_upload(db: Session, username: str) -> List[str]:
+    """Al terminar de cargar una sábana: borradores semanal y mensual con los datos nuevos."""
+    created = []
+    for frequency in ("SEMANAL", "MENSUAL"):
+        try:
+            alert, new = generate(db, frequency, username or "SISTEMA", trigger="CARGA")
+        except LookupError:
+            continue
+        if new:
+            created.append(f"{frequency}:{alert.period_end.isoformat()}")
+    return created
 
 
 def _get(db: Session, alert_id: str):

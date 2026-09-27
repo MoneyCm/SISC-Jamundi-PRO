@@ -28,7 +28,7 @@ class NarrativeAlert(Base):
     data_cutoff = Column(Date, nullable=False)
     source_version_id = Column(String(64), nullable=False)  # entrega policial usada (ingestion_runs.id)
     rules_version = Column(String(20), nullable=False)
-    trigger = Column(String(20), nullable=False, default="MANUAL")  # PROGRAMADA | MANUAL
+    trigger = Column(String(20), nullable=False, default="MANUAL")  # PROGRAMADA | CARGA (al cargar la sábana) | MANUAL
     generated_text = Column(Text, nullable=False)
     text = Column(Text, nullable=False)
     status = Column(String(20), nullable=False, default="BORRADOR", index=True)

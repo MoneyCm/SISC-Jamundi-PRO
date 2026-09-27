@@ -200,8 +200,8 @@ def narrative_item(frequency: str, latest: Optional[Dict[str, Any]], today: date
     if not weekly and today.day > 10 and not (latest and latest["status"] == "BORRADOR"):
         return None  # la mensual solo figura a comienzo de mes o mientras tenga un borrador sin enviar
     if latest is None:
-        return item(key, "Alerta", title, "lunes 7:00" if weekly else "día 1", "PENDIENTE",
-                    "Aún no hay mensajes. Se generan solos (lunes 7:00 y día 1 a las 7:00) o con el botón Generar.", target)
+        return item(key, "Alerta", title, "al cargar la sábana", "PENDIENTE",
+                    "Aún no hay mensajes. Se generan solos al cargar una sábana nueva, o con el botón Generar.", target)
     if latest["status"] == "BORRADOR":
         due = latest["created_on"] + timedelta(days=ALERT_DAYS_TO_SEND[frequency])
         return item(key, "Alerta", title, f"hasta el {_d(due)}", "ATRASADO" if today > due else "PENDIENTE",
@@ -209,7 +209,7 @@ def narrative_item(frequency: str, latest: Optional[Dict[str, Any]], today: date
     if latest["status"] == "ENVIADO":
         detail = f"La de {latest['period_label']} se envió el {_d(latest['sent_on'])}." if latest.get("sent_on") else             f"La de {latest['period_label']} ya se envió."
         if weekly and latest["created_on"] < monday:
-            detail += " Esta semana no hay mensaje nuevo: se genera el lunes a las 7:00 si llegó sábana nueva."
+            detail += " Esta semana no hay mensaje nuevo: se genera cuando se cargue una sábana nueva."
         return item(key, "Alerta", title, "hecho", "HECHO", detail, target)
     return item(key, "Alerta", title, "hecho", "HECHO", f"La de {latest['period_label']} se descartó.", target)
 
