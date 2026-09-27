@@ -14,6 +14,7 @@ import {
     LoaderCircle,
     MapPinned,
     PhoneForwarded,
+    Printer,
     RefreshCw,
     Shield,
     Skull,
@@ -36,6 +37,7 @@ import {
 import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
 import DataCaveats from '../components/DataCaveats';
 import { localToday } from '../utils/localDate';
+import { downloadHojaEjecutiva } from '../utils/hojaEjecutiva';
 
 const METRIC_DEFINITIONS = [
     { key: 'homicidios', label: 'Homicidios', icon: Skull },
@@ -383,6 +385,19 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
         setExportOpen(false);
     };
 
+    const exportHoja = async () => {
+        setExporting('hoja');
+        setError('');
+        try {
+            await downloadHojaEjecutiva();
+            setExportOpen(false);
+        } catch (requestError) {
+            setError(requestError.message || 'No fue posible generar la hoja ejecutiva.');
+        } finally {
+            setExporting('');
+        }
+    };
+
     const exportPdf = async (executive = false) => {
         setExporting(executive ? 'executive' : 'detail');
         setError('');
@@ -422,7 +437,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                     <DashboardFilters range={range} referenceDate={sourceStatus?.ultima_fecha ? parseIso(sourceStatus.ultima_fecha) : new Date()} comparisonMode={comparisonMode} onRangeChange={setRange} onComparisonChange={setComparisonMode} />
                     <div className="relative">
                         <button disabled={loading || !Object.keys(currentKpis).length} onClick={() => setExportOpen(!exportOpen)} className="disabled:opacity-50 disabled:cursor-not-allowed w-full lg:w-auto inline-flex items-center justify-center gap-2 bg-primary text-white rounded-lg px-4 py-2.5 text-sm font-bold"><Download size={17} />Exportar<ChevronDown size={15} /></button>
-                        {exportOpen && <><button aria-label="Cerrar exportación" onClick={() => setExportOpen(false)} className="fixed inset-0 z-40 cursor-default" /><div className="absolute right-0 top-full mt-2 z-50 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-2"><button onClick={() => exportPdf(true)} disabled={Boolean(exporting)} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left disabled:opacity-50"><Brain size={17} className="text-primary" /><span><span className="block text-sm font-bold">Boletín ejecutivo</span><span className="block text-[10px] text-slate-500">PDF con lectura asistida</span></span></button><button onClick={() => exportPdf(false)} disabled={Boolean(exporting)} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left disabled:opacity-50"><FileText size={17} className="text-slate-600" /><span><span className="block text-sm font-bold">Resumen detallado</span><span className="block text-[10px] text-slate-500">PDF comparativo</span></span></button><button onClick={exportCsv} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left"><FileSpreadsheet size={17} className="text-emerald-700" /><span><span className="block text-sm font-bold">Indicadores CSV</span><span className="block text-[10px] text-slate-500">Datos de esta vista</span></span></button></div></>}
+                        {exportOpen && <><button aria-label="Cerrar exportación" onClick={() => setExportOpen(false)} className="fixed inset-0 z-40 cursor-default" /><div className="absolute right-0 top-full mt-2 z-50 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-2"><button onClick={exportHoja} disabled={Boolean(exporting)} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left disabled:opacity-50">{exporting === 'hoja' ? <LoaderCircle size={17} className="animate-spin text-primary" /> : <Printer size={17} className="text-primary" />}<span><span className="block text-sm font-bold">Hoja ejecutiva</span><span className="block text-[10px] text-slate-500">1 página para imprimir</span></span></button><button onClick={() => exportPdf(true)} disabled={Boolean(exporting)} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left disabled:opacity-50"><Brain size={17} className="text-primary" /><span><span className="block text-sm font-bold">Boletín ejecutivo</span><span className="block text-[10px] text-slate-500">PDF con lectura asistida</span></span></button><button onClick={() => exportPdf(false)} disabled={Boolean(exporting)} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left disabled:opacity-50"><FileText size={17} className="text-slate-600" /><span><span className="block text-sm font-bold">Resumen detallado</span><span className="block text-[10px] text-slate-500">PDF comparativo</span></span></button><button onClick={exportCsv} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 text-left"><FileSpreadsheet size={17} className="text-emerald-700" /><span><span className="block text-sm font-bold">Indicadores CSV</span><span className="block text-[10px] text-slate-500">Datos de esta vista</span></span></button></div></>}
                     </div>
                 </div>
             </header>

@@ -26,6 +26,7 @@ import OfficialQueryPanel from './OfficialQueryPanel';
 import CentralHistoryPanel from './CentralHistoryPanel';
 import SabanaUploadFlow from './SabanaUploadFlow';
 import { downloadBulletinPdf } from '../lib/exportPdf';
+import { downloadHojaEjecutiva } from '../../../utils/hojaEjecutiva';
 // Componente JSX compartido con SISC en cifras (misma revisión editorial).
 import EditorialReview from '../../../components/EditorialReview';
 import type { OfficialResult } from '../hooks/useOfficialIndicator';
@@ -235,6 +236,8 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
   const [loading, setLoading] = useState(false);
   const [pdfProgress, setPdfProgress] = useState('');
   const [pdfError, setPdfError] = useState('');
+  const [hojaBusy, setHojaBusy] = useState(false);
+  const [hojaError, setHojaError] = useState('');
 
   // Data State
   const [rawExcelData, setRawExcelData] = useState<CrimeRow[]>([]);
@@ -1777,6 +1780,26 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
               </div>
             </section>
           )}
+
+          {/* Hoja ejecutiva: sale de lo ya guardado en el SISC, no necesita la sábana en pantalla */}
+          <section className="order-5 bg-ui-card-bg p-5 rounded-lg border border-ui-border">
+            <h2 className="text-md font-semibold text-white mb-1">🖨️ Hoja ejecutiva para la Secretaria</h2>
+            <p className="text-xs text-ui-text-secondary">Una página para imprimir: cifras de la última semana cargada, barrios con más casos y compromisos del Consejo.</p>
+            <button
+              onClick={async () => {
+                setHojaBusy(true); setHojaError('');
+                try { await downloadHojaEjecutiva(); }
+                catch (error) { setHojaError((error as Error).message || 'No se pudo generar la hoja ejecutiva.'); }
+                finally { setHojaBusy(false); }
+              }}
+              disabled={hojaBusy}
+              className="mt-3 w-full bg-ui-accent hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+            >
+              {hojaBusy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Printer size={16} aria-hidden="true" />}
+              <span>{hojaBusy ? 'Preparando…' : 'Descargar hoja ejecutiva'}</span>
+            </button>
+            {hojaError && <p role="alert" className="mt-2 text-xs font-semibold text-red-300">{hojaError}</p>}
+          </section>
 
           {/* Sección de Historial */}
           <section className="order-5 bg-ui-card-bg p-5 rounded-lg border border-ui-border">
