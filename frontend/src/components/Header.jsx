@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, User, Search, Menu, ShieldCheck, LogOut, MonitorSmartphone, ChevronDown, Loader2 } from 'lucide-react';
+import { Bell, User, Search, Menu, ShieldCheck, LogOut, MonitorSmartphone, ChevronDown, Loader2, KeyRound, Eye, EyeOff, X, CheckCircle2 } from 'lucide-react';
 import { pageLabel } from '../utils/pageLabels';
 import { apiFetch, readApiError } from '../utils/apiClient';
+import { passwordIssues } from '../utils/passwordPolicy';
 
 const LegacyHeader = ({ onMenuClick, isPublic }) => {
     // In public mode, we only show a very minimal header for mobile menu access
@@ -73,12 +74,101 @@ const ROLE_LABELS = {
     SOURCE_UPLOADER: 'Carga de fuentes',
 };
 
+// Cambio de la contraseña propia. Al cambiarla se cierran todas las sesiones, también esta.
+const ChangePasswordDialog = ({ username, onClose, onDone }) => {
+    const [form, setForm] = useState({ current: '', next: '', confirm: '' });
+    const [show, setShow] = useState(false);
+    const [touched, setTouched] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+    const [done, setDone] = useState(false);
+    const issues = passwordIssues({ ...form, username });
+    const field = (key) => ({
+        value: form[key],
+        onChange: (event) => { setForm({ ...form, [key]: event.target.value }); setError(''); },
+        type: show ? 'text' : 'password',
+        className: 'mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm',
+    });
+
+    const submit = async (event) => {
+        event.preventDefault();
+        setTouched(true);
+        if (issues.length) return;
+        setBusy(true);
+        setError('');
+        try {
+            const response = await apiFetch('/users/me/password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: form.current, new_password: form.next }),
+            });
+            if (!response.ok) throw new Error(await readApiError(response));
+            setDone(true);
+        } catch (requestError) {
+            setError(requestError.message || 'No fue posible cambiar la contraseña.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl">
+                {done ? (
+                    <div className="text-center">
+                        <CheckCircle2 size={40} className="mx-auto text-emerald-600" />
+                        <h3 id="change-password-title" className="mt-3 text-xl font-black text-slate-900">Contraseña actualizada</h3>
+                        <p className="mt-2 text-sm text-slate-600">Por seguridad se cerraron todas sus sesiones. Ingrese de nuevo con la contraseña nueva.</p>
+                        <button onClick={() => onDone?.()} className="mt-5 rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-white">Ir al ingreso</button>
+                    </div>
+                ) : (
+                    <form onSubmit={submit} noValidate>
+                        <div className="flex items-start justify-between">
+                            <h3 id="change-password-title" className="text-xl font-black text-slate-900">Cambiar mi contraseña</h3>
+                            <button type="button" onClick={onClose} aria-label="Cerrar"><X size={20} /></button>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">Al cambiarla se cerrará su sesión en todos sus dispositivos.</p>
+                        <div className="mt-4 space-y-3">
+                            <label className="block text-xs font-bold text-slate-600">Contraseña actual
+                                <input autoComplete="current-password" autoFocus {...field('current')} />
+                            </label>
+                            <label className="block text-xs font-bold text-slate-600">Contraseña nueva
+                                <input autoComplete="new-password" {...field('next')} />
+                            </label>
+                            <label className="block text-xs font-bold text-slate-600">Repita la contraseña nueva
+                                <input autoComplete="new-password" {...field('confirm')} />
+                            </label>
+                            <button type="button" onClick={() => setShow((value) => !value)} className="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
+                                {show ? <EyeOff size={15} /> : <Eye size={15} />} {show ? 'Ocultar' : 'Mostrar'} contraseñas
+                            </button>
+                        </div>
+                        <p className="mt-3 text-xs text-slate-500">Mínimo 12 caracteres, con al menos tres de estos: mayúsculas, minúsculas, números o símbolos. No puede contener su usuario.</p>
+                        {touched && issues.length > 0 && (
+                            <ul role="alert" className="mt-3 list-disc space-y-1 rounded-md bg-amber-50 p-3 pl-7 text-sm font-semibold text-amber-900">
+                                {issues.map((issue) => <li key={issue}>{issue}</li>)}
+                            </ul>
+                        )}
+                        {error && <p role="alert" className="mt-3 rounded-md bg-red-50 p-3 text-sm font-bold text-red-800">{error}</p>}
+                        <div className="mt-5 flex justify-end gap-3">
+                            <button type="button" onClick={onClose} className="rounded-md border border-slate-200 px-4 py-2.5 text-sm font-bold">Cancelar</button>
+                            <button disabled={busy} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
+                                {busy && <Loader2 size={15} className="animate-spin" />} Cambiar contraseña
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // Menú de la cuenta: cerrar la sesión en este equipo o en todos los dispositivos de la persona.
 const UserMenu = ({ currentUser, displayName, primaryRole, onLogout }) => {
     const [open, setOpen] = useState(false);
     const [confirming, setConfirming] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    const [changing, setChanging] = useState(false);
     const ref = useRef(null);
 
     useEffect(() => {
@@ -132,6 +222,9 @@ const UserMenu = ({ currentUser, displayName, primaryRole, onLogout }) => {
                         <p className="text-sm font-black text-slate-900 truncate">{displayName}</p>
                         <p className="text-xs text-slate-500 truncate">{currentUser?.username}</p>
                     </div>
+                    <button role="menuitem" onClick={() => { setOpen(false); setChanging(true); }} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-50">
+                        <KeyRound size={17} /> Cambiar mi contraseña
+                    </button>
                     <button role="menuitem" onClick={() => onLogout?.()} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-50">
                         <LogOut size={17} /> Cerrar sesión
                     </button>
@@ -153,6 +246,7 @@ const UserMenu = ({ currentUser, displayName, primaryRole, onLogout }) => {
                     )}
                 </div>
             )}
+            {changing && <ChangePasswordDialog username={currentUser?.username} onClose={() => setChanging(false)} onDone={onLogout} />}
         </div>
     );
 };
