@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from services.entrega_vigente import filtro_sql
 from services.geocoding_service import GeocodingService
 
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "data" / "defensoria_sat_jamundi.json"
@@ -96,6 +97,7 @@ def _events(db: Session) -> List[Any]:
             FROM hechos_seguridad h
             LEFT JOIN ingestion_runs r ON r.id = h.ingestion_id
             WHERE h.fuente_codigo = 'POLICIA_SEMANAL' AND h.fecha_evento IS NOT NULL
+            {filtro_sql(db, prefijo="h")}
         )
         SELECT identity, fecha, conducta, lugar FROM ranked WHERE rn = 1
     """)).fetchall()
@@ -112,7 +114,7 @@ def _location_conflicts(db: Session) -> int:
     return int(db.execute(text(f"""
         SELECT COUNT(*) FROM (
             SELECT {identity} FROM hechos_seguridad
-            WHERE fuente_codigo = 'POLICIA_SEMANAL'
+            WHERE fuente_codigo = 'POLICIA_SEMANAL' {filtro_sql(db)}
             GROUP BY 1 HAVING COUNT(DISTINCT {location}) > 1
         ) conflicts
     """)).scalar() or 0)

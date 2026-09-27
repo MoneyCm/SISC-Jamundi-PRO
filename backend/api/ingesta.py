@@ -486,7 +486,9 @@ async def police_weekly_explorer(
 
     can_filter_detailed = bool(roles.intersection({"TI_ADMIN", "FUNC_ADMIN", "DATA_OWNER", "STEWARD", "ANALYST"}))
     role_label = "Analisis detallado agregado" if can_filter_detailed else "Resumen directivo agregado"
-    source = db.query(HechoSeguridad).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL")
+    from services.entrega_vigente import filtro_hechos
+    # Como el tablero: última entrega de la Policía en las fechas que cubre; histórico fuera de ellas.
+    source = db.query(HechoSeguridad).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db))
     query = source
     if anio:
         query = query.filter(func.extract("year", HechoSeguridad.fecha_evento) == anio)

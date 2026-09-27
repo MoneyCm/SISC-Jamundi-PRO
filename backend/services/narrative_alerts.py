@@ -25,6 +25,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from services.entrega_vigente import filtro_sql
+
 logger = logging.getLogger("narrative_alerts")
 
 RULES_VERSION = "2026.09b"
@@ -687,6 +689,7 @@ def load_events(db: Session) -> List[Dict[str, Any]]:
             FROM hechos_seguridad h
             LEFT JOIN ingestion_runs r ON r.id = h.ingestion_id
             WHERE h.fuente_codigo = 'POLICIA_SEMANAL' AND h.fecha_evento IS NOT NULL
+            {filtro_sql(db, prefijo="h")}
         )
         SELECT fecha, conducta, lugar, hora FROM ranked WHERE rn = 1
     """)).fetchall()
