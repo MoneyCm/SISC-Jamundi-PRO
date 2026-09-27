@@ -35,6 +35,23 @@ def test_security_sensitive_user_changes_invalidate_session_fingerprint():
     assert baseline != user_session_version(_user(roles=("DIRECTIVE",)))
 
 
+def test_revoking_sessions_changes_the_fingerprint_only_when_used():
+    user = _user()
+    before = user_session_version(user)
+    user.session_epoch = 0
+    assert user_session_version(user) == before  # las sesiones vigentes no se cortan al desplegar
+    user.session_epoch = 1
+    first = user_session_version(user)
+    assert first != before
+    user.session_epoch = 2
+    assert user_session_version(user) not in {before, first}
+
+
+def test_revoking_other_users_sessions_requires_ti_admin():
+    guard = _guard(users.router, "/{user_id}/revoke-sessions")
+    assert guard.allowed_roles == ["TI_ADMIN"]
+
+
 def test_privileged_roles_cannot_be_requested_by_self_service():
     assert {"TI_ADMIN", "FUNC_ADMIN", "DATA_OWNER", "PORTAL_ADMIN"}.isdisjoint(
         users.REQUESTABLE_ROLE_CODES
