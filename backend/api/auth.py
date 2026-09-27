@@ -21,7 +21,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
 def user_session_version(user: User) -> str:
-    """Huella de seguridad: invalida tokens cuando cambian clave, estado, roles o nivel."""
+    """Huella de seguridad: invalida tokens cuando cambian clave, estado, roles, nivel o el contador
+    de cierres de sesión."""
     role_codes = ",".join(sorted(role.code for role in (user.roles or [])))
     expires_at = user.expires_at.isoformat() if user.expires_at else ""
     raw = "|".join([
@@ -31,6 +32,9 @@ def user_session_version(user: User) -> str:
         role_codes,
         expires_at,
     ])
+    epoch = getattr(user, "session_epoch", 0) or 0
+    if epoch:  # con 0 la huella no cambia: las sesiones emitidas antes de esta función siguen válidas
+        raw += f"|sesiones:{epoch}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 

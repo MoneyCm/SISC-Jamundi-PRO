@@ -6,6 +6,7 @@ import {
     EyeOff,
     KeyRound,
     LoaderCircle,
+    LogOut,
     Pencil,
     Plus,
     Power,
@@ -16,7 +17,7 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
+import { apiFetch, apiJson, clearStoredSession, readApiError } from '../utils/apiClient';
 
 const ROLE_OPTIONS = [
     { code: 'TI_ADMIN', name: 'Administrador TI', minLevel: 3 },
@@ -71,6 +72,7 @@ const UsersManagement = ({ userRoles = [], currentUser }) => {
     const [resetUser, setResetUser] = useState(null);
     const [temporaryPassword, setTemporaryPassword] = useState('');
     const [statusUser, setStatusUser] = useState(null);
+    const [revokeUser, setRevokeUser] = useState(null);
 
     const loadUsers = useCallback(async () => {
         setLoading(true);
@@ -190,6 +192,29 @@ const UsersManagement = ({ userRoles = [], currentUser }) => {
             await loadUsers();
         } catch (requestError) {
             setError(requestError.message || 'No fue posible cambiar el estado.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const revokeSessions = async () => {
+        if (!revokeUser) return;
+        setSaving(true);
+        setError('');
+        try {
+            const response = await apiFetch(`/users/${revokeUser.id}/revoke-sessions`, { method: 'POST' });
+            if (!response.ok) throw new Error(await readApiError(response));
+            const data = await response.json();
+            setRevokeUser(null);
+            if (data.own) {
+                // También se cerró esta sesión: volver a la pantalla de ingreso.
+                clearStoredSession();
+                window.location.reload();
+                return;
+            }
+            setNotice(data.message || 'Se cerraron todas las sesiones de la cuenta.');
+        } catch (requestError) {
+            setError(requestError.message || 'No fue posible cerrar las sesiones.');
         } finally {
             setSaving(false);
         }
@@ -319,6 +344,7 @@ const UsersManagement = ({ userRoles = [], currentUser }) => {
                                 <div className="flex justify-end gap-1 pt-1">
                                     <button onClick={() => openEdit(user)} aria-label={`Editar ${user.username}`} title="Editar perfil y permisos" className="p-2.5 rounded-lg text-slate-600 hover:text-primary hover:bg-primary/5"><Pencil size={18} /></button>
                                     <button onClick={() => openPasswordReset(user)} aria-label={`Restablecer contraseña de ${user.username}`} title="Restablecer contraseña" className="p-2.5 rounded-lg text-slate-600 hover:text-amber-700 hover:bg-amber-50"><KeyRound size={18} /></button>
+                                    <button onClick={() => setRevokeUser(user)} aria-label={`Cerrar todas las sesiones de ${user.username}`} title="Cerrar todas las sesiones" className="p-2.5 rounded-lg text-slate-600 hover:text-orange-700 hover:bg-orange-50"><LogOut size={18} /></button>
                                     <button disabled={user.id === currentUser?.id} onClick={() => setStatusUser(user)} aria-label={`${user.is_active ? 'Desactivar' : 'Activar'} ${user.username}`} title={user.id === currentUser?.id ? 'No puede desactivar su propia cuenta' : user.is_active ? 'Desactivar cuenta' : 'Activar cuenta'} className="p-2.5 rounded-lg text-slate-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"><Power size={18} /></button>
                                 </div>
                             )}
@@ -363,6 +389,7 @@ const UsersManagement = ({ userRoles = [], currentUser }) => {
                                             <div className="flex justify-end gap-1">
                                                 <button onClick={() => openEdit(user)} aria-label={`Editar ${user.username}`} title="Editar perfil y permisos" className="p-2 rounded-lg text-slate-500 hover:text-primary hover:bg-primary/5"><Pencil size={17} /></button>
                                                 <button onClick={() => openPasswordReset(user)} aria-label={`Restablecer contraseña de ${user.username}`} title="Restablecer contraseña" className="p-2 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50"><KeyRound size={17} /></button>
+                                                <button onClick={() => setRevokeUser(user)} aria-label={`Cerrar todas las sesiones de ${user.username}`} title="Cerrar todas las sesiones" className="p-2 rounded-lg text-slate-500 hover:text-orange-700 hover:bg-orange-50"><LogOut size={17} /></button>
                                                 <button disabled={user.id === currentUser?.id} onClick={() => setStatusUser(user)} aria-label={`${user.is_active ? 'Desactivar' : 'Activar'} ${user.username}`} title={user.id === currentUser?.id ? 'No puede desactivar su propia cuenta' : user.is_active ? 'Desactivar cuenta' : 'Activar cuenta'} className="p-2 rounded-lg text-slate-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"><Power size={17} /></button>
                                             </div>
                                         )}
@@ -406,6 +433,21 @@ const UsersManagement = ({ userRoles = [], currentUser }) => {
                         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg p-3">Al confirmar se cerrarán las sesiones anteriores. Comparta esta clave únicamente por un canal institucional seguro.</p>
                         <div className="flex justify-end gap-3"><button type="button" onClick={() => setTemporaryPassword(generateTemporaryPassword())} className="px-3 py-2.5 rounded-lg border border-slate-200 font-bold text-sm">Generar otra</button><button disabled={saving} className="px-4 py-2.5 rounded-lg bg-primary text-white font-bold text-sm">Restablecer</button></div>
                     </form>
+                </div>
+            )}
+
+            {revokeUser && (
+                <div className="fixed inset-0 z-50 bg-slate-950/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="revoke-title">
+                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-6">
+                        <div className="w-11 h-11 rounded-lg flex items-center justify-center mb-4 bg-orange-50 text-orange-700"><LogOut size={22} /></div>
+                        <h3 id="revoke-title" className="text-xl font-black text-slate-900">Cerrar todas las sesiones</h3>
+                        <p className="text-sm text-slate-600 mt-2">
+                            {revokeUser.id === currentUser?.id
+                                ? 'Se cerrará su sesión en todos sus dispositivos, incluido este. Tendrá que volver a ingresar.'
+                                : `${revokeUser.full_name || revokeUser.username} tendrá que volver a ingresar en todos sus dispositivos. Úselo si perdió el celular o dejó una sesión abierta. Su contraseña, roles y estado no cambian.`}
+                        </p>
+                        <div className="flex justify-end gap-3 mt-6"><button onClick={() => setRevokeUser(null)} className="px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-sm">Cancelar</button><button disabled={saving} onClick={revokeSessions} className="px-4 py-2.5 rounded-lg text-white font-bold text-sm bg-orange-700">Cerrar sesiones</button></div>
+                    </div>
                 </div>
             )}
 

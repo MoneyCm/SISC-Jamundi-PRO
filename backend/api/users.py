@@ -311,6 +311,46 @@ async def reset_user_password(
     return {"status": "success", "message": "Contraseña temporal actualizada; las sesiones anteriores quedaron invalidadas."}
 
 
+def _revoke_sessions(user: User) -> None:
+    user.session_epoch = (user.session_epoch or 0) + 1
+    _touch_user(user)
+
+
+@router.post("/me/revoke-sessions")
+async def revoke_own_sessions(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cierra la sesión en todos los dispositivos de quien la pide."""
+    _revoke_sessions(current_user)
+    db.commit()
+    await log_audit(db, "SESSIONS_REVOKED", actor_id=str(current_user.id), module="users",
+                    target={"user_id": str(current_user.id), "self": True}, level=current_user.data_level_max, request=request)
+    return {"status": "success", "own": True, "message": "Se cerró la sesión en todos sus dispositivos."}
+
+
+@router.post("/{user_id}/revoke-sessions")
+async def revoke_user_sessions(
+    user_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["TI_ADMIN"])),
+):
+    """Cierra todas las sesiones abiertas del usuario (p. ej. un celular perdido)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    _revoke_sessions(user)
+    db.commit()
+    await log_audit(db, "SESSIONS_REVOKED", actor_id=str(current_user.id), module="users",
+                    target={"user_id": str(user.id)}, level=user.data_level_max, request=request)
+    own = user.id == current_user.id
+    return {"status": "success", "own": own,
+            "message": "Se cerraron todas las sesiones, incluida la suya." if own else
+            "Se cerraron todas las sesiones de la cuenta; deberá iniciar sesión otra vez."}
+
+
 @router.post("/me/password")
 async def change_own_password(
     password_in: PasswordChange,

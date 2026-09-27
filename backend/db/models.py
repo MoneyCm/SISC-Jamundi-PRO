@@ -138,6 +138,8 @@ def create_tables():
                 conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS review_on DATE;"))
                 conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS status_note TEXT;"))
                 conn.execute(text("ALTER TABLE observatory_studies ADD COLUMN IF NOT EXISTS field_notes JSONB NOT NULL DEFAULT '[]'::jsonb;"))
+                # Usuarios: contador para "Cerrar todas las sesiones".
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_epoch INTEGER NOT NULL DEFAULT 0;"))
                 # Alertas Narrativas: alerta para el Consejo (sesión) y unicidad controlada por el servicio.
                 conn.execute(text("ALTER TABLE narrative_alerts DROP CONSTRAINT IF EXISTS uq_narrative_alert_period_source;"))
                 conn.execute(text("ALTER TABLE narrative_alerts ADD COLUMN IF NOT EXISTS occasion_date DATE;"))

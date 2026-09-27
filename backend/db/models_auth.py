@@ -48,6 +48,8 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     last_login_at = Column(DateTime)
+    # Sube en uno con "Cerrar todas las sesiones": invalida los tokens sin tocar clave, estado ni roles.
+    session_epoch = Column(Integer, nullable=False, default=0, server_default="0")
     expires_at = Column(DateTime) # Vigencia obligatoria para N3
 
     roles = relationship("Role", secondary="user_roles", back_populates="users")
