@@ -6,7 +6,7 @@ const normalize = (value) => String(value || '').normalize('NFD').replace(/[\u03
 const readable = (value) => String(value || '')
   .replace(/acompanamientos/gi, 'acompañamientos')
   .replace(/psicologicos/gi, 'psicológicos')
-  .replace(/proteccion/gi, 'protección')
+  .replace(/\bproteccion\b/gi, 'protección')
   .replace(/psicologia/gi, 'psicología')
   .replace(/verificacion\b/gi, 'verificación')
   .replace(/genero/gi, 'género')
