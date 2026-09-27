@@ -867,7 +867,7 @@ class SiscCifrasService:
             source_codes=selected_sources,
         )
         included_sources = [source["code"] for source in sources if source.get("included")]
-        indicators = cls.collect_indicators(
+        collected = cls.collect_indicators(
             db,
             start,
             end,
@@ -876,6 +876,20 @@ class SiscCifrasService:
             included_sources,
             edition_type=edition_type,
         )
+        # Un boletín solo lleva cifras de su propio periodo. El último informe de una dependencia que
+        # no cubre el periodo (p. ej. Comisarías de enero a marzo en un boletín de septiembre) no entra
+        # en las láminas: al lado de las cifras de la semana se leería como si fuera de esa semana.
+        indicators, out_of_period = cls.split_out_of_period(collected)
+        out_of_period_notes = cls.out_of_period_notes(out_of_period)
+        used_codes = {indicator.source_code for indicator in indicators}
+        for source in sources:
+            if source.get("included") and source["code"] not in used_codes:
+                source["in_bulletin"] = False
+                note = next((item["note"] for item in out_of_period_notes if item["source_code"] == source["code"]), None)
+                if note:
+                    source["status_note"] = note
+            else:
+                source["in_bulletin"] = bool(source.get("included"))
         insights = cls.select_insights(indicators, max_insights=max_insights, comparison_label=comparison_label)
         slides = cls.build_slides(indicators, insights, start, end)
         applicable_sources = [source for source in sources if source.get("coverage_status") != "not_applicable"]
@@ -887,7 +901,7 @@ class SiscCifrasService:
         context_warnings = [
             source.get("status_note") or f"{source.get('name', source['code'])} con cobertura contextual."
             for source in applicable_sources
-            if source.get("coverage_status") == "context" and source.get("publishable")
+            if source.get("coverage_status") == "context" and source.get("publishable") and source.get("in_bulletin")
         ]
 
         publication = {
@@ -913,6 +927,7 @@ class SiscCifrasService:
                 "history_saved": False,
                 "review_blockers": review_blockers,
                 "context_warnings": context_warnings,
+                "out_of_period": out_of_period_notes,
                 "privacy_note": "Solo se usan indicadores agregados y clasificados como PUBLICO.",
                 "aggregation_note": "Los dominios se presentan por separado y sus valores no se suman entre si.",
             },
@@ -1148,6 +1163,34 @@ class SiscCifrasService:
             except Exception:
                 pass
         return indicators
+
+    @staticmethod
+    def split_out_of_period(indicators: Sequence[Indicator]) -> Tuple[List[Indicator], List[Indicator]]:
+        """(del periodo, de otro periodo). Los de otro periodo vienen marcados como CONTEXT."""
+        in_period = [i for i in indicators if (i.metadata or {}).get("coverage_type") != "CONTEXT"]
+        out_of_period = [i for i in indicators if (i.metadata or {}).get("coverage_type") == "CONTEXT"]
+        return in_period, out_of_period
+
+    @staticmethod
+    def out_of_period_notes(indicators: Sequence[Indicator]) -> List[Dict[str, Any]]:
+        """Una nota por fuente y dependencia: qué último informe había y por qué no entró."""
+        notes: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for indicator in indicators:
+            meta = indicator.metadata or {}
+            entity = meta.get("reporting_entity") or indicator.source
+            key = (indicator.source_code, entity)
+            if key in notes:
+                continue
+            label = meta.get("period_label") or meta.get("period") or f"{indicator.period_start} a {indicator.period_end}"
+            notes[key] = {
+                "source_code": indicator.source_code,
+                "source": indicator.source,
+                "entity": entity,
+                "period_label": label,
+                "cutoff": indicator.cutoff_date,
+                "note": f"Último informe disponible de {entity}: {label}. No corresponde al periodo del boletín y no se incluye en sus cifras.",
+            }
+        return list(notes.values())
 
     @classmethod
     def medicina_legal_indicators(cls, db: Session, start: date, end: date) -> List[Indicator]:
