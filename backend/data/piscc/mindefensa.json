@@ -54,23 +54,27 @@
     },
     {
       "delito": "Extorsión",
-      "anterior": 15,
-      "actual": 16,
-      "diffAbs": 1,
-      "varPct": "+6.7%",
+      "anterior": 26,
+      "actual": 34,
+      "diffAbs": 8,
+      "varPct": "+30.8%",
       "estado": "SUBE",
-      "ultimo_registro": "14/05/2026",
-      "barrios_top": "Sin datos de barrio"
+      "ultimo_registro": "31/08/2026",
+      "barrios_top": "Sin datos de barrio",
+      "ultimo_caso_jamundi": "23/08/2026",
+      "fuente": "MinDefensa, datos.gov.co/resource/q2ib-t9am"
     },
     {
       "delito": "Secuestro",
       "anterior": 2,
-      "actual": 4,
-      "diffAbs": 2,
-      "varPct": "+100.0%",
+      "actual": 6,
+      "diffAbs": 4,
+      "varPct": "+200.0%",
       "estado": "SUBE",
-      "ultimo_registro": "24/02/2026",
-      "barrios_top": "Sin datos de barrio"
+      "ultimo_registro": "31/08/2026",
+      "barrios_top": "Sin datos de barrio",
+      "ultimo_caso_jamundi": "04/05/2026",
+      "fuente": "MinDefensa, datos.gov.co/resource/d7zw-hpf4"
     },
     {
       "delito": "Terrorismo",
@@ -94,13 +98,15 @@
     },
     {
       "delito": "Violencia Intrafamiliar",
-      "anterior": 92,
-      "actual": 152,
-      "diffAbs": 60,
-      "varPct": "+65.2%",
+      "anterior": 171,
+      "actual": 213,
+      "diffAbs": 42,
+      "varPct": "+24.6%",
       "estado": "SUBE",
-      "ultimo_registro": "25/06/2026",
-      "barrios_top": "Sin datos de barrio"
+      "ultimo_registro": "31/08/2026",
+      "barrios_top": "Sin datos de barrio",
+      "ultimo_caso_jamundi": "31/08/2026",
+      "fuente": "MinDefensa, datos.gov.co/resource/gepp-dxcs"
     },
     {
       "delito": "Lesiones Personales",
@@ -182,5 +188,14 @@
       "ultimo_registro": "28/06/2026",
       "barrios_top": "Sin datos de barrio"
     }
-  ]
+  ],
+  "actualizacion_piscc": {
+    "fecha": "2026-09-27",
+    "indicadores": [
+      "Secuestro",
+      "Extorsión",
+      "Violencia Intrafamiliar"
+    ],
+    "nota": "Estos tres tienen su propio corte (ultimo_registro); las demás filas conservan el corte de mes_corte."
+  }
 }
