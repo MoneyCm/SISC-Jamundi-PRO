@@ -183,6 +183,58 @@ def weekly_items(db: Session, today: date) -> List[Dict[str, Any]]:
     return rows
 
 
+# Plazo para revisar y enviar, contado desde que se genera el borrador (lunes → martes; día 1 → día 5).
+ALERT_DAYS_TO_SEND = {"SEMANAL": 1, "MENSUAL": 4}
+
+
+def narrative_item(frequency: str, latest: Optional[Dict[str, Any]], today: date) -> Optional[Dict[str, Any]]:
+    """Tarea de la Alerta Narrativa (resumen para WhatsApp) según el último mensaje de esa frecuencia.
+
+    latest: {"status", "period_label", "created_on", "sent_on"} del mensaje más reciente no reemplazado.
+    """
+    weekly = frequency == "SEMANAL"
+    monday = today - timedelta(days=today.weekday())
+    key, noun = ("alerta-semanal", "semanal") if weekly else ("alerta-mensual", "mensual")
+    title = f"Revisar y enviar la alerta narrativa {noun}"
+    target = {"page": "narrative_alerts"}
+    if not weekly and today.day > 10 and not (latest and latest["status"] == "BORRADOR"):
+        return None  # la mensual solo figura a comienzo de mes o mientras tenga un borrador sin enviar
+    if latest is None:
+        return item(key, "Alerta", title, "lunes 7:00" if weekly else "día 1", "PENDIENTE",
+                    "Aún no hay mensajes. Se generan solos (lunes 7:00 y día 1 a las 7:00) o con el botón Generar.", target)
+    if latest["status"] == "BORRADOR":
+        due = latest["created_on"] + timedelta(days=ALERT_DAYS_TO_SEND[frequency])
+        return item(key, "Alerta", title, f"hasta el {_d(due)}", "ATRASADO" if today > due else "PENDIENTE",
+                    f"Borrador de {latest['period_label']} listo para revisar y enviar por WhatsApp.", target)
+    if latest["status"] == "ENVIADO":
+        detail = f"La de {latest['period_label']} se envió el {_d(latest['sent_on'])}." if latest.get("sent_on") else             f"La de {latest['period_label']} ya se envió."
+        if weekly and latest["created_on"] < monday:
+            detail += " Esta semana no hay mensaje nuevo: se genera el lunes a las 7:00 si llegó sábana nueva."
+        return item(key, "Alerta", title, "hecho", "HECHO", detail, target)
+    return item(key, "Alerta", title, "hecho", "HECHO", f"La de {latest['period_label']} se descartó.", target)
+
+
+def narrative_items(db: Session, today: date) -> List[Dict[str, Any]]:
+    from db.models_narrative_alerts import NarrativeAlert
+    from services.narrative_alerts import TZ, period_label
+
+    rows = []
+    for frequency in ("SEMANAL", "MENSUAL"):
+        alert = (db.query(NarrativeAlert)
+                 .filter(NarrativeAlert.frequency == frequency, NarrativeAlert.status != "REEMPLAZADO")
+                 .order_by(NarrativeAlert.created_at.desc()).first())
+        latest = None if alert is None else {
+            "status": alert.status,
+            "period_label": period_label(alert.frequency, alert.period_start, alert.period_end),
+            "created_on": alert.created_at.astimezone(TZ).date(),
+            "sent_on": alert.sent_at.astimezone(TZ).date() if alert.sent_at else None,
+        }
+        row = narrative_item(frequency, latest, today)
+        if row:
+            rows.append(row)
+    return rows
+
+
 def piscc_items(db: Session, today: date) -> List[Dict[str, Any]]:
     from services import piscc_actions as pa
 
@@ -203,7 +255,8 @@ def piscc_items(db: Session, today: date) -> List[Dict[str, Any]]:
 def build(db: Session, today: Optional[date] = None) -> Dict[str, Any]:
     today = today or date.today()
     previous, upcoming, proposals, report_generated, act_loaded, registered_ids = _council_inputs(db, today)
-    rows = weekly_items(db, today) + council_items(today, previous, upcoming, proposals, report_generated, act_loaded) + piscc_items(db, today)
+    rows = (weekly_items(db, today) + narrative_items(db, today)
+            + council_items(today, previous, upcoming, proposals, report_generated, act_loaded) + piscc_items(db, today))
     rows.sort(key=lambda row: STATUS_ORDER[row["status"]])
     monday = today - timedelta(days=today.weekday())
     return {

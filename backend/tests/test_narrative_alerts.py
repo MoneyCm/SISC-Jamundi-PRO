@@ -178,3 +178,27 @@ def test_hora_programada():
     assert na.slot_start("SEMANAL", monday_6) == datetime(2026, 9, 21, 7, 0, tzinfo=tz)
     assert na.slot_start("MENSUAL", datetime(2026, 10, 1, 6, 0, tzinfo=tz)) == datetime(2026, 9, 1, 7, 0, tzinfo=tz)
     assert na.slot_start("MENSUAL", datetime(2026, 1, 1, 6, 0, tzinfo=tz)) == datetime(2025, 12, 1, 7, 0, tzinfo=tz)
+
+
+def test_tarea_en_el_calendario_del_centro_de_analisis():
+    from services.operating_calendar import narrative_item
+
+    wednesday = date(2026, 9, 30)
+    draft = {"status": "BORRADOR", "period_label": "13 al 19 de septiembre", "created_on": date(2026, 9, 28), "sent_on": None}
+    assert narrative_item("SEMANAL", draft, date(2026, 9, 28))["status"] == "PENDIENTE"
+    late = narrative_item("SEMANAL", draft, wednesday)
+    assert late["status"] == "ATRASADO" and late["target"] == {"page": "narrative_alerts"} and late["area"] == "Alerta"
+    sent = {**draft, "status": "ENVIADO", "sent_on": date(2026, 9, 28)}
+    assert narrative_item("SEMANAL", sent, wednesday)["status"] == "HECHO"
+    old = {**sent, "created_on": date(2026, 9, 21)}
+    assert "no hay mensaje nuevo" in narrative_item("SEMANAL", old, wednesday)["detail"]
+    assert narrative_item("SEMANAL", None, wednesday)["status"] == "PENDIENTE"
+    # La mensual figura a comienzo de mes, o después si sigue en borrador.
+    monthly = {**draft, "period_label": "agosto de 2026"}
+    monthly = {**monthly, "created_on": date(2026, 9, 1)}
+    assert narrative_item("MENSUAL", monthly, date(2026, 9, 3))["status"] == "PENDIENTE"
+    assert narrative_item("MENSUAL", monthly, date(2026, 9, 3))["when"] == "hasta el 5/09"
+    assert narrative_item("MENSUAL", monthly, date(2026, 9, 20))["status"] == "ATRASADO"
+    # Un borrador recién generado no nace atrasado.
+    assert narrative_item("SEMANAL", {**draft, "created_on": wednesday}, wednesday)["status"] == "PENDIENTE"
+    assert narrative_item("MENSUAL", {**monthly, "status": "ENVIADO"}, date(2026, 9, 20)) is None
