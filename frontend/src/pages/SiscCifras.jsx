@@ -270,7 +270,7 @@ const buildWhatsappText = (publication) => {
     .slice(0, 3)
     .map((insight) => `- ${publicInsightText(insight.detail, label)}`);
   const sourceLines = (publication.sources || [])
-    .filter((source) => source.publication_level === 'PUBLICO')
+    .filter((source) => source.publication_level === 'PUBLICO' && source.in_bulletin !== false)
     .map((source) => `${source.name}: corte ${source.last_cutoff_date || 'sin corte'}`);
   const body = insightLines.length
     ? insightLines.join('\n')
@@ -320,7 +320,7 @@ const buildTikTokPrompt = (publication) => {
       return `- ${indicatorDisplayName(indicator)}: ${fmt(indicator.value)} ${indicator.unit || 'registros'}. ${comparison}${detail ? ` Nota: ${detail}` : ''}`;
     });
   const sourceLines = (publication.sources || [])
-    .filter((source) => source.publication_level === 'PUBLICO' && source.included !== false)
+    .filter((source) => source.publication_level === 'PUBLICO' && source.included !== false && source.in_bulletin !== false)
     .map((source) => `- ${source.name}: corte ${source.last_cutoff_date || 'sin corte informado'}.`);
   const dataLines = insightLines.length ? insightLines : indicatorLines;
 
@@ -1282,24 +1282,32 @@ const SiscCifras = ({ publicMode = false }) => {
             <h1 className="mt-1 text-3xl font-black uppercase tracking-tight text-slate-900">SISC en cifras</h1>
           </div>
           <div className={executiveMode ? 'hidden' : 'flex flex-wrap items-center gap-2'}>
-            <button onClick={fetchSources} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50">
-              <RefreshCw size={15} /> Fuentes
-            </button>
-            <button onClick={downloadJson} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-              <FileJson size={15} /> JSON
-            </button>
+            {!publicMode && (
+              <>
+                <button onClick={fetchSources} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50">
+                  <RefreshCw size={15} /> Fuentes
+                </button>
+                <button onClick={downloadJson} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                  <FileJson size={15} /> JSON
+                </button>
+              </>
+            )}
             <button onClick={() => requestPdf(false)} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center gap-2 rounded-md bg-[#281FD0] px-3 py-2 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:opacity-40">
               {pdfLoading ? <Loader2 className="animate-spin" size={15} /> : <FileText size={15} />} Ver PDF
             </button>
             <button onClick={() => requestPdf(true)} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <Download size={15} /> PDF
             </button>
-            <button onClick={downloadSvg} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-              <Download size={15} /> SVG
-            </button>
-            <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-              <ImageDown size={15} /> ZIP carrusel
-            </button>
+            {!publicMode && (
+              <>
+                <button onClick={downloadSvg} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                  <Download size={15} /> SVG
+                </button>
+                <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                  <ImageDown size={15} /> ZIP carrusel
+                </button>
+              </>
+            )}
             <button onClick={downloadSummaryImage} disabled={!publicationIsCurrent} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40">
               <ImageDown size={15} /> Imagen resumen
             </button>
@@ -1528,12 +1536,14 @@ const SiscCifras = ({ publicMode = false }) => {
                   <section className="rounded-lg border border-slate-200 bg-white p-5">
                     <div className="mb-4 flex items-center gap-2">
                       <MessageCircle size={18} className="text-emerald-600" />
-                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Publicación y video</h2>
+                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">{publicMode ? 'Descargar y compartir' : 'Publicación y video'}</h2>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-3 text-xs font-black uppercase text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
-                        <ImageDown size={15} /> ZIP carrusel
-                      </button>
+                      {!publicMode && (
+                        <button onClick={downloadPngCarousel} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-3 text-xs font-black uppercase text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
+                          <ImageDown size={15} /> ZIP carrusel
+                        </button>
+                      )}
                       <button onClick={() => requestPdf(false)} disabled={!publicationIsCurrent || pdfLoading} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#281FD0] px-3 py-3 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:cursor-not-allowed disabled:opacity-40">
                         {pdfLoading ? <Loader2 className="animate-spin" size={15} /> : <FileText size={15} />} Ver PDF
                       </button>
@@ -1557,14 +1567,18 @@ const SiscCifras = ({ publicMode = false }) => {
                       <button onClick={shareWhatsappCarousel} disabled={!publicationIsCurrent || shareBlocked} title={shareBlocked ? 'Apruebe el boletín para compartirlo' : undefined} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-3 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">
                         <MessageCircle size={15} /> Compartir
                       </button>
-                      <button onClick={copyTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-40">
-                        <Video size={15} /> Copiar guion de video
-                      </button>
-                      <button onClick={downloadTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-                        <Download size={15} /> Guion video TXT
-                      </button>
+                      {!publicMode && (
+                        <>
+                          <button onClick={copyTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-40">
+                            <Video size={15} /> Copiar guion de video
+                          </button>
+                          <button onClick={downloadTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+                            <Download size={15} /> Guion video TXT
+                          </button>
+                        </>
+                      )}
                     </div>
-                    {shareStatus && (
+                    {shareStatus && !(publicMode && shareStatus.startsWith('Cargado el boletín publicado')) && (
                       <p className="mt-3 rounded-md bg-emerald-50 p-3 text-xs font-bold text-emerald-800">{shareStatus}</p>
                     )}
                     {pdfUrl && (
@@ -1583,6 +1597,7 @@ const SiscCifras = ({ publicMode = false }) => {
                     />
                   </section>
 
+                  {!publicMode && (
                   <section className="rounded-lg border border-slate-200 bg-white p-5">
                     <div className="mb-4 flex items-center gap-2">
                       <Video size={18} className="text-[#281FD0]" />
@@ -1594,7 +1609,9 @@ const SiscCifras = ({ publicMode = false }) => {
                       className="h-80 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-relaxed text-slate-700 outline-none"
                     />
                   </section>
+                  )}
 
+                  {!publicMode && (
                   <section className="rounded-lg border border-slate-200 bg-white p-5">
                     <div className="mb-4 flex items-center gap-2">
                       <ShieldCheck size={18} className="text-[#281FD0]" />
@@ -1613,7 +1630,9 @@ const SiscCifras = ({ publicMode = false }) => {
                       ))}
                     </div>
                   </section>
+                  )}
 
+                  {!publicMode && (
                   <section className="rounded-lg border border-slate-200 bg-white p-5">
                     <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Trazabilidad y gobierno</h2>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -1628,7 +1647,13 @@ const SiscCifras = ({ publicMode = false }) => {
                     <p className="mt-4 rounded-md bg-amber-50 p-3 text-xs font-bold text-amber-800">
                       Publicación automática de información agregada y anonimizada. Esta vista conserva fuentes, cortes, advertencias y trazabilidad para su correcta interpretación.
                     </p>
+                    {(publication.governance?.out_of_period || []).length > 0 && (
+                      <ul className="mt-3 space-y-1 text-[11px] font-bold text-slate-500">
+                        {publication.governance.out_of_period.map((item) => <li key={`${item.source_code}-${item.entity}`}>{item.note}</li>)}
+                      </ul>
+                    )}
                   </section>
+                  )}
                 </div>
               </section>
             </>
