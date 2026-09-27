@@ -197,3 +197,13 @@
     display: none !important;
   }
 }
+
+/* Mientras se arma el PDF: el documento toma su ancho de diseño aunque la pantalla sea de celular,
+   para que las gráficas se dibujen a tamaño completo. */
+.boletin-replica.pdf-exporting .newsletter-document-container.has-document {
+  min-width: 900px;
+}
+.boletin-replica.pdf-exporting .newsletter-document {
+  width: 900px !important;
+  max-width: 900px !important;
+}
