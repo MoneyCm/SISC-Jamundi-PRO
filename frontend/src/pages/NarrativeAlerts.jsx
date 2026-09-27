@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Ban, CheckCircle2, ClipboardCopy, History, Loader2, MessageCircle, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
+import { Ban, CheckCircle2, ClipboardCopy, History, Loader2, MessageCircle, RefreshCcwDot, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
 import { apiJson } from '../utils/apiClient';
 import {
-    ACTION_LABELS, DIMENSION_LABELS, MAX_CHARS, MAX_LINES, STATE_LABELS, STATUS_LABELS,
-    checkText, formatProbability, whatsappUrl,
+    ACTION_LABELS, DIMENSION_LABELS, SOURCE_LABELS, STATE_LABELS, STATUS_LABELS, TRIGGER_LABELS, TYPES,
+    checkText, formatProbability, typeLabel, whatsappUrl,
 } from '../utils/narrativeAlerts';
 
 const STATUS_STYLES = {
@@ -12,8 +12,7 @@ const STATUS_STYLES = {
     DESCARTADO: 'bg-slate-200 text-slate-500',
     REEMPLAZADO: 'bg-slate-100 text-slate-500',
 };
-const TRIGGER_LABELS = { PROGRAMADA: 'Programado', CARGA: 'Al cargar la sábana' };
-const FILTERS = [{ id: '', label: 'Todas' }, { id: 'SEMANAL', label: 'Semanales' }, { id: 'MENSUAL', label: 'Mensuales' }];
+const FILTERS = [{ id: '', label: 'Todas' }, ...TYPES.map((type) => ({ id: type.code, label: type.label }))];
 
 const formatDate = (value) => (value
     ? new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value.slice(0, 10)}T12:00:00`))
@@ -44,7 +43,7 @@ const Evidence = ({ evidence }) => {
                         <li key={`${item.dimension}-${item.category}`} className="border-l-4 border-[#281FD0] bg-slate-50 p-3 text-sm">
                             <p className="font-black text-slate-900">{DIMENSION_LABELS[item.dimension]}: {item.label || item.category}</p>
                             <p className="font-semibold text-slate-600">
-                                {item.previous} → {item.current} hechos · promedio de los 4 periodos anteriores: {String(item.baseline_expected).replace('.', ',')}
+                                {item.previous} → {item.current} hechos · {item.baseline_expected == null ? 'sin periodos anteriores para comparar' : `promedio de ${evidence.baseline_periods === 1 ? 'el periodo anterior con datos' : `los ${evidence.baseline_periods ?? 4} periodos anteriores`}: ${String(item.baseline_expected).replace('.', ',')}`}
                                 {' '}· probabilidad de verlo por azar: {formatProbability(item.p_value)}{item.strict ? ' (supera también el umbral estricto)' : ''}
                             </p>
                             <p className="mt-1 font-semibold text-slate-600">
@@ -56,6 +55,19 @@ const Evidence = ({ evidence }) => {
                     );
                 })}
             </ul>
+            {(evidence.context || []).length > 0 && (
+                <div className="space-y-1">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">Otras fuentes</p>
+                    <ul className="space-y-1 text-sm">
+                        {evidence.context.map((item) => (
+                            <li key={item.source} className={`border-l-4 p-2 ${item.included ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 bg-slate-50'}`}>
+                                <span className="font-black text-slate-900">{SOURCE_LABELS[item.source] || item.source}</span>
+                                {item.included ? '' : ' (no cupo en el mensaje)'}: <span className="font-semibold text-slate-700">{item.line}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
             <p className="text-sm font-semibold text-slate-600">
                 Compromisos: {commitments.overdue?.length || 0} vencidos
                 {commitments.overdue?.length ? ` (${commitments.overdue.slice(0, 8).join(', ')}${commitments.overdue.length > 8 ? '…' : ''})` : ''}
@@ -87,7 +99,7 @@ const Editor = ({ alert, onChanged }) => {
     const [copied, setCopied] = useState(false);
     const editable = alert.status === 'BORRADOR';
     const dirty = text !== alert.text;
-    const check = checkText(text);
+    const check = checkText(text, alert.max_lines, alert.max_chars);
 
     useEffect(() => { setText(alert.text); setNote(''); setError(''); }, [alert.id, alert.version, alert.text]);
 
@@ -123,14 +135,14 @@ const Editor = ({ alert, onChanged }) => {
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-black uppercase tracking-wide text-slate-700">Mensaje</h3>
                 <p className={`text-xs font-bold ${check.error ? 'text-red-700' : 'text-slate-500'}`}>
-                    {check.lines} de {MAX_LINES} líneas · {check.chars} de {MAX_CHARS} caracteres{alert.edited ? ' · editado a mano' : ''}
+                    {check.lines} de {alert.max_lines} líneas · {check.chars} de {alert.max_chars} caracteres{alert.edited ? ' · editado a mano' : ''}
                 </p>
             </div>
             <textarea
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 readOnly={!editable}
-                rows={8}
+                rows={Math.min(16, (alert.max_lines || 6) + 2)}
                 aria-label="Texto del mensaje"
                 className="w-full resize-y border border-slate-300 p-3 font-mono text-sm leading-6 text-slate-900 read-only:bg-slate-50"
             />
@@ -150,6 +162,11 @@ const Editor = ({ alert, onChanged }) => {
                         <button disabled={!dirty || !!check.error || !!busy} onClick={() => act('save', '/text', { text, note: note || null }, 'PUT')}
                             className="inline-flex min-h-10 items-center gap-2 bg-[#281FD0] px-3 text-sm font-black text-white hover:bg-[#1F18A8] disabled:opacity-40">
                             {busy === 'save' ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Guardar cambios
+                        </button>
+                        <button disabled={dirty || !!busy} onClick={() => act('refresh', '/refresh', {})}
+                            title={dirty ? 'Guarde o deshaga sus cambios antes de actualizar' : 'Recalcula con la última sábana y el estado actual de los compromisos'}
+                            className="inline-flex min-h-10 items-center gap-2 border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+                            {busy === 'refresh' ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcwDot size={16} />} Actualizar borrador
                         </button>
                         {(dirty || alert.edited) && (
                             <button disabled={!!busy} onClick={() => setText(dirty ? alert.text : alert.generated_text)}
@@ -214,6 +231,7 @@ const NarrativeAlerts = () => {
     const [rules, setRules] = useState([]);
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState('');
+    const [newType, setNewType] = useState('SEMANAL');
     const [message, setMessage] = useState(null);
 
     const load = useCallback(async () => {
@@ -251,11 +269,14 @@ const NarrativeAlerts = () => {
             const data = await apiJson('/narrative-alerts/generate', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frequency }),
             });
+            const name = `${typeLabel(frequency).toLowerCase()} (${data.occasion_label ? `sesión ${data.occasion_label}` : data.period_label})`;
             setMessage({
                 type: 'success',
                 text: data.created
-                    ? `Mensaje ${frequency.toLowerCase()} generado (${data.period_label}).`
-                    : `Ya existe el mensaje ${frequency.toLowerCase()} de ${data.period_label} con los datos actuales; se abrió ese.`,
+                    ? `Mensaje ${name} generado.`
+                    : data.status === 'BORRADOR'
+                        ? `Ya existe el mensaje ${name} con estos datos; se abrió ese. Use «Actualizar borrador» para recalcularlo con los compromisos al día.`
+                        : `El mensaje ${name} ya está ${data.status.toLowerCase()}; se abrió ese.`,
             });
             setFilter('');
             setSelectedId(data.id);
@@ -274,19 +295,21 @@ const NarrativeAlerts = () => {
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-[#281FD0]">Resumen para WhatsApp</p>
                     <h1 className="mt-1 text-3xl font-black text-slate-950">Alertas Narrativas</h1>
                     <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                        Apenas se carga una sábana policial nueva, el SISC redacta un mensaje de máximo seis líneas con las tres variaciones más significativas
-                        por delito, barrio y franja horaria, y el estado de los compromisos del Consejo (semanal y, cuando hay un mes completo nuevo, mensual).
-                        Revíselo, ajústelo si hace falta y envíelo. Uso interno.
+                        El SISC redacta mensajes cortos con las variaciones más significativas por delito, barrio y franja horaria, el estado de los
+                        compromisos del Consejo y lo que aportan otras fuentes. La semanal sale al cargar cada sábana; la mensual, semestral y anual cuando
+                        la sábana completa el periodo; la del Consejo, el día antes de la sesión. También puede generarlas cuando las necesite. Uso interno.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    {['SEMANAL', 'MENSUAL'].map((frequency) => (
-                        <button key={frequency} disabled={!!generating} onClick={() => generate(frequency)}
-                            className={`inline-flex min-h-11 items-center gap-2 px-4 text-sm font-black disabled:opacity-50 ${frequency === 'SEMANAL' ? 'bg-[#281FD0] text-white hover:bg-[#1F18A8]' : 'bg-[#FFE000] text-slate-950 hover:bg-[#FFB600]'}`}>
-                            {generating === frequency ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
-                            Generar {frequency === 'SEMANAL' ? 'semanal' : 'mensual'}
-                        </button>
-                    ))}
+                    <label className="sr-only" htmlFor="alert-type">Tipo de alerta</label>
+                    <select id="alert-type" value={newType} onChange={(event) => setNewType(event.target.value)} disabled={!!generating}
+                        className="min-h-11 border border-slate-300 bg-white px-2 text-sm font-bold text-slate-800">
+                        {TYPES.map((type) => <option key={type.code} value={type.code}>{type.label} (hasta {type.maxLines} líneas)</option>)}
+                    </select>
+                    <button disabled={!!generating} onClick={() => generate(newType)}
+                        className="inline-flex min-h-11 items-center gap-2 bg-[#281FD0] px-4 text-sm font-black text-white hover:bg-[#1F18A8] disabled:opacity-50">
+                        {generating ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />} Generar
+                    </button>
                     <button onClick={refresh} aria-label="Recargar" className="inline-flex min-h-11 items-center border border-slate-300 bg-white px-3 text-slate-700 hover:bg-slate-50">
                         <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
                     </button>
@@ -299,7 +322,7 @@ const NarrativeAlerts = () => {
 
             <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
                 <aside className="space-y-3">
-                    <div className="flex gap-1" role="tablist">
+                    <div className="flex flex-wrap gap-1" role="tablist">
                         {FILTERS.map((item) => (
                             <button key={item.id || 'todas'} role="tab" aria-selected={filter === item.id} onClick={() => setFilter(item.id)}
                                 className={`min-h-9 px-3 text-xs font-black ${filter === item.id ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}>
@@ -314,10 +337,10 @@ const NarrativeAlerts = () => {
                                 <button onClick={() => setSelectedId(item.id)}
                                     className={`w-full border p-3 text-left ${selectedId === item.id ? 'border-[#281FD0] bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
                                     <span className="flex items-center justify-between gap-2">
-                                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">{item.frequency === 'SEMANAL' ? 'Semanal' : 'Mensual'}</span>
+                                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">{typeLabel(item.frequency)}</span>
                                         <Chip status={item.status} />
                                     </span>
-                                    <span className="mt-1 block font-black text-slate-900">{item.period_label}</span>
+                                    <span className="mt-1 block font-black text-slate-900">{item.occasion_label ? `Sesión: ${item.occasion_label}` : item.period_label}</span>
                                     <span className="block text-xs font-semibold text-slate-500">
                                         {TRIGGER_LABELS[item.trigger] || `Generado por ${item.created_by}`} · {formatDateTime(item.created_at)}{item.edited ? ' · editado' : ''}
                                     </span>
@@ -331,7 +354,7 @@ const NarrativeAlerts = () => {
                     {detail ? (
                         <>
                             <div className="flex flex-wrap items-center gap-2">
-                                <h2 className="text-xl font-black text-slate-950">{detail.frequency === 'SEMANAL' ? 'Semana' : 'Mes'}: {detail.period_label}</h2>
+                                <h2 className="text-xl font-black text-slate-950">{detail.type_title}: {detail.occasion_label ? `sesión ${detail.occasion_label}` : detail.period_label}</h2>
                                 <Chip status={detail.status} />
                             </div>
                             <p className="text-sm font-semibold text-slate-600">

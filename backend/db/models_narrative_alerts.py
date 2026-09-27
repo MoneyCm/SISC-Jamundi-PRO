@@ -6,12 +6,12 @@ ediciones quedan como revisiones con autor y fecha, y la evidencia calculada se 
 """
 import uuid
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from db.session import Base
 
-FREQUENCIES = ("SEMANAL", "MENSUAL")
+FREQUENCIES = ("SEMANAL", "MENSUAL", "CONSEJO", "SEMESTRAL", "ANUAL")
 # BORRADOR: se puede editar. ENVIADO: congelado. REEMPLAZADO: una entrega corregida generó otra versión.
 ALERT_STATUSES = ("BORRADOR", "ENVIADO", "DESCARTADO", "REEMPLAZADO")
 
@@ -20,7 +20,7 @@ class NarrativeAlert(Base):
     __tablename__ = "narrative_alerts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    frequency = Column(String(10), nullable=False, index=True)  # SEMANAL | MENSUAL
+    frequency = Column(String(10), nullable=False, index=True)  # SEMANAL | MENSUAL | CONSEJO | SEMESTRAL | ANUAL
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False, index=True)
     previous_start = Column(Date, nullable=False)
@@ -42,10 +42,13 @@ class NarrativeAlert(Base):
     sent_by = Column(String(120))
     sent_at = Column(DateTime(timezone=True))
     sent_note = Column(String(300))  # a quién o a qué grupo se envió
+    # Alerta para el Consejo: la sesión para la que se preparó.
+    occasion_date = Column(Date, index=True)
+    occasion_label = Column(String(120))
 
-    __table_args__ = (
-        UniqueConstraint("frequency", "period_end", "source_version_id", name="uq_narrative_alert_period_source"),
-    )
+    # Sin restricción única: una misma entrega puede servir a dos sesiones del Consejo. La unicidad
+    # (periodo o sesión + entrega) la garantiza el servicio con un bloqueo consultivo.
+    __table_args__ = (Index("ix_narrative_alerts_period", "frequency", "period_end"),)
 
 
 class NarrativeAlertRevision(Base):
@@ -54,7 +57,7 @@ class NarrativeAlertRevision(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     alert_id = Column(UUID(as_uuid=True), ForeignKey("narrative_alerts.id"), nullable=False, index=True)
     version = Column(Integer, nullable=False)
-    action = Column(String(20), nullable=False)  # GENERADO | EDITADO | ENVIADO | DESCARTADO | REEMPLAZADO
+    action = Column(String(20), nullable=False)  # GENERADO | EDITADO | ACTUALIZADO | ENVIADO | DESCARTADO | REEMPLAZADO
     text = Column(Text, nullable=False)
     note = Column(Text)
     username = Column(String(120), nullable=False)

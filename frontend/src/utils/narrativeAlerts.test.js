@@ -13,6 +13,12 @@ test('máximo seis líneas y texto no vacío', () => {
     assert.match(checkText('x'.repeat(1201)).error, /caracteres/);
 });
 
+test('cada tipo tiene su propio límite', () => {
+    const twelve = Array.from({ length: 12 }, (_, i) => `línea ${i}`).join('\n');
+    assert.equal(checkText(twelve, 12, 2400).error, '');
+    assert.match(checkText(twelve, 10, 2000).error, /12 líneas; el máximo es 10/);
+});
+
 test('enlace de WhatsApp con el texto codificado', () => {
     assert.equal(whatsappUrl('*Hola* Jamundí\nlínea 2'), 'https://wa.me/?text=*Hola*%20Jamund%C3%AD%0Al%C3%ADnea%202');
 });

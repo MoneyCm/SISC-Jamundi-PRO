@@ -14,16 +14,17 @@ router = APIRouter()
 
 # Mismo equipo que lleva el seguimiento de los compromisos del Consejo.
 EDITOR_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
+FREQUENCY_PATTERN = "^(" + "|".join(service.TYPES) + ")$"
 
 
 class GenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    frequency: str = Field(pattern="^(SEMANAL|MENSUAL)$")
+    frequency: str = Field(pattern=FREQUENCY_PATTERN)
 
 
 class EditRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    text: str = Field(max_length=service.MAX_CHARS * 2)
+    text: str = Field(max_length=max(service.max_chars(code) for code in service.TYPES) * 2)
     expected_version: int = Field(ge=0)
     note: Optional[str] = Field(default=None, max_length=500)
 
@@ -47,13 +48,15 @@ def _errors(call):
 
 @router.get("/rules")
 def rules(current_user: User = Depends(institutional_access)):
-    return {"rules_version": service.RULES_VERSION, "rules": service.RULES, "max_lines": service.MAX_LINES,
-            "max_chars": service.MAX_CHARS}
+    return {"rules_version": service.RULES_VERSION, "rules": service.RULES,
+            "types": [{"code": code, "label": config["label"], "title": config["title"],
+                       "max_lines": config["max_lines"], "max_chars": service.max_chars(code)}
+                      for code, config in service.TYPES.items()]}
 
 
 @router.get("/")
 def list_alerts(
-    frequency: Optional[str] = Query(default=None, pattern="^(SEMANAL|MENSUAL)$"),
+    frequency: Optional[str] = Query(default=None, pattern=FREQUENCY_PATTERN),
     status: Optional[str] = Query(default=None, pattern="^(BORRADOR|ENVIADO|DESCARTADO|REEMPLAZADO)$"),
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -69,7 +72,7 @@ def list_alerts(
 
 
 @router.get("/preview")
-def preview(frequency: str = Query(pattern="^(SEMANAL|MENSUAL)$"), db: Session = Depends(get_db),
+def preview(frequency: str = Query(pattern=FREQUENCY_PATTERN), db: Session = Depends(get_db),
             current_user: User = Depends(institutional_access)):
     """Calcula el mensaje sin guardarlo."""
     data = _errors(lambda: service.compute(db, frequency))
@@ -117,6 +120,14 @@ async def mark_sent(alert_id: str, payload: StateRequest, request: Request, db: 
     alert = _errors(lambda: service.mark_sent(db, alert_id, payload.expected_version, current_user.username,
                                               payload.note))
     return await _audited(db, request, current_user, "NARRATIVE_ALERT_SENT", alert)
+
+
+@router.post("/{alert_id}/refresh")
+async def refresh(alert_id: str, payload: StateRequest, request: Request, db: Session = Depends(get_db),
+                  current_user: User = Depends(require_role(EDITOR_ROLES))):
+    """Recalcula un borrador con la última sábana y el estado actual de los compromisos."""
+    alert = _errors(lambda: service.refresh(db, alert_id, payload.expected_version, current_user.username))
+    return await _audited(db, request, current_user, "NARRATIVE_ALERT_REFRESHED", alert)
 
 
 @router.post("/{alert_id}/discard")
