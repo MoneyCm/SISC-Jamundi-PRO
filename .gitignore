@@ -61,3 +61,6 @@ backend/monitor_execution.json
 # Página de QA local con datos de prueba
 frontend/executive-qa.html
 frontend/executive-qa.jsx
+
+# Token del tunel de Cloudflare (nunca al repositorio)
+tunnel_token.txt
