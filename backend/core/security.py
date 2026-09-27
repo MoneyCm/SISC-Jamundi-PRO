@@ -27,7 +27,9 @@ def _load_secret_key() -> str:
 
 SECRET_KEY = _load_secret_key()
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 día para desarrollo
+# Una semana: el SISC se usa desde equipos de confianza (oficina y Tailscale). Una sesión
+# se corta antes si cambian la clave, el estado, los roles o el nivel del usuario.
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
