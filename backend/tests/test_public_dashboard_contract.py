@@ -19,7 +19,7 @@ def test_non_territorial_placeholders_are_not_publishable():
 def test_public_conducta_names_hide_internal_codes():
     assert _public_conducta_label("HURTO_PERSONAS") == "Hurto a personas"
     assert _public_conducta_label("SIN_CLASIFICAR") == "Sin clasificar"
-    assert _public_conducta_label("DELITO GENERAL") == "Delito General"
+    assert _public_conducta_label("DELITO GENERAL") == "Otros delitos"
 
 
 def test_same_period_previous_year_handles_leap_day():

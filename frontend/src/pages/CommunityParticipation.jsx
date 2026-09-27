@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
     Users,
-    MessageCircle,
     Handshake,
     Home,
     Lightbulb,
     ChevronRight,
     MapPin,
-    CalendarDays,
     Plus,
     X,
     CheckCircle2
@@ -16,7 +14,6 @@ import { API_BASE_URL } from '../utils/apiConfig';
 
 const CommunityParticipation = ({ onBack }) => {
     const [proposals, setProposals] = useState([]);
-    const [safetyFronts, setSafetyFronts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [showFrontModal, setShowFrontModal] = useState(false);
@@ -45,7 +42,7 @@ const CommunityParticipation = ({ onBack }) => {
 
     const fetchData = async () => {
         try {
-            await Promise.all([fetchProposals(), fetchSafetyFronts()]);
+            await fetchProposals();
         } catch (err) {
             console.error("Error fetching data:", err);
         } finally {
@@ -58,14 +55,6 @@ const CommunityParticipation = ({ onBack }) => {
         if (response.ok) {
             const data = await response.json();
             setProposals(data);
-        }
-    };
-
-    const fetchSafetyFronts = async () => {
-        const response = await fetch(`${API_BASE_URL}/participacion/frentes`);
-        if (response.ok) {
-            const data = await response.json();
-            setSafetyFronts(data);
         }
     };
 
@@ -114,7 +103,6 @@ const CommunityParticipation = ({ onBack }) => {
             if (response.ok) {
                 setSuccessMessage(true);
                 setFrontData({ name: '', barrio: '', leader_name: '', contact_phone: '' });
-                fetchSafetyFronts();
                 setTimeout(() => {
                     setSuccessMessage(false);
                     setShowFrontModal(false);
@@ -127,27 +115,21 @@ const CommunityParticipation = ({ onBack }) => {
         }
     };
 
+    // Solo acciones que funcionan de verdad; sin contadores ni cifras de relleno.
     const initiatives = [
         {
             title: 'Frentes de Seguridad Local',
-            description: 'Organización de vecinos conectados para la prevención y alerta temprana en barrios.',
+            description: 'Organización de vecinos para la prevención en su barrio. El Observatorio verifica cada frente antes de reconocerlo.',
             icon: Handshake,
-            members: `${safetyFronts.length > 0 ? safetyFronts.length : 45} frentes activos`,
+            members: 'Registrar un frente',
             color: 'emerald'
         },
         {
             title: 'Propuestas de Convivencia',
             description: 'Envía tus ideas para mejorar la iluminación, parques o espacios comunes de tu sector.',
             icon: Lightbulb,
-            members: `${proposals.length > 0 ? proposals.length : 12} proyectos en curso`,
+            members: 'Enviar una propuesta',
             color: 'amber'
-        },
-        {
-            title: 'Reporte de Riesgos Sociales',
-            description: 'Informa sobre situaciones de vulnerabilidad o falta de cohesión social en tu comunidad.',
-            icon: Users,
-            members: 'Atención integral',
-            color: 'blue'
         }
     ];
 
@@ -160,7 +142,7 @@ const CommunityParticipation = ({ onBack }) => {
                         onClick={onBack}
                         className="flex items-center gap-2 text-white/70 hover:text-white mb-6 font-bold uppercase text-xs tracking-widest transition-colors"
                     >
-                        <Home size={16} /> Volver al Hub
+                        <Home size={16} /> Volver al inicio
                     </button>
                     <div className="flex items-center gap-4 mb-4">
                         <div className="p-3 bg-white/20 rounded-2xl">
@@ -169,18 +151,18 @@ const CommunityParticipation = ({ onBack }) => {
                         <h1 className="text-3xl md:text-5xl font-black tracking-tighter">Participación Ciudadana</h1>
                     </div>
                     <p className="text-white/80 max-max-w-2xl font-medium">
-                        La seguridad se construye desde el barrio. Conéctate con tu JAC y participa en la transformación de Jamundí.
+                        La seguridad se construye desde el barrio. Envía propuestas para tu sector o registra el frente de seguridad de tu comunidad.
                     </p>
                 </div>
             </div>
 
             <div className="max-w-5xl mx-auto px-6 -mt-8">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                     {initiatives.map((item, idx) => (
                         <div
                             key={idx}
                             onClick={() => handleInviteClick(item.title)}
-                            className={`bg-white p-6 rounded-3xl shadow-lg border border-slate-100 hover:shadow-xl transition-all group ${(item.title === 'Propuestas de Convivencia' || item.title === 'Frentes de Seguridad Local') ? 'cursor-pointer hover:border-emerald-200' : ''}`}
+                            className="bg-white p-6 rounded-3xl shadow-lg border border-slate-100 hover:shadow-xl transition-all group cursor-pointer hover:border-emerald-200"
                         >
                             <div className={`p-4 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform ${item.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
                                 item.color === 'amber' ? 'bg-amber-50 text-amber-600' :
@@ -198,11 +180,11 @@ const CommunityParticipation = ({ onBack }) => {
                     ))}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-8">
                     {/* Proposal List Section */}
                     <div className="bg-white p-8 md:p-10 rounded-3xl shadow-xl border border-slate-100 h-fit">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-2xl font-black text-slate-800 tracking-tight">Proyectos en Curso</h3>
+                            <h3 className="text-2xl font-black text-slate-800 tracking-tight">Propuestas aprobadas</h3>
                             <button
                                 onClick={() => setShowModal(true)}
                                 className="bg-emerald-100 text-emerald-700 p-2 rounded-xl hover:bg-emerald-200 transition-colors"
@@ -214,8 +196,8 @@ const CommunityParticipation = ({ onBack }) => {
                         <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                             {proposals.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400">
-                                    <p className="text-sm italic">No hay propuestas registradas aún.</p>
-                                    <p className="text-xs">¡Sé el primero en proponer una mejora!</p>
+                                    <p className="text-sm italic">Todavía no hay propuestas aprobadas.</p>
+                                    <p className="text-xs">Las propuestas se publican aquí cuando el equipo de la Secretaría las revisa.</p>
                                 </div>
                             ) : (
                                 proposals.map((p) => (
@@ -235,77 +217,6 @@ const CommunityParticipation = ({ onBack }) => {
                         </div>
                     </div>
 
-                    {/* JAC Form Section - Restored */}
-                    <div className="bg-white p-8 md:p-10 rounded-3xl shadow-xl border border-slate-100">
-                        <h3 className="text-2xl font-black text-slate-800 mb-6 tracking-tight">Vínculo con tu JAC</h3>
-                        <p className="text-slate-500 mb-8 text-sm">
-                            ¿Eres líder de una Junta de Acción Comunal? Regístrate para recibir información estratégica del SISC y participar en las mesas de seguridad territorial.
-                        </p>
-                        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); alert("Solicitud de vínculo enviada. El equipo del SISC se pondrá en contacto pronto."); }}>
-                            <input
-                                required
-                                type="text"
-                                placeholder="Nombre del Líder / Representante"
-                                className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 h-12"
-                            />
-                            <input
-                                required
-                                type="text"
-                                placeholder="Barrio / Vereda"
-                                className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 h-12"
-                            />
-                            <textarea
-                                required
-                                placeholder="Describa brevemente su requerimiento o propuesta..."
-                                rows={4}
-                                className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500"
-                            ></textarea>
-                            <button type="submit" className="w-full bg-emerald-600 text-white font-black py-4 rounded-xl hover:bg-emerald-700 transition-all shadow-lg active:scale-95">
-                                ENVIAR SOLICITUD DE VÍNCULO
-                            </button>
-                        </form>
-                    </div>
-
-                    {/* Events Section moved lower */}
-                    <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-xl lg:col-span-1">
-                        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                            <CalendarDays size={20} className="text-emerald-400" />
-                            Agenda Comunitaria
-                        </h3>
-                        <div className="space-y-6">
-                            <div className="border-l-2 border-emerald-500 pl-4 py-1">
-                                <p className="text-xs font-bold text-emerald-400">25 FEB | 6:00 PM</p>
-                                <p className="text-sm font-bold">Mesa de Seguridad - Comuna 1</p>
-                                <p className="text-[10px] text-white/40">Lugar: Casa de la Cultura</p>
-                            </div>
-                            <div className="border-l-2 border-slate-700 pl-4 py-1">
-                                <p className="text-xs font-bold text-slate-500">02 MAR | 5:30 PM</p>
-                                <p className="text-sm font-bold">Capacitación Prevención VBG</p>
-                                <p className="text-[10px] text-white/40">Lugar: Virtual (Meet)</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm lg:col-span-1">
-                        <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                            <MessageCircle size={18} className="text-emerald-600" />
-                            ¿Por qué participar?
-                        </h4>
-                        <ul className="text-sm text-slate-500 space-y-3">
-                            <li className="flex items-center gap-2">
-                                <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
-                                Incidencia real en las políticas de seguridad.
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
-                                Acceso a reportes preventivos de tu sector.
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
-                                Fortalecimiento del tejido social de Jamundí.
-                            </li>
-                        </ul>
-                    </div>
                 </div>
             </div>
 

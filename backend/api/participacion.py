@@ -102,11 +102,14 @@ class SafetyFrontResponse(BaseModel):
 
 @router.post("/frentes", response_model=SafetyFrontResponse)
 def create_safety_front(front: SafetyFrontCreate, db: Session = Depends(get_db)):
+    # Un frente registrado desde el portal queda pendiente hasta que el Observatorio lo verifique;
+    # solo los ACTIVO se muestran al público.
     db_front = SafetyFront(
         name=front.name,
         barrio=front.barrio,
         leader_name=front.leader_name,
-        contact_phone=front.contact_phone
+        contact_phone=front.contact_phone,
+        status="PENDIENTE",
     )
     db.add(db_front)
     db.commit()

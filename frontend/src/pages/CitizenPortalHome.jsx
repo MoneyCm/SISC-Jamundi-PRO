@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     ArrowRight, BarChart3, CalendarClock, CheckCircle2, ChevronRight, Database,
     Download, FileText, Gavel, HeartPulse, Info, MapPinned, MessageCircle,
-    PhoneCall, RefreshCw, Share2, ShieldAlert, TrendingDown, TrendingUp, Users,
+    LifeBuoy, PhoneCall, RefreshCw, Share2, ShieldAlert, TrendingDown, TrendingUp, Users,
 } from 'lucide-react';
 import CitizenFilterBar from '../components/public/CitizenFilterBar';
 import PublicPortalHeader from '../components/public/PublicPortalHeader';
@@ -175,6 +175,7 @@ const CitizenPortalHome = ({ onNavigate, onLoginClick }) => {
     };
 
     const services = [
+        { id: 'victim-support', title: 'Rutas de atención a víctimas', description: 'Qué hacer y a qué líneas nacionales llamar ante violencia intrafamiliar, de género o contra niñas y niños.', icon: LifeBuoy },
         { id: 'public-inspections', title: 'Gestión de Inspecciones', description: 'Actuaciones, trámites y servicios agregados de las Inspecciones de Policía.', icon: Gavel },
         { id: 'public-family-protection', title: 'Protección familiar', description: 'Atenciones y medidas de protección de las Comisarías de Familia.', icon: HeartPulse },
         { id: 'reporting', title: 'Reporte seguro', description: 'Canal institucional para informar delitos o riesgos.', icon: ShieldAlert },

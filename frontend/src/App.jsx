@@ -238,6 +238,14 @@ const App = () => {
   const isPublic = appMode === 'public';
   const showCitizenAssistant = isPublic;
 
+  // Páginas secundarias del portal: el mismo menú que el resto, para no depender del botón de regreso.
+  const withPortalMenu = (page) => (
+    <>
+      <PublicPortalHeader currentPage={publicActivePage} onNavigate={navigatePublic} onLoginClick={() => setAppMode('login')} />
+      {page}
+    </>
+  );
+
   const renderContent = () => {
     if (isPublic) {
       switch (publicActivePage) {
@@ -259,7 +267,6 @@ const App = () => {
           />;
         case 'transparency-info':
         case 'open-data':
-        case 'accountability':
           return <PublicInformation
             initialSection={publicActivePage}
             onBack={() => navigatePublic('hub')}
@@ -272,21 +279,19 @@ const App = () => {
             <SiscCifras publicMode />
           </>;
         case 'public-measures':
-          return <PublicMeasures onBack={() => navigatePublic('hub')} />;
+          return withPortalMenu(<PublicMeasures onBack={() => navigatePublic('hub')} />);
         case 'public-inspections':
-          return <PublicInspectionManagement onBack={() => navigatePublic('hub')} onNavigate={navigatePublic} />;
+          return withPortalMenu(<PublicInspectionManagement onBack={() => navigatePublic('hub')} onNavigate={navigatePublic} />);
         case 'public-family-protection':
-          return <PublicFamilyProtection onBack={() => navigatePublic('hub')} />;
+          return withPortalMenu(<PublicFamilyProtection onBack={() => navigatePublic('hub')} />);
         case 'victim-support':
-          return <VictimRoutes onBack={() => navigatePublic('hub')} />;
+          return withPortalMenu(<VictimRoutes onBack={() => navigatePublic('hub')} />);
         case 'reporting':
-          return <SecureReporting onBack={() => navigatePublic('hub')} />;
+          return withPortalMenu(<SecureReporting onBack={() => navigatePublic('hub')} />);
         case 'participation':
-          return <CommunityParticipation onBack={() => navigatePublic('hub')} />;
-        case 'educational':
-          return <div className="p-20 text-center">Módulo Educativo en Desarrollo</div>;
+          return withPortalMenu(<CommunityParticipation onBack={() => navigatePublic('hub')} />);
         case 'pqr':
-          return <PQRPage onBack={() => navigatePublic('hub')} />;
+          return withPortalMenu(<PQRPage onBack={() => navigatePublic('hub')} />);
         default:
           return <CitizenPortalHome
             onNavigate={navigatePublic}

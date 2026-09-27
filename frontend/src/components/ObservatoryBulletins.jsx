@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
     FileText, CalendarDays, AlertTriangle, CheckCircle2, XCircle,
-    ArrowRight, MapPin, Clock, Search, Loader2
+    Download, MapPin, Clock, Search, Loader2
 } from 'lucide-react';
 import { apiJson } from '../utils/apiClient';
+import { API_BASE_URL } from '../utils/apiConfig';
 import { bulletinPeriod, editionLabel, groupByEdition } from '../utils/bulletinEditions';
 
-const fmt = (v) => Number(v || 0).toLocaleString('es-CO');
+// Sin dato no es cero: una fuente que no entregó no reporta «0 hechos».
+const fmt = (v) => (v === undefined || v === null ? 'sin dato' : Number(v).toLocaleString('es-CO'));
+const hasTriData = (tri) => Boolean(tri && Object.keys(tri.hechos_por_fuente || {}).length);
 
 const TriFuenteDisplay = ({ tri }) => {
     if (!tri) return null;
@@ -120,7 +123,7 @@ const ObservatoryBulletins = () => {
                 </div>
                 <div>
                     <h2 className="text-xl font-black text-slate-900">Boletines del Observatorio</h2>
-                    <p className="text-xs text-slate-500">Conciliación tri-fuente de homicidios</p>
+                    <p className="text-xs text-slate-500">Ediciones revisadas y publicadas, con su periodo y fuentes.</p>
                 </div>
             </div>
 
@@ -128,7 +131,7 @@ const ObservatoryBulletins = () => {
                 <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                     <Search className="h-12 w-12 mb-3" />
                     <p className="font-bold">Sin boletines publicados</p>
-                    <p className="text-xs">Genera un boletín con las 3 fuentes para ver la conciliación.</p>
+                    <p className="text-xs">Cuando el Observatorio publique un boletín, aparecerá aquí.</p>
                 </div>
             ) : (
                 <div className="space-y-8">
@@ -158,16 +161,24 @@ const ObservatoryBulletins = () => {
                                             )}
                                         </div>
                                     </div>
-                                    <ArrowRight className="h-5 w-5 text-slate-300 flex-shrink-0" />
                                 </div>
 
-                                {tri ? (
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    <a href={`${API_BASE_URL}/sisc-cifras/publications/${b.id}/pdf`} target="_blank" rel="noreferrer"
+                                        className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#281FD0] px-3 text-sm font-black text-white hover:bg-[#1F18A8]">
+                                        <FileText size={16} /> Ver boletín
+                                    </a>
+                                    <a href={`${API_BASE_URL}/sisc-cifras/publications/${b.id}/pdf?download=true`}
+                                        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                                        <Download size={16} /> Descargar PDF
+                                    </a>
+                                </div>
+                                {hasTriData(tri) ? (
                                     <TriFuenteDisplay tri={tri} />
                                 ) : (
-                                    <div className="mt-4 flex items-center gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-3">
-                                        <AlertTriangle size={16} />
-                                        <span>Sin conciliación tri-fuente: faltan entregas fijas (SPOA/ML).</span>
-                                    </div>
+                                    <p className="mt-3 text-xs text-slate-500">
+                                        Este boletín no incluye el cruce de homicidios entre Policía, Fiscalía y Medicina Legal porque faltan datos de alguna de esas fuentes para el periodo.
+                                    </p>
                                 )}
                             </article>
                         );
