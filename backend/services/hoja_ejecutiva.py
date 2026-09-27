@@ -1,7 +1,11 @@
 """Hoja ejecutiva semanal: una página impresa para la Secretaría de Seguridad.
 
-Cifras de la sábana policial (hechos únicos), los barrios con más casos y los compromisos del
-Consejo que necesitan atención. Las frases se arman con reglas fijas a partir de las cifras.
+Cifras de la sábana policial, los barrios con más casos y los compromisos del Consejo que
+necesitan atención. Las frases se arman con reglas fijas a partir de las cifras.
+
+Cuenta como el cálculo oficial publicable (services/indicator_calculation.py): hechos únicos
+sobre la foto de la última entrega de la Policía, no sobre el histórico acumulado. Así coincide
+con el boletín institucional, que cuenta los hechos únicos del mismo archivo.
 """
 import io
 import os
@@ -12,12 +16,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from db.models_council import CouncilCommitment
-from db.models_hechos_seguridad import HechoSeguridad
+from db.models_hechos_seguridad import SabanaSnapshotRow
 from services import council_commitments_service as commitments
 from services.alert_engine import NON_PUBLIC_TERRITORY_VALUES, is_public_territory_name
-from services.hechos_metrics import hechos_unicos_expr
+from services.indicator_calculation import _latest_completed_run
 
-FUENTE = "POLICIA_SEMANAL"
 # Los seis delitos de la hoja, con las conductas de la sábana que agrupa cada uno.
 DELITOS = [
     ("Homicidios", ["Homicidio"]),
@@ -69,37 +72,36 @@ def tendencia(actual: int, referencia: int) -> str:
     return "igual"
 
 
-def _conteo(db: Session, inicio: date, fin: date, conductas: Optional[List[str]] = None) -> int:
-    query = db.query(hechos_unicos_expr()).filter(
-        HechoSeguridad.fuente_codigo == FUENTE,
-        HechoSeguridad.fecha_evento >= inicio,
-        HechoSeguridad.fecha_evento <= fin,
-    )
+Fila = SabanaSnapshotRow
+HECHOS = func.count(func.distinct(Fila.hecho_key))
+
+
+def _en_entrega(entrega, inicio: date, fin: date):
+    return [Fila.ingestion_id == entrega, Fila.fecha_evento >= inicio, Fila.fecha_evento <= fin]
+
+
+def _conteo(db: Session, entrega, inicio: date, fin: date, conductas: Optional[List[str]] = None) -> int:
+    query = db.query(HECHOS).filter(*_en_entrega(entrega, inicio, fin))
     if conductas:
-        query = query.filter(HechoSeguridad.conducta_estandar.in_(conductas))
+        query = query.filter(Fila.conducta_estandar.in_(conductas))
     return int(query.scalar() or 0)
 
 
-def _barrios(db: Session, inicio: date, fin: date, limite: int = 3) -> List[Dict[str, Any]]:
-    barrio = HechoSeguridad.barrio_normalizado
-    filas = db.query(barrio, hechos_unicos_expr().label("total")).filter(
-        HechoSeguridad.fuente_codigo == FUENTE,
-        HechoSeguridad.fecha_evento >= inicio,
-        HechoSeguridad.fecha_evento <= fin,
+def _barrios(db: Session, entrega, inicio: date, fin: date, limite: int = 3) -> List[Dict[str, Any]]:
+    barrio = Fila.barrio_normalizado
+    filas = db.query(barrio, HECHOS.label("total")).filter(
+        *_en_entrega(entrega, inicio, fin),
         barrio.isnot(None), barrio != "",
         func.upper(func.trim(barrio)).notin_(NON_PUBLIC_TERRITORY_VALUES),
         ~func.upper(barrio).like("%PENDIENTE%"),
-    ).group_by(barrio).order_by(hechos_unicos_expr().desc(), barrio).limit(limite * 3).all()
+    ).group_by(barrio).order_by(HECHOS.desc(), barrio).limit(limite * 3).all()
     resultado = []
     for nombre, total in filas:
         if not is_public_territory_name(nombre):
             continue
-        principal = db.query(HechoSeguridad.conducta_estandar, hechos_unicos_expr().label("n")).filter(
-            HechoSeguridad.fuente_codigo == FUENTE,
-            HechoSeguridad.fecha_evento >= inicio,
-            HechoSeguridad.fecha_evento <= fin,
-            barrio == nombre,
-        ).group_by(HechoSeguridad.conducta_estandar).order_by(hechos_unicos_expr().desc()).first()
+        principal = db.query(Fila.conducta_estandar, HECHOS.label("n")).filter(
+            *_en_entrega(entrega, inicio, fin), barrio == nombre,
+        ).group_by(Fila.conducta_estandar).order_by(HECHOS.desc()).first()
         resultado.append({"barrio": nombre_lugar(nombre), "casos": int(total),
                           "principal": principal[0] if principal else None})
         if len(resultado) == limite:
@@ -144,8 +146,9 @@ def frases(filas: List[Dict[str, Any]], total: Dict[str, Any], barrios: List[Dic
 
 def construir(db: Session, corte: Optional[date] = None, hoy: Optional[date] = None) -> Dict[str, Any]:
     hoy = hoy or date.today()
-    ultimo = db.query(func.max(HechoSeguridad.fecha_evento)).filter(
-        HechoSeguridad.fuente_codigo == FUENTE, HechoSeguridad.fecha_evento <= hoy).scalar()
+    run = _latest_completed_run(db)
+    ultimo = db.query(func.max(Fila.fecha_evento)).filter(
+        Fila.ingestion_id == run.id, Fila.fecha_evento <= hoy).scalar() if run else None
     if ultimo is None:
         raise ValueError("Todavía no hay sábana policial cargada.")
     corte = min(corte or ultimo, ultimo)
@@ -158,17 +161,17 @@ def construir(db: Session, corte: Optional[date] = None, hoy: Optional[date] = N
     for nombre, conductas in DELITOS + [("Total de delitos", None)]:
         fila = {
             "delito": nombre,
-            "semana": _conteo(db, *semana, conductas),
-            "semana_anterior": _conteo(db, *anterior, conductas),
-            "anio": _conteo(db, *anio, conductas),
-            "anio_anterior": _conteo(db, *anio_previo, conductas),
+            "semana": _conteo(db, run.id, *semana, conductas),
+            "semana_anterior": _conteo(db, run.id, *anterior, conductas),
+            "anio": _conteo(db, run.id, *anio, conductas),
+            "anio_anterior": _conteo(db, run.id, *anio_previo, conductas),
         }
         fila["tendencia_semana"] = tendencia(fila["semana"], fila["semana_anterior"])
         fila["variacion_anio"] = variacion(fila["anio"], fila["anio_anterior"])
         filas.append(fila)
     total = filas.pop()
 
-    barrios = _barrios(db, corte - timedelta(days=27), corte)
+    barrios = _barrios(db, run.id, corte - timedelta(days=27), corte)
     resumen = commitments.summary(db.query(CouncilCommitment).all(), today=hoy)
     atencion = [{
         "codigo": item["code"],
@@ -180,6 +183,7 @@ def construir(db: Session, corte: Optional[date] = None, hoy: Optional[date] = N
     dias_retraso = (hoy - corte).days
 
     return {
+        "entrega": run.filename,
         "corte": corte,
         "hoy": hoy,
         "dias_retraso": dias_retraso,
@@ -335,7 +339,8 @@ def render_pdf(datos: Dict[str, Any]) -> bytes:
 
     historia.append(Spacer(1, 6))
     historia.append(Paragraph(
-        f"Datos policiales al {fecha_larga(datos['corte'])} ({datos['dias_retraso']} días de retraso). "
+        f"Datos policiales al {fecha_larga(datos['corte'])} ({datos['dias_retraso']} días de retraso), "
+        f"entrega {datos.get('entrega') or 'vigente'}. "
         f"Generado por el SISC el {fecha_larga(datos['hoy'])}. Documento de uso interno.", pie))
 
     salida = io.BytesIO()
