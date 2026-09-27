@@ -166,6 +166,8 @@ from api import observatory
 app.include_router(observatory.router, prefix="/api/observatory", tags=["observatory"])
 from api import narrative_alerts
 app.include_router(narrative_alerts.router, prefix="/api/narrative-alerts", tags=["narrative-alerts"])
+from api import comisarias
+app.include_router(comisarias.router, prefix="/api/comisarias", tags=["comisarias"])
 
 # --- Fase 1.5: Router v1 para contrato aprobado ---
 from api import sisc_cifras_v1

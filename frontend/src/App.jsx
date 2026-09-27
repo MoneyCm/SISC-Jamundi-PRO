@@ -36,6 +36,7 @@ const RNMCModule = lazy(() => import('./pages/RNMCModule'));
 const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
 const CouncilCommitments = lazy(() => import('./pages/CouncilCommitments'));
 const NarrativeAlerts = lazy(() => import('./pages/NarrativeAlerts'));
+const ComisariasModule = lazy(() => import('./pages/ComisariasModule'));
 const ObservatoryCenter = lazy(() => import('./pages/ObservatoryCenter'));
 const UsersManagement = lazy(() => import('./pages/UsersManagementV2'));
 const AccessRequests = lazy(() => import('./pages/AccessRequests'));
@@ -342,6 +343,8 @@ const App = () => {
         return <DataQuality initialReportId={selectedReportId} />;
       case 'inspecciones':
         return <InspeccionesModule />;
+      case 'comisarias':
+        return <ComisariasModule />;
       case 'police_audit':
         return <PoliceIngestionAudit runId={selectedReportId} onBack={() => setActivePage('boletin_replica')} />;
       case 'institutional_agents':

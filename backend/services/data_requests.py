@@ -60,6 +60,16 @@ def loaded_cutoffs(db: Session) -> Dict[str, Dict[str, Any]]:
         current = result.get(key)
         if not current or (cutoff and cutoff > current["cutoff"]):
             result[key] = {"cutoff": cutoff, "loaded_on": loaded_at.date() if loaded_at else None}
+    # Bases de casos de las Comisarías (violencia intrafamiliar) también cuentan como entrega.
+    from db.models_vif import VifDelivery
+
+    vif = db.query(VifDelivery.entity, func.max(VifDelivery.period_end), func.max(VifDelivery.decided_at)).filter(
+        VifDelivery.status == "CONFIRMADA").group_by(VifDelivery.entity).all()
+    for entity, cutoff, loaded_at in vif:
+        key = match_key(entity)
+        current = result.get(key)
+        if not current or (cutoff and (not current["cutoff"] or cutoff > current["cutoff"])):
+            result[key] = {"cutoff": cutoff, "loaded_on": loaded_at.date() if loaded_at else None}
     return result
 
 
