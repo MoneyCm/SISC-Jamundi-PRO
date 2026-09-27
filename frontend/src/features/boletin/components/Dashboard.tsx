@@ -3,7 +3,7 @@ import { bulletinFetch as fetch } from '../lib/bulletinApi';
 
 import React, { useEffect, useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, Database, ExternalLink, Megaphone, Printer, RefreshCw, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, Database, Download, ExternalLink, Loader2, Megaphone, Printer, RefreshCw, XCircle } from 'lucide-react';
 import NewsletterPreview from './NewsletterPreview';
 import type {
   ChartPoint,
@@ -25,6 +25,7 @@ import { withinBulletinCutoff } from '../lib/bulletinPeriod';
 import OfficialQueryPanel from './OfficialQueryPanel';
 import CentralHistoryPanel from './CentralHistoryPanel';
 import SabanaUploadFlow from './SabanaUploadFlow';
+import { downloadBulletinPdf } from '../lib/exportPdf';
 // Componente JSX compartido con SISC en cifras (misma revisión editorial).
 import EditorialReview from '../../../components/EditorialReview';
 import type { OfficialResult } from '../hooks/useOfficialIndicator';
@@ -232,6 +233,8 @@ export const excelSerialToDateString = (serialVal: unknown): string => {
 
 export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState('');
+  const [pdfError, setPdfError] = useState('');
 
   // Data State
   const [rawExcelData, setRawExcelData] = useState<CrimeRow[]>([]);
@@ -460,6 +463,21 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', 'historial_boletines.json');
     linkElement.click();
+  };
+
+  const downloadPdf = async () => {
+    const pages = Array.from(document.querySelectorAll<HTMLElement>('.boletin-replica .newsletter-document'));
+    const slug = (stats?.periodName || 'periodo').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_');
+    setPdfError('');
+    setPdfProgress('Preparando PDF…');
+    try {
+      await downloadBulletinPdf(pages, `Boletin_SISC_Jamundi_${slug}_${stats?.baseYear ?? ''}.pdf`,
+        (done, total) => setPdfProgress(`Armando página ${Math.min(done + 1, total)} de ${total}…`));
+    } catch (error) {
+      setPdfError((error as Error).message || 'No se pudo generar el PDF. Intente de nuevo o use Imprimir desde un computador.');
+    } finally {
+      setPdfProgress('');
+    }
   };
 
   const handleImportHistory = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1728,11 +1746,20 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                  </div>
               </div>
               <button
-                onClick={() => window.print()}
-                className="mt-4 w-full bg-ui-accent hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors flex items-center justify-center gap-2"
+                onClick={downloadPdf}
+                disabled={Boolean(pdfProgress)}
+                className="mt-4 w-full bg-ui-accent hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
               >
-                <Printer size={16} aria-hidden="true" />
-                <span>Descargar PDF / Imprimir</span>
+                {pdfProgress ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Download size={16} aria-hidden="true" />}
+                <span>{pdfProgress || 'Descargar PDF'}</span>
+              </button>
+              {pdfError && <p role="alert" className="mt-2 text-xs font-semibold text-red-300">{pdfError}</p>}
+              <button
+                onClick={() => window.print()}
+                className="mt-2 w-full border border-ui-border text-ui-text-secondary hover:text-white py-1.5 px-4 rounded transition-colors flex items-center justify-center gap-2 text-xs"
+              >
+                <Printer size={14} aria-hidden="true" />
+                <span>Imprimir</span>
               </button>
               <div className="mt-3 pt-3 border-t border-ui-border">
                 <label className="flex items-center gap-2 text-xs text-ui-text-secondary cursor-pointer hover:text-white transition-colors">

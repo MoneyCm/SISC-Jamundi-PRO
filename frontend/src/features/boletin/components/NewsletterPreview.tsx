@@ -410,8 +410,8 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#A0AEC0' }} />
                      <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
                      <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
-                     <Bar dataKey="current" name={`Total ${baseYear}`} fill={colorAzul} radius={[4, 4, 0, 0]} />
-                     <Bar dataKey="prev" name={`Total ${prevYear}`} fill="#A0AEC0" radius={[4, 4, 0, 0]} />
+                     <Bar dataKey="current" name={`Total ${baseYear}`} fill={colorAzul} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                     <Bar dataKey="prev" name={`Total ${prevYear}`} fill="#A0AEC0" radius={[4, 4, 0, 0]} isAnimationActive={false} />
                    </BarChart>
                  ) : (
                    <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
@@ -420,8 +420,8 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#A0AEC0' }} />
                      <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
                      <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '5px' }} />
-                     <Line type="monotone" dataKey="current" name={`Curva ${baseYear}`} stroke={colorAzul} strokeWidth={3} dot={{ r: 3, fill: colorAzul, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-                     <Line type="monotone" dataKey="prev" name={`Curva ${prevYear}`} stroke="#A0AEC0" strokeWidth={2} dot={{ r: 2, fill: '#A0AEC0' }} />
+                     <Line type="monotone" dataKey="current" name={`Curva ${baseYear}`} stroke={colorAzul} strokeWidth={3} dot={{ r: 3, fill: colorAzul, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} isAnimationActive={false} />
+                     <Line type="monotone" dataKey="prev" name={`Curva ${prevYear}`} stroke="#A0AEC0" strokeWidth={2} dot={{ r: 2, fill: '#A0AEC0' }} isAnimationActive={false} />
                    </LineChart>
                  )}
                </ResponsiveContainer>
