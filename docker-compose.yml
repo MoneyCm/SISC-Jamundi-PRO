@@ -9,8 +9,9 @@ services:
       POSTGRES_USER: sisc_user
       POSTGRES_PASSWORD: sisc_password
       POSTGRES_DB: sisc_jamundi
+    # Solo este PC: la base no se expone a la red wifi (el backend la usa por la red interna de Docker).
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -25,8 +26,9 @@ services:
       DATABASE_URL: postgresql://sisc_user:sisc_password@db:5432/sisc_jamundi
       # Fechas de "hoy" en hora de Colombia (sin esto, desde las 7 p. m. el backend ya está en el día siguiente).
       TZ: America/Bogota
+    # Solo este PC: la red accede al API a traves del frontend (puerto 5173, proxy /api).
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       - db
     volumes:
