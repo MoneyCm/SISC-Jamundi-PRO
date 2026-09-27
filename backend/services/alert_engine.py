@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from db.models import Event, EventType
 from db.models_hechos_seguridad import HechoSeguridad
 from services.hechos_metrics import hechos_unicos_expr
+from services.entrega_vigente import filtro_hechos
 import logging
 
 logger = logging.getLogger("alert_engine")
@@ -75,7 +76,8 @@ class AlertEngine:
             HechoSeguridad.fecha_evento.label('date'),
             HechoSeguridad.categoria_delito.label('cat'),
             hechos_unicos_expr().label('count')
-        ).filter(HechoSeguridad.fecha_evento >= start_date, HechoSeguridad.fecha_evento <= end_date)
+        ).filter(HechoSeguridad.fecha_evento >= start_date, HechoSeguridad.fecha_evento <= end_date,
+                 HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db))
 
         if category:
             query_mod = query_mod.filter(HechoSeguridad.categoria_delito == category)
@@ -171,6 +173,8 @@ class AlertEngine:
             HechoSeguridad.barrio_normalizado,
             hechos_unicos_expr().label('total')
         ).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
+            filtro_hechos(db),
             HechoSeguridad.fecha_evento >= hace_30,
             HechoSeguridad.barrio_normalizado.isnot(None),
             HechoSeguridad.barrio_normalizado != "",
