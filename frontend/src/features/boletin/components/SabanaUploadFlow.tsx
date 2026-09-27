@@ -60,7 +60,13 @@ export default function SabanaUploadFlow({ onStart, onReady }: Props) {
     fileRef.current = file; setRun(null); setPendingRun(''); setError(''); setIssues([]); setReconciliation(''); setBusy(true); onStart();
     try {
       if (!file.size || file.size > 25 * 1024 * 1024) throw new Error('Seleccione un archivo no vacío de hasta 25 MB.');
-      const form = new FormData(); form.set('file', file);
+      // En el celular, un archivo de Drive, WhatsApp o el correo puede dejar de ser legible al enviarlo
+      // ("Failed to fetch"): se copia a memoria al elegirlo y se envía la copia.
+      let copy: File;
+      try { copy = new File([await file.arrayBuffer()], file.name, { type: file.type || 'application/octet-stream' }); }
+      catch { throw new Error('El teléfono no dejó leer el archivo. Guárdelo primero en Descargas y elíjalo desde allí.'); }
+      if (seq !== serial.current) return;
+      const form = new FormData(); form.set('file', copy);
       setPhase('1 de 3 · Revisando estructura y calidad…');
       const check = await request('/api/generator/ingestion/preflight', { method: 'POST', body: form, signal: abort.signal });
       if (seq !== serial.current) return;
@@ -79,7 +85,7 @@ export default function SabanaUploadFlow({ onStart, onReady }: Props) {
     <p className="mt-1 text-ui-text-secondary">Cargue aquí la sábana semanal. La entrega validada se guarda en el histórico compartido del SISC y alimenta los indicadores del sistema; no necesita volver a subirla en otro módulo.</p>
     {checking ? <p>Comprobando sesión…</p> : !user ? <p role="alert" className="mt-3 text-amber-200">No se pudo verificar la sesión del SISC. Compruebe la conexión y vuelva a abrir esta sección.</p> : <>
       <div className="my-3"><span>Sesión del SISC: {user}</span></div>
-      <label className="block">Sábana policial (Excel o CSV, hasta 25 MB)<input type="file" accept=".xlsx,.xls,.csv" disabled={busy} className={`${field} mt-1`} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f); }} /></label>
+      <label className="block">Sábana policial (Excel o CSV, hasta 25 MB)<input type="file" accept=".xlsx,.xls,.csv" disabled={busy} className={`${field} mt-1`} onClick={e => { e.currentTarget.value = ''; }} onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); }} /></label>
     </>}
     {phase && <p role="status" className="mt-3 text-white">{phase}</p>}
     {issues.length > 0 && <ul className="mt-2 list-disc pl-4 text-amber-200">{issues.map((i, n) => <li key={n}>{i}</li>)}</ul>}
