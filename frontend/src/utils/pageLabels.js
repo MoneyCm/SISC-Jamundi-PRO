@@ -18,6 +18,7 @@ export const INSTITUTIONAL_PAGE_LABELS = {
     council_commitments: 'Compromisos y acuerdos',
     narrative_alerts: 'Alertas Narrativas',
     inspecciones: 'Inspecciones de Policía',
+    comisarias: 'Comisarías de Familia',
     reports: 'Boletín institucional',
     data: 'Descarga CSV/XLS',
     audit: 'Auditoría',

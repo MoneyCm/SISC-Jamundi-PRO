@@ -1,6 +1,6 @@
 import React from 'react';
 import { INSTITUTIONAL_PAGE_LABELS } from '../utils/pageLabels';
-import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks, Compass, MessageSquareText } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks, Compass, MessageSquareText, HeartHandshake } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -29,7 +29,8 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'alerts', label: 'Alertas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'narrative_alerts', label: 'Alertas Narrativas', icon: MessageSquareText, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
-        { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'OPERACIONES', show: isAnalyst || isDirective },
+        { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective },
+        { id: 'comisarias', label: 'Comisarías de Familia', icon: HeartHandshake, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective || isUploader || isSteward },
 
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },
         { id: 'audit', label: 'Auditoría', icon: Activity, category: 'ADMINISTRACIÓN', show: isAdmin },
@@ -42,7 +43,9 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
     ] : allItems.filter(item => item.show);
 
     // Helper to render grouped items
-    const categories = [...new Set(menuItems.map(item => item.category))];
+    const CATEGORY_ORDER = ['HOME', 'OPERACIONES', 'ESTRATEGIA', 'GESTIÓN INSTITUCIONAL', 'SALIDA', 'ADMINISTRACIÓN'];
+    const categories = [...new Set(menuItems.map(item => item.category))]
+        .sort((a, b) => (CATEGORY_ORDER.indexOf(a) + 1 || 99) - (CATEGORY_ORDER.indexOf(b) + 1 || 99));
 
     return (
         <aside className={`fixed inset-y-0 left-0 z-30 w-72 bg-[#281FD0] text-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out md:relative md:translate-x-0 overflow-hidden ${isOpen ? 'translate-x-0' : '-translate-x-full'
