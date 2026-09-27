@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useInstitutionalIndicators } from '../hooks/useInstitutionalIndicators';
 
 const readable = (value) => String(value || '')
-  .replace(/proteccion/gi, 'protección')
-  .replace(/actuacion/gi, 'actuación')
+  .replace(/\bproteccion\b/gi, 'protección')
+  .replace(/\bactuacion\b/gi, 'actuación')
   .replace(/tramites/gi, 'trámites')
   .replace(/perdida/gi, 'pérdida')
   .replace(/defuncion/gi, 'defunción')
