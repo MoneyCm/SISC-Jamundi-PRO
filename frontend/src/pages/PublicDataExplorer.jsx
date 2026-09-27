@@ -288,7 +288,7 @@ const PublicDataExplorer = ({ onBack, onNavigate, onLoginClick }) => {
                 <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Indicadores principales">
                     <Metric label="Casos agregados" value={formatNumber(data.kpis?.total_hechos)} helper="Casos únicos en el periodo seleccionado." />
                     <Metric label="Cambio comparado" value={formatVariation(variation)} helper={meta.comparison_label || 'Sin comparación'} tone={tone === 'up' ? 'red' : tone === 'down' ? 'green' : 'blue'} />
-                    <Metric label="Homicidios" value={formatNumber(data.kpis?.homicidios)} helper={`${data.kpis?.tasa_homicidios || 0} por cada 100.000 habitantes.`} tone="red" />
+                    <Metric label="Homicidios" value={formatNumber(data.kpis?.homicidios)} helper={`${Number(data.kpis?.tasa_homicidios || 0).toLocaleString('es-CO', { maximumFractionDigits: 1 })} por cada 100.000 habitantes en el periodo (no es una tasa anual).`} tone="red" />
                     <Metric label="Territorios visibles" value={formatNumber(data.territories?.length)} helper={`Solo volúmenes de ${data.map?.min_location_count || 3} casos o más.`} />
                 </section>
 

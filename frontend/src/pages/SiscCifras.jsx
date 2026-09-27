@@ -1237,8 +1237,19 @@ const SiscCifras = ({ publicMode = false }) => {
     latestPublished && publication?.id && publication.id === latestPublished.id && publicationIsCurrent
   );
 
+  // En el portal ciudadano se abre la última edición publicada, no el generador vacío.
+  const [autoOpened, setAutoOpened] = useState(false);
   useEffect(() => {
-    if (!sources.length) return;
+    // Espera a que las fuentes y el periodo sugerido se hayan aplicado; si no, lo sobrescribirían.
+    if (!publicMode || autoOpened || !latestPublished?.publication_json || publication || !sources.length || !periodSuggested) return;
+    setAutoOpened(true);
+    applyLatestPublished();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicMode, latestPublished, autoOpened, publication, sources, periodSuggested]);
+
+  useEffect(() => {
+    // Si ya hay un boletín en pantalla (p. ej. el publicado), no se le agregan fuentes por detrás.
+    if (!sources.length || publication) return;
     const publicDefaults = DEFAULT_SOURCES.filter((code) =>
       sources.some((source) => source.code === code && source.publication_level === 'PUBLICO')
     );
@@ -1411,7 +1422,7 @@ const SiscCifras = ({ publicMode = false }) => {
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#FFE000] px-4 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-sm hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
-              {executiveMode ? 'Generar parte ejecutivo' : 'Generar SISC en cifras'}
+              {executiveMode ? 'Generar parte ejecutivo' : publicMode ? 'Consultar este periodo' : 'Generar SISC en cifras'}
             </button>
           </section>
 
@@ -1447,7 +1458,7 @@ const SiscCifras = ({ publicMode = false }) => {
               <div className="max-w-md text-center">
                 <BarChart3 className="mx-auto text-[#281FD0]" size={52} />
                 <h2 className="mt-4 text-xl font-black uppercase text-slate-900">{executiveMode ? 'Una página para decidir y hacer seguimiento' : 'Semanal para seguimiento / Mensual para balance'}</h2>
-                <p className="mt-2 text-sm font-semibold text-slate-500">{executiveMode ? 'Selecciona el período y genera el parte: cifras, propuestas, compromisos y cierres documentados. Uso institucional; no se publica automáticamente.' : 'Genera láminas y un boletín PDF con comparación automática, trazabilidad de fuentes y datos anonimizados. Antes de publicarse, una persona lo revisa y lo aprueba.'}</p>
+                <p className="mt-2 text-sm font-semibold text-slate-500">{executiveMode ? 'Selecciona el período y genera el parte: cifras, propuestas, compromisos y cierres documentados. Uso institucional; no se publica automáticamente.' : publicMode ? 'Elija un periodo y consulte las cifras agregadas, con su fuente y fecha de corte. Las ediciones oficiales están en Boletines.' : 'Genera láminas y un boletín PDF con comparación automática, trazabilidad de fuentes y datos anonimizados. Antes de publicarse, una persona lo revisa y lo aprueba.'}</p>
               </div>
             </section>
           ) : executiveMode ? (
@@ -1456,7 +1467,14 @@ const SiscCifras = ({ publicMode = false }) => {
             <>
               {!publicationIsCurrent && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
-                  La configuración cambió. Genera SISC en cifras de nuevo antes de descargar o compartir.
+                  {publicMode ? 'Cambió el periodo o las fuentes. Pulse «Consultar este periodo» para ver las cifras actualizadas.' : 'La configuración cambió. Genera SISC en cifras de nuevo antes de descargar o compartir.'}
+                </div>
+              )}
+              {publicMode && publicationIsCurrent && (
+                <div className={`rounded-md border p-4 text-sm font-bold ${showsPublishedBulletin ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+                  {showsPublishedBulletin
+                    ? `Edición oficial publicada: ${latestPublished.period_start} al ${latestPublished.period_end}.`
+                    : 'Consulta personalizada: cifras calculadas con los datos públicos para el periodo elegido. No es una edición oficial del Observatorio.'}
                 </div>
               )}
               <section className="grid gap-4 lg:grid-cols-4">
@@ -1474,7 +1492,7 @@ const SiscCifras = ({ publicMode = false }) => {
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Estado</p>
-                  <p className={`mt-2 flex items-center gap-2 text-lg font-black ${publication.status === 'PUBLISHED' ? 'text-emerald-700' : 'text-amber-700'}`}><CheckCircle2 size={20} /> {publication.status === 'PUBLISHED' ? 'Publicado' : publication.governance?.history_saved ? 'Borrador: pendiente de aprobación' : 'Vista previa'}</p>
+                  <p className={`mt-2 flex items-center gap-2 text-lg font-black ${publication.status === 'PUBLISHED' ? 'text-emerald-700' : 'text-amber-700'}`}><CheckCircle2 size={20} /> {publication.status === 'PUBLISHED' ? 'Publicado' : publicMode ? 'Consulta personalizada' : publication.governance?.history_saved ? 'Borrador: pendiente de aprobación' : 'Vista previa'}</p>
                 </div>
               </section>
 

@@ -127,8 +127,8 @@ const PublicInformation = ({ initialSection = 'transparency-info', onBack, onNav
         ];
     }, [data.kpis]);
 
-    const source = data.kpis?.fuente === 'POLICIA_SEMANAL'
-        ? 'Policía Nacional - SABANA SIEDCO/PONAL'
+    const source = ['POLICIA_SEMANAL', 'SABANA_SNAPSHOT'].includes(data.kpis?.fuente)
+        ? 'Sábana de la Policía Nacional (SIEDCO)'
         : data.kpis?.fuente || 'Fuente oficial en validación';
     const cutoff = data.metadata?.ultima_fecha || 'Corte no disponible';
 

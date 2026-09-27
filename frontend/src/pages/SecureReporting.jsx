@@ -152,7 +152,7 @@ const SecureReporting = ({ onBack }) => {
                         onClick={onBack}
                         className="flex items-center gap-2 text-white/70 hover:text-white mb-6 font-bold uppercase text-xs tracking-widest transition-colors"
                     >
-                        <Home size={16} /> Volver al Hub
+                        <Home size={16} /> Volver al inicio
                     </button>
                     <div className="flex items-center gap-4 mb-4">
                         <div className="p-3 bg-red-500 rounded-2xl shadow-lg">

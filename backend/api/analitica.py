@@ -109,6 +109,8 @@ def _public_conducta_label(code: str) -> str:
         return CONDUCTA_PUBLIC_LABELS[code]
     if not code or code == 'SIN_CLASIFICAR':
         return 'Sin clasificar'
+    if code == 'DELITO GENERAL':  # conducta de la sábana sin homologación a una categoría ciudadana
+        return 'Otros delitos'
     return code.replace('_', ' ').strip().title()
 
 

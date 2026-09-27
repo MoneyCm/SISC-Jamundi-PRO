@@ -91,9 +91,14 @@ const PublicFamilyProtection = ({ onBack }) => {
         <div style={{ display: 'flex', gap: 16, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: 22 }}>
           <button type="button" onClick={onBack} style={{ background: 'transparent', border: 0, color: '#176269', cursor: 'pointer', fontWeight: 800, padding: 0 }}>Volver al portal ciudadano</button>
           <span style={{ background: '#fff', border: '1px solid #d9e3dd', borderRadius: 999, color: '#355267', fontSize: 13, fontWeight: 750, padding: '8px 13px' }}>
-            {cutoffs.length ? 'Corte: ' + cutoffs.join(' · ') : 'Cifras institucionales aprobadas'}
+            {cutoffs.length ? `${formatPeriod(period)} · corte ${cutoffs.join(' · ')}` : 'Cifras institucionales aprobadas'}
           </span>
         </div>
+        {period && periods[0] && periods[0] !== period && (
+          <p style={{ background: '#fff8e6', border: '1px solid #f0d9a4', borderRadius: 12, color: '#6b4d0f', fontSize: 14, fontWeight: 700, margin: '0 0 18px', padding: '10px 14px' }}>
+            Se muestra el último periodo informado por las dos comisarías, para poder compararlas. Hay datos más recientes ({formatPeriod(periods[0])}) de una sola comisaría: elíjalo en «Periodo».
+          </p>
+        )}
 
         <header style={{ background: 'linear-gradient(125deg, #0d4f59, #17766c 62%, #d09a22 140%)', borderRadius: 28, boxShadow: '0 22px 50px rgba(20, 69, 67, .18)', color: '#fff', padding: 'clamp(26px, 5vw, 52px)' }}>
           <p style={{ color: '#c9f4e8', fontSize: 13, fontWeight: 850, letterSpacing: '.09em', margin: 0, textTransform: 'uppercase' }}>Comisarías de Familia</p>
