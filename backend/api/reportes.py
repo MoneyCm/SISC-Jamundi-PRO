@@ -417,3 +417,20 @@ async def generar_boletin_ejecutivo(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=Boletin_Ejecutivo_SISC_{fin_act.strftime('%Y%m%d')}.pdf"}
     )
+
+
+@router.get("/hoja-ejecutiva")
+def hoja_ejecutiva(
+    corte: date = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["DIRECTIVE", "ANALYST", "SOURCE_UPLOADER", "STEWARD", "FUNC_ADMIN", "TI_ADMIN"])),
+):
+    """Una página para imprimir: cifras de la semana, barrios y compromisos del Consejo."""
+    from services import hoja_ejecutiva as hoja
+    try:
+        datos = hoja.construir(db, corte)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    nombre = f"Hoja_ejecutiva_SISC_{datos['corte'].isoformat()}.pdf"
+    return Response(content=hoja.render_pdf(datos), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
