@@ -202,3 +202,44 @@ def test_tarea_en_el_calendario_del_centro_de_analisis():
     # Un borrador recién generado no nace atrasado.
     assert narrative_item("SEMANAL", {**draft, "created_on": wednesday}, wednesday)["status"] == "PENDIENTE"
     assert narrative_item("MENSUAL", {**monthly, "status": "ENVIADO"}, date(2026, 9, 20)) is None
+
+
+@pytest.fixture
+def db():
+    from sqlalchemy.orm import Session
+    from db.session import engine
+
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, join_transaction_mode="create_savepoint")
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+
+
+def fake_compute(source, end=date(2031, 3, 15)):
+    def compute(db, frequency, today=None):
+        plan = na.periods(frequency, end)
+        return {"frequency": frequency, "plan": plan, "cutoff": end, "source_version_id": source,
+                "text": f"{frequency} {source}", "evidence": {}}
+    return compute
+
+
+def test_al_cargar_la_sabana_se_generan_borradores_y_no_se_repite_lo_enviado(db, monkeypatch):
+    from db.models_narrative_alerts import NarrativeAlert
+
+    monkeypatch.setattr(na, "compute", fake_compute("entrega-1"))
+    assert sorted(na.generate_after_upload(db, "cargador")) == ["MENSUAL:2031-02-28", "SEMANAL:2031-03-15"]
+    weekly = db.query(NarrativeAlert).filter_by(source_version_id="entrega-1", frequency="SEMANAL").one()
+    assert weekly.trigger == "CARGA" and weekly.created_by == "cargador" and weekly.status == "BORRADOR"
+    assert na.generate_after_upload(db, "cargador") == []  # la misma entrega no duplica
+
+    # Se envía la semanal; llega una entrega corregida del mismo periodo.
+    na.mark_sent(db, str(weekly.id), weekly.version, "analista")
+    monkeypatch.setattr(na, "compute", fake_compute("entrega-2"))
+    assert na.generate_after_upload(db, "cargador") == ["MENSUAL:2031-02-28"]  # la semanal enviada no se repropone
+    monthly_old = db.query(NarrativeAlert).filter_by(source_version_id="entrega-1", frequency="MENSUAL").one()
+    assert monthly_old.status == "REEMPLAZADO"
