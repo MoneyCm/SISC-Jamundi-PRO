@@ -56,6 +56,20 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "fresh_days": 55,
         "lagged_days": 90,
     },
+    "FISCALIA_DATOS": {
+        "name": "Fiscalia",
+        "institution": "Fiscalia General de la Nacion (SPOA V3, datos.gov.co)",
+        "scope": "Procesos, victimas y procesados por hechos en Jamundi, contados en datos.gov.co",
+        "purpose": "Capa judicial: denuncias y en que va la respuesta de la justicia",
+        "update_mode": "AUTOMATIC",
+        "expected_frequency": "Revision semanal; publicacion mensual",
+        "source_url": "https://www.datos.gov.co/resource/dbdv-iihs",
+        "action_type": "OPEN",
+        "action_label": "Abrir fuente oficial",
+        "dataset_code": None,
+        "fresh_days": 55,
+        "lagged_days": 90,
+    },
     "MINDEFENSA": {
         "name": "Ministerio de Defensa",
         "institution": "Ministerio de Defensa Nacional",
@@ -269,6 +283,8 @@ class SourceCenterService:
                 "warnings": list(state.warnings or []),
                 # Tabla oficial frente a sábana (solo los conectores que la calculan).
                 "contrast": (state.details or {}).get("contraste"),
+                "contrast_kind": (state.details or {}).get("tipo_tabla", "contraste"),
+                "judicial_stages": (state.details or {}).get("respuesta_judicial"),
             }
         )
         config = SOURCE_CONNECTORS[connector["code"]]
@@ -415,9 +431,10 @@ class SourceCenterService:
             cls._apply_state(cls._base("POLICIA_NACIONAL_DATOS"), states.get("POLICIA_NACIONAL_DATOS")),
             cls._apply_state(cls._base("MINDEFENSA"), states.get("MINDEFENSA")),
             cls._apply_state(cls._base("MINDEFENSA_PISCC"), states.get("MINDEFENSA_PISCC")),
-            cls._apply_state(cls._base("SIEDCO_PUBLICO"), states.get("SIEDCO_PUBLICO")),
+            # SIEDCO_PUBLICO (monitor-siedco) y FISCALIA_SPOA_V3 (monitor-fiscalia-spoa-v3) se retiraron de la
+            # vista: el primero repetía la sábana y Policía Nacional; el segundo lo reemplaza FISCALIA_DATOS.
             cls._apply_state(cls._base("OBSERVATORIO_VALLE"), states.get("OBSERVATORIO_VALLE")),
-            cls._apply_state(cls._base("FISCALIA_SPOA_V3"), states.get("FISCALIA_SPOA_V3")),
+            cls._apply_state(cls._base("FISCALIA_DATOS"), states.get("FISCALIA_DATOS")),
         ]
         attention_statuses = {"ERROR", "NOT_CONNECTED", "UPDATE_AVAILABLE", "NEEDS_REVIEW", "EXPIRED"}
         timestamps = [item["last_checked_at"] for item in connectors if item["last_checked_at"]]

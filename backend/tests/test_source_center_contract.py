@@ -44,6 +44,7 @@ def test_catalog_has_the_distinct_source_connectors():
         "SIEDCO_PUBLICO",
         "OBSERVATORIO_VALLE",
         "FISCALIA_SPOA_V3",
+        "FISCALIA_DATOS",
         "MEDICINA_LEGAL",
     }
     assert SOURCE_CONNECTORS["POLICIA_JAMUNDI"]["purpose"] == "Fuente operativa principal"
