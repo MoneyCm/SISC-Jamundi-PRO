@@ -50,7 +50,7 @@ import {
 
 import { API_BASE_URL } from '../utils/apiConfig';
 import { buildPrioritizedTotalComparison } from '../utils/territorialComparison';
-import { compartirImagen, crearImagenRanking } from '../utils/rankingImage';
+import { compartirImagen, crearImagenRanking, leyendaAutomatica, recomendacionSugerida } from '../utils/rankingImage';
 
 const Card = ({ children, className }) => <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>{children}</div>;
 const CardHeader = ({ children, className }) => <div className={`p-6 pb-2 ${className}`}>{children}</div>;
@@ -253,15 +253,29 @@ const IntelligenceModule = () => {
     const selectedComparisonItem = comparisonOptions.find(item => item.delito === comparisonCrime) || comparisonOptions[0];
     const territorialComparison = selectedComparisonItem?.territorial_comparison;
     const [imagenEstado, setImagenEstado] = useState('');
-    const compartirRanking = async () => {
+    const [borradorImagen, setBorradorImagen] = useState(null);
+    const datosImagen = () => ({
+        rows: territorialComparison?.rows || [],
+        objetivo: selectedMunicipioNombre,
+        conducta: selectedComparisonItem?.label || delitoLabel(selectedComparisonItem?.delito),
+        periodo: `enero a ${monthNames[(selectedComparisonItem?.period_end_month || 12) - 1]} de ${selectedYear}`,
+        corte: territorialComparison?.cutoff ? fmtDate(territorialComparison.cutoff) : 'sin fecha',
+        alcance: 'Valle del Cauca y Cauca',
+        unidad: selectedComparisonItem?.isAggregate ? 'registros' : 'casos',
+    });
+    const abrirBorradorImagen = () => {
         if (!territorialComparison?.rows?.length) return;
+        const datos = datosImagen();
+        setImagenEstado('');
+        setBorradorImagen({ leyenda: leyendaAutomatica(datos), recomendacion: recomendacionSugerida(datos) });
+    };
+    const compartirRanking = async () => {
+        if (!territorialComparison?.rows?.length || !borradorImagen) return;
         setImagenEstado('Preparando la imagen…');
         try {
-            const conducta = selectedComparisonItem?.label || delitoLabel(selectedComparisonItem?.delito);
-            const periodo = `enero a ${monthNames[(selectedComparisonItem?.period_end_month || 12) - 1]} de ${selectedYear}`;
-            const corte = territorialComparison.cutoff ? fmtDate(territorialComparison.cutoff) : 'sin fecha';
-            const blob = await crearImagenRanking({ rows: territorialComparison.rows, objetivo: selectedMunicipioNombre, conducta,
-                periodo, corte, alcance: 'Valle del Cauca y Cauca', unidad: selectedComparisonItem?.isAggregate ? 'registros' : 'casos' });
+            const { conducta, periodo, ...resto } = datosImagen();
+            const blob = await crearImagenRanking({ ...resto, conducta, periodo, leyenda: borradorImagen.leyenda, recomendacion: borradorImagen.recomendacion });
+            setBorradorImagen(null);
             const nombre = `comparacion-${String(conducta).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${selectedYear}.png`;
             const resultado = await compartirImagen(blob, nombre, `${conducta}: ${selectedMunicipioNombre} frente a municipios comparables (${periodo}). SISC Jamundí.`);
             setImagenEstado(resultado === 'descargada' ? 'Imagen descargada: adjúntela en WhatsApp.' : resultado === 'compartida' ? 'Imagen compartida.' : '');
@@ -622,11 +636,32 @@ const IntelligenceModule = () => {
                                 {selectedComparisonItem?.isAggregate && <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">{sourceComparisonOptions.length} conductas priorizadas sumadas</span>}
                                 {selectedComparisonItem?.hasMixedPeriods && <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">Cortes independientes</span>}
                                 {territorialComparison.cutoff && <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al {fmtDate(territorialComparison.cutoff)}</span>}
-                                <button type="button" onClick={compartirRanking} className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-1.5 text-white hover:bg-emerald-700">
+                                <button type="button" onClick={abrirBorradorImagen} className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-1.5 text-white hover:bg-emerald-700">
                                     <Share2 size={14} /> Imagen para WhatsApp
                                 </button>
                                 {imagenEstado && <span role="status" className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">{imagenEstado}</span>}
                             </div>
+                            {borradorImagen && (
+                                <div role="dialog" aria-modal="true" aria-labelledby="borrador-imagen-titulo" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+                                    <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
+                                        <h3 id="borrador-imagen-titulo" className="text-lg font-black text-slate-900">Textos de la imagen para WhatsApp</h3>
+                                        <p className="mt-1 text-sm text-slate-500">El SISC los redactó con las cifras de la tabla. Revíselos y ajústelos antes de compartir: van en nombre del Observatorio.</p>
+                                        <label className="mt-4 block text-xs font-bold uppercase text-slate-600">Cómo leer esta comparación
+                                            <textarea value={borradorImagen.leyenda} maxLength={700} rows={5} onChange={(e) => setBorradorImagen({ ...borradorImagen, leyenda: e.target.value })}
+                                                className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm font-normal normal-case text-slate-800" />
+                                        </label>
+                                        <label className="mt-3 block text-xs font-bold uppercase text-amber-800">Recomendación del Observatorio
+                                            <textarea value={borradorImagen.recomendacion} maxLength={600} rows={5} onChange={(e) => setBorradorImagen({ ...borradorImagen, recomendacion: e.target.value })}
+                                                className="mt-1 block w-full rounded-md border border-amber-300 bg-amber-50 p-2 text-sm font-normal normal-case text-slate-800" />
+                                        </label>
+                                        <p className="mt-2 text-xs text-slate-500">Si deja un cuadro vacío, esa sección no aparece en la imagen.</p>
+                                        <div className="mt-4 flex justify-end gap-2">
+                                            <button type="button" onClick={() => setBorradorImagen(null)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">Cancelar</button>
+                                            <button type="button" onClick={compartirRanking} className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"><Share2 size={15} /> Generar imagen</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                                 <div className="overflow-x-auto">
                                     <table className="w-full min-w-[760px] border-collapse text-left text-sm">

@@ -31,6 +31,53 @@ export const prepararRanking = ({ rows = [], objetivo }) => {
     };
 };
 
+const lista = (nombres) => (nombres.length > 1 ? `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}` : nombres[0] || '');
+
+// Explicación en lenguaje sencillo, armada solo con las cifras de la tabla.
+export const leyendaAutomatica = ({ rows, objetivo, conducta, periodo, alcance, unidad = 'casos' }) => {
+    const { filas, objetivo: meta, total } = prepararRanking({ rows, objetivo });
+    if (!meta) return '';
+    const arriba = filas.filter((f) => f.tasa > meta.tasa);
+    const debajo = filas.filter((f) => f.tasa < meta.tasa);
+    const partes = [
+        `La tasa permite comparar municipios de distinto tamaño: indica cuántos ${unidad} hubo por cada 100.000 habitantes.`,
+        `${meta.municipio} registró ${formatoNumero(meta.casos)} ${unidad} de ${conducta.toLowerCase()} de ${periodo}, `
+            + `una tasa de ${formatoNumero(meta.tasa, 2)}: el puesto ${meta.posicion} entre ${total} municipios de ${alcance} con población parecida.`,
+    ];
+    if (arriba.length) {
+        partes.push(arriba.length <= 3
+            ? `Por encima está${arriba.length > 1 ? 'n' : ''} ${lista(arriba.map((f) => `${f.municipio} (${formatoNumero(f.tasa, 2)})`))}.`
+            : `${arriba.length} municipios tienen una tasa más alta.`);
+    } else {
+        partes.push('Ningún municipio comparable tiene una tasa más alta.');
+    }
+    if (debajo.length) {
+        const cercano = debajo[0];
+        partes.push(`El más cercano por debajo es ${cercano.municipio} (${formatoNumero(cercano.tasa, 2)}).`);
+    }
+    return partes.join(' ');
+};
+
+// Recomendación sugerida según la posición; la Secretaría la revisa y la puede cambiar antes de publicar.
+export const recomendacionSugerida = ({ rows, objetivo, conducta }) => {
+    const { filas, objetivo: meta, total } = prepararRanking({ rows, objetivo });
+    if (!meta || !total) return '';
+    const tercio = Math.ceil(total / 3);
+    const mejor = filas[filas.length - 1];
+    const delito = conducta.toLowerCase();
+    if (meta.posicion <= tercio) {
+        return `${meta.municipio} está entre los municipios con la tasa más alta de ${delito} en la región comparable. `
+            + 'El Observatorio recomienda presentar este resultado en el próximo Consejo de Seguridad, revisar con la Policía '
+            + 'los barrios y las franjas horarias donde se concentran los casos, y hacer seguimiento mensual a la meta del PISCC.';
+    }
+    if (meta.posicion <= total - tercio) {
+        return `${meta.municipio} está en la mitad de la tabla. El Observatorio recomienda mantener el seguimiento mensual, `
+            + `revisar qué acciones han funcionado en municipios con tasas más bajas, como ${mejor.municipio}, y vigilar que la tendencia no suba.`;
+    }
+    return `${meta.municipio} está entre los municipios con menor tasa de ${delito}. El Observatorio recomienda sostener `
+        + 'las acciones actuales y vigilar los próximos meses para confirmar que el resultado se mantiene.';
+};
+
 const cargarImagen = (src) => new Promise((resolve) => {
     const imagen = new Image();
     imagen.onload = () => resolve(imagen);
@@ -50,16 +97,24 @@ const partirTexto = (ctx, texto, ancho) => {
     return lineas;
 };
 
-export async function crearImagenRanking({ rows, objetivo, conducta, periodo, corte, alcance, unidad = 'casos' }) {
+export async function crearImagenRanking({ rows, objetivo, conducta, periodo, corte, alcance, unidad = 'casos', leyenda = '', recomendacion = '' }) {
     const { filas, objetivo: meta, total } = prepararRanking({ rows, objetivo });
     const W = 1080;
     const FILA = 92;
     const arriba = 520;
-    const H = Math.max(1350, arriba + filas.length * FILA + 330);
+    const fuente = (peso, tam) => `${peso} ${tam}px "Segoe UI", Arial, sans-serif`;
+    // Se miden primero los textos para saber el alto de la imagen.
+    const medidor = document.createElement('canvas').getContext('2d');
+    medidor.font = fuente(500, 25);
+    const lineasLeyenda = leyenda.trim() ? partirTexto(medidor, leyenda.trim(), W - 176) : [];
+    medidor.font = fuente(700, 26);
+    const lineasRecomendacion = recomendacion.trim() ? partirTexto(medidor, recomendacion.trim(), W - 176) : [];
+    const altoBloque = (lineas, alto) => (lineas.length ? 88 + lineas.length * alto : 0);
+    const extra = altoBloque(lineasLeyenda, 36) + altoBloque(lineasRecomendacion, 38) + (lineasLeyenda.length || lineasRecomendacion.length ? 20 : 0);
+    const H = Math.max(1350, arriba + filas.length * FILA + 330 + extra);
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
-    const fuente = (peso, tam) => `${peso} ${tam}px "Segoe UI", Arial, sans-serif`;
 
     ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = AZUL; ctx.fillRect(0, 0, W, 150);
@@ -112,6 +167,20 @@ export async function crearImagenRanking({ rows, objetivo, conducta, periodo, co
         ctx.fillStyle = '#E2E8F0'; ctx.fillRect(56, filaY + FILA - 4, W - 112, 2);
         filaY += FILA;
     });
+
+    let bloqueY = filaY + 28;
+    const bloque = (titulo, lineas, fondo, borde, tamano, peso, alto) => {
+        if (!lineas.length) return;
+        const altoTotal = 88 + lineas.length * alto - 24;
+        ctx.fillStyle = fondo; ctx.beginPath(); ctx.roundRect(56, bloqueY, W - 112, altoTotal, 20); ctx.fill();
+        ctx.fillStyle = borde; ctx.fillRect(56, bloqueY + 18, 8, altoTotal - 36);
+        ctx.fillStyle = borde; ctx.font = fuente(900, 24); ctx.fillText(titulo.toUpperCase(), 88, bloqueY + 44);
+        ctx.fillStyle = TINTA; ctx.font = fuente(peso, tamano);
+        lineas.forEach((linea, i) => ctx.fillText(linea, 88, bloqueY + 86 + i * alto));
+        bloqueY += altoTotal + 20;
+    };
+    bloque('Cómo leer esta comparación', lineasLeyenda, '#F1F5F9', GRIS, 25, 500, 36);
+    bloque('Recomendación del Observatorio', lineasRecomendacion, '#FEF9C3', '#A16207', 26, 700, 38);
 
     ctx.fillStyle = GRIS; ctx.font = fuente(600, 21);
     let pieY = H - 190;
