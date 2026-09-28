@@ -181,8 +181,19 @@ def construir(db: Session, corte: Optional[date] = None, hoy: Optional[date] = N
         "vencido": "ATRASADO" in item["flags"],
     } for item in resumen["attention"][:3]]
     dias_retraso = (hoy - corte).days
+    from services.respaldo_sabana import estado as estado_respaldo
+    respaldo = estado_respaldo(db, hoy)
+    lineas = frases(filas, total, barrios, resumen, dias_retraso)
+    if respaldo["atrasada"]:
+        ultimo = date.fromisoformat(respaldo["sabana_corte"]) if respaldo["sabana_corte"] else corte
+        aviso = (f"La sábana de la Policía no llega desde hace {respaldo['dias_retraso']} días "
+                 f"(último dato: {fecha_larga(ultimo)}); conviene pedirla.")
+        if respaldo["respaldo_disponible"]:
+            aviso += " Abajo van las cifras oficiales más recientes de MinDefensa, sin barrios."
+        lineas = [aviso] + [l for l in lineas if not l.startswith("Ojo: la última semana")]
 
     return {
+        "respaldo": respaldo,
         "entrega": run.filename,
         "corte": corte,
         "hoy": hoy,
@@ -196,7 +207,7 @@ def construir(db: Session, corte: Optional[date] = None, hoy: Optional[date] = N
         "barrios": barrios,
         "compromisos": {"abiertos": resumen["open"], "vencidos": resumen["overdue"],
                         "cumplidos": resumen["by_status"].get("CUMPLIDO", 0), "atencion": atencion},
-        "frases": frases(filas, total, barrios, resumen, dias_retraso),
+        "frases": lineas,
     }
 
 
@@ -313,6 +324,21 @@ def render_pdf(datos: Dict[str, Any]) -> bytes:
     historia.append(Paragraph(
         f"Semana anterior: {fecha_corta(anterior[0])} al {fecha_corta(anterior[1])}. Hechos únicos registrados por la "
         "Policía (sábana SIEDCO). Una baja puede ser falta de registro: confírmela con la siguiente entrega.", pie))
+
+    respaldo = datos.get("respaldo") or {}
+    if respaldo.get("respaldo_disponible"):
+        corte_respaldo = date.fromisoformat(respaldo["respaldo_corte"])
+        historia.append(Paragraph(f"Mientras llega la sábana: cifras oficiales de MinDefensa al {fecha_larga(corte_respaldo)}", seccion))
+        tabla_respaldo = [[Paragraph(t, celda_b) for t in ("Delito", f"En el año {corte_respaldo.year}", f"Mismo periodo {corte_respaldo.year - 1}")]]
+        for fila in respaldo["respaldo"]:
+            tabla_respaldo.append([Paragraph(fila["delito"], celda), Paragraph(str(fila["actual"]), celda_b),
+                                   Paragraph(str(fila["anterior"]), celda)])
+        cuadro = Table(tabla_respaldo, hAlign="LEFT", colWidths=[6 * cm, 3.5 * cm, 3.5 * cm])
+        cuadro.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FEF3C7")),
+                                    ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")),
+                                    ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
+        historia.append(cuadro)
+        historia.append(Paragraph("Fuente: datos.gov.co (MinDefensa / Policía Nacional). No trae barrios ni horas.", pie))
 
     historia.append(Paragraph("3. Barrios con más casos (últimas cuatro semanas)", seccion))
     if datos["barrios"]:

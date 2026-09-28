@@ -36,6 +36,7 @@ import {
 } from '../components/OperationalDashboardWidgets';
 import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
 import DataCaveats from '../components/DataCaveats';
+import RespaldoSabana from '../components/RespaldoSabana';
 import { localToday } from '../utils/localDate';
 import { downloadHojaEjecutiva } from '../utils/hojaEjecutiva';
 
@@ -452,6 +453,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             {error && <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-sm text-red-800 flex items-start gap-3"><AlertTriangle size={18} className="shrink-0" /><span className="flex-1">{error}</span><button onClick={() => loadDashboard(range, comparisonMode)} className="font-bold inline-flex items-center gap-1"><RefreshCw size={14} />Reintentar</button></div>}
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 className="text-lg font-black text-slate-900">Indicadores prioritarios</h3><p className="text-xs text-slate-500">Comparación con el {comparisonLabel}: {referenceRange ? `${formatDate(referenceRange.start)} – ${formatDate(referenceRange.end)}` : ''}.</p></div>{loading && <span className="text-xs font-bold text-primary inline-flex items-center gap-2"><LoaderCircle size={15} className="animate-spin" />Actualizando</span>}</div>
+            <RespaldoSabana />
             {caveats?.incomplete && <DataCaveats caveats={caveats} onOpen={() => onNavigate?.('observatory')} />}
             <section className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3">{metrics.map((metric) => <MetricCard key={metric.key} metric={metric} />)}</section>
 

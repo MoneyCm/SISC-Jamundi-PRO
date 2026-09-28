@@ -1429,3 +1429,10 @@ def get_public_open_data(
 
 
 
+
+
+@router.get("/estadisticas/respaldo-sabana", dependencies=[Depends(institutional_access)])
+def get_respaldo_sabana(db: Session = Depends(get_db)):
+    """Si la sábana tiene más de 3 semanas, el aviso y las cifras de MinDefensa mientras tanto."""
+    from services.respaldo_sabana import estado
+    return estado(db)
