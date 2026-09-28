@@ -43,9 +43,9 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "lagged_days": 90,
     },
     "POLICIA_NACIONAL_DATOS": {
-        "name": "Policia Nacional (datos.gov.co)",
+        "name": "Policia Nacional",
         "institution": "Policia Nacional / MinDefensa (datos.gov.co)",
-        "scope": "Ocho delitos de Jamundi consultados directamente, sin descargar archivos",
+        "scope": "Ocho delitos de Jamundi consultados en datos.gov.co, sin descargar archivos",
         "purpose": "Contraste mensual oficial de la sabana semanal",
         "update_mode": "AUTOMATIC",
         "expected_frequency": "Revision semanal; publicacion mensual",
@@ -410,7 +410,8 @@ class SourceCenterService:
         states = cls._state_map(db)
         connectors = [
             cls._local_police(db, states.get("POLICIA_JAMUNDI")),
-            cls._apply_state(cls._base("POLICIA_NACIONAL"), states.get("POLICIA_NACIONAL")),
+            # POLICIA_NACIONAL (monitor-policia en GitHub) no lee el Excel de 2026: se retiró de la vista y
+            # la reemplaza POLICIA_NACIONAL_DATOS. Su configuración se conserva para los latidos que aún lleguen.
             cls._apply_state(cls._base("POLICIA_NACIONAL_DATOS"), states.get("POLICIA_NACIONAL_DATOS")),
             cls._apply_state(cls._base("MINDEFENSA"), states.get("MINDEFENSA")),
             cls._apply_state(cls._base("MINDEFENSA_PISCC"), states.get("MINDEFENSA_PISCC")),
