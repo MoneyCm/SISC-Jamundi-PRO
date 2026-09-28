@@ -26,9 +26,10 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'stats', label: 'Estadísticas', icon: BarChart2, category: 'ESTRATEGIA', show: true },
         { id: 'map', label: 'Mapa territorial', icon: Map, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'intelligence', label: 'Contexto comparado', icon: Globe2, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
-        { id: 'alerts', label: 'Alertas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        // Bandeja de trabajo del Observatorio; la dirección recibe los resúmenes y la hoja ejecutiva.
+        { id: 'alerts', label: 'Bandeja de alertas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst },
         { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
-        { id: 'narrative_alerts', label: 'Alertas Narrativas', icon: MessageSquareText, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        { id: 'narrative_alerts', label: 'Resúmenes para WhatsApp', icon: MessageSquareText, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective },
         { id: 'comisarias', label: 'Comisarías de Familia', icon: HeartHandshake, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective || isUploader || isSteward },
 
