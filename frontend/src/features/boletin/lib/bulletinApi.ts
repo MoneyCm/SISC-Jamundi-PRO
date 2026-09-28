@@ -71,6 +71,7 @@ export async function bulletinFetch(url: string, options: RequestInit = {}): Pro
     '/api/central-reconcile': '/sisc-cifras/reconcile',
     '/api/generator/ingestion/preflight': '/ingesta/policia/preflight',
     '/api/generator/ingestion/upload': '/ingesta/gate/POLICIA_SEMANAL',
+    '/api/generator/latest-delivery': '/ingesta/policia/entrega-vigente/sabana',
   };
   if (aliases[url]) return request(aliases[url], options);
   if (url === '/api/generator/session' && (!options.method || options.method === 'GET')) {
