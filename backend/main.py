@@ -185,6 +185,8 @@ app.include_router(inspecciones.router, prefix="/api/inspecciones", tags=["inspe
 app.include_router(institutional_indicators.router, prefix="/api/institutional-indicators", tags=["institutional-indicators"])
 app.include_router(sisc_cifras.router, prefix="/api/sisc-cifras", tags=["sisc-cifras"])
 app.include_router(piscc_sources.router, prefix="/api/sisc-cifras/piscc-sources", tags=["piscc-sources"])
+from api import asistente
+app.include_router(asistente.router, prefix="/api/asistente", tags=["asistente"])
 app.include_router(source_center.router, prefix="/api/source-center", tags=["source-center"])
 app.include_router(fiscalia_spoa.router, prefix="/api/fiscalia-spoa", tags=["fiscalia-spoa"])
 app.include_router(medicina_legal.router, prefix="/api/medicina-legal", tags=["medicina-legal"])

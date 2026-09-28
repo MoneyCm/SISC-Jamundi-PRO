@@ -1,6 +1,7 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import AsesorSISC from './AsesorSISC';
 
 const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userRoles, dataLevel, currentUser }) => {
     const [sidebarOpen, setSidebarOpen] = React.useState(false);
@@ -38,6 +39,7 @@ const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userR
                     {children}
                 </main>
             </div>
+            {!isPublic && <AsesorSISC userRoles={userRoles} currentUser={currentUser} />}
         </div>
     );
 };
