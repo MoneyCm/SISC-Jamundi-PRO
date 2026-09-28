@@ -70,6 +70,20 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "fresh_days": 55,
         "lagged_days": 90,
     },
+    "MINDEFENSA_DATOS": {
+        "name": "Ministerio de Defensa (datos.gov.co)",
+        "institution": "Ministerio de Defensa Nacional (datos.gov.co)",
+        "scope": "Ocho delitos por municipio y mes: Jamundi, Valle, Cauca y el pais",
+        "purpose": "Contexto comparado: Jamundi frente a municipios comparables y al pais",
+        "update_mode": "AUTOMATIC",
+        "expected_frequency": "Revision semanal; publicacion mensual",
+        "source_url": "https://www.datos.gov.co/resource/m8fd-ahd9",
+        "action_type": "OPEN",
+        "action_label": "Abrir fuente oficial",
+        "dataset_code": None,
+        "fresh_days": 55,
+        "lagged_days": 90,
+    },
     "MINDEFENSA": {
         "name": "Ministerio de Defensa",
         "institution": "Ministerio de Defensa Nacional",
@@ -430,6 +444,7 @@ class SourceCenterService:
             # la reemplaza POLICIA_NACIONAL_DATOS. Su configuración se conserva para los latidos que aún lleguen.
             cls._apply_state(cls._base("POLICIA_NACIONAL_DATOS"), states.get("POLICIA_NACIONAL_DATOS")),
             cls._apply_state(cls._base("MINDEFENSA"), states.get("MINDEFENSA")),
+            cls._apply_state(cls._base("MINDEFENSA_DATOS"), states.get("MINDEFENSA_DATOS")),
             cls._apply_state(cls._base("MINDEFENSA_PISCC"), states.get("MINDEFENSA_PISCC")),
             # SIEDCO_PUBLICO (monitor-siedco) y FISCALIA_SPOA_V3 (monitor-fiscalia-spoa-v3) se retiraron de la
             # vista: el primero repetía la sábana y Policía Nacional; el segundo lo reemplaza FISCALIA_DATOS.

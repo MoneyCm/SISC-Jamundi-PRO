@@ -41,6 +41,7 @@ def test_catalog_has_the_distinct_source_connectors():
         "POLICIA_NACIONAL_DATOS",
         "MINDEFENSA",
         "MINDEFENSA_PISCC",
+        "MINDEFENSA_DATOS",
         "SIEDCO_PUBLICO",
         "OBSERVATORIO_VALLE",
         "FISCALIA_SPOA_V3",

@@ -103,6 +103,7 @@ async def lifespan(app: FastAPI):
             from services.piscc_mindefensa_sync import sincronizar
             from services.policia_datos_sync import sincronizar as sincronizar_policia
             from services.fiscalia_datos_sync import sincronizar as sincronizar_fiscalia
+            from services.mindefensa_referencia_datos import sincronizar as sincronizar_referencia
 
             time_module.sleep(300)
             while True:
@@ -111,6 +112,7 @@ async def lifespan(app: FastAPI):
                     sincronizar(db)
                     sincronizar_policia(db)
                     sincronizar_fiscalia(db)
+                    sincronizar_referencia(db)
                 except Exception as e_piscc:
                     db.rollback()
                     logger.warning(f"[PISCC MinDefensa] No se pudo revisar: {e_piscc}")

@@ -9,6 +9,7 @@ import argparse
 from datetime import datetime, timezone
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -213,13 +214,18 @@ def main():
         parser.error('--interval must be at least 60 seconds')
     from dotenv import load_dotenv
     load_dotenv(BACKEND / '.env')
+    # La referencia de "Contexto comparado" la carga ahora el backend desde datos.gov.co
+    # (services/mindefensa_referencia_datos.py), con cifras más recientes que los libros del monitor.
+    # Cargar también los libros podría pisarlas con una versión anterior: solo si se pide explícitamente.
+    desde_monitor = os.getenv("MINDEFENSA_REFERENCIA_DESDE_MONITOR") == "1"
     while True:
         result = sync_once()
-        try:
-            result = max(result, sync_mindefensa_reference())
-        except Exception as error:
-            print(f"MINDEFENSA_REFERENCIA: sincronizacion fallida ({type(error).__name__})", flush=True)
-            result = 1
+        if desde_monitor:
+            try:
+                result = max(result, sync_mindefensa_reference())
+            except Exception as error:
+                print(f"MINDEFENSA_REFERENCIA: sincronizacion fallida ({type(error).__name__})", flush=True)
+                result = 1
         if not args.watch:
             return result
         time.sleep(args.interval)
