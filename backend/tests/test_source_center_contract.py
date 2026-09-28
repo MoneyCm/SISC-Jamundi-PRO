@@ -38,6 +38,7 @@ def test_catalog_has_the_distinct_source_connectors():
     assert set(SOURCE_CONNECTORS) == {
         "POLICIA_JAMUNDI",
         "POLICIA_NACIONAL",
+        "POLICIA_NACIONAL_DATOS",
         "MINDEFENSA",
         "MINDEFENSA_PISCC",
         "SIEDCO_PUBLICO",

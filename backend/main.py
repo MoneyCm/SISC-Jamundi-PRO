@@ -92,7 +92,8 @@ async def lifespan(app: FastAPI):
 
         threading.Thread(target=narrative_alerts_scheduler, daemon=True, name="narrative-alerts").start()
 
-    # PISCC: secuestro, extorsión y violencia intrafamiliar desde datos.gov.co (MinDefensa).
+    # datos.gov.co (MinDefensa): PISCC (secuestro, extorsión, violencia intrafamiliar) y contraste
+    # mensual de la Policía Nacional (ocho delitos frente a la sábana).
     # Cada 6 horas mira si pasó una semana desde la última revisión; así no depende de que el
     # equipo esté prendido un día fijo.
     if os.environ.get("PISCC_MINDEFENSA_SYNC", "1") != "0":
@@ -100,12 +101,14 @@ async def lifespan(app: FastAPI):
             import time as time_module
             from db.session import SessionLocal
             from services.piscc_mindefensa_sync import sincronizar
+            from services.policia_datos_sync import sincronizar as sincronizar_policia
 
             time_module.sleep(300)
             while True:
                 db = SessionLocal()
                 try:
                     sincronizar(db)
+                    sincronizar_policia(db)
                 except Exception as e_piscc:
                     db.rollback()
                     logger.warning(f"[PISCC MinDefensa] No se pudo revisar: {e_piscc}")
