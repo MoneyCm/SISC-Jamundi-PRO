@@ -42,6 +42,20 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "fresh_days": 55,
         "lagged_days": 90,
     },
+    "POLICIA_NACIONAL_DATOS": {
+        "name": "Policia Nacional (datos.gov.co)",
+        "institution": "Policia Nacional / MinDefensa (datos.gov.co)",
+        "scope": "Ocho delitos de Jamundi consultados directamente, sin descargar archivos",
+        "purpose": "Contraste mensual oficial de la sabana semanal",
+        "update_mode": "AUTOMATIC",
+        "expected_frequency": "Revision semanal; publicacion mensual",
+        "source_url": "https://www.datos.gov.co/resource/m8fd-ahd9",
+        "action_type": "OPEN",
+        "action_label": "Abrir fuente oficial",
+        "dataset_code": None,
+        "fresh_days": 55,
+        "lagged_days": 90,
+    },
     "MINDEFENSA": {
         "name": "Ministerio de Defensa",
         "institution": "Ministerio de Defensa Nacional",
@@ -253,6 +267,8 @@ class SourceCenterService:
                 "indicator_count": state.indicator_count or 0,
                 "period_label": state.period_label,
                 "warnings": list(state.warnings or []),
+                # Tabla oficial frente a sábana (solo los conectores que la calculan).
+                "contrast": (state.details or {}).get("contraste"),
             }
         )
         config = SOURCE_CONNECTORS[connector["code"]]
@@ -395,6 +411,7 @@ class SourceCenterService:
         connectors = [
             cls._local_police(db, states.get("POLICIA_JAMUNDI")),
             cls._apply_state(cls._base("POLICIA_NACIONAL"), states.get("POLICIA_NACIONAL")),
+            cls._apply_state(cls._base("POLICIA_NACIONAL_DATOS"), states.get("POLICIA_NACIONAL_DATOS")),
             cls._apply_state(cls._base("MINDEFENSA"), states.get("MINDEFENSA")),
             cls._apply_state(cls._base("MINDEFENSA_PISCC"), states.get("MINDEFENSA_PISCC")),
             cls._apply_state(cls._base("SIEDCO_PUBLICO"), states.get("SIEDCO_PUBLICO")),
