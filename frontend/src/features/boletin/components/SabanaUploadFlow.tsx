@@ -6,9 +6,12 @@ type Run = { id: string; status: string; total_filas: number; aprobadas: number;
   resumen?: { snapshot?: { coverage?: { max_date?: string; max_week_by_year?: Record<string, number> }; nuevas_consolidadas?: number; actualizadas_consolidadas?: number }; dq?: { semaforo?: string } } };
 type Props = { onStart: () => void; onReady: (file: File, run: Run) => void };
 const field = 'w-full rounded border border-ui-border bg-black/30 p-2 text-white';
+// Los mismos perfiles que acepta el servidor para cargar (api/auth.py::ingestion_operator).
+const UPLOAD_ROLES = ['TI_ADMIN', 'FUNC_ADMIN', 'ANALYST', 'SOURCE_UPLOADER', 'STEWARD'];
 
 export default function SabanaUploadFlow({ onStart, onReady }: Props) {
   const [user, setUser] = useState<string | null>(null);
+  const [canUpload, setCanUpload] = useState(true);
   const [checking, setChecking] = useState(true);
   const [phase, setPhase] = useState(''); const [busy, setBusy] = useState(false);
   const [error, setError] = useState(''); const [issues, setIssues] = useState<string[]>([]);
@@ -21,7 +24,7 @@ export default function SabanaUploadFlow({ onStart, onReady }: Props) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const abort = new AbortController();
-    fetch('/api/generator/session', { signal: abort.signal, cache: 'no-store' }).then(r => r.json()).then(d => { if (d.authenticated) setUser(d.full_name || d.username); })
+    fetch('/api/generator/session', { signal: abort.signal, cache: 'no-store' }).then(r => r.json()).then(d => { if (d.authenticated) { setUser(d.full_name || d.username); setCanUpload((d.roles || []).some((role: string) => UPLOAD_ROLES.includes(role))); } })
       .catch(() => {}).finally(() => setChecking(false));
     return () => { abort.abort(); controller.current?.abort(); serial.current++; if (timer.current) clearTimeout(timer.current); };
   }, []);
@@ -81,11 +84,11 @@ export default function SabanaUploadFlow({ onStart, onReady }: Props) {
     } catch (e) { if (seq !== serial.current || abort.signal.aborted) return; setBusy(false); setPhase('Carga detenida'); setError((e as Error).message); }
   }
   return <section className="rounded border border-ui-border bg-black/20 p-4 text-sm" aria-label="Carga de sábana">
-    <h3 className="font-bold text-white">Cargar → validar → preparar boletín</h3>
-    <p className="mt-1 text-ui-text-secondary">Cargue aquí la sábana semanal. La entrega validada se guarda en el histórico compartido del SISC y alimenta los indicadores del sistema; no necesita volver a subirla en otro módulo.</p>
+    <h3 className="font-bold text-white">{canUpload ? 'Cargar → validar → preparar boletín' : 'Sábana semanal'}</h3>
+    {canUpload && <p className="mt-1 text-ui-text-secondary">Cargue aquí la sábana semanal. La entrega validada se guarda en el histórico compartido del SISC y alimenta los indicadores del sistema; no necesita volver a subirla en otro módulo.</p>}
     {checking ? <p>Comprobando sesión…</p> : !user ? <p role="alert" className="mt-3 text-amber-200">No se pudo verificar la sesión del SISC. Compruebe la conexión y vuelva a abrir esta sección.</p> : <>
       <div className="my-3"><span>Sesión del SISC: {user}</span></div>
-      <label className="block">Sábana policial (Excel o CSV, hasta 25 MB)<input type="file" accept=".xlsx,.xls,.csv" disabled={busy} className={`${field} mt-1`} onClick={e => { e.currentTarget.value = ''; }} onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); }} /></label>
+      {!canUpload ? <p role="note" className="rounded border border-amber-300/40 bg-amber-950/40 p-3 text-amber-100">Su perfil consulta los boletines pero no carga la sábana: de eso se encarga el equipo de carga de datos cada semana. Para tener la semana en papel, use <strong>Descargar hoja ejecutiva</strong>, más abajo en esta misma columna.</p> : <label className="block">Sábana policial (Excel o CSV, hasta 25 MB)<input type="file" accept=".xlsx,.xls,.csv" disabled={busy} className={`${field} mt-1`} onClick={e => { e.currentTarget.value = ''; }} onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); }} /></label>}
     </>}
     {phase && <p role="status" className="mt-3 text-white">{phase}</p>}
     {issues.length > 0 && <ul className="mt-2 list-disc pl-4 text-amber-200">{issues.map((i, n) => <li key={n}>{i}</li>)}</ul>}
