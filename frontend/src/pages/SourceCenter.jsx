@@ -495,7 +495,7 @@ const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
                                             </td>
                                             <td className="px-3 py-4">
                                                 <p className="text-sm font-semibold text-slate-700">{formatDateTime(connector.last_checked_at)}</p>
-                                                <p className="mt-0.5 text-xs text-slate-500">{connector.asset_count ? `${connector.asset_count} archivos vigilados` : connector.update_mode === 'MANUAL' ? 'Carga institucional' : 'Monitor externo'}</p>
+                                                <p className="mt-0.5 text-xs text-slate-500">{connector.asset_count ? `${connector.asset_count} archivos vigilados` : connector.update_mode === 'MANUAL' ? 'Carga institucional' : connector.update_mode === 'AUTOMATIC' ? 'Revisión del SISC' : 'Monitor externo'}</p>
                                             </td>
                                             <td className="px-3 py-4 text-right">
                                                 {(connector.action?.type !== 'UPLOAD' || connector.action.dataset_code === 'POLICIA_SEMANAL') && (<button
