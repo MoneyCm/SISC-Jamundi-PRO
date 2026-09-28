@@ -135,6 +135,58 @@ def sync_once():
     return 1 if failures else 0
 
 
+VALLE_REPO = 'MoneyCm/monitor-valle'
+VALLE_ARTIFACT = 'jamundi-extracted-data'
+VALLE_MAX_BYTES = 20 * 1024 * 1024
+
+
+def sync_observatorio_valle():
+    """Guarda en la tarjeta del Observatorio del Valle las cifras que su monitor ya extrajo.
+
+    Descarga en memoria el paquete de resultados de la última ejecución exitosa (no la clave ni el
+    portal) y lee solo jamundi_analytics_master.csv con services/observatorio_valle.py.
+    """
+    from db.session import SessionLocal
+    from db.models_source_center import SourceConnectorState
+    from services.observatorio_valle import tabla_desde_csv
+
+    runs = gh_api(f'repos/{VALLE_REPO}/actions/workflows/extract_jamundi.yml/runs?branch=main&status=success&per_page=10')
+    elegido = None
+    for run in runs['workflow_runs']:
+        if run['event'] not in {'schedule', 'workflow_dispatch'} or run['head_repository']['full_name'] != VALLE_REPO:
+            continue
+        artifacts = gh_api(f'repos/{VALLE_REPO}/actions/runs/{run["id"]}/artifacts?per_page=100')
+        artifact = next((a for a in artifacts['artifacts'] if a['name'] == VALLE_ARTIFACT and not a['expired']), None)
+        if artifact:
+            elegido = (run, artifact)
+            break
+    if elegido is None:
+        print('OBSERVATORIO_VALLE_CIFRAS: sin paquete de resultados vigente', flush=True)
+        return 0
+    run, artifact = elegido
+    with SessionLocal() as db:
+        estado = db.get(SourceConnectorState, 'OBSERVATORIO_VALLE')
+        if estado is None:
+            return 0
+        detalles = estado.details or {}
+        if detalles.get('datos_run_id') == run['id'] and detalles.get('contraste'):
+            print('OBSERVATORIO_VALLE_CIFRAS: sin cambios', flush=True)
+            return 0
+    if artifact['size_in_bytes'] > VALLE_MAX_BYTES:
+        raise ValueError('El paquete del Observatorio excede el tamaño esperado')
+    archive = gh_api(f'repos/{VALLE_REPO}/actions/artifacts/{artifact["id"]}/zip', binary=True)
+    with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+        texto = bundle.read('jamundi_analytics_master.csv').decode('utf-8-sig')
+    tabla = tabla_desde_csv(texto)
+    with SessionLocal() as db:
+        estado = db.get(SourceConnectorState, 'OBSERVATORIO_VALLE')
+        estado.details = {**(estado.details or {}), 'contraste': tabla['filas'], 'tipo_tabla': 'valle',
+                          'datos_run_id': run['id']}
+        db.commit()
+    print(f"OBSERVATORIO_VALLE_CIFRAS: {len(tabla['filas'])} delitos al {tabla['corte'].isoformat()}", flush=True)
+    return 0
+
+
 MONITOR_MINDEFENSA_DIR = Path(r"C:\Proyectos\monitor-mindefensa")
 REFERENCE_STATE_FILE = BACKEND.parent / "mindefensa_reference_sync_state.json"
 
@@ -220,6 +272,11 @@ def main():
     desde_monitor = os.getenv("MINDEFENSA_REFERENCIA_DESDE_MONITOR") == "1"
     while True:
         result = sync_once()
+        try:
+            result = max(result, sync_observatorio_valle())
+        except Exception as error:
+            print(f"OBSERVATORIO_VALLE_CIFRAS: sincronizacion fallida ({type(error).__name__})", flush=True)
+            result = 1
         if desde_monitor:
             try:
                 result = max(result, sync_mindefensa_reference())

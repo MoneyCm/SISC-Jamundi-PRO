@@ -112,20 +112,23 @@ const StatusBadge = ({ connector }) => {
 const ContrastTable = ({ rows, kind = 'contraste', stages }) => {
     if (!rows?.length) return null;
     const judicial = kind === 'judicial';
+    const valle = kind === 'valle';
+    const corteAnio = Number(String(rows[0]?.corte || '').slice(0, 4)) || new Date().getFullYear();
     const stageEntries = Object.entries(stages || {}).sort((a, b) => b[1] - a[1]);
     return (
         <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
             <p className="border-b border-slate-100 px-3 py-2 text-[10px] font-bold uppercase text-slate-500">
-                {judicial ? 'Hechos en Jamundí · año a la fecha frente al mismo periodo anterior' : 'Registro oficial frente a la sábana · año a la fecha'}
+                {valle ? 'Cifras de Jamundí en el portal del Observatorio' : judicial ? 'Hechos en Jamundí · año a la fecha frente al mismo periodo anterior' : 'Registro oficial frente a la sábana · año a la fecha'}
             </p>
             <table className="w-full text-xs">
                 <thead className="text-left text-slate-500">
                     <tr>
                         <th className="px-3 py-1.5">{judicial ? 'Procesos por delito' : 'Delito'}</th>
-                        <th className="px-2 py-1.5 text-right">{judicial ? 'Este año' : 'Oficial'}</th>
-                        <th className="px-2 py-1.5 text-right">{judicial ? 'Mismo periodo anterior' : 'Año anterior'}</th>
-                        {!judicial && <th className="px-2 py-1.5 text-right">Sábana</th>}
-                        {!judicial && <th className="px-3 py-1.5 text-right">Diferencia</th>}
+                        <th className="px-2 py-1.5 text-right">{valle ? `${corteAnio} al corte` : judicial ? 'Este año' : 'Oficial'}</th>
+                        <th className="px-2 py-1.5 text-right">{valle ? `${corteAnio - 1} completo` : judicial ? 'Mismo periodo anterior' : 'Año anterior'}</th>
+                        {valle && <th className="px-3 py-1.5 text-right">{`${corteAnio - 2} completo`}</th>}
+                        {!judicial && !valle && <th className="px-2 py-1.5 text-right">Sábana</th>}
+                        {!judicial && !valle && <th className="px-3 py-1.5 text-right">Diferencia</th>}
                     </tr>
                 </thead>
                 <tbody>
@@ -134,8 +137,9 @@ const ContrastTable = ({ rows, kind = 'contraste', stages }) => {
                             <td className={`px-3 py-1.5 text-slate-800 ${row.delito.startsWith('Total') ? 'font-black' : 'font-semibold'}`}>{row.delito}</td>
                             <td className="px-2 py-1.5 text-right font-bold">{formatNumber(row.oficial_actual)}</td>
                             <td className="px-2 py-1.5 text-right text-slate-500">{formatNumber(row.oficial_anterior)}</td>
-                            {!judicial && <td className="px-2 py-1.5 text-right">{row.sabana_actual == null ? <span className="text-slate-400">No aplica</span> : formatNumber(row.sabana_actual)}</td>}
-                            {!judicial && <td className={`px-3 py-1.5 text-right font-bold ${row.diferencia == null ? 'text-slate-400' : Math.abs(row.diferencia) > Math.max(5, 0.15 * row.oficial_actual) ? 'text-amber-700' : 'text-slate-700'}`}>{row.diferencia == null ? '—' : `${row.diferencia > 0 ? '+' : ''}${row.diferencia}`}</td>}
+                            {valle && <td className="px-3 py-1.5 text-right text-slate-500">{formatNumber(row.anterior_2)}</td>}
+                            {!judicial && !valle && <td className="px-2 py-1.5 text-right">{row.sabana_actual == null ? <span className="text-slate-400">No aplica</span> : formatNumber(row.sabana_actual)}</td>}
+                            {!judicial && !valle && <td className={`px-3 py-1.5 text-right font-bold ${row.diferencia == null ? 'text-slate-400' : Math.abs(row.diferencia) > Math.max(5, 0.15 * row.oficial_actual) ? 'text-amber-700' : 'text-slate-700'}`}>{row.diferencia == null ? '—' : `${row.diferencia > 0 ? '+' : ''}${row.diferencia}`}</td>}
                         </tr>
                     ))}
                 </tbody>
@@ -151,7 +155,7 @@ const ContrastTable = ({ rows, kind = 'contraste', stages }) => {
                 </div>
             )}
             <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-500">
-                Corte oficial {rows[0]?.corte}. {judicial ? 'Los años anteriores siguen sumando procesos a medida que se denuncian hechos pasados.' : '"No aplica": la sábana semanal no trae ese delito.'}
+                Corte {valle ? 'del portal' : 'oficial'} {rows[0]?.corte}. {valle ? 'Los años anteriores son el año completo; no son comparables con el año en curso, que va hasta el corte.' : judicial ? 'Los años anteriores siguen sumando procesos a medida que se denuncian hechos pasados.' : '"No aplica": la sábana semanal no trae ese delito.'}
             </p>
         </div>
     );
