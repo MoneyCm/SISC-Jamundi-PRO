@@ -71,7 +71,7 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "lagged_days": 90,
     },
     "MINDEFENSA_DATOS": {
-        "name": "Ministerio de Defensa (datos.gov.co)",
+        "name": "Ministerio de Defensa",
         "institution": "Ministerio de Defensa Nacional (datos.gov.co)",
         "scope": "Ocho delitos por municipio y mes: Jamundi, Valle, Cauca y el pais",
         "purpose": "Contexto comparado: Jamundi frente a municipios comparables y al pais",
@@ -443,7 +443,7 @@ class SourceCenterService:
             # POLICIA_NACIONAL (monitor-policia en GitHub) no lee el Excel de 2026: se retiró de la vista y
             # la reemplaza POLICIA_NACIONAL_DATOS. Su configuración se conserva para los latidos que aún lleguen.
             cls._apply_state(cls._base("POLICIA_NACIONAL_DATOS"), states.get("POLICIA_NACIONAL_DATOS")),
-            cls._apply_state(cls._base("MINDEFENSA"), states.get("MINDEFENSA")),
+            # MINDEFENSA (monitor-mindefensa en GitHub, deshabilitado) se reemplazó por MINDEFENSA_DATOS.
             cls._apply_state(cls._base("MINDEFENSA_DATOS"), states.get("MINDEFENSA_DATOS")),
             cls._apply_state(cls._base("MINDEFENSA_PISCC"), states.get("MINDEFENSA_PISCC")),
             # SIEDCO_PUBLICO (monitor-siedco) y FISCALIA_SPOA_V3 (monitor-fiscalia-spoa-v3) se retiraron de la
