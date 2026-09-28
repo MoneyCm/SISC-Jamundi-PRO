@@ -23,7 +23,7 @@ const LEVEL_STYLES = {
 };
 const STUDY_STATUS = { ABIERTO: 'Abierto', EN_CURSO: 'En curso', PAUSADO: 'Pausado', CERRADO: 'Cerrado' };
 const PAGE_LABELS = {
-    sources: 'Centro de fuentes', inspecciones: 'Inspecciones', boletin_replica: 'Boletín', alerts: 'Alertas',
+    sources: 'Centro de fuentes', inspecciones: 'Inspecciones', boletin_replica: 'Boletín', alerts: 'Bandeja de alertas',
     council_commitments: 'Compromisos', observatory: 'Estudios', dashboard: 'Inicio',
 };
 const EMPTY_STUDY = { title: '', question: '', phenomenon: '', territory: '', period_start: '', period_end: '', hypotheses: '', access_level: 'INSTITUCIONAL' };
