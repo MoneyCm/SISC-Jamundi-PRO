@@ -107,27 +107,52 @@ const StatusBadge = ({ connector }) => {
     );
 };
 
-// Registro oficial frente a la sábana (conectores que calculan el contraste).
-const ContrastTable = ({ rows }) => {
+// Tabla de "Detalles" para los conectores que calculan cifras: contraste con la sábana (Policía)
+// o capa judicial (Fiscalía: año en curso frente al mismo periodo y en qué va cada proceso).
+const ContrastTable = ({ rows, kind = 'contraste', stages }) => {
     if (!rows?.length) return null;
+    const judicial = kind === 'judicial';
+    const stageEntries = Object.entries(stages || {}).sort((a, b) => b[1] - a[1]);
     return (
         <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <p className="border-b border-slate-100 px-3 py-2 text-[10px] font-bold uppercase text-slate-500">Registro oficial frente a la sábana · año a la fecha</p>
+            <p className="border-b border-slate-100 px-3 py-2 text-[10px] font-bold uppercase text-slate-500">
+                {judicial ? 'Hechos en Jamundí · año a la fecha frente al mismo periodo anterior' : 'Registro oficial frente a la sábana · año a la fecha'}
+            </p>
             <table className="w-full text-xs">
-                <thead className="text-left text-slate-500"><tr><th className="px-3 py-1.5">Delito</th><th className="px-2 py-1.5 text-right">Oficial</th><th className="px-2 py-1.5 text-right">Año anterior</th><th className="px-2 py-1.5 text-right">Sábana</th><th className="px-3 py-1.5 text-right">Diferencia</th></tr></thead>
+                <thead className="text-left text-slate-500">
+                    <tr>
+                        <th className="px-3 py-1.5">{judicial ? 'Procesos por delito' : 'Delito'}</th>
+                        <th className="px-2 py-1.5 text-right">{judicial ? 'Este año' : 'Oficial'}</th>
+                        <th className="px-2 py-1.5 text-right">{judicial ? 'Mismo periodo anterior' : 'Año anterior'}</th>
+                        {!judicial && <th className="px-2 py-1.5 text-right">Sábana</th>}
+                        {!judicial && <th className="px-3 py-1.5 text-right">Diferencia</th>}
+                    </tr>
+                </thead>
                 <tbody>
                     {rows.map((row) => (
-                        <tr key={row.delito} className="border-t border-slate-100">
-                            <td className="px-3 py-1.5 font-semibold text-slate-800">{row.delito}</td>
+                        <tr key={row.delito} className={`border-t border-slate-100 ${/^(Total|Víctimas)/.test(row.delito) ? 'border-t-slate-300' : ''}`}>
+                            <td className={`px-3 py-1.5 text-slate-800 ${row.delito.startsWith('Total') ? 'font-black' : 'font-semibold'}`}>{row.delito}</td>
                             <td className="px-2 py-1.5 text-right font-bold">{formatNumber(row.oficial_actual)}</td>
                             <td className="px-2 py-1.5 text-right text-slate-500">{formatNumber(row.oficial_anterior)}</td>
-                            <td className="px-2 py-1.5 text-right">{row.sabana_actual == null ? <span className="text-slate-400">No aplica</span> : formatNumber(row.sabana_actual)}</td>
-                            <td className={`px-3 py-1.5 text-right font-bold ${row.diferencia == null ? 'text-slate-400' : Math.abs(row.diferencia) > Math.max(5, 0.15 * row.oficial_actual) ? 'text-amber-700' : 'text-slate-700'}`}>{row.diferencia == null ? '—' : `${row.diferencia > 0 ? '+' : ''}${row.diferencia}`}</td>
+                            {!judicial && <td className="px-2 py-1.5 text-right">{row.sabana_actual == null ? <span className="text-slate-400">No aplica</span> : formatNumber(row.sabana_actual)}</td>}
+                            {!judicial && <td className={`px-3 py-1.5 text-right font-bold ${row.diferencia == null ? 'text-slate-400' : Math.abs(row.diferencia) > Math.max(5, 0.15 * row.oficial_actual) ? 'text-amber-700' : 'text-slate-700'}`}>{row.diferencia == null ? '—' : `${row.diferencia > 0 ? '+' : ''}${row.diferencia}`}</td>}
                         </tr>
                     ))}
                 </tbody>
             </table>
-            <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-500">Corte oficial {rows[0]?.corte}. "No aplica": la sábana semanal no trae ese delito.</p>
+            {judicial && stageEntries.length > 0 && (
+                <div className="border-t border-slate-100 px-3 py-2">
+                    <p className="text-[10px] font-bold uppercase text-slate-500">En qué van los procesos de este año</p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                        {stageEntries.map(([etapa, total]) => (
+                            <span key={etapa} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700">{etapa}: <strong>{formatNumber(total)}</strong></span>
+                        ))}
+                    </div>
+                </div>
+            )}
+            <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-500">
+                Corte oficial {rows[0]?.corte}. {judicial ? 'Los años anteriores siguen sumando procesos a medida que se denuncian hechos pasados.' : '"No aplica": la sábana semanal no trae ese delito.'}
+            </p>
         </div>
     );
 };
@@ -413,7 +438,7 @@ const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
                                                 Publicación oficial <ExternalLink size={14} />
                                             </a>
                                         )}
-                                        <ContrastTable rows={connector.contrast} />
+                                        <ContrastTable rows={connector.contrast} kind={connector.contrast_kind} stages={connector.judicial_stages} />
                                         {connector.assets?.length > 0 && (
                                             <div className="mt-4 border-t border-slate-200">
                                                 {connector.assets.map((asset) => {
@@ -538,7 +563,7 @@ const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
                                                                     Consultar publicación oficial <ExternalLink size={14} />
                                                                 </a>
                                                             )}
-                                                            <ContrastTable rows={connector.contrast} />
+                                                            <ContrastTable rows={connector.contrast} kind={connector.contrast_kind} stages={connector.judicial_stages} />
                                                             {connector.warnings?.length > 0 && (
                                                                 <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                                                                     <p className="font-bold">Advertencias del monitor</p>
