@@ -18,6 +18,7 @@ export default function SabanaUploadFlow({ onStart, onReady }: Props) {
   const [run, setRun] = useState<Run | null>(null);
   const [pendingRun, setPendingRun] = useState('');
   const [reconciliation, setReconciliation] = useState('');
+  const [latestBusy, setLatestBusy] = useState(false);
   const fileRef = useRef<File | null>(null);
   const controller = useRef<AbortController | null>(null);
   const serial = useRef(0);
@@ -36,6 +37,21 @@ export default function SabanaUploadFlow({ onStart, onReady }: Props) {
       throw new Error(typeof detail === 'string' ? detail : detail?.message || d.error || 'No se pudo completar la operación.');
     }
     return d;
+  }
+  // El boletín con la última sábana ya guardada en el SISC: no sube nada, solo la lee.
+  async function loadLatest() {
+    controller.current?.abort(); if (timer.current) clearTimeout(timer.current); serial.current++;
+    setLatestBusy(true); setError(''); setIssues([]); setReconciliation(''); setPendingRun(''); setRun(null); onStart();
+    setPhase('Buscando la última sábana del SISC…');
+    try {
+      const data = await request('/api/generator/latest-delivery', { cache: 'no-store' });
+      const file = new File([data.csv], data.filename, { type: 'text/csv' });
+      const loadedOn = data.run.fecha_carga ? new Date(data.run.fecha_carga).toLocaleDateString('es-CO') : '';
+      setRun(data.run);
+      setPhase(`Boletín con la última sábana del SISC: ${data.run.filename}${loadedOn ? `, cargada el ${loadedOn}` : ''}. Elija el período si quiere otro.`);
+      onReady(file, data.run);
+    } catch (e) { setPhase(''); setError((e as Error).message); }
+    finally { setLatestBusy(false); }
   }
   async function poll(id: string, file: File, seq: number, signal: AbortSignal, attempts = 0) {
     try {
@@ -88,7 +104,12 @@ export default function SabanaUploadFlow({ onStart, onReady }: Props) {
     {canUpload && <p className="mt-1 text-ui-text-secondary">Cargue aquí la sábana semanal. La entrega validada se guarda en el histórico compartido del SISC y alimenta los indicadores del sistema; no necesita volver a subirla en otro módulo.</p>}
     {checking ? <p>Comprobando sesión…</p> : !user ? <p role="alert" className="mt-3 text-amber-200">No se pudo verificar la sesión del SISC. Compruebe la conexión y vuelva a abrir esta sección.</p> : <>
       <div className="my-3"><span>Sesión del SISC: {user}</span></div>
-      {!canUpload ? <p role="note" className="rounded border border-amber-300/40 bg-amber-950/40 p-3 text-amber-100">Su perfil consulta los boletines pero no carga la sábana: de eso se encarga el equipo de carga de datos cada semana. Para tener la semana en papel, use <strong>Descargar hoja ejecutiva</strong>, más abajo en esta misma columna.</p> : <label className="block">Sábana policial (Excel o CSV, hasta 25 MB)<input type="file" accept=".xlsx,.xls,.csv" disabled={busy} className={`${field} mt-1`} onClick={e => { e.currentTarget.value = ''; }} onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); }} /></label>}
+      <button type="button" onClick={() => void loadLatest()} disabled={latestBusy || busy}
+        className="mb-3 w-full rounded bg-ui-accent px-3 py-2 font-bold text-white hover:bg-blue-600 disabled:opacity-60">
+        {latestBusy ? 'Armando el boletín…' : 'Ver el boletín con la última sábana del SISC'}
+      </button>
+      <p className="mb-3 text-xs text-ui-text-secondary">Usa la sábana que el equipo ya cargó; no sube ni cambia nada.</p>
+      {!canUpload ? <p role="note" className="rounded border border-amber-300/40 bg-amber-950/40 p-3 text-amber-100">Su perfil consulta los boletines pero no carga la sábana: de eso se encarga el equipo de carga de datos cada semana. Para ver el boletín use el botón de arriba; para tener la semana en una sola hoja, use <strong>Descargar hoja ejecutiva</strong>, más abajo en esta misma columna.</p> : <label className="block">Sábana policial (Excel o CSV, hasta 25 MB)<input type="file" accept=".xlsx,.xls,.csv" disabled={busy} className={`${field} mt-1`} onClick={e => { e.currentTarget.value = ''; }} onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); }} /></label>}
     </>}
     {phase && <p role="status" className="mt-3 text-white">{phase}</p>}
     {issues.length > 0 && <ul className="mt-2 list-disc pl-4 text-amber-200">{issues.map((i, n) => <li key={n}>{i}</li>)}</ul>}

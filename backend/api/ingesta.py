@@ -909,3 +909,52 @@ def get_ingestion_issues(run_id: str, db: Session = Depends(get_db)):
 
 
 
+
+
+MESES_SABANA = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+
+
+@router.get("/policia/entrega-vigente/sabana")
+def sabana_entrega_vigente(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["DIRECTIVE", "ANALYST", "SOURCE_UPLOADER", "STEWARD", "FUNC_ADMIN", "TI_ADMIN"])),
+):
+    """La última sábana guardada, con las columnas del Excel de la Policía, para armar el boletín sin subir nada.
+
+    Se arma desde la foto de la entrega (sabana_snapshot_rows): mismas filas, mismo HECHOS_ID, así que
+    el boletín da las mismas cifras que si se hubiera cargado el archivo original.
+    """
+    import csv
+    import io
+    from db.models_hechos_seguridad import IngestionRun, SabanaSnapshotRow
+    from services.entrega_vigente import entrega_vigente
+
+    entrega = entrega_vigente(db)
+    if entrega is None:
+        raise HTTPException(status_code=404, detail="Todavía no hay una sábana cargada en el SISC.")
+    run = db.query(IngestionRun).filter(IngestionRun.id == entrega.run_id).first()
+    filas = (db.query(SabanaSnapshotRow).filter(SabanaSnapshotRow.ingestion_id == entrega.run_id)
+             .order_by(SabanaSnapshotRow.fila_origen).all())
+    salida = io.StringIO()
+    escritor = csv.writer(salida)
+    escritor.writerow(["FILA_ORIGEN", "MUNICIPIO_HECHO", "DESCRIPCION_CONDUCTA", "HECHOS_ID", "AÑO", "MES", "FECHA_HECHO",
+                       "NoSEMANA", "DIA_SEMANA", "GENERO", "BARRIOS_HECHO", "ARMAS_MEDIOS", "EDAD"])
+    for fila in filas:
+        fecha = fila.fecha_evento
+        escritor.writerow([
+            fila.fila_origen, "Jamundí", fila.conducta_original or fila.conducta_estandar or "", fila.id_fuente or "",
+            fila.anio or (fecha.year if fecha else ""), MESES_SABANA[fecha.month - 1] if fecha else "",
+            fecha.isoformat() if fecha else "", fila.semana_num or "", fila.dia_semana or "", fila.sexo or "",
+            fila.barrio_normalizado or "", fila.arma_medio or "", fila.edad if fila.edad is not None else "",
+        ])
+    nombre = (run.filename or "sabana").rsplit(".", 1)[0]
+    return {
+        "run": {
+            "id": str(run.id), "status": run.status, "filename": run.filename,
+            "fecha_carga": run.fecha_inicio.isoformat() if run.fecha_inicio else None,
+            "total_filas": run.total_filas, "aprobadas": run.aprobadas,
+            "rechazadas": run.rechazadas, "duplicadas": run.duplicadas, "resumen": run.resumen,
+        },
+        "filename": f"{nombre} (SISC).csv",
+        "csv": salida.getvalue(),
+    }
