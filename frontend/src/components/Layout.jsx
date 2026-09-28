@@ -35,7 +35,7 @@ const Layout = ({ children, activePage, setActivePage, onLogout, isPublic, userR
 
             <div className="sisc-layout-content flex-1 flex flex-col min-w-0 h-full">
                 <Header onMenuClick={() => setSidebarOpen(true)} isPublic={isPublic} currentUser={currentUser} activePage={activePage} onLogout={onLogout} />
-                <main className={`sisc-layout-main flex-1 overflow-y-auto ${isPublic || activePage === 'boletin_replica' ? 'p-0' : 'p-4 md:p-8'}`}>
+                <main className={`sisc-layout-main flex-1 overflow-y-auto ${isPublic || activePage === 'boletin_replica' ? 'p-0' : 'p-4 pb-28 md:p-8 md:pb-28'}`}>
                     {children}
                 </main>
             </div>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, TrendingUp, TrendingDown, Minus, RefreshCw, Activity, BarChart2, Clock, ArrowUpRight, Brain, Globe2, Search, ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Minus, RefreshCw, Activity, BarChart2, Clock, ArrowUpRight, Brain, Globe2, Search, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Share2 } from "lucide-react";
 
 // Nombres legibles para los códigos de conducta de MinDefensa
 const DELITO_LABELS = {
@@ -50,6 +50,7 @@ import {
 
 import { API_BASE_URL } from '../utils/apiConfig';
 import { buildPrioritizedTotalComparison } from '../utils/territorialComparison';
+import { compartirImagen, crearImagenRanking } from '../utils/rankingImage';
 
 const Card = ({ children, className }) => <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>{children}</div>;
 const CardHeader = ({ children, className }) => <div className={`p-6 pb-2 ${className}`}>{children}</div>;
@@ -251,6 +252,23 @@ const IntelligenceModule = () => {
         : sourceComparisonOptions;
     const selectedComparisonItem = comparisonOptions.find(item => item.delito === comparisonCrime) || comparisonOptions[0];
     const territorialComparison = selectedComparisonItem?.territorial_comparison;
+    const [imagenEstado, setImagenEstado] = useState('');
+    const compartirRanking = async () => {
+        if (!territorialComparison?.rows?.length) return;
+        setImagenEstado('Preparando la imagen…');
+        try {
+            const conducta = selectedComparisonItem?.label || delitoLabel(selectedComparisonItem?.delito);
+            const periodo = `enero a ${monthNames[(selectedComparisonItem?.period_end_month || 12) - 1]} de ${selectedYear}`;
+            const corte = territorialComparison.cutoff ? fmtDate(territorialComparison.cutoff) : 'sin fecha';
+            const blob = await crearImagenRanking({ rows: territorialComparison.rows, objetivo: selectedMunicipioNombre, conducta,
+                periodo, corte, alcance: 'Valle del Cauca y Cauca', unidad: selectedComparisonItem?.isAggregate ? 'registros' : 'casos' });
+            const nombre = `comparacion-${String(conducta).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${selectedYear}.png`;
+            const resultado = await compartirImagen(blob, nombre, `${conducta}: ${selectedMunicipioNombre} frente a municipios comparables (${periodo}). SISC Jamundí.`);
+            setImagenEstado(resultado === 'descargada' ? 'Imagen descargada: adjúntela en WhatsApp.' : resultado === 'compartida' ? 'Imagen compartida.' : '');
+        } catch (error) {
+            setImagenEstado(error.message || 'No se pudo crear la imagen.');
+        }
+    };
     const rateComparisonData = (stats.summary || [])
         .filter(item => item.rate_per_100k != null)
         .map(item => ({
@@ -604,9 +622,13 @@ const IntelligenceModule = () => {
                                 {selectedComparisonItem?.isAggregate && <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">{sourceComparisonOptions.length} conductas priorizadas sumadas</span>}
                                 {selectedComparisonItem?.hasMixedPeriods && <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">Cortes independientes</span>}
                                 {territorialComparison.cutoff && <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Fuente actualizada al {fmtDate(territorialComparison.cutoff)}</span>}
+                                <button type="button" onClick={compartirRanking} className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-1.5 text-white hover:bg-emerald-700">
+                                    <Share2 size={14} /> Imagen para WhatsApp
+                                </button>
+                                {imagenEstado && <span role="status" className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">{imagenEstado}</span>}
                             </div>
                             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                                <div className="max-h-[440px] overflow-auto">
+                                <div className="overflow-x-auto">
                                     <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                                         <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
                                             <tr>
