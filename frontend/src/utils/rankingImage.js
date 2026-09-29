@@ -144,21 +144,26 @@ export async function crearImagenRanking({ rows, objetivo, conducta, periodo, co
     let filaY = Math.max(arriba, y + 50);
     ctx.font = fuente(900, 32);
     const anchoCifra = Math.max(...filas.map((f) => ctx.measureText(formatoNumero(f.tasa, 2)).width), 0);
-    const anchoBarra = Math.max(120, 1010 - anchoCifra - 28 - 600);
+    // Columnas: # | municipio | cantidad | barra | tasa. La barra termina antes de la tasa más ancha.
+    const COL_CANTIDAD = 600;
+    const barraX = 628;
+    const anchoBarra = Math.max(100, 1010 - anchoCifra - 28 - barraX);
     ctx.fillStyle = GRIS; ctx.font = fuente(800, 22);
     ctx.fillText('#', 70, filaY - 18); ctx.fillText('MUNICIPIO', 130, filaY - 18);
-    ctx.textAlign = 'right'; ctx.fillText('TASA', 1010, filaY - 18); ctx.textAlign = 'left';
+    ctx.textAlign = 'right'; ctx.fillText(unidad.toUpperCase(), COL_CANTIDAD, filaY - 18);
+    ctx.fillText('TASA', 1010, filaY - 18); ctx.textAlign = 'left';
     filas.forEach((fila) => {
         if (fila.objetivo) { ctx.fillStyle = '#E0E7FF'; ctx.fillRect(40, filaY, W - 80, FILA - 8); }
         ctx.fillStyle = fila.objetivo ? AZUL : TINTA;
         ctx.font = fuente(900, 32); ctx.fillText(String(fila.posicion ?? '—'), 70, filaY + 40);
-        ctx.font = fuente(fila.objetivo ? 900 : 700, 30); ctx.fillText(fila.municipio, 130, filaY + 38);
+        ctx.font = fuente(fila.objetivo ? 900 : 700, 29); ctx.fillText(fila.municipio, 130, filaY + 38);
         ctx.fillStyle = GRIS; ctx.font = fuente(600, 21);
         const diferencia = fila.diferencia == null ? 'Base de comparación'
-            : `${fila.diferencia > 0 ? '+' : ''}${formatoNumero(fila.diferencia, 2)} pts. vs ${objetivo}`;
-        ctx.fillText(`${formatoNumero(fila.casos)} ${unidad} · ${diferencia}`, 130, filaY + 70);
-        // La barra termina antes de la cifra más ancha, para que nunca se monten.
-        const barraX = 600; const barraW = anchoBarra;
+            : `${fila.diferencia > 0 ? '+' : ''}${formatoNumero(fila.diferencia, 2)} pts. de tasa vs ${objetivo}`;
+        ctx.fillText(diferencia, 130, filaY + 70);
+        ctx.fillStyle = fila.objetivo ? AZUL : TINTA; ctx.font = fuente(800, 30); ctx.textAlign = 'right';
+        ctx.fillText(formatoNumero(fila.casos), COL_CANTIDAD, filaY + 44); ctx.textAlign = 'left';
+        const barraW = anchoBarra;
         ctx.fillStyle = '#E2E8F0'; ctx.beginPath(); ctx.roundRect(barraX, filaY + 26, barraW, 18, 9); ctx.fill();
         ctx.fillStyle = fila.objetivo ? AZUL : fila.diferencia > 0 ? ROJO : VERDE;
         ctx.beginPath(); ctx.roundRect(barraX, filaY + 26, Math.max(10, barraW * fila.proporcion), 18, 9); ctx.fill();
