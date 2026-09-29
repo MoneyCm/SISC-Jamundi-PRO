@@ -1319,7 +1319,9 @@ class SiscCifrasService:
         if cutoff and cutoff < start:
             cutoff = None
         total = comparendos_rnmc.contar(db, start, min(end, date.today()))
-        prev_total = comparendos_rnmc.contar(db, prev_start, prev_end)
+        # Sin datos del periodo anterior completo (p. ej. 2025 solo trae enero a mayo) no se compara.
+        compara = comparendos_rnmc.cubre(db, prev_start, prev_end)
+        prev_total = comparendos_rnmc.contar(db, prev_start, prev_end) if compara else None
 
         indicators = [
             cls.indicator(
@@ -1342,7 +1344,8 @@ class SiscCifrasService:
         top_medidas = comparendos_rnmc.agrupar(db, InspeccionMedida.nombre_medida, start, min(end, date.today()))
         previous_measures = {
             name or "SIN ESPECIFICAR": value
-            for name, value in comparendos_rnmc.agrupar(db, InspeccionMedida.nombre_medida, prev_start, prev_end, limite=100)
+            for name, value in (comparendos_rnmc.agrupar(db, InspeccionMedida.nombre_medida, prev_start, prev_end, limite=100)
+                                if compara else [])
         }
 
         for name, value in top_medidas:
@@ -1380,7 +1383,8 @@ class SiscCifrasService:
 
         # Qué comportamientos del Código de Convivencia originan los comparendos (artículo de la Ley 1801).
         previous_behaviours = {
-            numero: valor for numero, _etiqueta, _texto, valor in comparendos_rnmc.por_comportamiento(db, prev_start, prev_end, limite=50)
+            numero: valor for numero, _etiqueta, _texto, valor in
+            (comparendos_rnmc.por_comportamiento(db, prev_start, prev_end, limite=50) if compara else [])
         }
         for numero, etiqueta, texto, valor in comparendos_rnmc.por_comportamiento(db, start, min(end, date.today()), limite=3):
             indicators.append(

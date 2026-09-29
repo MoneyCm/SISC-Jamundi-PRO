@@ -181,14 +181,19 @@ def detalle(db, clave: str, hoy: Optional[date] = None) -> Optional[Dict]:
         corte = comparendos_rnmc.corte(db, hoy)
         if corte:
             resumen = comparendos_rnmc.resumen_convivencia(db, date(corte.year, 1, 1), corte, barrios=5)
-            por_mes = {m["mes"]: m["total"] for m in resumen["meses"]}
+            series = []
+            for anio in range(2024, corte.year + 1):
+                hasta = corte if anio == corte.year else date(anio, 12, 31)
+                meses = {m["mes"]: m["total"] for m in comparendos_rnmc.resumen_convivencia(db, date(anio, 1, 1), hasta, barrios=0)["meses"]}
+                if meses:
+                    series.append({"anio": anio, "valores": [meses.get(m) for m in MESES]})
             resultado.update({
-                "series": [{"anio": corte.year, "valores": [por_mes.get(m) for m in MESES]}],
+                "series": series,
                 "fuente_series": f"RNMC (comparendos, cada uno una vez) hasta el {corte.isoformat()}",
                 "comportamientos": resumen["comportamientos"][:6],
                 "barrios": [{"nombre": b["barrio"], "total": b["total"],
                              "principal": b["principal"]["etiqueta"] if b["principal"] else None} for b in resumen["barrios"]],
-                "nota": "El SISC tiene comparendos del RNMC solo desde 2026; para 2024 y 2025 hacen falta esos reportes.",
+                "nota": "Un mes con «—» no tiene reportes del RNMC cargados (2025 solo trae enero a mayo).",
             })
         return resultado
     datos = cargar()

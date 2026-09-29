@@ -56,3 +56,26 @@ def test_rnmc_html_report_is_read_without_nested_rows_or_personal_data():
                              "MEDIDA": None, "ESTADO_MEDIDA": "PENDIENTE"}])
     assert service.comparendos_to_rnmc(pending).iloc[0]["MEDIDA"] == "Medida por definir"
     assert not {"INFRACTOR", "RELATO_HECHOS"} & set(frame.columns)
+
+
+def test_encabezado_mas_abajo_y_matriz_sin_columna_comparendo():
+    """Reportes con títulos arriba (encabezado en la fila 4) y la MATRIZ RNMC, que no trae COMPARENDO."""
+    import io
+    from openpyxl import Workbook
+
+    libro = Workbook()
+    hoja = libro.active
+    hoja.append(["POLICIA NACIONAL - Reporte"])
+    hoja.append([])
+    hoja.append(["Periodo 2025"])
+    hoja.append(["DTO", "LUGAR", "FECHA_HECHOS", "EXPEDIENTE", "ARTICULO", "MEDIDA", "ESTADO_MEDIDA", "BARRIO_HECHOS", "INFRACTOR"])
+    hoja.append(["VALLE", "JAMUNDI - CM", "2025-03-01", "76-364-6-2025-9", "Art. 27 - Vida", None, "PENDIENTE", "CENTRO", "PERSONA"])
+    salida = io.BytesIO()
+    libro.save(salida)
+
+    frame, source_format = InspeccionService(db=None).read_frame(salida.getvalue())
+
+    assert source_format == "COMPARENDOS"
+    assert list(frame["EXPEDIENTE"]) == ["76-364-6-2025-9"]
+    assert frame.iloc[0]["MEDIDA"] == "Medida por definir"
+    assert "INFRACTOR" not in frame.columns
