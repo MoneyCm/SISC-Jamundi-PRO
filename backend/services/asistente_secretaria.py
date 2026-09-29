@@ -28,6 +28,7 @@ SUGERENCIAS_INICIALES = [
     "¿Qué le pido a la Policía en el próximo Consejo?",
     "¿Qué barrio me debe preocupar más?",
     "¿Cómo va el PISCC?",
+    "¿Cómo va la convivencia este año?",
     "Resúmame la semana para WhatsApp",
 ]
 DELITOS = {
@@ -44,6 +45,9 @@ ENTIDADES = {
     "personeria": "Personería", "defensoria": "Defensoría", "fiscalia": "Fiscalía", "educacion": "Educación",
     "salud": "Salud", "icbf": "ICBF", "comisaria": "Comisaría", "secretaria de seguridad": "Secretaría de Seguridad",
 }
+# Preguntas sobre el Código de Convivencia: comparendos del RNMC (Inspecciones de Policía).
+CONVIVENCIA = ("convivencia", "comparendo", "rnmc", "inspecc", "codigo de policia", "medida correctiva",
+               "rina", "irrespeto", "espacio publico", "ruido", "multa")
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
          "noviembre", "diciembre"]
 
@@ -218,7 +222,83 @@ def _barrio(db: Session, exp: Expediente, barrio: str, corte: date):
     if conductas:
         lineas.append("Delitos principales en el año: " + "; ".join(f"{c.lower()}: {n}" for c, n in conductas) + ".")
     lineas.append(_franjas(db, base, corte))
+    lineas.append(_comparendos_barrio(db, barrio))
     exp.agregar(f"Barrio {barrio.title()}", lineas, f"Sábana de la Policía al {fecha_larga(corte)}")
+
+
+def _comparendos_barrio(db: Session, barrio: str) -> Optional[str]:
+    """Comparendos del RNMC en el barrio (mismo nombre en mayúsculas), con su comportamiento más común."""
+    try:
+        from db.models_inspecciones import InspeccionExpediente, InspeccionMedida
+        from services import comparendos_rnmc
+
+        corte = comparendos_rnmc.corte(db)
+        if not corte:
+            return None
+        mismo = [func.upper(func.trim(InspeccionExpediente.localidad)) == normalizar(barrio).upper().strip()]
+        total = comparendos_rnmc.agrupar(db, InspeccionExpediente.localidad, date(corte.year, 1, 1), corte, filtros=mismo)
+        if not total:
+            return None
+        texto = f"Comparendos del RNMC en el año (al {fecha_larga(corte)}): {total[0][1]}"
+        filas = comparendos_rnmc.agrupar(db, InspeccionMedida.articulo, date(corte.year, 1, 1), corte, filtros=mismo, limite=1)
+        if filas:
+            texto += f"; lo más común: {minuscula(comparendos_rnmc.etiqueta_articulo(filas[0][0]))} ({filas[0][1]})"
+        return texto + "."
+    except Exception:  # noqa: BLE001 - sin comparendos, el resto de la respuesta sigue
+        db.rollback()
+        return None
+
+
+def _convivencia(db: Session, exp: Expediente, hoy: date, pregunta: str = ""):
+    """Comparendos del año (cada uno una vez), meta del PISCC, comportamientos, barrios y meses recientes."""
+    from services import comparendos_rnmc
+    from services.piscc_goals import GOALS, evaluate
+
+    estado = comparendos_rnmc.estado_carga(db, hoy)
+    if not estado["corte"]:
+        exp.agregar("Convivencia (comparendos del RNMC)", ["Todavía no hay comparendos del RNMC cargados en el SISC."])
+        return
+    corte = date.fromisoformat(estado["corte"])
+    resumen = comparendos_rnmc.resumen_convivencia(db, date(corte.year, 1, 1), corte, barrios=5)
+    meta = evaluate(resumen["total"], corte, GOALS["convivencia"])
+    lineas = [f"Comparendos del año al {fecha_larga(corte)}: {resumen['total']} (cada comparendo se cuenta una vez).",
+              f"Meta del PISCC para comportamientos contrarios a la convivencia: {GOALS['convivencia']} en el año. {meta['detail']}"]
+    if estado["atrasado"]:
+        lineas.append(f"Los reportes del RNMC no se actualizan desde hace {estado['dias_desde_corte']} días; conviene pedirlos.")
+    lineas += [f"{c['etiqueta']} (artículo {c['articulo']} del Código de Convivencia): {c['total']} comparendos, "
+               f"{str(c['porcentaje']).replace('.', ',')} % del total." for c in resumen["comportamientos"][:4]]
+    for b in resumen["barrios"]:
+        principal = (f"; lo más común: {minuscula(b['principal']['etiqueta'])} "
+                     f"({str(b['principal']['porcentaje']).replace('.', ',')} % del barrio)") if b["principal"] else ""
+        lineas.append(f"Barrio {nombre_barrio(b['barrio'])}: {b['total']} comparendos{principal}; "
+                      f"{str(b['fin_de_semana_pct']).replace('.', ',')} % en fin de semana.")
+    dias = sorted(resumen["dias"], key=lambda d: -d["total"])
+    if dias and dias[0]["total"]:
+        lineas.append(f"Día con más comparendos: {dias[0]['dia'].lower()} ({dias[0]['total']}).")
+    lineas += [f"Comparendos en {m['mes']}: {m['total']}." for m in resumen["meses"][-3:]]
+    # Si preguntan por un comportamiento (riñas, espacio público...), sus barrios.
+    from db.models_inspecciones import InspeccionExpediente, InspeccionMedida
+    p = normalizar(pregunta)
+    for claves, articulo in ((("rina", "arma", "amenaza"), "27"), (("irrespeto", "autoridad"), "35"),
+                             (("espacio publico", "vendedor"), "140"), (("ruido",), "33")):
+        if any(c in p for c in claves):
+            filas = comparendos_rnmc.agrupar(
+                db, InspeccionExpediente.localidad, date(corte.year, 1, 1), corte, limite=5,
+                filtros=comparendos_rnmc.filtros_barrio() + [InspeccionMedida.articulo.like(f"Art. {articulo} %")])
+            etiqueta = comparendos_rnmc.ETIQUETAS_ARTICULO[articulo]
+            lineas += [f"Barrios con más comparendos por {minuscula(etiqueta)}: "
+                       + "; ".join(f"{nombre_barrio(b)}: {n}" for b, n in filas) + "."] if filas else []
+    lineas.append("Nota: un comparendo muestra la actuación de la Policía, no solo el comportamiento de la gente; "
+                  "si sube, puede ser por más controles.")
+    exp.agregar("Convivencia: comparendos del RNMC", lineas, f"RNMC (Policía Nacional / Inspecciones) al {fecha_larga(corte)}")
+
+
+def minuscula(texto: str) -> str:
+    return texto[:1].lower() + texto[1:] if texto else ""
+
+
+def nombre_barrio(valor: str) -> str:
+    return " ".join(p.capitalize() if len(p) > 2 else p.lower() for p in str(valor or "").split())
 
 
 def _entidad(db: Session, exp: Expediente, entidad: str):
@@ -244,6 +324,11 @@ def construir_expediente(db: Session, pregunta: str, hoy: Optional[date] = None)
     p = normalizar(pregunta)
     if "piscc" in p or "meta" in p or "plan" in p:
         _piscc(db, exp, corte)
+    if any(w in p for w in CONVIVENCIA):
+        try:
+            _convivencia(db, exp, hoy, pregunta)
+        except Exception:  # noqa: BLE001 - la convivencia no debe impedir responder lo demás
+            db.rollback()
     if any(w in p for w in ("fiscal", "justicia", "judicial", "juicio", "denuncia", "valle", "oficial", "nacional", "compar")):
         _externas(db, exp)
     whatsapp = _resumen_whatsapp(db, exp) if "whatsapp" in p or "resum" in p else None
@@ -289,9 +374,15 @@ def respuesta_sin_ia(pregunta: str, expediente: Expediente, extra: Dict) -> str:
     if extra.get("whatsapp") and ("whatsapp" in p or "resum" in p):
         return extra["whatsapp"]
     datos = extra["datos"]
+    convivencia = next((c for t, c in expediente.bloques if t.startswith("Convivencia")), None)
+    if convivencia and any(w in p for w in CONVIVENCIA) and not expediente.temas.get("barrios"):
+        # Pregunta de convivencia: total, meta, dos comportamientos y el barrio con más comparendos.
+        filas = [l.lstrip("- ") for l in convivencia.split("\n")]
+        elegidas = filas[:2] + [l for l in filas if "artículo" in l][:2] + [l for l in filas if l.startswith("Barrio ")][:1]
+        return "• " + "\n• ".join(elegidas)
     lineas = datos["frases"][:4]
     for titulo, contenido in expediente.bloques[1:]:
-        if titulo.startswith(("Barrio ", "Tendencia de", "Compromisos del Consejo a cargo")):
+        if titulo.startswith(("Barrio ", "Tendencia de", "Compromisos del Consejo a cargo", "Convivencia")):
             lineas.append(f"{titulo}: " + contenido.replace("\n- ", " ").lstrip("- "))
     return "• " + "\n• ".join(lineas)
 
@@ -302,8 +393,8 @@ def sugerencias(temas: Dict[str, List[str]], datos: Dict, pregunta: str = "") ->
         opciones.append(f"¿Qué delitos pasan más en {temas['barrios'][0].title()} y a qué hora?")
     if datos.get("barrios"):
         opciones.append(f"¿Qué está pasando en {datos['barrios'][0]['barrio']}?")
-    opciones += ["¿Qué compromisos tiene vencidos la Policía?", "¿Cómo va el PISCC?", "¿Qué dice la Fiscalía de este año?",
-                 "Resúmame la semana para WhatsApp"]
+    opciones += ["¿Qué compromisos tiene vencidos la Policía?", "¿Cómo va el PISCC?", "¿Cómo va la convivencia este año?",
+                 "¿Qué dice la Fiscalía de este año?", "Resúmame la semana para WhatsApp"]
     hecha = normalizar(pregunta).strip(" ¿?")
     return [o for o in dict.fromkeys(opciones) if normalizar(o).strip(" ¿?") != hecha][:3]
 

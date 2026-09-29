@@ -10,6 +10,7 @@ const INICIALES = [
     '¿Qué le pido a la Policía en el próximo Consejo?',
     '¿Qué barrio me debe preocupar más?',
     '¿Cómo va el PISCC?',
+    '¿Cómo va la convivencia este año?',
     'Resúmame la semana para WhatsApp',
 ];
 
