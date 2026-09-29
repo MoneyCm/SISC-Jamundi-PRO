@@ -1,8 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, and_, or_, desc, text
-from db.models_intelligence import RNMCMeasure
 from db.models_inspecciones import InspeccionMedida, InspeccionExpediente, InspeccionFinanza, InspeccionActuacion
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import pandas as pd
 
 class RNMCService:
@@ -258,81 +257,84 @@ class RNMCService:
             "impagos_ratificados": [mask(i) for i in impagables]
         }
 
+    # La tabla rnmc_measures ya no se carga: la lista sale de las tablas de Inspecciones, que reciben
+    # los reportes del RNMC. El "event_fingerprint" de cada fila es el id de la medida.
+    SOURCE_INSPECCIONES = "INSPECCIONES"
+
+    @staticmethod
+    def _medidas_query(db: Session):
+        from sqlalchemy import func as sa_func
+        primera = (db.query(InspeccionActuacion.medida_id.label("medida_id"),
+                            sa_func.min(InspeccionActuacion.fecha_actuacion).label("fecha"))
+                   .group_by(InspeccionActuacion.medida_id).subquery())
+        query = (db.query(InspeccionMedida, InspeccionExpediente, InspeccionFinanza, primera.c.fecha)
+                 .join(InspeccionExpediente, InspeccionExpediente.id == InspeccionMedida.expediente_id)
+                 .join(primera, primera.c.medida_id == InspeccionMedida.id)
+                 .outerjoin(InspeccionFinanza, InspeccionFinanza.medida_id == InspeccionMedida.id))
+        return query, primera
+
+    @staticmethod
+    def _fila(medida, expediente, finanza, fecha):
+        numero = str(expediente.numero_expediente or "")
+        inicio = medida.fecha_inicio or (fecha.date() if fecha else None)
+        return {
+            "id": str(medida.id),
+            "fecha_actuacion": fecha.strftime("%Y-%m-%d") if fecha else None,
+            "localidad": expediente.localidad,
+            "medida": medida.nombre_medida,
+            "estado": medida.estado_actual,
+            "dias": (date.today() - inicio).days if inicio else None,
+            "valor_neto": float(finanza.valor_neto or 0) if finanza else 0.0,
+            "valor_pagado": float(finanza.valor_pagado or 0) if finanza else 0.0,
+            "event_fingerprint": str(medida.id),
+            "source_id": RNMCService.SOURCE_INSPECCIONES,
+            "expediente_masked": "********" + numero[-4:] if len(numero) > 4 else numero,
+        }
+
     @staticmethod
     def get_backlog(db: Session, from_date=None, to_date=None, min_dias=None, estado=None, medida=None, localidad=None, page=1, page_size=50):
-        query = db.query(RNMCMeasure)
-        
+        query, primera = RNMCService._medidas_query(db)
         if from_date:
-            query = query.filter(RNMCMeasure.fecha_actuacion >= from_date)
+            query = query.filter(primera.c.fecha >= from_date)
         if to_date:
-            query = query.filter(RNMCMeasure.fecha_actuacion <= to_date)
+            query = query.filter(primera.c.fecha <= to_date)
         if min_dias:
-            query = query.filter(RNMCMeasure.dias >= min_dias)
+            limite = date.today() - timedelta(days=int(min_dias))
+            query = query.filter(func.coalesce(InspeccionMedida.fecha_inicio, func.date(primera.c.fecha)) <= limite)
         if estado:
-            query = query.filter(RNMCMeasure.estado == estado)
+            query = query.filter(InspeccionMedida.estado_actual == estado)
         if medida:
-            query = query.filter(RNMCMeasure.medida == medida)
+            query = query.filter(InspeccionMedida.nombre_medida == medida)
         if localidad:
-            query = query.filter(RNMCMeasure.localidad == localidad)
-            
+            query = query.filter(InspeccionExpediente.localidad == localidad)
+
         total = query.count()
-        items = query.order_by(desc(RNMCMeasure.fecha_actuacion)).offset((page-1)*page_size).limit(page_size).all()
-        
-        results = []
-        for i in items:
-            exp = str(i.expediente)
-            masked = "********" + exp[-4:] if len(exp) > 4 else exp
-            results.append({
-                "id": i.id,
-                "fecha_actuacion": i.fecha_actuacion.strftime("%Y-%m-%d"),
-                "localidad": i.localidad,
-                "medida": i.medida,
-                "estado": i.estado,
-                "dias": i.dias,
-                "valor_neto": i.valor_neto,
-                "valor_pagado": i.valor_pagado,
-                "event_fingerprint": i.event_fingerprint,
-                "source_id": i.source_id,
-                "expediente_masked": masked
-            })
-            
-        return {"total": total, "items": results, "page": page, "page_size": page_size}
+        items = query.order_by(desc(primera.c.fecha)).offset((page - 1) * page_size).limit(page_size).all()
+        return {"total": total, "items": [RNMCService._fila(*item) for item in items], "page": page, "page_size": page_size}
 
     @staticmethod
     def get_measure_history(db: Session, source_id: str, event_fingerprint: str):
-        from db.models_intelligence import RNMCStatusHistory
-        
-        current = db.query(RNMCMeasure).filter(
-            RNMCMeasure.source_id == source_id,
-            RNMCMeasure.event_fingerprint == event_fingerprint
-        ).first()
-        
-        if not current:
+        import uuid as uuid_module
+        try:
+            medida_id = uuid_module.UUID(str(event_fingerprint))
+        except ValueError:
             return None
-            
-        history = db.query(RNMCStatusHistory).filter(
-            RNMCStatusHistory.source_id == source_id,
-            RNMCStatusHistory.event_fingerprint == event_fingerprint
-        ).order_by(RNMCStatusHistory.changed_at.asc()).all()
-        
+        query, _primera = RNMCService._medidas_query(db)
+        item = query.filter(InspeccionMedida.id == medida_id).first()
+        if not item:
+            return None
+        fila = RNMCService._fila(*item)
+        # Las actuaciones de la medida, en orden: la fecha y el archivo del que salió cada una.
+        actuaciones = (db.query(InspeccionActuacion.fecha_actuacion, InspeccionActuacion.fuente_archivo)
+                       .filter(InspeccionActuacion.medida_id == medida_id)
+                       .order_by(InspeccionActuacion.fecha_actuacion.asc()).all())
         return {
-            "current": {
-                "medida": current.medida,
-                "expediente_masked": "***" + str(current.expediente)[-4:] if current.expediente else "N/A",
-                "estado": current.estado,
-                "fecha_actuacion": current.fecha_actuacion.strftime("%Y-%m-%d"),
-                "valor_neto": current.valor_neto,
-                "valor_pagado": current.valor_pagado or 0
-            },
+            "current": {key: fila[key] for key in ("medida", "expediente_masked", "estado", "fecha_actuacion", "valor_neto", "valor_pagado")},
             "history": [
-                {
-                    "estado_anterior": h.estado_anterior,
-                    "estado_nuevo": h.estado_nuevo,
-                    "changed_at": h.changed_at.isoformat(),
-                    "fuente_archivo": h.fuente_archivo,
-                    "ingestion_id": str(h.ingestion_id) if h.ingestion_id else None
-                } for h in history
-            ]
+                {"estado_anterior": "", "estado_nuevo": "REGISTRO EN RNMC",
+                 "changed_at": fecha.isoformat() if fecha else None, "fuente_archivo": fuente}
+                for fecha, fuente in actuaciones
+            ],
         }
 
     @staticmethod

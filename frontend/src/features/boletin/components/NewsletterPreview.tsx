@@ -158,12 +158,12 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
   } as const;
 
   const periodReading = inspectionTotal
-    ? `Inspecciones reporta ${formatIndicatorValue(inspectionTotal)} actuaciones con corte al ${inspectionSource?.last_cutoff_date || 'corte disponible'}. ${
+    ? `Inspecciones reporta ${formatIndicatorValue(inspectionTotal)} comparendos con corte al ${inspectionSource?.last_cutoff_date || 'corte disponible'}. ${
         familyIndicators.length > 0
           ? `Comisarías aporta ${familyIndicators.length} indicadores agregados del mismo mes.`
           : 'Comisarías se incorporará cuando exista un corte aprobado para el mes.'
       }`
-    : sourceMessage(inspectionSource, 'No hay actuaciones de Inspecciones publicables para este periodo.');
+    : sourceMessage(inspectionSource, 'No hay comparendos de Inspecciones publicables para este periodo.');
 
   return (
     <div className="newsletter-document-container w-full bg-gray-100 p-4 md:p-8 flex flex-col items-center gap-8">
@@ -468,7 +468,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
             <div className="border-l-4 pl-3 mb-2" style={{ borderColor: colorAmarillo }}>
               <h2 className="font-extrabold text-base uppercase" style={{ color: colorAzul }}>7. GESTIÓN Y CONVIVENCIA</h2>
             </div>
-            <p className="text-xs text-gray-600">Actuaciones de Inspecciones y atención de Comisarías, cada una con su propio corte y unidad de medida.</p>
+            <p className="text-xs text-gray-600">Comparendos de Inspecciones y atención de Comisarías, cada una con su propio corte y unidad de medida.</p>
           </div>
 
           {siscPublication && (
@@ -484,7 +484,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
             <div className="flex justify-between items-end border-b-2 border-gray-200 pb-1.5 mb-2">
               <div>
                 <h3 className="font-extrabold text-sm" style={{ color: colorAzul }}>INSPECCIONES DE POLICÍA</h3>
-                <p className="text-[9px] text-gray-500">Actuaciones y medidas registradas en el periodo.</p>
+                <p className="text-[9px] text-gray-500">Comparendos (cada uno una vez) y medidas del periodo.</p>
               </div>
               <p className="text-[9px] font-semibold text-gray-500">Corte: {inspectionSource?.last_cutoff_date || 'no disponible'}</p>
             </div>
@@ -492,7 +492,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
             {inspectionTotal ? (
               <div className="grid grid-cols-[190px_1fr] gap-3">
                 <div className="border border-blue-100 bg-blue-50 p-3">
-                  <p className="text-[10px] font-bold uppercase text-blue-800">Actuaciones registradas</p>
+                  <p className="text-[10px] font-bold uppercase text-blue-800">Comparendos registrados</p>
                   <p className="text-4xl font-extrabold mt-1" style={{ color: colorAzul }}>{formatIndicatorValue(inspectionTotal)}</p>
                   <p className="text-[9px] text-gray-600 mt-1">{comparisonText(inspectionTotal)}</p>
                 </div>
@@ -514,7 +514,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
               </div>
             ) : (
               <div className="border border-dashed border-gray-300 bg-gray-50 p-3 text-[10px] text-gray-600">
-                {sourceMessage(inspectionSource, 'No hay actuaciones publicables para este periodo.')}
+                {sourceMessage(inspectionSource, 'No hay comparendos publicables para este periodo.')}
               </div>
             )}
           </section>

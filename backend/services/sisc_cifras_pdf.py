@@ -370,7 +370,7 @@ def build_sisc_cifras_pdf(publication: dict) -> bytes:
     )])
 
     story.extend([PageBreak(), _section("7", "Gestion y convivencia", styles)])
-    story.append(Paragraph("Actuaciones de Inspecciones y atencion de Comisarias, cada una con su propio corte y unidad de medida.", styles["body"]))
+    story.append(Paragraph("Comparendos de Inspecciones y atencion de Comisarias, cada una con su propio corte y unidad de medida.", styles["body"]))
     blockers = (publication.get("governance") or {}).get("review_blockers") or []
     if blockers:
         warning = Table([[Paragraph(f'<b>Revision de cobertura:</b> {_text(blockers[0])}', styles["small"])]], colWidths=[17.1 * cm])

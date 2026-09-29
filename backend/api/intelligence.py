@@ -57,7 +57,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from api.ia import redactar_verificado, AI_PROVIDER, GEMINI_API_KEY, MISTRAL_API_KEY
 from sqlalchemy import text, func, desc
@@ -704,51 +704,52 @@ async def get_crime_accumulated(
 
 @router.get("/public/rnmc-summary")
 async def get_public_rnmc_summary(db: Session = Depends(get_db)):
-    """Public RNMC statistics. This endpoint never returns people, case files, or individual records."""
+    """Public RNMC statistics. This endpoint never returns people, case files, or individual records.
+
+    Comparendos únicos desde las tablas de Inspecciones (services/comparendos_rnmc.py), la misma
+    cifra de la meta del PISCC y de SISC en cifras.
+    """
+    from services import comparendos_rnmc
+    from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionFinanza
+
     minimum_group_size = 10
-    base_filters = [
-        RNMCMeasure.source_id == "INSPECCION_MEDIDAS_RNMC",
-        RNMCMeasure.municipio.ilike("%JAMUNDI%"),
-        # Una fecha posterior a hoy no puede ser el corte de una publicación.
-        func.date(RNMCMeasure.fecha_actuacion) <= date.today(),
-    ]
-    latest_date = db.query(func.max(RNMCMeasure.fecha_actuacion)).filter(*base_filters).scalar()
+    latest_date = comparendos_rnmc.corte(db, date.today())
     if not latest_date:
         return {"metadata": {"available": False, "minimum_group_size": minimum_group_size}, "kpis": {}, "monthly": [], "states": [], "measures": [], "zones": []}
 
-    year_start = datetime(latest_date.year, 1, 1)
-    year_end = datetime(latest_date.year + 1, 1, 1)
-    period_filters = [*base_filters, RNMCMeasure.fecha_actuacion >= year_start, RNMCMeasure.fecha_actuacion < year_end]
-    total_measures = db.query(func.count(RNMCMeasure.id)).filter(*period_filters).scalar() or 0
-    total_paid = db.query(func.coalesce(func.sum(RNMCMeasure.valor_pagado), 0)).filter(*period_filters).scalar() or 0
-    total_net = db.query(func.coalesce(func.sum(RNMCMeasure.valor_neto), 0)).filter(*period_filters).scalar() or 0
+    year_start = date(latest_date.year, 1, 1)
+    total = comparendos_rnmc.contar(db, year_start, latest_date)
+    sub = comparendos_rnmc.primeras_fechas(db)
+    in_year = [sub.c.fecha >= datetime.combine(year_start, datetime.min.time()),
+               sub.c.fecha < datetime.combine(latest_date + timedelta(days=1), datetime.min.time())]
+    paid, net = db.query(func.coalesce(func.sum(InspeccionFinanza.valor_pagado), 0),
+                         func.coalesce(func.sum(InspeccionFinanza.valor_neto), 0)).select_from(sub).join(
+        InspeccionMedida, InspeccionMedida.expediente_id == sub.c.expediente_id).join(
+        InspeccionFinanza, InspeccionFinanza.medida_id == InspeccionMedida.id).filter(*in_year).one()
 
     def grouped(column, limit=10):
-        rows = db.query(column.label("name"), func.count(RNMCMeasure.id).label("value")).filter(
-            *period_filters, column.isnot(None), column != ""
-        ).group_by(column).having(func.count(RNMCMeasure.id) >= minimum_group_size).order_by(func.count(RNMCMeasure.id).desc()).limit(limit).all()
-        return [{"name": row.name, "value": int(row.value)} for row in rows]
+        rows = comparendos_rnmc.agrupar(db, column, year_start, latest_date, minimo=minimum_group_size, limite=limit)
+        return [{"name": name, "value": int(value)} for name, value in rows]
 
-    monthly_rows = db.query(
-        func.extract("month", RNMCMeasure.fecha_actuacion).label("month"),
-        func.count(RNMCMeasure.id).label("value"),
-    ).filter(*period_filters).group_by(func.extract("month", RNMCMeasure.fecha_actuacion)).order_by(func.extract("month", RNMCMeasure.fecha_actuacion)).all()
+    month = func.extract("month", sub.c.fecha)
+    monthly_rows = db.query(month.label("month"), func.count(sub.c.expediente_id).label("value")).filter(
+        *in_year).group_by(month).order_by(month).all()
     months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
     return {
         "metadata": {
             "available": True,
             "year": latest_date.year,
-            "cutoff": latest_date.date().isoformat(),
+            "cutoff": latest_date.isoformat(),
             "source": "Inspecciones de Policia / RNMC",
             "minimum_group_size": minimum_group_size,
             "privacy": "Datos agregados. No se publican personas, expedientes, comparendos, direcciones ni relatos.",
         },
-        "kpis": {"measures": int(total_measures), "paid_value": float(total_paid), "net_value": float(total_net)},
+        "kpis": {"measures": int(total), "paid_value": float(paid), "net_value": float(net)},
         "monthly": [{"name": months[int(row.month) - 1], "value": int(row.value)} for row in monthly_rows],
-        "states": grouped(RNMCMeasure.estado),
-        "measures": grouped(RNMCMeasure.medida),
-        "zones": grouped(RNMCMeasure.localidad),
+        "states": grouped(InspeccionMedida.estado_actual),
+        "measures": grouped(InspeccionMedida.nombre_medida),
+        "zones": grouped(InspeccionExpediente.localidad),
     }
 @router.get("/stats/rnmc")
 async def get_rnmc_stats(
