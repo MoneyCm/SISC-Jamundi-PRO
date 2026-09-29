@@ -169,3 +169,22 @@ def get_inspecciones_stats(
         "total_medidas": total_med,
         "por_estado": {e: c for e, c in estados}
     }
+
+
+@router.get("/stats/convivencia")
+def get_convivencia(
+    anio: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
+    """Comparendos del año por comportamiento, barrio, día y mes (cada comparendo una vez)."""
+    from datetime import date
+    from services import comparendos_rnmc
+
+    ultimo = comparendos_rnmc.corte(db, date.today())
+    if not ultimo:
+        return {"total": 0, "comportamientos": [], "barrios": [], "dias": [], "meses": [], "corte": None}
+    anio = anio or ultimo.year
+    hasta = min(date(anio, 12, 31), ultimo)
+    return comparendos_rnmc.resumen_convivencia(db, date(anio, 1, 1), hasta)
+

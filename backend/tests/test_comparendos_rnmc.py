@@ -32,3 +32,11 @@ def test_expediente_counts_once_at_its_first_date():
     finally:
         db.rollback()
         db.close()
+
+
+def test_article_labels_are_plain_spanish():
+    assert comparendos_rnmc.numero_articulo("Art. 35 - Comportamientos que afectan las relaciones") == "35"
+    assert comparendos_rnmc.etiqueta_articulo("Art. 27 - Comportamientos que ponen en riesgo la vida e integridad") \
+        == "Riñas, amenazas y porte de armas o elementos peligrosos"
+    # Un artículo sin etiqueta propia usa el texto oficial.
+    assert comparendos_rnmc.etiqueta_articulo("Art. 999 - COMPORTAMIENTOS NUEVOS") == "Comportamientos nuevos"
