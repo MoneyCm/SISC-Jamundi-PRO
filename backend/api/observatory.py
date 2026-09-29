@@ -148,6 +148,17 @@ def get_piscc_goals(db: Session = Depends(get_db), user: User = Depends(institut
     return build_goals(db)
 
 
+@router.get("/piscc-goals/{goal_id}/detalle")
+def get_piscc_goal_detail(goal_id: str, db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    """Lo que se despliega al hacer clic en una meta del PISCC."""
+    from services.piscc_historico import detalle
+
+    resultado = detalle(db, goal_id)
+    if resultado is None:
+        raise HTTPException(404, "Meta del PISCC no encontrada.")
+    return resultado
+
+
 class PisccReportIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     value: Optional[float] = Field(default=None, ge=0)
