@@ -112,3 +112,40 @@ async def discard(delivery_id: str, request: Request, db: Session = Depends(get_
     await log_audit(db, "VIF_DELIVERY_DISCARDED", actor_id=str(current_user.id), module="COMISARIAS",
                     target={"id": delivery_id}, level=2, request=request)
     return result
+
+
+@router.get("/informes")
+def informes(db: Session = Depends(get_db), current_user: User = Depends(institutional_access)):
+    """Último informe de gestión APROBADO de cada Comisaría (cifras agregadas que ya alimentan el boletín).
+
+    Los pendientes de aprobar no se muestran: se avisa cuántos hay para que se revisen en Entregas.
+    """
+    from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator
+    from services.institutional_agent_service import InstitutionalAgentService
+
+    lotes = (db.query(InstitutionalDataBatch)
+             .filter(InstitutionalDataBatch.program == "COMISARIAS")
+             .order_by(InstitutionalDataBatch.cutoff_date.desc(), InstitutionalDataBatch.created_at.desc()).all())
+    ultimos, pendientes = {}, 0
+    for lote in lotes:
+        if lote.validation_status == "PENDING":
+            pendientes += 1
+            continue
+        if lote.validation_status != "APPROVED":
+            continue
+        entidad = InstitutionalAgentService.canonical_entity(lote.reporting_entity or "")
+        if entidad in ultimos:
+            continue
+        cifras = (db.query(InstitutionalIndicator).filter(InstitutionalIndicator.batch_id == lote.id)
+                  .order_by(InstitutionalIndicator.category, InstitutionalIndicator.indicator).all())
+        if not cifras:
+            continue
+        ultimos[entidad] = {
+            "entidad": entidad,
+            "periodo": lote.period,
+            "corte": lote.cutoff_date.isoformat() if lote.cutoff_date else None,
+            "archivo": lote.source_filename,
+            "cifras": [{"indicador": c.indicator, "categoria": c.category, "valor": float(c.value) if c.value is not None else None,
+                        "unidad": c.unit} for c in cifras],
+        }
+    return {"informes": sorted(ultimos.values(), key=lambda item: item["entidad"]), "pendientes": pendientes}
