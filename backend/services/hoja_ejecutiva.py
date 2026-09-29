@@ -144,6 +144,34 @@ def frases(filas: List[Dict[str, Any]], total: Dict[str, Any], barrios: List[Dic
     return lineas
 
 
+def _convivencia(db: Session, hoy: date) -> Optional[Dict[str, Any]]:
+    """Comparendos del RNMC en el año (cada uno una vez) frente a la meta del PISCC. Nunca rompe la hoja."""
+    try:
+        from services import comparendos_rnmc
+        from services.piscc_goals import GOALS, evaluate
+
+        estado = comparendos_rnmc.estado_carga(db, hoy)
+        if not estado["corte"]:
+            return None
+        corte = date.fromisoformat(estado["corte"])
+        resumen = comparendos_rnmc.resumen_convivencia(db, date(corte.year, 1, 1), corte, barrios=3)
+        meta = evaluate(resumen["total"], corte, GOALS["convivencia"])
+        return {
+            "corte": corte,
+            "total": resumen["total"],
+            "meta": GOALS["convivencia"],
+            "meta_estado": meta["status"],
+            "proyeccion": meta.get("projection"),
+            "atrasado": estado["atrasado"],
+            "dias": estado["dias_desde_corte"],
+            "comportamientos": resumen["comportamientos"][:2],
+            "barrios": resumen["barrios"][:3],
+        }
+    except Exception:
+        db.rollback()
+        return None
+
+
 def construir(db: Session, corte: Optional[date] = None, hoy: Optional[date] = None) -> Dict[str, Any]:
     hoy = hoy or date.today()
     run = _latest_completed_run(db)
@@ -208,6 +236,7 @@ def construir(db: Session, corte: Optional[date] = None, hoy: Optional[date] = N
         "compromisos": {"abiertos": resumen["open"], "vencidos": resumen["overdue"],
                         "cumplidos": resumen["by_status"].get("CUMPLIDO", 0), "atencion": atencion},
         "frases": lineas,
+        "convivencia": _convivencia(db, hoy),
     }
 
 
@@ -348,8 +377,34 @@ def render_pdf(datos: Dict[str, Any]) -> bytes:
     else:
         historia.append(Paragraph("Sin barrios identificados en el periodo.", texto))
 
+    numero = 4
+    conv = datos.get("convivencia")
+    if conv:
+        historia.append(Paragraph(f"{numero}. Convivencia: comparendos del año", seccion))
+        numero += 1
+        miles = lambda valor: f"{valor:,}".replace(",", ".")
+        historia.append(Paragraph(
+            f"<b>{miles(conv['total'])}</b> comparendos al {fecha_larga(conv['corte'])}. "
+            f"Meta del PISCC para el año: {miles(conv['meta'])}. " + {
+                "SUPERADA": "Ya se pasó la meta del año.",
+                "DESVIACION": f"A este ritmo el año cerraría cerca de {miles(conv['proyeccion'] or 0)}, por encima de la meta.",
+                "EN_META": f"A este ritmo el año cerraría cerca de {miles(conv['proyeccion'] or 0)}, dentro de la meta.",
+            }.get(conv["meta_estado"], "Todavía es pronto para proyectar el año."),
+            texto))
+        if conv["comportamientos"]:
+            partes = [f"{c['etiqueta'][:1].lower() + c['etiqueta'][1:]} ({c['porcentaje']:.0f} %)" for c in conv["comportamientos"]]
+            historia.append(Paragraph("Lo más común: " + " y ".join(partes) + ".", texto))
+        if conv["barrios"]:
+            partes = [f"{nombre_lugar(b['barrio'])} ({miles(b['total'])})" for b in conv["barrios"]]
+            historia.append(Paragraph("Barrios con más comparendos: " + ", ".join(partes) + ".", texto))
+        if conv["atrasado"]:
+            historia.append(Paragraph(f"Ojo: los reportes del RNMC no se actualizan desde hace {conv['dias']} días; conviene pedirlos.", texto))
+        historia.append(Paragraph("Fuente: RNMC, Policía Nacional (reportes de medidas pendientes y gestionadas). "
+                                  "Cada comparendo se cuenta una vez.", pie))
+
     comp = datos["compromisos"]
-    historia.append(Paragraph("4. Compromisos del Consejo de Seguridad", seccion))
+    historia.append(Paragraph(f"{numero}. Compromisos del Consejo de Seguridad", seccion))
+    numero += 1
     historia.append(Paragraph(f"<b>{comp['vencidos']}</b> vencidos · <b>{comp['abiertos']}</b> abiertos · "
                               f"<b>{comp['cumplidos']}</b> cumplidos.", texto))
     for item in comp["atencion"]:
@@ -358,7 +413,7 @@ def render_pdf(datos: Dict[str, Any]) -> bytes:
         historia.append(Paragraph(f"•&nbsp;&nbsp;{texto_item} <font color='{GRIS}'>— {item['responsable']}{veces}</font>",
                                   texto))
 
-    historia.append(Paragraph("5. Notas", seccion))
+    historia.append(Paragraph(f"{numero}. Notas", seccion))
     renglones = Table([[""]] * 4, hAlign="LEFT", colWidths=[ancho], rowHeights=[0.75 * cm] * 4,
                       style=[("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.HexColor("#9CA3AF"))])
     historia.append(renglones)

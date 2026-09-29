@@ -4,7 +4,7 @@ import { Database, ClipboardCheck } from 'lucide-react';
 const SourceCenter = lazy(() => import('./SourceCenter'));
 const InstitutionalAgents = lazy(() => import('./InstitutionalAgents'));
 
-export default function SourceCenterHub({ userRoles = [], onOpenBulletin, initialSection = 'sources' }) {
+export default function SourceCenterHub({ userRoles = [], onOpenBulletin, onOpenInspecciones, initialSection = 'sources' }) {
     const canManageDeliveries = userRoles.some((role) => ['TI_ADMIN', 'FUNC_ADMIN', 'SOURCE_UPLOADER', 'STEWARD', 'DATA_OWNER'].includes(role));
     const [section, setSection] = useState(initialSection);
     const active = canManageDeliveries ? section : 'sources';
@@ -14,7 +14,7 @@ export default function SourceCenterHub({ userRoles = [], onOpenBulletin, initia
         </nav>}
         {active === 'deliveries' && <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-sm text-slate-700"><strong className="block text-slate-900">Entregas de Comisarías e Inspecciones</strong><p className="mt-1">Recepción de archivos, revisión de hallazgos y aprobación para publicación. Los expedientes y actuaciones se consultan en Inspecciones de Policía.</p></div>}
         <Suspense fallback={<div role="status" className="p-8 text-center text-sm text-slate-500">Cargando sección…</div>}>
-            {active === 'deliveries' ? <InstitutionalAgents /> : <SourceCenter userRoles={userRoles} onOpenBulletin={onOpenBulletin} />}
+            {active === 'deliveries' ? <InstitutionalAgents /> : <SourceCenter userRoles={userRoles} onOpenBulletin={onOpenBulletin} onOpenInspecciones={onOpenInspecciones} />}
         </Suspense>
     </div>;
 }
