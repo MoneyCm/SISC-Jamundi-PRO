@@ -42,6 +42,20 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "fresh_days": 35,
         "lagged_days": 60,
     },
+    "COPIA_SEGURIDAD": {
+        "name": "Copia de seguridad",
+        "institution": "SISC (este computador)",
+        "scope": "Base de datos completa del SISC",
+        "purpose": "Recuperar la información si algo falla",
+        "update_mode": "AUTOMATIC_LOCAL",
+        "expected_frequency": "Diaria, 7 p. m. (tarea programada de Windows)",
+        "source_url": None,
+        "action_type": "OPEN",
+        "action_label": "Documentos\\SISC Respaldos",
+        "dataset_code": None,
+        "fresh_days": 2,
+        "lagged_days": 4,
+    },
     "POLICIA_NACIONAL": {
         "name": "Policia Nacional",
         "institution": "Policia Nacional de Colombia",
@@ -375,6 +389,46 @@ class SourceCenterService:
         return connector
 
     @classmethod
+    def _backup(cls) -> Dict[str, Any]:
+        """Estado que deja scripts/respaldo_diario.ps1 en data/respaldo_estado.json."""
+        import json
+        from pathlib import Path
+
+        connector = cls._base("COPIA_SEGURIDAD")
+        archivo = Path(__file__).resolve().parents[1] / "data" / "respaldo_estado.json"
+        if not archivo.exists():
+            connector["warnings"] = ["Todavía no se ha hecho ninguna copia automática."]
+            return connector
+        try:
+            estado = json.loads(archivo.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            connector["warnings"] = ["No se pudo leer el estado de la copia de seguridad."]
+            return connector
+        exitosa = estado.get("ultima_exitosa")
+        cutoff = date.fromisoformat(exitosa[:10]) if exitosa else None
+        config = SOURCE_CONNECTORS["COPIA_SEGURIDAD"]
+        freshness = freshness_status(cutoff, config["fresh_days"], config["lagged_days"])
+        status = overall_status(connected=bool(cutoff), monitor_status="CURRENT" if estado.get("ok") else "ERROR",
+                                freshness=freshness, last_checked_at=datetime.fromisoformat(estado["fecha"]) if estado.get("fecha") else None)
+        warnings = [] if estado.get("ok") else [f"La última copia falló: {estado.get('mensaje')}"]
+        connector.update({
+            "status": status,
+            "status_label": STATUS_LABELS[status],
+            "quality_status": "VALIDATED" if estado.get("ok") else "ERROR",
+            "quality_label": QUALITY_LABELS["VALIDATED" if estado.get("ok") else "ERROR"],
+            "freshness_status": freshness,
+            "source_cutoff_date": _as_iso(cutoff),
+            "last_checked_at": estado.get("fecha"),
+            "last_success_at": exitosa,
+            "record_count": int(estado.get("copias") or 0),
+            "period_label": (f"Última copia: {estado.get('archivo')} ({estado.get('tamano_mb')} MB), "
+                             f"{estado.get('copias')} guardadas") if estado.get("ok") else None,
+            "warnings": warnings,
+        })
+        connector["action"]["enabled"] = False
+        return connector
+
+    @classmethod
     def _local_rnmc(cls, db: Session) -> Dict[str, Any]:
         """Reportes del RNMC que se suben en Inspecciones: al día si el último dato tiene 35 días o menos."""
         from services import comparendos_rnmc
@@ -500,6 +554,7 @@ class SourceCenterService:
             # vista: el primero repetía la sábana y Policía Nacional; el segundo lo reemplaza FISCALIA_DATOS.
             cls._apply_state(cls._base("OBSERVATORIO_VALLE"), states.get("OBSERVATORIO_VALLE")),
             cls._apply_state(cls._base("FISCALIA_DATOS"), states.get("FISCALIA_DATOS")),
+            cls._backup(),
         ]
         attention_statuses = {"ERROR", "NOT_CONNECTED", "UPDATE_AVAILABLE", "NEEDS_REVIEW", "EXPIRED"}
         timestamps = [item["last_checked_at"] for item in connectors if item["last_checked_at"]]

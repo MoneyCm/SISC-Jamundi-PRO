@@ -64,3 +64,6 @@ frontend/executive-qa.jsx
 
 # Token del tunel de Cloudflare (nunca al repositorio)
 tunnel_token.txt
+
+# Estado de la copia de seguridad diaria (lo escribe scripts/respaldo_diario.ps1)
+backend/data/respaldo_estado.json
