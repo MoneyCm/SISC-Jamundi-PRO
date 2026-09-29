@@ -243,3 +243,14 @@ def get_mapa_comparendos(
         "comportamientos": [{"code": numero, "name": etiqueta, "value": total}
                             for numero, etiqueta, _texto, total in comparendos_rnmc.por_comportamiento(db, inicio, fin, limite=20)],
     }
+
+
+@router.get("/stats/tendencia")
+def get_tendencia(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
+    """Comparendos por año desde 2018: año completo y mismo tramo del año, por comportamiento y por barrio."""
+    from services import comparendos_rnmc
+
+    return comparendos_rnmc.tendencia(db)
