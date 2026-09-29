@@ -350,7 +350,7 @@ const App = () => {
       case 'dq':
         return <DataQuality initialReportId={selectedReportId} />;
       case 'inspecciones':
-        return <InspeccionesModule />;
+        return <InspeccionesModule userRoles={userRoles} />;
       case 'comisarias':
         return <ComisariasModule />;
       case 'police_audit':

@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -67,30 +68,44 @@ def get_expedientes(
     db: Session = Depends(get_db),
     current_user: User = Depends(institutional_access),
 ):
-    # Usar query cruda para extraer lat/lng de PostGIS
-    sql = text("""
-        SELECT id, numero_expediente, departamento, municipio, localidad, 
-               ST_X(geom_punto) as lng, ST_Y(geom_punto) as lat 
-        FROM inspeccion_expedientes
-        WHERE (:localidad IS NULL OR localidad ILIKE :localidad_pattern OR numero_expediente ILIKE :localidad_pattern)
-        ORDER BY created_at DESC
+    from services.comparendos_rnmc import etiqueta_articulo
+
+    # Los comparendos más recientes primero (fecha del hecho), con su comportamiento y el estado de sus medidas.
+    # La búsqueda sirve por barrio o por número de expediente.
+    filtro = "(:localidad IS NULL OR e.localidad ILIKE :localidad_pattern OR e.numero_expediente ILIKE :localidad_pattern)"
+    sql = text(f"""
+        WITH primera AS (
+            SELECT m.expediente_id, MIN(a.fecha_actuacion) AS fecha
+            FROM inspeccion_medidas m JOIN inspeccion_actuaciones a ON a.medida_id = m.id
+            GROUP BY m.expediente_id
+        )
+        SELECT e.id, e.numero_expediente, e.localidad,
+               ST_X(e.geom_punto) AS lng, ST_Y(e.geom_punto) AS lat, primera.fecha,
+               (SELECT m.articulo FROM inspeccion_medidas m
+                 WHERE m.expediente_id = e.id AND m.articulo IS NOT NULL LIMIT 1) AS articulo,
+               (SELECT string_agg(DISTINCT m.estado_actual, ', ') FROM inspeccion_medidas m
+                 WHERE m.expediente_id = e.id) AS estados
+        FROM inspeccion_expedientes e
+        LEFT JOIN primera ON primera.expediente_id = e.id
+        WHERE {filtro}
+        ORDER BY primera.fecha DESC NULLS LAST, e.numero_expediente DESC
         LIMIT :limit OFFSET :skip
     """)
-    
+
     params = {
-        # La búsqueda sirve por barrio o por número de expediente.
         "localidad": localidad.strip() if (localidad and localidad.strip()) else None,
         "localidad_pattern": f"%{localidad.strip()}%" if (localidad and localidad.strip()) else "%%",
         "limit": limit,
         "skip": skip
     }
-    
-    results = db.execute(sql, params).fetchall()
-    items = [dict(r._mapping) for r in results]
-    total = db.execute(text("""
-        SELECT COUNT(*) FROM inspeccion_expedientes
-        WHERE (:localidad IS NULL OR localidad ILIKE :localidad_pattern OR numero_expediente ILIKE :localidad_pattern)
-    """), params).scalar() or 0
+
+    items = []
+    for fila in db.execute(sql, params).fetchall():
+        item = dict(fila._mapping)
+        item["fecha"] = item["fecha"].date().isoformat() if item["fecha"] else None
+        item["comportamiento"] = etiqueta_articulo(item["articulo"]) if item["articulo"] else None
+        items.append(item)
+    total = db.execute(text(f"SELECT COUNT(*) FROM inspeccion_expedientes e WHERE {filtro}"), params).scalar() or 0
 
     return {"total": total, "items": items}
 
@@ -161,19 +176,30 @@ def get_inspecciones_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(institutional_access),
 ):
-    # KPIs rápidos
-    total_exp = db.query(InspeccionExpediente).count()
-    total_med = db.query(InspeccionMedida).count()
-    
-    estados = db.query(
-        InspeccionMedida.estado_actual, 
-        func.count(InspeccionMedida.id)
-    ).group_by(InspeccionMedida.estado_actual).all()
-    
+    # Todas las cifras son del mismo año: el del último comparendo cargado (cada comparendo una vez).
+    from datetime import date as fecha_tipo
+    from services import comparendos_rnmc
+
+    corte = comparendos_rnmc.corte(db, fecha_tipo.today())
+    if not corte:
+        return {"anio": None, "comparendos": 0, "medidas": 0, "ratificadas": 0, "pagadas": 0, "por_estado": {}}
+    sub = comparendos_rnmc.primeras_fechas(db)
+    inicio = datetime.combine(fecha_tipo(corte.year, 1, 1), datetime.min.time())
+    estados = dict(
+        db.query(InspeccionMedida.estado_actual, func.count(InspeccionMedida.id))
+        .join(sub, sub.c.expediente_id == InspeccionMedida.expediente_id)
+        .filter(sub.c.fecha >= inicio)
+        .group_by(InspeccionMedida.estado_actual).all()
+    )
+    suma = lambda texto: sum(n for estado, n in estados.items() if estado and texto in estado)
     return {
-        "total_expedientes": total_exp,
-        "total_medidas": total_med,
-        "por_estado": {e: c for e, c in estados}
+        "anio": corte.year,
+        "corte": corte.isoformat(),
+        "comparendos": comparendos_rnmc.contar(db, fecha_tipo(corte.year, 1, 1), corte),
+        "medidas": sum(estados.values()),
+        "ratificadas": suma("RATIFICADA"),
+        "pagadas": suma("PAGADO"),
+        "por_estado": estados,
     }
 
 
