@@ -64,7 +64,8 @@ class InspeccionService:
     # Exportación de comparendos de la Policía (69 columnas: FECHA_HECHOS, ESTADO_MEDIDA, COMPARENDO...).
     # Trae datos personales del infractor; solo se conservan estas columnas y lo demás se descarta
     # antes de procesar cualquier fila.
-    COMPARENDOS_MARKERS = {"FECHA_HECHOS", "ESTADO_MEDIDA", "COMPARENDO"}
+    # La "MATRIZ RNMC" no trae la columna COMPARENDO: basta la fecha del hecho, el expediente y el estado.
+    COMPARENDOS_MARKERS = {"FECHA_HECHOS", "EXPEDIENTE", "ESTADO_MEDIDA"}
 
     def comparendos_to_rnmc(self, df: pd.DataFrame) -> pd.DataFrame:
         """Convierte el formato de comparendos al formato RNMC que entiende el cargador."""
@@ -95,6 +96,15 @@ class InspeccionService:
         df = smart_read_file(file_content)
         # Normalizar nombres de columnas (quitar espacios, tildes, a mayúsculas)
         df.columns = [self.normalize_text(c).replace(' ', '_') for c in df.columns]
+        if "EXPEDIENTE" not in df.columns:
+            # Algunos reportes traen títulos arriba: el encabezado está unas filas más abajo.
+            crudo = smart_read_file(file_content, header=None)
+            for fila in range(min(20, len(crudo))):
+                valores = {self.normalize_text(str(v)).replace(' ', '_') for v in crudo.iloc[fila].tolist()}
+                if "EXPEDIENTE" in valores and valores & {"FECHA_HECHOS", "FECHA_ACTUACION"}:
+                    df = smart_read_file(file_content, header=fila).dropna(how="all")
+                    df.columns = [self.normalize_text(str(c)).replace(' ', '_') for c in df.columns]
+                    break
         if self.COMPARENDOS_MARKERS.issubset(df.columns):
             return self.comparendos_to_rnmc(df), "COMPARENDOS"
         return df, "RNMC"

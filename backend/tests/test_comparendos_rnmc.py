@@ -46,3 +46,24 @@ def test_article_labels_are_plain_spanish():
         == "Riñas, amenazas y porte de armas o elementos peligrosos"
     # Un artículo sin etiqueta propia usa el texto oficial.
     assert comparendos_rnmc.etiqueta_articulo("Art. 999 - COMPORTAMIENTOS NUEVOS") == "Comportamientos nuevos"
+
+
+def test_no_compara_con_un_periodo_sin_datos_completos():
+    db = SessionLocal()
+    try:
+        # Solo hay comparendos de enero a mayo de 2002 (dos expedientes).
+        for i, fecha in enumerate([datetime(2002, 1, 3), datetime(2002, 5, 28)]):
+            expediente = InspeccionExpediente(numero_expediente=f"UNIDAD-RNMC-2002-{i}", localidad="CENTRO")
+            db.add(expediente)
+            db.flush()
+            medida = InspeccionMedida(expediente_id=expediente.id, nombre_medida="MULTA GENERAL TIPO 2")
+            db.add(medida)
+            db.flush()
+            db.add(InspeccionActuacion(medida_id=medida.id, fecha_actuacion=fecha, fuente_archivo="reporte.xls",
+                                       fingerprint_hash=f"unidad-rnmc-2002-{i}"))
+        db.flush()
+        assert comparendos_rnmc.cubre(db, date(2002, 1, 1), date(2002, 5, 31)) is True
+        assert comparendos_rnmc.cubre(db, date(2002, 1, 1), date(2002, 12, 31)) is False
+    finally:
+        db.rollback()
+        db.close()

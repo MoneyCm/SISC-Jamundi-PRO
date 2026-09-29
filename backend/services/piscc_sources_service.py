@@ -22,7 +22,8 @@ def _parse_date(value):
 
 
 def _source_item(key, label, previous, current, cutoff, source):
-    difference = current - previous
+    # previous None: el año anterior no tiene datos del mismo periodo (no se compara).
+    difference = current - previous if previous is not None else 0
     variation = ((difference / previous) * 100) if previous else None
     weeks = max(1, min(52, ((cutoff - date(cutoff.year, 1, 1)).days // 7) + 1))
     projection = round((current / weeks) * 52)
@@ -74,7 +75,10 @@ def load_rnmc(db: Session, cutoff):
     if not source_cutoff:
         return None
     current = comparendos_rnmc.contar(db, date(source_cutoff.year, 1, 1), source_cutoff)
-    previous = comparendos_rnmc.contar(db, date(source_cutoff.year - 1, 1, 1), source_cutoff.replace(year=source_cutoff.year - 1))
+    previo_desde = date(source_cutoff.year - 1, 1, 1)
+    previo_hasta = source_cutoff.replace(year=source_cutoff.year - 1, day=28) if (source_cutoff.month, source_cutoff.day) == (2, 29) \
+        else source_cutoff.replace(year=source_cutoff.year - 1)
+    previous = comparendos_rnmc.contar(db, previo_desde, previo_hasta) if comparendos_rnmc.cubre(db, previo_desde, previo_hasta) else None
     return _source_item("convivencia", "Comportamientos Contrarios a la Convivencia", previous, current, source_cutoff, "RNMC / Inspecciones de Policía")
 
 

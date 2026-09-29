@@ -41,6 +41,20 @@ def _limites(desde: date, hasta: date) -> Tuple[datetime, datetime]:
     return datetime.combine(desde, datetime.min.time()), datetime.combine(hasta + timedelta(days=1), datetime.min.time())
 
 
+def cubre(db: Session, desde: date, hasta: date, margen: int = 20) -> bool:
+    """Si hay comparendos al principio y al final del periodo: sin eso, comparar daría cambios falsos
+    (por ejemplo, 2025 solo tiene reportes de enero a mayo)."""
+    sub = primeras_fechas(db)
+    inicio, fin = _limites(desde, hasta)
+    primero, ultimo = db.query(func.min(sub.c.fecha), func.max(sub.c.fecha)).filter(
+        sub.c.fecha >= inicio, sub.c.fecha < fin).one()
+    if not primero or not ultimo:
+        return False
+    primero = primero.date() if isinstance(primero, datetime) else primero
+    ultimo = ultimo.date() if isinstance(ultimo, datetime) else ultimo
+    return primero <= desde + timedelta(days=margen) and ultimo >= hasta - timedelta(days=margen)
+
+
 def contar(db: Session, desde: date, hasta: date) -> int:
     sub = primeras_fechas(db)
     inicio, fin = _limites(desde, hasta)

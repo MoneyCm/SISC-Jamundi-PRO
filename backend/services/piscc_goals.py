@@ -139,6 +139,26 @@ def short_text(item: Dict[str, Any]) -> str:
     return f"{item['label']}: ritmo de ≈{item['projection']} (meta {item['goal_2027']})"
 
 
+def _convivencia_anios(db: Session, baseline: int, goal: int, today: date) -> List[Dict[str, Any]]:
+    """Comparendos únicos del RNMC por año cerrado; sin enero a diciembre completos no se califica."""
+    from services import comparendos_rnmc, piscc_historico
+
+    anios = []
+    for anio in range(2024, today.year):
+        desde, hasta = date(anio, 1, 1), date(anio, 12, 31)
+        try:
+            total = comparendos_rnmc.contar(db, desde, hasta)
+            completo = comparendos_rnmc.cubre(db, desde, hasta)
+        except Exception:
+            db.rollback()
+            total, completo = 0, False
+        estado = piscc_historico.semaforo(total, baseline, goal) if completo else None
+        etiqueta = piscc_historico.SEMAFORO.get(estado) if estado else (
+            "Reportes del RNMC incompletos para ese año" if total else "Sin reportes del RNMC de ese año")
+        anios.append({"anio": anio, "total": total or None, "completo": completo, "semaforo": estado, "semaforo_label": etiqueta})
+    return anios
+
+
 def build_goals(db: Session, today: Optional[date] = None, source_version_id: Optional[str] = None) -> Dict[str, Any]:
     """`today` es la fecha de corte: la del día en el Centro de análisis, el fin del periodo en el boletín."""
     today = today or date.today()
@@ -158,8 +178,7 @@ def build_goals(db: Session, today: Optional[date] = None, source_version_id: Op
             lag = (today - date.fromisoformat(row["cutoff"])).days
             row = {**row, "stale": lag > STALE_DAYS, "lag_days": lag}
         if key == "convivencia":
-            anios = [{"anio": anio, "total": None, "completo": False, "semaforo": None,
-                      "semaforo_label": "Sin reportes del RNMC de ese año"} for anio in range(2024, today.year)]
+            anios = _convivencia_anios(db, baseline, goal, today)
         else:
             anios = piscc_historico.anios_cerrados(key, baseline, goal, today, historico)
         indicators.append({"id": key, "label": label, "baseline_2023": baseline, "goal_2027": goal,
