@@ -29,7 +29,8 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         // Bandeja de trabajo del Observatorio; la dirección recibe los resúmenes y la hoja ejecutiva.
         { id: 'alerts', label: 'Bandeja de alertas', icon: Bell, category: 'ESTRATEGIA', show: isAnalyst },
         { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
-        { id: 'narrative_alerts', label: 'Resúmenes para WhatsApp', icon: MessageSquareText, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
+        // Los arma el Observatorio; la dirección los recibe ya listos por WhatsApp.
+        { id: 'narrative_alerts', label: 'Resúmenes para WhatsApp', icon: MessageSquareText, category: 'ESTRATEGIA', show: isAnalyst },
         { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective },
         { id: 'comisarias', label: 'Comisarías de Familia', icon: HeartHandshake, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective || isUploader || isSteward },
 
