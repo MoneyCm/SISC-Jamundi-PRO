@@ -90,3 +90,14 @@ def client(db, monkeypatch, *roles):
 def test_permisos(db, monkeypatch):
     assert client(db, monkeypatch, "DIRECTIVE").post("/api/asistente/preguntar", json={"pregunta": "¿Cómo vamos?"}).status_code == 200
     assert client(db, monkeypatch, "SOURCE_UPLOADER").post("/api/asistente/preguntar", json={"pregunta": "¿Cómo vamos?"}).status_code == 403
+
+
+def test_pregunta_de_convivencia_trae_comparendos(db):
+    """Con o sin comparendos cargados, la pregunta de convivencia agrega su bloque al expediente."""
+    expediente, _extra = asesor.construir_expediente(db, "¿Cómo va la convivencia este año?")
+    titulos = [titulo for titulo, _ in expediente.bloques]
+    assert any(titulo.startswith("Convivencia") for titulo in titulos)
+    # Una pregunta solo de delitos no lo trae.
+    expediente, _extra = asesor.construir_expediente(db, "¿Cómo van los homicidios?")
+    assert not any(titulo.startswith("Convivencia") for titulo, _ in expediente.bloques)
+
