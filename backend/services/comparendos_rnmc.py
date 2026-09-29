@@ -272,3 +272,92 @@ def capa_mapa(db: Session, desde: date, hasta: date, articulo: Optional[str] = N
         "unmapped_names": sin_poligono,
         "points": sorted(puntos.values(), key=lambda punto: -punto["total"]),
     }
+
+
+def _mismo_tramo(anio: int, corte: date) -> date:
+    """El mismo día de corte en otro año (el 29 de febrero cae en el 28)."""
+    try:
+        return corte.replace(year=anio)
+    except ValueError:
+        return corte.replace(year=anio, day=28)
+
+
+def _por_anio(db: Session, columna, anios, corte: Optional[date], filtros=()) -> dict:
+    """{(valor, año): comparendos}. Con `corte`, cada año solo cuenta de enero hasta ese mismo día."""
+    sub = primeras_fechas(db)
+    anio = func.extract("year", sub.c.fecha)
+    query = db.query(columna, anio, func.count(func.distinct(sub.c.expediente_id))).select_from(sub)
+    if columna is not None and columna is not True:
+        query = query.join(InspeccionExpediente, InspeccionExpediente.id == sub.c.expediente_id) \
+                     .join(InspeccionMedida, InspeccionMedida.expediente_id == InspeccionExpediente.id)
+    condiciones = [anio.in_(list(anios)), *filtros]
+    if corte:
+        # Día del año hasta el corte: compara tramos iguales entre años.
+        condiciones.append(func.to_char(sub.c.fecha, "MM-DD") <= corte.strftime("%m-%d"))
+    filas = query.filter(*condiciones).group_by(columna, anio).all()
+    return {(valor, int(a)): int(n) for valor, a, n in filas}
+
+
+def tendencia(db: Session, desde: int = 2018, hoy: Optional[date] = None) -> dict:
+    """Comparendos por año (completo y mismo tramo), por comportamiento y por barrio."""
+    hoy = hoy or date.today()
+    ultimo = corte(db, hoy)
+    if not ultimo:
+        return {"anios": [], "comportamientos": [], "barrios": []}
+    anios = list(range(desde, ultimo.year + 1))
+    # Una sola consulta: por año, total, mismo tramo y primera/última fecha (para saber si está completo).
+    sub = primeras_fechas(db)
+    anio_col = func.extract("year", sub.c.fecha)
+    en_tramo = func.to_char(sub.c.fecha, "MM-DD") <= ultimo.strftime("%m-%d")
+    filas = (db.query(anio_col, func.count(sub.c.expediente_id),
+                      func.count(sub.c.expediente_id).filter(en_tramo),
+                      func.min(sub.c.fecha), func.max(sub.c.fecha), func.max(sub.c.fecha).filter(en_tramo))
+             .filter(anio_col.between(desde, ultimo.year), sub.c.fecha < _limites(ultimo, ultimo)[1])
+             .group_by(anio_col).all())
+    por = {int(a): (int(t), int(tr), mn, mx, mxt) for a, t, tr, mn, mx, mxt in filas}
+    dia = lambda valor: valor.date() if isinstance(valor, datetime) else valor
+    margen = timedelta(days=20)
+    total_anio = {a: por.get(a, (0,))[0] for a in anios}
+    tramo = {a: por[a][1] if a in por else 0 for a in anios}
+    completos = {a for a in anios if a in por and a < ultimo.year
+                 and dia(por[a][2]) <= date(a, 1, 1) + margen and dia(por[a][3]) >= date(a, 12, 31) - margen}
+    tramo_ok = {a: a in por and por[a][4] is not None and dia(por[a][2]) <= date(a, 1, 1) + margen
+                and dia(por[a][4]) >= _mismo_tramo(a, ultimo) - margen for a in anios}
+
+    def variacion(actual, anterior):
+        return round((actual - anterior) * 100 / anterior, 1) if anterior else None
+
+    serie = [{"anio": a, "total": total_anio[a], "completo": a in completos or a == ultimo.year,
+              "en_curso": a == ultimo.year, "mismo_tramo": tramo[a] if tramo_ok[a] else None} for a in anios]
+
+    # Comportamientos: mismo tramo en cada año, agrupados por artículo.
+    crudo = _por_anio(db, InspeccionMedida.articulo, anios, ultimo, [InspeccionMedida.articulo.isnot(None)])
+    por_articulo: dict = {}
+    for (texto, a), n in crudo.items():
+        numero = numero_articulo(texto) or texto
+        fila = por_articulo.setdefault(numero, {"articulo": numero, "etiqueta": etiqueta_articulo(texto), "por_anio": {}})
+        fila["por_anio"][a] = fila["por_anio"].get(a, 0) + n
+    previo = ultimo.year - 1
+    comportamientos = sorted(por_articulo.values(), key=lambda f: -f["por_anio"].get(ultimo.year, 0))[:6]
+    for fila in comportamientos:
+        fila["variacion"] = variacion(fila["por_anio"].get(ultimo.year, 0), fila["por_anio"].get(previo, 0)) if tramo_ok.get(previo) else None
+
+    # Barrios: mismo tramo; los 8 con más comparendos este año y su cambio frente al año anterior.
+    crudo = _por_anio(db, InspeccionExpediente.localidad, [previo, ultimo.year], ultimo, filtros_barrio())
+    barrios: dict = {}
+    for (nombre, a), n in crudo.items():
+        barrios.setdefault(nombre, {"barrio": nombre, "por_anio": {}})["por_anio"][a] = n
+    lista = sorted(barrios.values(), key=lambda f: -f["por_anio"].get(ultimo.year, 0))[:8]
+    for fila in lista:
+        fila["variacion"] = variacion(fila["por_anio"].get(ultimo.year, 0), fila["por_anio"].get(previo, 0)) if tramo_ok.get(previo) else None
+
+    return {
+        "corte": ultimo.isoformat(),
+        "tramo": f"1 de enero al {ultimo.day} de {['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][ultimo.month - 1]}",
+        "anios": serie,
+        "variacion_tramo": variacion(tramo[ultimo.year], tramo.get(previo, 0)) if tramo_ok.get(previo) else None,
+        "comportamientos": comportamientos,
+        "barrios": lista,
+        "anio_actual": ultimo.year,
+        "anio_previo": previo,
+    }

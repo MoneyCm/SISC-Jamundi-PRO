@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE_URL } from '../utils/apiConfig';
+import TendenciaConvivencia from '../components/TendenciaConvivencia';
 
 const COLORS = ['#281FD0', '#34D399', '#FBBF24', '#EF4444', '#8B5CF6'];
 
@@ -466,6 +467,7 @@ const InspeccionesModule = () => {
                                     <p className="mt-2 text-xs text-slate-500 font-semibold">El último mes puede estar incompleto: llega hasta el corte.</p>
                                 </div>
                             </div>
+                            <TendenciaConvivencia />
                         </>
                     )}
                 </div>

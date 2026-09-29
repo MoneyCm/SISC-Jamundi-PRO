@@ -67,3 +67,8 @@ def test_no_compara_con_un_periodo_sin_datos_completos():
     finally:
         db.rollback()
         db.close()
+
+
+def test_mismo_tramo_en_otro_anio():
+    assert comparendos_rnmc._mismo_tramo(2025, date(2026, 9, 28)) == date(2025, 9, 28)
+    assert comparendos_rnmc._mismo_tramo(2025, date(2024, 2, 29)) == date(2025, 2, 28)
