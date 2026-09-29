@@ -110,6 +110,57 @@ const FactorTable = ({ title, rows }) => (
     </div>
 );
 
+// Informes de gestión aprobados (cifras agregadas que ya usa el boletín): se ven aunque no haya base caso a caso.
+const periodoLargo = (periodo) => {
+    if (!periodo) return '';
+    const [anio, mes] = periodo.split('-');
+    return `${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][Number(mes) - 1]} de ${anio}`;
+};
+
+const InformesComisarias = () => {
+    const [datos, setDatos] = useState(null);
+    useEffect(() => {
+        let vigente = true;
+        apiJson('/comisarias/informes').then((resultado) => { if (vigente) setDatos(resultado); }).catch(() => {});
+        return () => { vigente = false; };
+    }, []);
+    if (!datos || (!datos.informes.length && !datos.pendientes)) return null;
+    return (
+        <section className="space-y-3">
+            <div>
+                <h3 className="text-lg font-black text-slate-900">Lo que ya reportaron las Comisarías</h3>
+                <p className="text-sm font-semibold text-slate-600">Último informe de gestión aprobado de cada una. Son cifras del mes que reporta la Comisaría, las mismas del boletín.</p>
+            </div>
+            {datos.pendientes > 0 && (
+                <p className="flex gap-2 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                    <AlertTriangle size={18} className="shrink-0" />
+                    Hay {datos.pendientes} {datos.pendientes === 1 ? 'informe pendiente' : 'informes pendientes'} de aprobar: no se muestran hasta revisarlos en Centro de fuentes → Entregas.
+                </p>
+            )}
+            <div className="grid gap-4 lg:grid-cols-2">
+                {datos.informes.map((informe) => (
+                    <Panel key={informe.entidad} title={informe.entidad} note={`Informe de ${periodoLargo(informe.periodo)} · corte ${formatDate(informe.corte)}`}>
+                        <table className="w-full text-sm">
+                            <tbody>
+                                {informe.cifras.map((cifra) => (
+                                    <tr key={cifra.indicador} className="border-t border-slate-100 first:border-t-0">
+                                        <td className="py-1.5 pr-3 font-semibold text-slate-800">{cifra.indicador}</td>
+                                        <td className="py-1.5 text-right font-black tabular-nums text-slate-950">
+                                            {cifra.valor === null ? '—' : Number(cifra.valor).toLocaleString('es-CO')}
+                                            {cifra.unidad && <span className="ml-1 text-xs font-semibold text-slate-500">{cifra.unidad}</span>}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {informe.cifras.length < 3 && <p className="mt-2 text-xs font-semibold text-amber-800">Este informe trae muy pocas cifras; conviene pedir el informe completo.</p>}
+                    </Panel>
+                ))}
+            </div>
+        </section>
+    );
+};
+
 const Analysis = ({ catalog, onUpload, onTemplate }) => {
     const [entity, setEntity] = useState('');
     const [start, setStart] = useState('');
@@ -139,8 +190,10 @@ const Analysis = ({ catalog, onUpload, onTemplate }) => {
     if (!data) return <p className="flex items-center gap-2 text-sm font-semibold text-slate-500"><Loader2 size={16} className="animate-spin" /> Cargando…</p>;
     if (data.status === 'SIN_DATOS' && !data.data_last) {
         return (
+            <div className="space-y-6">
+            <InformesComisarias />
             <section className="space-y-3 border border-dashed border-slate-300 bg-white p-6">
-                <h3 className="text-lg font-black text-slate-900">Aún no hay bases de casos cargadas</h3>
+                <h3 className="text-lg font-black text-slate-900">Análisis caso a caso: aún no hay bases cargadas</h3>
                 <p className="max-w-3xl text-sm font-semibold leading-6 text-slate-600">
                     Cuando las Comisarías respondan la solicitud del Observatorio, cargue aquí su base (Excel o CSV) en el formato que usen.
                     Si no tienen formato propio, envíeles la plantilla: trae los 11 datos solicitados y la explicación de cada columna.
@@ -150,6 +203,7 @@ const Analysis = ({ catalog, onUpload, onTemplate }) => {
                     <button onClick={onUpload} className="inline-flex min-h-11 items-center gap-2 bg-[#281FD0] px-4 text-sm font-black text-white hover:bg-[#1F18A8]"><Upload size={17} /> Cargar base</button>
                 </div>
             </section>
+            </div>
         );
     }
 
@@ -241,6 +295,7 @@ const Analysis = ({ catalog, onUpload, onTemplate }) => {
                             <Bars rows={Object.entries(data.completeness).map(([code, pct]) => ({ code, label: COMPLETENESS_LABELS[code] || code, count: pct ?? 0, display: formatPct(pct) }))} />
                         </Panel>
                     </div>
+                    <InformesComisarias />
                     <p className="text-xs font-semibold text-slate-500">Uso interno y reservado. Solo se muestran cifras agregadas; el SISC no guarda nombres, documentos, teléfonos ni direcciones.</p>
                 </>
             )}
