@@ -77,21 +77,30 @@ class InspeccionService:
             "LOCALIDAD": barrio,
             "LUGAR": lugar,
             "EXPEDIENTE": df["EXPEDIENTE"],
-            "MEDIDA": df["MEDIDA"],
+            # El inspector aún no ha definido la medida en algunos comparendos: igual cuentan.
+            "MEDIDA": df["MEDIDA"].where(df["MEDIDA"].notna() & (df["MEDIDA"].astype(str).str.strip() != ""), "Medida por definir"),
             "ESTADO": df["ESTADO_MEDIDA"],
             "FECHA_ACTUACION": df["FECHA_HECHOS"],
+            "ARTICULO": df["ARTICULO"] if "ARTICULO" in df.columns else None,
+            "COMPORTAMIENTO": df["COMPORTAMIENTO"] if "COMPORTAMIENTO" in df.columns else None,
         })
 
-    async def ingest_excel(self, file_content: bytes, filename: str, user_id: Optional[str] = None) -> Dict:
-        df = pd.read_excel(io.BytesIO(file_content))
+    def read_frame(self, file_content: bytes):
+        """Lee el archivo (Excel, o el HTML con extensión .xls que exporta el RNMC) y lo deja en formato RNMC.
 
+        Devuelve (tabla, formato). En el formato de comparendos los datos personales se descartan aquí.
+        """
+        from services.file_reader import smart_read_file
+
+        df = smart_read_file(file_content)
         # Normalizar nombres de columnas (quitar espacios, tildes, a mayúsculas)
         df.columns = [self.normalize_text(c).replace(' ', '_') for c in df.columns]
-
-        source_format = "RNMC"
         if self.COMPARENDOS_MARKERS.issubset(df.columns):
-            source_format = "COMPARENDOS"
-            df = self.comparendos_to_rnmc(df)
+            return self.comparendos_to_rnmc(df), "COMPARENDOS"
+        return df, "RNMC"
+
+    async def ingest_excel(self, file_content: bytes, filename: str, user_id: Optional[str] = None) -> Dict:
+        df, source_format = self.read_frame(file_content)
 
         # Filtro Jamundí
         if 'MUNICIPIO' in df.columns:
@@ -171,9 +180,14 @@ class InspeccionService:
                     except:
                         if medida.fecha_inicio and medida.fecha_fin:
                             medida.dias_duracion = (medida.fecha_fin - medida.fecha_inicio).days
-                elif medida.fecha_inicio is None:
-                    # Comparendos: la medida se cuenta desde la fecha del hecho.
-                    medida.fecha_inicio = fecha_actuacion.date()
+                else:
+                    if medida.fecha_inicio is None:
+                        # Comparendos: la medida se cuenta desde la fecha del hecho.
+                        medida.fecha_inicio = fecha_actuacion.date()
+                    for field, column in (("articulo", "ARTICULO"), ("comportamiento", "COMPORTAMIENTO")):
+                        value = row.get(column)
+                        if value is not None and not pd.isna(value) and str(value).strip():
+                            setattr(medida, field, str(value).strip()[:500])
 
                 # 3. Gestionar Actuación (Idempotente)
                 fp = self.generate_fingerprint(row)

@@ -31,7 +31,8 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         { id: 'council_commitments', label: 'Compromisos y acuerdos', icon: ListChecks, category: 'ESTRATEGIA', show: isAnalyst || isDirective },
         // Los arma el Observatorio; la dirección los recibe ya listos por WhatsApp.
         { id: 'narrative_alerts', label: 'Resúmenes para WhatsApp', icon: MessageSquareText, category: 'ESTRATEGIA', show: isAnalyst },
-        { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective },
+        // Aquí se suben cada mes los reportes del RNMC (comparendos y medidas gestionadas).
+        { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective || isUploader },
         { id: 'comisarias', label: 'Comisarías de Familia', icon: HeartHandshake, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective || isUploader || isSteward },
 
         { id: 'data', label: 'Descarga CSV/XLS', icon: Database, category: 'SALIDA', show: isAnalyst },

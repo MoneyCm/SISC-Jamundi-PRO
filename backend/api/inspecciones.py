@@ -12,7 +12,7 @@ from db import crud_dq
 from services import dq_service
 
 router = APIRouter()
-INSPECTIONS_UPLOAD_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
+INSPECTIONS_UPLOAD_ROLES = ["ANALYST", "DIRECTIVE", "SOURCE_UPLOADER", "FUNC_ADMIN", "TI_ADMIN"]
 
 @router.post("/upload")
 async def upload_inspecciones(
@@ -20,17 +20,24 @@ async def upload_inspecciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(INSPECTIONS_UPLOAD_ROLES)),
 ):
-    """Carga y procesa el archivo Excel de Medidas Gestionadas."""
+    """Carga los reportes del RNMC: medidas gestionadas o comparendos (medidas pendientes)."""
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Formato de archivo no soportado. Use Excel.")
     
     content = await file.read()
-    quality_report = dq_service.run_dq(
-        content,
-        file.filename or "archivo_sin_nombre",
-        source_name="INSPECCIONES_POLICIA",
-        profile="INSPECCIONES",
-    )
+    service = InspeccionService(db)
+    try:
+        # La calidad se revisa sobre el formato RNMC ya convertido (los comparendos traen otras columnas).
+        frame, _format = service.read_frame(content)
+        quality_report = dq_service.run_frame_dq(
+            frame, file.filename or "archivo_sin_nombre", source_name="INSPECCIONES_POLICIA", profile="INSPECCIONES")
+    except Exception:
+        quality_report = dq_service.run_dq(
+            content,
+            file.filename or "archivo_sin_nombre",
+            source_name="INSPECCIONES_POLICIA",
+            profile="INSPECCIONES",
+        )
     db_quality_report = crud_dq.create_dq_report(db, quality_report)
     if quality_report.get("semaforo") == "ROJO":
         raise HTTPException(
@@ -43,7 +50,6 @@ async def upload_inspecciones(
             },
         )
 
-    service = InspeccionService(db)
     result = await service.ingest_excel(content, file.filename)
     result["quality"] = {
         "report_id": str(db_quality_report.id),
