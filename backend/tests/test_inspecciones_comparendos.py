@@ -18,10 +18,41 @@ def test_comparendos_export_keeps_only_operational_columns():
 
     converted = service.comparendos_to_rnmc(raw)
 
-    assert list(converted.columns) == ["DTO", "MUNICIPIO", "LOCALIDAD", "LUGAR", "EXPEDIENTE", "MEDIDA", "ESTADO", "FECHA_ACTUACION"]
+    assert list(converted.columns) == ["DTO", "MUNICIPIO", "LOCALIDAD", "LUGAR", "EXPEDIENTE", "MEDIDA", "ESTADO", "FECHA_ACTUACION",
+                                       "ARTICULO", "COMPORTAMIENTO"]
     row = converted.iloc[0]
     assert row["FECHA_ACTUACION"] == "2026-04-19 00:00:00"  # fecha real del hecho, no la del día de carga
     assert row["ESTADO"] == "PENDIENTE"
     assert row["LOCALIDAD"] == "TERRANOVA"
     assert row["MUNICIPIO"] == "JAMUNDI"
     assert not {"INFRACTOR", "IDENTIFICACION", "TELEFONO", "DIRECCION_RESIDE", "RELATO_HECHOS", "POLICIA_IMPONE"} & set(converted.columns)
+
+
+def test_rnmc_html_report_is_read_without_nested_rows_or_personal_data():
+    """El RNMC exporta un HTML con extensión .xls; el relato puede traer tablas dentro de la celda."""
+    html = (
+        "<form><table><caption>POLICIA NACIONAL</caption>"
+        "<tr><td>DTO</td><td>LUGAR</td><td>FECHA_HECHOS</td><td>EXPEDIENTE</td><td>COMPARENDO</td>"
+        "<td>ARTICULO</td><td>COMPORTAMIENTO</td><td>MEDIDA</td><td>ESTADO_MEDIDA</td><td>BARRIO_HECHOS</td>"
+        "<td>INFRACTOR</td><td>RELATO_HECHOS</td></tr>"
+        "<tr><td>VALLE</td><td>JAMUNDI - CM</td><td>19/04/2026</td><td>76-364-6-2026-1</td><td>1</td>"
+        "<td>Art. 35 - Relaciones con las autoridades</td><td>Irrespetar a las autoridades</td>"
+        "<td>Multa General Tipo 4</td><td>PENDIENTE</td><td>CENTRO</td><td>PERSONA</td>"
+        "<td><table><tr><td>relato</td></tr></table></td></tr>"
+        "</table></form>"
+    ).encode("latin-1")
+    service = InspeccionService(db=None)
+
+    frame, source_format = service.read_frame(html)
+
+    assert source_format == "COMPARENDOS"
+    assert len(frame) == 1
+    row = frame.iloc[0]
+    assert row["EXPEDIENTE"] == "76-364-6-2026-1"
+    assert row["ARTICULO"].startswith("Art. 35")
+    assert row["LOCALIDAD"] == "CENTRO"
+
+    pending = pd.DataFrame([{"FECHA_HECHOS": "01/05/2026", "EXPEDIENTE": "76-364-6-2026-2", "COMPARENDO": "2",
+                             "MEDIDA": None, "ESTADO_MEDIDA": "PENDIENTE"}])
+    assert service.comparendos_to_rnmc(pending).iloc[0]["MEDIDA"] == "Medida por definir"
+    assert not {"INFRACTOR", "RELATO_HECHOS"} & set(frame.columns)

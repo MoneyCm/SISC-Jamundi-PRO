@@ -134,7 +134,8 @@ def test_operational_modules_enforce_the_roles_shown_in_navigation():
     assert set(dq_guard.allowed_roles) == {"STEWARD", "FUNC_ADMIN", "TI_ADMIN"}
 
     upload_guard = _role_guard(inspecciones.router, "/upload")
-    assert set(upload_guard.allowed_roles) == {"ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"}
+    # El cargador de fuentes sube cada mes los reportes del RNMC.
+    assert set(upload_guard.allowed_roles) == {"ANALYST", "DIRECTIVE", "SOURCE_UPLOADER", "FUNC_ADMIN", "TI_ADMIN"}
     expedientes_route = next(route for route in inspecciones.router.routes if route.path == "/expedientes")
     assert any(dependency.call is institutional_access for dependency in expedientes_route.dependant.dependencies)
 

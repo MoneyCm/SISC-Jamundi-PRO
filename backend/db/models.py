@@ -110,6 +110,8 @@ def create_tables():
                 conn.execute(text("UPDATE rnmc_measures SET source_id = 'INSPECCION_MEDIDAS_RNMC' WHERE source_id IS NULL;"))
                 conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_rnmc_source_fingerprint ON rnmc_measures (source_id, event_fingerprint);"))
                 conn.execute(text("ALTER TABLE institutional_data_batches ADD COLUMN IF NOT EXISTS reporting_basis VARCHAR(20) DEFAULT 'CUMULATIVE';"))
+                conn.execute(text("ALTER TABLE inspeccion_medidas ADD COLUMN IF NOT EXISTS articulo TEXT;"))
+                conn.execute(text("ALTER TABLE inspeccion_medidas ADD COLUMN IF NOT EXISTS comportamiento TEXT;"))
                 
                 # create_all no añade columnas a tablas que ya existen.
                 from db.conciliacion_schema import ensure_conciliacion_schema

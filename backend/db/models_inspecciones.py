@@ -29,6 +29,9 @@ class InspeccionMedida(Base):
     fecha_inicio = Column(Date)
     fecha_fin = Column(Date)
     dias_duracion = Column(Integer)
+    # Solo del reporte de comparendos: artículo y comportamiento del Código de Convivencia.
+    articulo = Column(Text)
+    comportamiento = Column(Text)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

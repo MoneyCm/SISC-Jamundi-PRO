@@ -2,10 +2,9 @@ import json
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from db.models_intelligence import RNMCMeasure
 from services.piscc_goals import GOALS
 
 
@@ -69,18 +68,31 @@ def load_mindefensa(cutoff):
 
 
 def load_rnmc(db: Session, cutoff):
-    end = datetime.combine(cutoff + timedelta(days=1), time.min)
-    start = datetime(cutoff.year, 1, 1)
-    previous_start = datetime(cutoff.year - 1, 1, 1)
-    previous_end = datetime.combine(cutoff.replace(year=cutoff.year - 1) + timedelta(days=1), time.min)
-    municipality = func.upper(func.coalesce(RNMCMeasure.municipio, ""))
-    base = [municipality.like("%JAMUND%")]
-    current = db.query(func.count(RNMCMeasure.id)).filter(*base, RNMCMeasure.fecha_actuacion >= start, RNMCMeasure.fecha_actuacion < end).scalar() or 0
-    previous = db.query(func.count(RNMCMeasure.id)).filter(*base, RNMCMeasure.fecha_actuacion >= previous_start, RNMCMeasure.fecha_actuacion < previous_end).scalar() or 0
-    source_cutoff = db.query(func.max(RNMCMeasure.fecha_actuacion)).filter(*base, RNMCMeasure.fecha_actuacion < end).scalar()
+    """Comportamientos contrarios a la convivencia: comparendos únicos (expedientes) del RNMC.
+
+    Sale de las tablas de Inspecciones, que reciben los reportes del RNMC (comparendos y medidas
+    gestionadas). Cada expediente se cuenta una vez, en la fecha de su primer registro (la del
+    hecho en el reporte de comparendos).
+    """
+    first_dates = """
+        SELECT e.numero_expediente, MIN(a.fecha_actuacion)::date AS fecha
+        FROM inspeccion_expedientes e
+        JOIN inspeccion_medidas m ON m.expediente_id = e.id
+        JOIN inspeccion_actuaciones a ON a.medida_id = m.id
+        GROUP BY e.numero_expediente
+    """
+
+    def count(desde, hasta):
+        return db.execute(text(f"SELECT COUNT(*) FROM ({first_dates}) t WHERE fecha >= :desde AND fecha <= :hasta"),
+                          {"desde": desde, "hasta": hasta}).scalar() or 0
+
+    source_cutoff = db.execute(text(f"SELECT MAX(fecha) FROM ({first_dates}) t WHERE fecha <= :hasta"),
+                               {"hasta": cutoff}).scalar()
     if not source_cutoff:
         return None
-    return _source_item("convivencia", "Comportamientos Contrarios a la Convivencia", previous, current, source_cutoff.date(), "RNMC / Inspecciones de Policía")
+    current = count(date(source_cutoff.year, 1, 1), source_cutoff)
+    previous = count(date(source_cutoff.year - 1, 1, 1), source_cutoff.replace(year=source_cutoff.year - 1))
+    return _source_item("convivencia", "Comportamientos Contrarios a la Convivencia", previous, current, source_cutoff, "RNMC / Inspecciones de Policía")
 
 
 def get_piscc_sources(db: Session, cutoff: date):

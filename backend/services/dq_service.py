@@ -540,6 +540,12 @@ def run_dq(
     return _run_frame(frame, filename, source_name, selected_profile)
 
 
+def run_frame_dq(frame: pd.DataFrame, filename: str, source_name: Optional[str] = None,
+                 profile: Optional[str] = None) -> Dict[str, Any]:
+    """Control de calidad sobre una tabla ya leída (por ejemplo, el reporte de comparendos convertido)."""
+    return _run_frame(frame, filename, source_name, _profile_for(source_name, profile))
+
+
 def run_records_dq(
     records: Iterable[Dict[str, Any]],
     filename: str,

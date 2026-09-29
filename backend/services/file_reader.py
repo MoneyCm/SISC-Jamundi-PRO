@@ -110,6 +110,36 @@ def promote_header_row(df_raw, header_idx):
     data.columns = columns
     return data
 
+def read_html_table(file_bytes: bytes):
+    """Primera tabla de un HTML guardado como .xls (así exporta la Policía los reportes del RNMC).
+
+    Usa BeautifulSoup con el analizador de Python: no depende de lxml. La primera fila es el encabezado.
+    """
+    head = file_bytes[:2048].lstrip().lower()
+    if not (head.startswith(b"<") and b"<table" in file_bytes[:200000].lower()):
+        return None
+    from bs4 import BeautifulSoup
+
+    for encoding in ("utf-8", "latin-1"):
+        try:
+            text = file_bytes.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    table = BeautifulSoup(text, "html.parser").find("table")
+    if table is None:
+        return None
+    # Solo las filas y celdas propias de la tabla: el relato de algunos hechos trae tablas anidadas.
+    trs = [tr for tr in table.find_all("tr") if tr.find_parent("table") is table]
+    rows = [[cell.get_text(" ", strip=True) for cell in tr.find_all(["th", "td"], recursive=False)] for tr in trs]
+    rows = [row for row in rows if any(row)]
+    if len(rows) < 2:
+        return None
+    columns = rows[0]
+    body = [(row + [""] * len(columns))[:len(columns)] for row in rows[1:]]
+    return pd.DataFrame(body, columns=columns).replace("", None)
+
+
 def smart_read_file(file_bytes: bytes, header=0) -> pd.DataFrame:
     """
     Intenta leer un archivo probando múltiples formatos y codificaciones.
@@ -120,6 +150,16 @@ def smart_read_file(file_bytes: bytes, header=0) -> pd.DataFrame:
         # Buscar la firma de cierre PK\x05\x06 en los últimos 1024 bytes
         if b'PK\x05\x06' not in file_bytes[-1024:]:
             raise ValueError("ERROR_FILE_CORRUPT_XLSX: El archivo parece ser un Excel (.xlsx) pero está incompleto o corrupto (falta la firma de cierre ZIP). Por favor, vuelva a descargarlo o guárdelo nuevamente desde Excel.")
+
+    # 0. Un HTML guardado como .xls (reportes del RNMC): leerlo como tabla antes de que el
+    #    intento de CSV lo tome por texto separado.
+    if file_bytes[:2048].lstrip()[:1] == b"<":
+        try:
+            frame = read_html_table(file_bytes)
+            if frame is not None:
+                return frame
+        except Exception as e:
+            logger.debug(f"Falló lectura HTML propia: {e}")
 
     # 1. Intento: Excel Moderno (.xlsx)
     try:
@@ -153,6 +193,13 @@ def smart_read_file(file_bytes: bytes, header=0) -> pd.DataFrame:
             return dfs[0]
     except Exception as e:
         logger.debug(f"Falló lectura HTML: {e}")
+    try:
+        frame = read_html_table(file_bytes)
+        if frame is not None:
+            logger.info("Archivo detectado como Tabla HTML (lector propio)")
+            return frame
+    except Exception as e:
+        logger.debug(f"Falló lectura HTML propia: {e}")
 
     # Si todo falla, lanzamos la excepción final
     raise ValueError("El formato del archivo no es reconocido (no es Excel, CSV válido ni HTML)")
