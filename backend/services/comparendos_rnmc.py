@@ -188,3 +188,22 @@ def resumen_convivencia(db: Session, desde: date, hasta: date, barrios: int = 10
         "dias": [{"dia": nombre, "total": int(por_dia.get(i + 1, 0))} for i, nombre in enumerate(DIAS)],
         "meses": [{"mes": MESES[int(m) - 1], "total": int(v)} for m, v in por_mes],
     }
+
+
+DIAS_ALERTA = 35  # los reportes del RNMC llegan cada mes; más de 35 días sin datos nuevos es atraso
+
+
+def estado_carga(db: Session, hoy: Optional[date] = None) -> dict:
+    """Qué tan al día están los comparendos: último dato, última carga y si ya toca pedir los reportes."""
+    hoy = hoy or date.today()
+    ultimo = corte(db, hoy)
+    ultima_carga = db.query(func.max(InspeccionActuacion.created_at)).filter(*filtros_publicos()).scalar()
+    dias = (hoy - ultimo).days if ultimo else None
+    return {
+        "corte": ultimo.isoformat() if ultimo else None,
+        "ultima_carga": ultima_carga.date().isoformat() if ultima_carga else None,
+        "dias_desde_corte": dias,
+        "dias_alerta": DIAS_ALERTA,
+        "atrasado": ultimo is None or dias > DIAS_ALERTA,
+        "comparendos_anio": contar(db, date(ultimo.year, 1, 1), ultimo) if ultimo else 0,
+    }

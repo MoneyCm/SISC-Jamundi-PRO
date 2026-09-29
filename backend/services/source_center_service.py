@@ -28,6 +28,20 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "fresh_days": 14,
         "lagged_days": 35,
     },
+    "INSPECCIONES_RNMC": {
+        "name": "RNMC - Comparendos",
+        "institution": "Policía Nacional / Inspecciones de Policía",
+        "scope": "Comparendos del Código de Convivencia en Jamundí",
+        "purpose": "Meta de convivencia del PISCC y análisis por barrio y comportamiento",
+        "update_mode": "MANUAL",
+        "expected_frequency": "Mensual (reportes de medidas pendientes y gestionadas)",
+        "source_url": None,
+        "action_type": "UPLOAD",
+        "action_label": "Cargar reportes del RNMC",
+        "dataset_code": "INSPECCIONES_RNMC",
+        "fresh_days": 35,
+        "lagged_days": 60,
+    },
     "POLICIA_NACIONAL": {
         "name": "Policia Nacional",
         "institution": "Policia Nacional de Colombia",
@@ -361,6 +375,41 @@ class SourceCenterService:
         return connector
 
     @classmethod
+    def _local_rnmc(cls, db: Session) -> Dict[str, Any]:
+        """Reportes del RNMC que se suben en Inspecciones: al día si el último dato tiene 35 días o menos."""
+        from services import comparendos_rnmc
+
+        connector = cls._base("INSPECCIONES_RNMC")
+        try:
+            estado = comparendos_rnmc.estado_carga(db)
+        except SQLAlchemyError:
+            db.rollback()
+            return connector
+        cutoff = date.fromisoformat(estado["corte"]) if estado["corte"] else None
+        last = estado["ultima_carga"]
+        config = SOURCE_CONNECTORS["INSPECCIONES_RNMC"]
+        freshness = freshness_status(cutoff, config["fresh_days"], config["lagged_days"])
+        status = overall_status(connected=bool(cutoff), monitor_status="CURRENT", freshness=freshness,
+                                last_checked_at=datetime.fromisoformat(last) if last else None)
+        warnings = []
+        if estado["atrasado"] and cutoff:
+            warnings.append(f"Sin datos nuevos desde hace {estado['dias_desde_corte']} días: pida los reportes del RNMC.")
+        connector.update({
+            "status": status,
+            "status_label": STATUS_LABELS[status],
+            "quality_status": "VALIDATED" if cutoff else "INCOMPLETE",
+            "quality_label": QUALITY_LABELS["VALIDATED" if cutoff else "INCOMPLETE"],
+            "freshness_status": freshness,
+            "source_cutoff_date": estado["corte"],
+            "last_checked_at": last,
+            "last_success_at": last,
+            "record_count": estado["comparendos_anio"],
+            "period_label": f"Comparendos {cutoff.year} hasta {cutoff.isoformat()}" if cutoff else None,
+            "warnings": warnings,
+        })
+        return connector
+
+    @classmethod
     def _asset_connector(
         cls,
         db: Session,
@@ -440,6 +489,7 @@ class SourceCenterService:
         states = cls._state_map(db)
         connectors = [
             cls._local_police(db, states.get("POLICIA_JAMUNDI")),
+            cls._local_rnmc(db),
             # POLICIA_NACIONAL (monitor-policia en GitHub) no lee el Excel de 2026: se retiró de la vista y
             # la reemplaza POLICIA_NACIONAL_DATOS. Su configuración se conserva para los latidos que aún lleguen.
             cls._apply_state(cls._base("POLICIA_NACIONAL_DATOS"), states.get("POLICIA_NACIONAL_DATOS")),

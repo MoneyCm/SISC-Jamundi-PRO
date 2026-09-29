@@ -37,6 +37,7 @@ def _user(*roles):
 def test_catalog_has_the_distinct_source_connectors():
     assert set(SOURCE_CONNECTORS) == {
         "POLICIA_JAMUNDI",
+        "INSPECCIONES_RNMC",
         "POLICIA_NACIONAL",
         "POLICIA_NACIONAL_DATOS",
         "MINDEFENSA",
@@ -55,6 +56,9 @@ def test_catalog_has_the_distinct_source_connectors():
     assert SOURCE_CONNECTORS["MINDEFENSA"]["action_type"] == "OPEN"
     assert SOURCE_CONNECTORS["SIEDCO_PUBLICO"]["expected_frequency"] == "Mensual y bajo demanda"
     assert SOURCE_CONNECTORS["OBSERVATORIO_VALLE"]["expected_frequency"] == "Semanal"
+    # Los reportes del RNMC se suben a mano cada mes, en Inspecciones de Policía.
+    assert SOURCE_CONNECTORS["INSPECCIONES_RNMC"]["update_mode"] == "MANUAL"
+    assert SOURCE_CONNECTORS["INSPECCIONES_RNMC"]["fresh_days"] == 35
     assert SOURCE_CONNECTORS["FISCALIA_SPOA_V3"]["purpose"] == "Capa judicial complementaria del Observatorio del Delito"
     assert SOURCE_CONNECTORS["MEDICINA_LEGAL"]["purpose"] == "Capa forense que arbitra homicidios, suicidios y violencia de causa externa"
 

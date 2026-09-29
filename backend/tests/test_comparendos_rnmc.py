@@ -29,6 +29,12 @@ def test_expediente_counts_once_at_its_first_date():
         assert comparendos_rnmc.contar(db, date(2001, 6, 1), date(2001, 6, 30)) == 0
         por_medida = dict(comparendos_rnmc.agrupar(db, InspeccionMedida.nombre_medida, date(2001, 1, 1), date(2001, 12, 31)))
         assert por_medida == {"MULTA GENERAL TIPO 4": 1, "MEDIDA POR DEFINIR": 1}
+
+        # Visto desde fin de 2001, el último comparendo (1 de marzo) tiene más de 35 días: toca pedir los reportes.
+        estado = comparendos_rnmc.estado_carga(db, date(2001, 12, 31))
+        assert estado["corte"] == "2001-03-01"
+        assert estado["atrasado"] is True
+        assert comparendos_rnmc.estado_carga(db, date(2001, 3, 20))["atrasado"] is False
     finally:
         db.rollback()
         db.close()

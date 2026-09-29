@@ -319,7 +319,7 @@ const App = () => {
       case 'sources':
       case 'monitoring':
       case 'police_monitor':
-        return <SourceCenter onOpenBulletin={() => setActivePage('boletin_replica')} userRoles={userRoles} />;
+        return <SourceCenter onOpenBulletin={() => setActivePage('boletin_replica')} onOpenInspecciones={() => setActivePage('inspecciones')} userRoles={userRoles} />;
       case 'police_explorer':
         return <PoliceWeeklyExplorer />;
       case 'sisc_cifras':
@@ -356,7 +356,7 @@ const App = () => {
       case 'police_audit':
         return <PoliceIngestionAudit runId={selectedReportId} onBack={() => setActivePage('boletin_replica')} />;
       case 'institutional_agents':
-        return <SourceCenter initialSection="deliveries" userRoles={userRoles} onOpenBulletin={() => setActivePage('boletin_replica')} />;
+        return <SourceCenter initialSection="deliveries" userRoles={userRoles} onOpenBulletin={() => setActivePage('boletin_replica')} onOpenInspecciones={() => setActivePage('inspecciones')} />;
       default:
         return <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;
     }

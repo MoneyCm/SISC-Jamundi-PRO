@@ -161,7 +161,7 @@ const ContrastTable = ({ rows, kind = 'contraste', stages }) => {
     );
 };
 
-const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
+const SourceCenter = ({ onOpenBulletin, onOpenInspecciones, userRoles = [] }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -244,6 +244,8 @@ const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
     const runAction = (connector) => {
         if (connector.action?.type === 'UPLOAD') {
             if (canUpload && connector.action.dataset_code === 'POLICIA_SEMANAL') onOpenBulletin?.();
+            // Los reportes del RNMC se suben en Inspecciones de Policía.
+            if (canUpload && connector.action.dataset_code === 'INSPECCIONES_RNMC') onOpenInspecciones?.();
             return;
         }
         if (connector.action?.type === 'CHECK') {
@@ -261,8 +263,8 @@ const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
         return ExternalLink;
     };
 
-    const actionLabel = (type) => {
-        if (type === 'UPLOAD') return 'Ir a Boletín';
+    const actionLabel = (type, datasetCode) => {
+        if (type === 'UPLOAD') return datasetCode === 'INSPECCIONES_RNMC' ? 'Ir a Inspecciones' : 'Ir a Boletín';
         if (type === 'CHECK') return 'Revisar';
         return 'Abrir';
     };
@@ -418,7 +420,7 @@ const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
                                         className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 hover:border-[#3026D9] hover:text-[#3026D9] disabled:cursor-not-allowed disabled:opacity-45"
                                     >
                                         {isChecking ? <Loader2 className="animate-spin" size={15} /> : <ActionIcon size={15} />}
-                                        {actionLabel(connector.action?.type)}
+                                        {actionLabel(connector.action?.type, connector.action?.dataset_code)}
                                     </button>)}
                                 </div>
 
@@ -535,7 +537,7 @@ const SourceCenter = ({ onOpenBulletin, userRoles = [] }) => {
                                                     className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 transition hover:border-[#3026D9] hover:text-[#3026D9] disabled:cursor-not-allowed disabled:opacity-45"
                                                 >
                                                     {isChecking ? <Loader2 className="animate-spin" size={15} /> : <ActionIcon size={15} />}
-                                                    {actionLabel(connector.action?.type)}
+                                                    {actionLabel(connector.action?.type, connector.action?.dataset_code)}
                                                 </button>)}
                                             </td>
                                         </tr>

@@ -188,3 +188,13 @@ def get_convivencia(
     hasta = min(date(anio, 12, 31), ultimo)
     return comparendos_rnmc.resumen_convivencia(db, date(anio, 1, 1), hasta)
 
+
+@router.get("/estado-carga")
+def get_estado_carga(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
+    """Si los reportes del RNMC están al día (aviso en Inicio y en el Centro de fuentes)."""
+    from services import comparendos_rnmc
+
+    return comparendos_rnmc.estado_carga(db)
