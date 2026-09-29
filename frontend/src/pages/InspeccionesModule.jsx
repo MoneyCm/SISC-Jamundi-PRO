@@ -12,6 +12,11 @@ import { API_BASE_URL } from '../utils/apiConfig';
 
 const COLORS = ['#281FD0', '#34D399', '#FBBF24', '#EF4444', '#8B5CF6'];
 
+// Barrio vacío o de relleno en el reporte del RNMC ("NONE", "SIN DATO", "NO APLICA...").
+const SIN_BARRIO = /^(|NONE|NAN|NULL|0|-|SIN DATO|SIN BARRIO|NO APLICA.*)$/i;
+const barrio = (valor) => (SIN_BARRIO.test(String(valor ?? '').trim()) ? 'Sin barrio' : valor);
+const textoActuacion = (valor) => (!valor || /^(none|nan|null)$/i.test(String(valor).trim()) ? 'Registro en el RNMC' : valor);
+
 const InspeccionesModule = () => {
     const [activeTab, setActiveTab] = useState('operativo');
     const [loading, setLoading] = useState(false);
@@ -254,7 +259,7 @@ const InspeccionesModule = () => {
                             <div className="flex items-center bg-white rounded-2xl px-4 py-2 border border-slate-200">
                                 <Search size={16} className="text-slate-400 mr-2" />
                                 <input 
-                                    placeholder="Localidad..."
+                                    placeholder="Barrio o expediente..."
                                     className="text-sm font-bold outline-none w-32"
                                     onChange={e => setFilters({localidad: e.target.value})}
                                 />
@@ -274,7 +279,7 @@ const InspeccionesModule = () => {
                                     {expedientes.items && expedientes.items.map(exp => (
                                         <tr key={exp.id} className="group hover:bg-indigo-50/30 transition-colors">
                                             <td className="px-8 py-6 font-black text-slate-900">{exp.numero_expediente}</td>
-                                            <td className="px-8 py-6 font-bold text-slate-500">{exp.localidad}</td>
+                                            <td className="px-8 py-6 font-bold text-slate-500">{barrio(exp.localidad)}</td>
                                             <td className="px-8 py-6">
                                                 {exp.lat ? (
                                                     <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 uppercase bg-emerald-50 px-3 py-1 rounded-full w-fit">
@@ -309,7 +314,7 @@ const InspeccionesModule = () => {
                                     <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Detalle de Actuación</span>
                                     <h2 className="text-4xl font-black mt-2 tracking-tighter">{selectedExp.expediente.numero_expediente}</h2>
                                     <p className="flex items-center gap-2 text-indigo-200/60 font-bold mt-2">
-                                        <MapPin size={16} /> {selectedExp.expediente.localidad}
+                                        <MapPin size={16} /> {barrio(selectedExp.expediente.localidad)}
                                     </p>
                                 </div>
 
@@ -318,7 +323,10 @@ const InspeccionesModule = () => {
                                     {selectedExp.medidas.map(m => (
                                         <div key={m.id} className="bg-white/5 p-6 rounded-3xl border border-white/5 space-y-4">
                                             <div className="flex justify-between items-start">
-                                                <p className="font-black text-lg leading-tight w-2/3">{m.nombre}</p>
+                                                <div className="w-2/3">
+                                                    <p className="font-black text-lg leading-tight">{m.nombre}</p>
+                                                    {m.articulo && <p className="mt-1 text-xs font-semibold text-indigo-200/80">{m.articulo}</p>}
+                                                </div>
                                                 <span className="bg-indigo-500 text-[10px] px-3 py-1.5 rounded-full font-black uppercase">{m.estado}</span>
                                             </div>
                                             
@@ -341,7 +349,7 @@ const InspeccionesModule = () => {
                                                     <div key={idx} className="flex gap-3 items-start">
                                                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5"></div>
                                                         <div>
-                                                            <p className="text-xs font-bold text-white/90">{a.anotacion}</p>
+                                                            <p className="text-xs font-bold text-white/90">{textoActuacion(a.anotacion)}</p>
                                                             <p className="text-[10px] text-white/40 mt-0.5">{new Date(a.fecha_actuacion).toLocaleDateString()}</p>
                                                         </div>
                                                     </div>

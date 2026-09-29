@@ -72,22 +72,26 @@ def get_expedientes(
         SELECT id, numero_expediente, departamento, municipio, localidad, 
                ST_X(geom_punto) as lng, ST_Y(geom_punto) as lat 
         FROM inspeccion_expedientes
-        WHERE (:localidad IS NULL OR localidad ILIKE :localidad_pattern)
+        WHERE (:localidad IS NULL OR localidad ILIKE :localidad_pattern OR numero_expediente ILIKE :localidad_pattern)
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :skip
     """)
     
     params = {
-        "localidad": localidad, 
-        "localidad_pattern": f"%{localidad}%" if (localidad and localidad.strip()) else "%%",
+        # La búsqueda sirve por barrio o por número de expediente.
+        "localidad": localidad.strip() if (localidad and localidad.strip()) else None,
+        "localidad_pattern": f"%{localidad.strip()}%" if (localidad and localidad.strip()) else "%%",
         "limit": limit,
         "skip": skip
     }
     
     results = db.execute(sql, params).fetchall()
     items = [dict(r._mapping) for r in results]
-    total = db.query(InspeccionExpediente).count()
-    
+    total = db.execute(text("""
+        SELECT COUNT(*) FROM inspeccion_expedientes
+        WHERE (:localidad IS NULL OR localidad ILIKE :localidad_pattern OR numero_expediente ILIKE :localidad_pattern)
+    """), params).scalar() or 0
+
     return {"total": total, "items": items}
 
 @router.get("/expedientes/{numero}")
@@ -108,6 +112,8 @@ def get_expediente_detail(
                 "id": m.id,
                 "nombre": m.nombre_medida,
                 "estado": m.estado_actual,
+                "articulo": m.articulo,
+                "comportamiento": m.comportamiento,
                 "fechas": {"inicio": m.fecha_inicio, "fin": m.fecha_fin},
                 "finanzas": m.finanza,
                 "actuaciones": m.actuaciones
