@@ -113,6 +113,8 @@ async def lifespan(app: FastAPI):
                     sincronizar_policia(db)
                     sincronizar_fiscalia(db)
                     sincronizar_referencia(db)
+                    from services.piscc_historico import actualizar_si_toca
+                    actualizar_si_toca()
                 except Exception as e_piscc:
                     db.rollback()
                     logger.warning(f"[PISCC MinDefensa] No se pudo revisar: {e_piscc}")

@@ -149,13 +149,21 @@ def build_goals(db: Session, today: Optional[date] = None, source_version_id: Op
         except Exception:
             logger.exception("Metas PISCC: no se pudo leer %s", label)
     indicators: List[Dict[str, Any]] = []
+    from services import piscc_historico
+
+    historico = piscc_historico.cargar()
     for key, label, baseline, goal, _indicator in TABLE_16:
         row = measured.get(key) or {"status": "SIN_DATOS", "detail": "La fuente de este indicador no tiene un corte disponible."}
         if row.get("cutoff"):
             lag = (today - date.fromisoformat(row["cutoff"])).days
             row = {**row, "stale": lag > STALE_DAYS, "lag_days": lag}
+        if key == "convivencia":
+            anios = [{"anio": anio, "total": None, "completo": False, "semaforo": None,
+                      "semaforo_label": "Sin reportes del RNMC de ese año"} for anio in range(2024, today.year)]
+        else:
+            anios = piscc_historico.anios_cerrados(key, baseline, goal, today, historico)
         indicators.append({"id": key, "label": label, "baseline_2023": baseline, "goal_2027": goal,
-                           "status_label": STATUS_LABELS[row["status"]], **row})
+                           "status_label": STATUS_LABELS[row["status"]], "closed_years": anios, **row})
     return {
         "as_of": today.isoformat(),
         "source": SOURCE,
@@ -163,4 +171,6 @@ def build_goals(db: Session, today: Optional[date] = None, source_version_id: Op
         "off_track": [item["id"] for item in indicators if item["status"] in ("DESVIACION", "SUPERADA")],
         "note": ("Cada indicador tiene su fuente y su fecha de corte. La meta es la cifra anual esperada en 2027; "
                  "la proyección es lineal y solo indica el ritmo, no predice el cierre."),
+        "closed_years_source": piscc_historico.FUENTE,
+        "closed_years_legend": piscc_historico.SEMAFORO,
     }
