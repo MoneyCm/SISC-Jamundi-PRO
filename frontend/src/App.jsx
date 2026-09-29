@@ -300,6 +300,9 @@ const App = () => {
       }
     }
 
+    // Los resúmenes para WhatsApp los arma el Observatorio (analista o administración).
+    const puedeArmarResumenes = ['ANALYST', 'TI_ADMIN', 'FUNC_ADMIN'].some(rol => userRoles.includes(rol));
+
     switch (activePage) {
       case 'dashboard':
         return <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;
@@ -337,9 +340,9 @@ const App = () => {
       case 'alerts':
         return <AlertsFeed onPageChange={setActivePage} setExternalFilters={setRnmcFilters} />;
       case 'council_commitments':
-        return <CouncilCommitments onNavigate={setActivePage} />;
+        return <CouncilCommitments onNavigate={puedeArmarResumenes ? setActivePage : undefined} />;
       case 'narrative_alerts':
-        return <NarrativeAlerts />;
+        return puedeArmarResumenes ? <NarrativeAlerts /> : <Dashboard userRoles={userRoles} dataLevel={dataLevel} onNavigate={setActivePage} />;
       case 'observatory':
         return <ObservatoryCenter userRoles={userRoles} onNavigate={setActivePage} />;
       case 'rnmc':

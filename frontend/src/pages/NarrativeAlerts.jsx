@@ -292,8 +292,7 @@ const NarrativeAlerts = () => {
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
             <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#281FD0]">Antes: Alertas Narrativas</p>
-                    <h1 className="mt-1 text-3xl font-black text-slate-950">Resúmenes para WhatsApp</h1>
+                    <h1 className="text-3xl font-black text-slate-950">Resúmenes para WhatsApp</h1>
                     <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
                         El SISC redacta mensajes cortos con las variaciones más significativas por delito, barrio y franja horaria, el estado de los
                         compromisos del Consejo y lo que aportan otras fuentes. La semanal sale al cargar cada sábana; la mensual, semestral y anual cuando
