@@ -18,8 +18,11 @@ const SIN_BARRIO = /^(|NONE|NAN|NULL|0|-|SIN DATO|SIN BARRIO|NO APLICA.*)$/i;
 const barrio = (valor) => (SIN_BARRIO.test(String(valor ?? '').trim()) ? 'Sin barrio' : valor);
 const textoActuacion = (valor) => (!valor || /^(none|nan|null)$/i.test(String(valor).trim()) ? 'Registro en el RNMC' : valor);
 
-const InspeccionesModule = () => {
-    const [activeTab, setActiveTab] = useState('operativo');
+const ROLES_OPERATIVOS = ['ANALYST', 'SOURCE_UPLOADER', 'FUNC_ADMIN', 'TI_ADMIN'];
+
+const InspeccionesModule = ({ userRoles = [] }) => {
+    const opera = userRoles.some((rol) => ROLES_OPERATIVOS.includes(rol));
+    const [activeTab, setActiveTab] = useState(opera ? 'operativo' : 'analitico');
     const [loading, setLoading] = useState(false);
     const [stats, setStats] = useState(null);
     const [expedientes, setExpedientes] = useState({ items: [], total: 0 });
@@ -95,7 +98,7 @@ const InspeccionesModule = () => {
 
         setUploading(true);
         setUploadStatus({ text: "Analizando calidad de datos...", type: "info" });
-        
+
         const formData = new FormData();
         formData.append('file', file);
 
@@ -107,11 +110,11 @@ const InspeccionesModule = () => {
                 body: formData
             });
             const result = await res.json();
-            
+
             if (res.ok) {
                 const quality = result.quality;
                 const qualityLabel = quality?.semaforo ? ` Calidad ${quality.semaforo.toLowerCase()}.` : '';
-                setUploadStatus({ 
+                setUploadStatus({
                     text: `Carga terminada: ${result.inserted} nuevos, ${result.skipped} ignorados.${qualityLabel}`,
                     type: quality?.semaforo === 'AMARILLO' ? "warning" : "success",
                     quality,
@@ -147,18 +150,15 @@ const InspeccionesModule = () => {
 
     const numero = (valor) => new Intl.NumberFormat('es-CO').format(Number(valor || 0));
     const porcentaje = (valor) => `${String(valor ?? 0).replace('.', ',')}%`;
-    const porEstado = stats?.por_estado || {};
-    const sumaEstados = (texto) => Object.entries(porEstado)
-        .filter(([estado]) => String(estado || '').includes(texto))
-        .reduce((total, [, valor]) => total + Number(valor || 0), 0);
     const minuscula = (texto) => (texto ? texto.charAt(0).toLowerCase() + texto.slice(1) : '');
-    const anioCorte = convivencia?.corte ? convivencia.corte.slice(0, 4) : '';
+    const anio = stats?.anio ? ` ${stats.anio}` : '';
 
+    // Las cuatro cifras son del mismo año (el del último comparendo cargado).
     const kpis = [
-        { label: `Comparendos ${anioCorte}`.trim(), value: numero(convivencia?.total), icon: Folder, color: 'bg-indigo-50 text-indigo-600' },
-        { label: 'Medidas registradas', value: numero(stats?.total_medidas), icon: List, color: 'bg-emerald-50 text-emerald-600' },
-        { label: 'Medidas ratificadas', value: numero(sumaEstados('RATIFICADA')), icon: CheckCircle2, color: 'bg-blue-50 text-blue-600' },
-        { label: 'Medidas pagadas', value: numero(sumaEstados('PAGADO')), icon: DollarSign, color: 'bg-amber-50 text-amber-600' }
+        { label: `Comparendos${anio}`, value: numero(stats?.comparendos), icon: Folder, color: 'bg-indigo-50 text-indigo-600' },
+        { label: `Medidas${anio}`, value: numero(stats?.medidas), icon: List, color: 'bg-emerald-50 text-emerald-600' },
+        { label: `Ratificadas${anio}`, value: numero(stats?.ratificadas), icon: CheckCircle2, color: 'bg-blue-50 text-blue-600' },
+        { label: `Pagadas${anio}`, value: numero(stats?.pagadas), icon: DollarSign, color: 'bg-amber-50 text-amber-600' }
     ];
 
     // Lectura automática: solo describe lo que dicen las cifras, sin adivinar causas.
@@ -190,9 +190,9 @@ const InspeccionesModule = () => {
                     <p className="text-slate-500 font-bold tracking-tight">Comparendos y medidas correctivas del RNMC</p>
                     <p className="text-slate-400 text-sm font-semibold mt-1">Cada mes suba los dos reportes del RNMC: medidas pendientes (comparendos) y medidas gestionadas.</p>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
-                    <button 
+                    <button
                         onClick={() => fileInputRef.current.click()}
                         disabled={uploading}
                         className="bg-[#281FD0] text-white px-8 py-4 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-indigo-200 flex items-center gap-3 hover:scale-105 transition-transform disabled:opacity-50"
@@ -206,7 +206,7 @@ const InspeccionesModule = () => {
 
             {uploadStatus && (
                 <div className={`p-6 rounded-[2rem] border-2 flex items-center justify-between ${
-                    uploadStatus.type === 'error' ? 'bg-red-50 border-red-100 text-red-700' : 
+                    uploadStatus.type === 'error' ? 'bg-red-50 border-red-100 text-red-700' :
                     uploadStatus.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
                     uploadStatus.type === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-700' :
                     'bg-indigo-50 border-indigo-100 text-indigo-700'
@@ -234,16 +234,17 @@ const InspeccionesModule = () => {
                     </div>
                 ))}
             </div>
+            {stats?.corte && <p className="-mt-4 text-xs font-semibold text-slate-500">Cifras de {stats.anio} hasta el {stats.corte}. Cada comparendo se cuenta una vez; una medida es lo que se impuso en cada comparendo.</p>}
 
             {/* Tabs */}
             <div className="flex gap-4 p-1.5 bg-slate-100 w-fit rounded-[2rem] border border-slate-200">
-                <button 
+                <button
                     onClick={() => setActiveTab('operativo')}
                     className={`px-10 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'operativo' ? 'bg-[#281FD0] text-white shadow-lg' : 'text-slate-500 hover:bg-white'}`}
                 >
                     Módulo Operativo
                 </button>
-                <button 
+                <button
                     onClick={() => setActiveTab('analitico')}
                     className={`px-10 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'analitico' ? 'bg-[#281FD0] text-white shadow-lg' : 'text-slate-500 hover:bg-white'}`}
                 >
@@ -252,14 +253,17 @@ const InspeccionesModule = () => {
             </div>
 
             {activeTab === 'operativo' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     {/* List */}
-                    <div className="lg:col-span-2 bg-white rounded-[3rem] shadow-2xl shadow-slate-100 overflow-hidden border border-slate-50">
+                    <div className={`${selectedExp ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white rounded-[3rem] shadow-2xl shadow-slate-100 overflow-hidden border border-slate-50`}>
                         <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                            <h3 className="font-black text-slate-900 uppercase tracking-tighter text-xl">Expedientes Activos</h3>
+                            <div>
+                                <h3 className="font-black text-slate-900 uppercase tracking-tighter text-xl">Comparendos más recientes</h3>
+                                <p className="text-xs font-semibold text-slate-500">{numero(expedientes.total)} expedientes · los más recientes primero</p>
+                            </div>
                             <div className="flex items-center bg-white rounded-2xl px-4 py-2 border border-slate-200">
                                 <Search size={16} className="text-slate-400 mr-2" />
-                                <input 
+                                <input
                                     placeholder="Barrio o expediente..."
                                     className="text-sm font-bold outline-none w-32"
                                     onChange={e => setFilters({localidad: e.target.value})}
@@ -270,34 +274,24 @@ const InspeccionesModule = () => {
                             <table className="w-full text-left">
                                 <thead>
                                     <tr className="bg-slate-50/50 border-b border-slate-50">
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Expediente</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Localidad</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Ubicación</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Acción</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Fecha</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Expediente</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Barrio</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Comportamiento</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Estado</th>
+                                        <th className="px-6 py-4" aria-label="Detalle" />
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {expedientes.items && expedientes.items.map(exp => (
-                                        <tr key={exp.id} className="group hover:bg-indigo-50/30 transition-colors">
-                                            <td className="px-8 py-6 font-black text-slate-900">{exp.numero_expediente}</td>
-                                            <td className="px-8 py-6 font-bold text-slate-500">{barrio(exp.localidad)}</td>
-                                            <td className="px-8 py-6">
-                                                {exp.lat ? (
-                                                    <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 uppercase bg-emerald-50 px-3 py-1 rounded-full w-fit">
-                                                        <MapPin size={10} /> Geolocalizado
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-[10px] font-bold text-slate-300 uppercase italic">Sin GPS</span>
-                                                )}
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                <button 
-                                                    onClick={() => fetchDetail(exp.numero_expediente)}
-                                                    className="flex items-center gap-2 text-[#281FD0] font-black text-[10px] uppercase tracking-widest group-hover:translate-x-2 transition-transform"
-                                                >
-                                                    Ver Detalle <ChevronRight size={14} />
-                                                </button>
-                                            </td>
+                                        <tr key={exp.id} onClick={() => fetchDetail(exp.numero_expediente)}
+                                            className={`group cursor-pointer transition-colors ${selectedExp?.expediente?.numero_expediente === exp.numero_expediente ? 'bg-indigo-50' : 'hover:bg-indigo-50/30'}`}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-700 tabular-nums">{exp.fecha || '—'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-slate-900">{exp.numero_expediente}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-slate-600">{barrio(exp.localidad)}</td>
+                                            <td className="px-6 py-4 text-sm font-semibold text-slate-600">{exp.comportamiento || 'Sin artículo'}</td>
+                                            <td className="px-6 py-4 text-xs font-black uppercase text-slate-500">{exp.estados || '—'}</td>
+                                            <td className="px-6 py-4 text-[#281FD0]"><ChevronRight size={16} /></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -305,12 +299,12 @@ const InspeccionesModule = () => {
                         </div>
                     </div>
 
-                    {/* Quick View / Detail */}
-                    <div className="bg-slate-900 rounded-[3.5rem] p-10 text-white shadow-2xl shadow-indigo-100 relative overflow-hidden">
+                    {/* Detalle: solo aparece al escoger un expediente */}
+                    {selectedExp && (
+                    <div className="bg-slate-900 rounded-[3.5rem] p-10 text-white shadow-2xl shadow-indigo-100 relative overflow-hidden lg:sticky lg:top-6">
                         <div className="absolute top-0 right-0 p-20 bg-indigo-500/10 blur-[100px] rounded-full"></div>
-                        
-                        {selectedExp ? (
                             <div className="relative z-10 space-y-8">
+                                <button onClick={() => setSelectedExp(null)} className="absolute right-0 top-0 text-white/60 hover:text-white" aria-label="Cerrar detalle"><X size={20} /></button>
                                 <div>
                                     <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Detalle de Actuación</span>
                                     <h2 className="text-4xl font-black mt-2 tracking-tighter">{selectedExp.expediente.numero_expediente}</h2>
@@ -330,7 +324,7 @@ const InspeccionesModule = () => {
                                                 </div>
                                                 <span className="bg-indigo-500 text-[10px] px-3 py-1.5 rounded-full font-black uppercase">{m.estado}</span>
                                             </div>
-                                            
+
                                             {m.finanzas && (
                                                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
                                                     <div>
@@ -360,13 +354,8 @@ const InspeccionesModule = () => {
                                     ))}
                                 </div>
                             </div>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-40">
-                                <Folder size={64} className="text-indigo-400" />
-                                <p className="font-black uppercase tracking-widest text-sm">Seleccione un expediente para visualizar su historia técnica</p>
-                            </div>
-                        )}
                     </div>
+                    )}
                 </div>
             ) : (
                 <div className="space-y-8">
@@ -382,7 +371,7 @@ const InspeccionesModule = () => {
                                 <p className="mt-3 text-xs text-indigo-200 font-semibold">Cada comparendo se cuenta una vez. Fuente: RNMC, Policía Nacional (reportes de medidas pendientes y gestionadas).</p>
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                                 <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
                                     <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
                                         <TrendingUp className="text-indigo-600" /> Comportamientos que más originan comparendos
