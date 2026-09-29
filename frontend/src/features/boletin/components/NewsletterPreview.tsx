@@ -94,7 +94,14 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
     indicator => indicator.source_code === 'COMISARIAS_FAMILIA',
   ) || [];
   const inspectionTotal = inspectionIndicators.find(indicator => indicator.indicator_code === 'convivencia.actuaciones');
-  const inspectionMeasures = inspectionIndicators.filter(indicator => indicator.category === 'Medida').slice(0, 3);
+  // Qué comportamientos originan los comparendos; si el periodo no los trae, las medidas impuestas.
+  const inspectionBehaviours = inspectionIndicators.filter(indicator => indicator.category === 'Comportamiento').slice(0, 3);
+  const inspectionMeasures = inspectionBehaviours.length > 0
+    ? inspectionBehaviours
+    : inspectionIndicators.filter(indicator => indicator.category === 'Medida').slice(0, 3);
+  const inspectionTopTerritory = siscPublication?.indicators.find(
+    indicator => indicator.source_code === 'INSPECCIONES_RNMC' && indicator.domain === 'TERRITORIO',
+  );
   const hasOperations = Object.values(operations).some(value => value > 0);
   const showInstitutionalPage = Boolean(siscPublication || hasOperations);
   // Medicina Legal publica por mes vencido: página propia solo fuera del boletín semanal.
@@ -484,7 +491,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
             <div className="flex justify-between items-end border-b-2 border-gray-200 pb-1.5 mb-2">
               <div>
                 <h3 className="font-extrabold text-sm" style={{ color: colorAzul }}>INSPECCIONES DE POLICÍA</h3>
-                <p className="text-[9px] text-gray-500">Comparendos (cada uno una vez) y medidas del periodo.</p>
+                <p className="text-[9px] text-gray-500">Comparendos (cada uno una vez) y los comportamientos que más los originan.</p>
               </div>
               <p className="text-[9px] font-semibold text-gray-500">Corte: {inspectionSource?.last_cutoff_date || 'no disponible'}</p>
             </div>
@@ -495,6 +502,11 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                   <p className="text-[10px] font-bold uppercase text-blue-800">Comparendos registrados</p>
                   <p className="text-4xl font-extrabold mt-1" style={{ color: colorAzul }}>{formatIndicatorValue(inspectionTotal)}</p>
                   <p className="text-[9px] text-gray-600 mt-1">{comparisonText(inspectionTotal)}</p>
+                  {inspectionTopTerritory && (
+                    <p className="text-[9px] text-gray-700 mt-2 leading-tight">
+                      Barrio con más comparendos: <strong>{inspectionTopTerritory.indicator_name}</strong> ({formatIndicatorValue(inspectionTopTerritory)})
+                    </p>
+                  )}
                 </div>
                 <div className="divide-y divide-gray-200 border-y border-gray-200">
                   {inspectionMeasures.length > 0 ? inspectionMeasures.map(indicator => (
@@ -508,7 +520,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                       <p className="text-lg font-extrabold text-right" style={{ color: colorAzul }}>{formatIndicatorValue(indicator)}</p>
                     </div>
                   )) : (
-                    <p className="py-3 text-[10px] text-gray-500">No hay medidas clasificadas para destacar en este periodo.</p>
+                    <p className="py-3 text-[10px] text-gray-500">No hay comportamientos ni medidas clasificadas para destacar en este periodo.</p>
                   )}
                 </div>
               </div>

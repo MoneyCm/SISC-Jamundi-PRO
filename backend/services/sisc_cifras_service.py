@@ -1378,6 +1378,30 @@ class SiscCifrasService:
             if len([item for item in indicators if item.category == "Medida"]) >= 4:
                 break
 
+        # Qué comportamientos del Código de Convivencia originan los comparendos (artículo de la Ley 1801).
+        previous_behaviours = {
+            numero: valor for numero, _etiqueta, _texto, valor in comparendos_rnmc.por_comportamiento(db, prev_start, prev_end, limite=50)
+        }
+        for numero, etiqueta, texto, valor in comparendos_rnmc.por_comportamiento(db, start, min(end, date.today()), limite=3):
+            indicators.append(
+                cls.indicator(
+                    source="Inspecciones de Policia / RNMC",
+                    source_code="INSPECCIONES_RNMC",
+                    domain="CONVIVENCIA",
+                    category="Comportamiento",
+                    code=f"convivencia.comportamiento.art{str(numero)[:40]}",
+                    name=etiqueta,
+                    value=valor,
+                    unit="comparendos registrados",
+                    start=start,
+                    end=end,
+                    comparison_value=previous_behaviours.get(numero),
+                    cutoff=cutoff,
+                    priority=0.7,
+                    metadata={"public_detail": texto},
+                )
+            )
+
         top_localidades = comparendos_rnmc.agrupar(
             db, InspeccionExpediente.localidad, start, min(end, date.today()),
             filtros=[
