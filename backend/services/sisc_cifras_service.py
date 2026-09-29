@@ -146,7 +146,8 @@ def is_public_territory_name(value: Optional[str]) -> bool:
 def public_measure_label(value: Optional[str]) -> Tuple[str, Optional[str]]:
     technical = " ".join(str(value or "").strip().split())
     clean = technical.upper()
-    if not clean or clean in {"SIN ESPECIFICAR", "NAN", "NONE", "NULL"}:
+    # "Medida por definir": el inspector aun no la fija; cuenta en el total, no como tipo de medida.
+    if not clean or clean in {"SIN ESPECIFICAR", "NAN", "NONE", "NULL", "MEDIDA POR DEFINIR"}:
         return "", technical or None
     if "PROHIBICION DE INGRESO" in clean or "PROHIBICIÓN DE INGRESO" in clean:
         return "Restricciones de ingreso a eventos publicos", technical
@@ -173,7 +174,8 @@ def public_measure_label(value: Optional[str]) -> Tuple[str, Optional[str]]:
 
 def public_measure_detail(value: Optional[str]) -> Optional[str]:
     clean = " ".join(str(value or "").strip().split()).upper()
-    if not clean or clean in {"SIN ESPECIFICAR", "NAN", "NONE", "NULL"}:
+    # "Medida por definir": el inspector aun no la fija; cuenta en el total, no como tipo de medida.
+    if not clean or clean in {"SIN ESPECIFICAR", "NAN", "NONE", "NULL", "MEDIDA POR DEFINIR"}:
         return None
     if "PROHIBICION DE INGRESO" in clean or "PROHIBICIÓN DE INGRESO" in clean:
         return "Medida aplicada para limitar el ingreso a actividades o eventos con publico."
@@ -206,7 +208,7 @@ class SiscCifrasService:
             "dependency": "Inspecciones de Policia",
             "periodicity": "Mensual",
             "coverage": "Jamundi",
-            "unit": "actuaciones registradas",
+            "unit": "comparendos registrados",
         },
         "COMISARIAS_FAMILIA": {
             "name": "Comisarias de Familia",
@@ -743,19 +745,10 @@ class SiscCifrasService:
                     HechoSeguridad.fecha_evento <= prev_end,
                 ).scalar() or 0
             elif code == "INSPECCIONES_RNMC":
-                period_records = db.query(InspeccionActuacion.id).filter(
-                    *cls.inspection_public_filters(),
-                    InspeccionActuacion.fecha_actuacion >= datetime.combine(start, datetime.min.time()),
-                    InspeccionActuacion.fecha_actuacion < min(
-                        datetime.combine(end + timedelta(days=1), datetime.min.time()),
-                        tomorrow,
-                    ),
-                ).count()
-                comparison_records = db.query(InspeccionActuacion.id).filter(
-                    *cls.inspection_public_filters(),
-                    InspeccionActuacion.fecha_actuacion >= datetime.combine(prev_start, datetime.min.time()),
-                    InspeccionActuacion.fecha_actuacion < datetime.combine(prev_end + timedelta(days=1), datetime.min.time()),
-                ).count()
+                from services import comparendos_rnmc
+
+                period_records = comparendos_rnmc.contar(db, start, min(end, date.today()))
+                comparison_records = comparendos_rnmc.contar(db, prev_start, prev_end)
             else:
                 result.append(source)
                 continue
@@ -1319,27 +1312,14 @@ class SiscCifrasService:
 
     @classmethod
     def inspection_indicators(cls, db: Session, start: date, end: date, prev_start: date, prev_end: date) -> List[Indicator]:
-        tomorrow = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
-        start_dt = datetime.combine(start, datetime.min.time())
-        end_dt = min(datetime.combine(end + timedelta(days=1), datetime.min.time()), tomorrow)
-        prev_start_dt = datetime.combine(prev_start, datetime.min.time())
-        prev_end_dt = datetime.combine(prev_end + timedelta(days=1), datetime.min.time())
+        # Cifra oficial: comparendos únicos (cada expediente una vez, en la fecha de su primer registro).
+        from services import comparendos_rnmc
 
-        base_filter = [
-            *cls.inspection_public_filters(),
-            InspeccionActuacion.fecha_actuacion >= start_dt,
-            InspeccionActuacion.fecha_actuacion < end_dt,
-            InspeccionActuacion.fecha_actuacion < tomorrow,
-        ]
-        prev_filter = [
-            *cls.inspection_public_filters(),
-            InspeccionActuacion.fecha_actuacion >= prev_start_dt,
-            InspeccionActuacion.fecha_actuacion < prev_end_dt,
-            InspeccionActuacion.fecha_actuacion < tomorrow,
-        ]
-        cutoff = db.query(func.max(InspeccionActuacion.fecha_actuacion)).filter(*base_filter).scalar()
-        total = db.query(InspeccionActuacion.id).filter(*base_filter).count()
-        prev_total = db.query(InspeccionActuacion.id).filter(*prev_filter).count()
+        cutoff = comparendos_rnmc.corte(db, min(end, date.today()))
+        if cutoff and cutoff < start:
+            cutoff = None
+        total = comparendos_rnmc.contar(db, start, min(end, date.today()))
+        prev_total = comparendos_rnmc.contar(db, prev_start, prev_end)
 
         indicators = [
             cls.indicator(
@@ -1348,9 +1328,9 @@ class SiscCifrasService:
                 domain="CONVIVENCIA",
                 category="Actuaciones",
                 code="convivencia.actuaciones",
-                name="Actuaciones registradas",
+                name="Comparendos registrados",
                 value=total,
-                unit="actuaciones registradas",
+                unit="comparendos registrados",
                 start=start,
                 end=end,
                 comparison_value=prev_total,
@@ -1359,16 +1339,10 @@ class SiscCifrasService:
             )
         ]
 
-        top_medidas = db.query(
-            InspeccionMedida.nombre_medida,
-            func.count(InspeccionActuacion.id).label("total"),
-        ).join(InspeccionActuacion).filter(*base_filter).group_by(InspeccionMedida.nombre_medida).order_by(desc("total")).limit(10).all()
+        top_medidas = comparendos_rnmc.agrupar(db, InspeccionMedida.nombre_medida, start, min(end, date.today()))
         previous_measures = {
             name or "SIN ESPECIFICAR": value
-            for name, value in db.query(
-                InspeccionMedida.nombre_medida,
-                func.count(InspeccionActuacion.id).label("total"),
-            ).join(InspeccionActuacion).filter(*prev_filter).group_by(InspeccionMedida.nombre_medida).all()
+            for name, value in comparendos_rnmc.agrupar(db, InspeccionMedida.nombre_medida, prev_start, prev_end, limite=100)
         }
 
         for name, value in top_medidas:
@@ -1392,7 +1366,7 @@ class SiscCifrasService:
                     code=f"convivencia.medida.{clean_name[:48]}",
                     name=public_name,
                     value=value,
-                    unit="actuaciones registradas",
+                    unit="comparendos registrados",
                     start=start,
                     end=end,
                     comparison_value=previous_measures.get(clean_name),
@@ -1404,15 +1378,9 @@ class SiscCifrasService:
             if len([item for item in indicators if item.category == "Medida"]) >= 4:
                 break
 
-        top_localidades = db.query(
-            InspeccionExpediente.localidad,
-            func.count(InspeccionActuacion.id).label("total"),
-        ).join(InspeccionMedida, InspeccionExpediente.id == InspeccionMedida.expediente_id).join(
-            InspeccionActuacion, InspeccionMedida.id == InspeccionActuacion.medida_id
-        ).filter(
-            *base_filter,
-            InspeccionExpediente.localidad.isnot(None),
-            InspeccionExpediente.localidad != "",
+        top_localidades = comparendos_rnmc.agrupar(
+            db, InspeccionExpediente.localidad, start, min(end, date.today()),
+            filtros=[
             func.upper(func.trim(InspeccionExpediente.localidad)).notin_(NON_PUBLIC_TERRITORY_VALUES),
             ~func.upper(InspeccionExpediente.localidad).like("%PENDIENTE%"),
             ~func.upper(InspeccionExpediente.localidad).like("%POR ASIGNAR%"),
@@ -1420,9 +1388,7 @@ class SiscCifrasService:
             ~func.upper(InspeccionExpediente.localidad).like("%NO DEFINIDO%"),
             ~func.upper(InspeccionExpediente.localidad).like("%SIN LOCALIDAD%"),
             ~func.upper(InspeccionExpediente.localidad).like("%SIN COMUNA%"),
-        ).group_by(
-            InspeccionExpediente.localidad
-        ).having(func.count(InspeccionActuacion.id) >= MIN_PUBLIC_TERRITORIAL_COUNT).order_by(desc("total")).limit(5).all()
+            ], minimo=MIN_PUBLIC_TERRITORIAL_COUNT, limite=5)
 
         for localidad, value in top_localidades:
             if not is_public_territory_name(localidad):
@@ -1437,7 +1403,7 @@ class SiscCifrasService:
                     code=f"territorio.convivencia.{localidad[:48]}",
                     name=localidad,
                     value=value,
-                    unit="actuaciones registradas",
+                    unit="comparendos registrados",
                     start=start,
                     end=end,
                     comparison_value=None,

@@ -131,7 +131,7 @@ const InstitutionalManagementSummary = ({
                 <div>
                     <p className="text-[10px] font-black uppercase text-primary">Fuentes complementarias</p>
                     <h3 id="institutional-management-title" className="mt-1 text-lg font-black text-slate-950">Gestión institucional y convivencia</h3>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">Actuaciones de Inspecciones y cifras agregadas de protección familiar para el mismo periodo consultado.</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">Comparendos de Inspecciones y cifras agregadas de protección familiar para el mismo periodo consultado.</p>
                 </div>
                 {summary?.period && (
                     <div className="shrink-0 text-left md:text-right">
@@ -161,7 +161,7 @@ const InstitutionalManagementSummary = ({
                         {inspectionTotal ? (
                             <>
                                 <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
-                                    <div><p className="text-4xl font-black tabular-nums text-slate-950">{formatNumber(inspectionTotal.value)}</p><p className="mt-1 text-sm font-bold text-slate-700">Actuaciones registradas</p></div>
+                                    <div><p className="text-4xl font-black tabular-nums text-slate-950">{formatNumber(inspectionTotal.value)}</p><p className="mt-1 text-sm font-bold text-slate-700">Comparendos registrados</p></div>
                                     <div className="text-left sm:text-right"><p className="text-[10px] font-bold uppercase text-slate-500">Comparación</p><p className="mt-1 text-xs font-black text-slate-700">{comparisonText(inspectionTotal)}</p></div>
                                 </div>
                                 {inspectionSource?.coverage_status === 'partial' && (

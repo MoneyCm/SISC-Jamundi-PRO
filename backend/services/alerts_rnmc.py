@@ -81,7 +81,8 @@ def generate_rnmc_alerts(db: Session):
             "title": f"RNMC: medida {item['estado'].lower()} hace {item['dias']} días — {item['medida'][:30]}",
             "body_md": (f"Medida en estado **{item['estado']}** desde hace {item['dias']} días (desde {item['inicio']}). "
                         f"Localidad: {item['localidad'] or 'sin dato'}. Expediente: {item['expediente_mask']}."),
-            "entity_ref": {"medida_id": item["id"], "expediente": item["expediente_mask"]},
+            "entity_ref": {"medida_id": item["id"], "expediente": item["expediente_mask"],
+                           "event_fingerprint": item["id"], "source_id": "INSPECCIONES"},
             "metrics": {"dias": item["dias"], "valor_neto": item["valor_neto"], "valor_pagado": item["valor_pagado"],
                         "localidad": item["localidad"], "medida": item["medida"], "fecha_inicio": item["inicio"],
                         "estado": item["estado"]},
@@ -102,7 +103,8 @@ def generate_rnmc_alerts(db: Session):
             "title": f"RNMC: ratificada sin pago — {item['medida'][:30]}",
             "body_md": (f"Medida **RATIFICADA** sin pago registrado. Valor a recaudar: ${item['valor_neto']:,.0f}. "
                         f"Localidad: {item['localidad'] or 'sin dato'}. Expediente: {item['expediente_mask']}."),
-            "entity_ref": {"medida_id": item["id"], "expediente": item["expediente_mask"]},
+            "entity_ref": {"medida_id": item["id"], "expediente": item["expediente_mask"],
+                           "event_fingerprint": item["id"], "source_id": "INSPECCIONES"},
             "metrics": {"dias": item["dias"], "valor_neto": item["valor_neto"], "valor_pagado": item["valor_pagado"],
                         "localidad": item["localidad"], "medida": item["medida"], "fecha_inicio": item["inicio"],
                         "estado": item["estado"]},

@@ -2,7 +2,6 @@ import json
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
-from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from services.piscc_goals import GOALS
@@ -68,30 +67,14 @@ def load_mindefensa(cutoff):
 
 
 def load_rnmc(db: Session, cutoff):
-    """Comportamientos contrarios a la convivencia: comparendos únicos (expedientes) del RNMC.
+    """Comportamientos contrarios a la convivencia: comparendos únicos del RNMC (services/comparendos_rnmc.py)."""
+    from services import comparendos_rnmc
 
-    Sale de las tablas de Inspecciones, que reciben los reportes del RNMC (comparendos y medidas
-    gestionadas). Cada expediente se cuenta una vez, en la fecha de su primer registro (la del
-    hecho en el reporte de comparendos).
-    """
-    first_dates = """
-        SELECT e.numero_expediente, MIN(a.fecha_actuacion)::date AS fecha
-        FROM inspeccion_expedientes e
-        JOIN inspeccion_medidas m ON m.expediente_id = e.id
-        JOIN inspeccion_actuaciones a ON a.medida_id = m.id
-        GROUP BY e.numero_expediente
-    """
-
-    def count(desde, hasta):
-        return db.execute(text(f"SELECT COUNT(*) FROM ({first_dates}) t WHERE fecha >= :desde AND fecha <= :hasta"),
-                          {"desde": desde, "hasta": hasta}).scalar() or 0
-
-    source_cutoff = db.execute(text(f"SELECT MAX(fecha) FROM ({first_dates}) t WHERE fecha <= :hasta"),
-                               {"hasta": cutoff}).scalar()
+    source_cutoff = comparendos_rnmc.corte(db, cutoff)
     if not source_cutoff:
         return None
-    current = count(date(source_cutoff.year, 1, 1), source_cutoff)
-    previous = count(date(source_cutoff.year - 1, 1, 1), source_cutoff.replace(year=source_cutoff.year - 1))
+    current = comparendos_rnmc.contar(db, date(source_cutoff.year, 1, 1), source_cutoff)
+    previous = comparendos_rnmc.contar(db, date(source_cutoff.year - 1, 1, 1), source_cutoff.replace(year=source_cutoff.year - 1))
     return _source_item("convivencia", "Comportamientos Contrarios a la Convivencia", previous, current, source_cutoff, "RNMC / Inspecciones de Policía")
 
 

@@ -102,7 +102,8 @@ const RNMCModule = ({ externalFilters, clearExternalFilters }) => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/intelligence/upload`, {
+            // Los reportes del RNMC entran por Inspecciones (las mismas tablas de la meta del PISCC).
+            const response = await fetch(`${API_BASE_URL}/inspecciones/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
@@ -112,9 +113,12 @@ const RNMCModule = ({ externalFilters, clearExternalFilters }) => {
             if (response.ok) {
                 const inserted = data.inserted ?? data.inserted_count ?? 0;
                 const updated = data.updated ?? 0;
-                const total = data.total ?? inserted + updated;
+                const skipped = data.skipped ?? 0;
+                const total = data.total ?? inserted + updated + skipped;
 
-                if ((inserted + updated) === 0) {
+                if ((inserted + updated) === 0 && skipped > 0) {
+                    setUploadStatus({ text: `Este archivo ya estaba cargado (${skipped} registros sin cambios).`, type: "info" });
+                } else if ((inserted + updated) === 0) {
                     const sheetInfo = data.detected_sheet ? `Hoja: ${data.detected_sheet}. ` : '';
                     const detailInfo = data.detail || (data.municipio_uniques ? `Municipios detectados: ${data.municipio_uniques.slice(0, 5).join(', ')}` : (data.message || 'Verifica que el archivo corresponda a la tabla RNMC de Jamundí.'));
 
@@ -131,7 +135,7 @@ const RNMCModule = ({ externalFilters, clearExternalFilters }) => {
                 }
             } else {
                 setUploadStatus({
-                    text: `Error: ${data.detail || 'Fallo en la carga'}`,
+                    text: `Error: ${(typeof data.detail === 'string' ? data.detail : data.detail?.message) || 'Fallo en la carga'}`,
                     type: "error"
                 });
             }
