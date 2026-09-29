@@ -198,3 +198,42 @@ def get_estado_carga(
     from services import comparendos_rnmc
 
     return comparendos_rnmc.estado_carga(db)
+
+
+@router.get("/mapa")
+def get_mapa_comparendos(
+    periodo: str = "year_to_date",
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    articulo: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
+    """Capa de comparendos del RNMC para el Mapa territorial (agregada por territorio oficial)."""
+    from datetime import date, timedelta
+    from services import comparendos_rnmc
+
+    ultimo = comparendos_rnmc.corte(db, date.today())
+    if not ultimo:
+        return {"metadata": {"available": False}, "map": {"points": []}, "comportamientos": []}
+    fin = ultimo
+    if periodo == "last_7_days":
+        inicio = ultimo - timedelta(days=6)
+    elif periodo == "last_30_days":
+        inicio = ultimo - timedelta(days=29)
+    elif periodo == "custom" and desde and hasta:
+        inicio, fin = date.fromisoformat(desde), min(date.fromisoformat(hasta), ultimo)
+    else:
+        inicio = date(ultimo.year, 1, 1)
+    return {
+        "metadata": {
+            "available": True,
+            "source": "RNMC - Policía Nacional (comparendos, cada uno una vez)",
+            "period_start": inicio.isoformat(),
+            "period_end": fin.isoformat(),
+            "latest_event_date": ultimo.isoformat(),
+        },
+        "map": comparendos_rnmc.capa_mapa(db, inicio, fin, articulo),
+        "comportamientos": [{"code": numero, "name": etiqueta, "value": total}
+                            for numero, etiqueta, _texto, total in comparendos_rnmc.por_comportamiento(db, inicio, fin, limite=20)],
+    }

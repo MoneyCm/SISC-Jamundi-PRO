@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import MapComponent from '../components/Map/MapComponent';
 import { Filter, Calendar, AlertTriangle, CalendarDays, Layers3, Loader2, MapPinned, RefreshCw, ShieldCheck } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import { apiJson } from '../utils/apiClient';
 import TerritoryExplorer from '../components/Map/TerritoryExplorer';
 import { loadPublicDashboard } from '../utils/publicDashboardCache';
 
@@ -169,12 +170,17 @@ const PERIOD_OPTIONS = [
   { value: 'custom', label: 'Rango personalizado' },
 ];
 
-const INITIAL_FILTERS = { periodMode: 'year_to_date', startDate: '', endDate: '', conducta: '' };
+const INITIAL_FILTERS = { periodMode: 'year_to_date', startDate: '', endDate: '', conducta: '', capa: 'delitos', articulo: '' };
+const CAPAS = [
+  { value: 'delitos', label: 'Delitos (sábana policial)' },
+  { value: 'comparendos', label: 'Comparendos (convivencia, RNMC)' },
+];
 
 const OperationalTerritoryMap = () => {
   const [draftFilters, setDraftFilters] = useState(INITIAL_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(INITIAL_FILTERS);
   const [data, setData] = useState(null);
+  const [comparendos, setComparendos] = useState(null);
   const [selectedTerritory, setSelectedTerritory] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -183,17 +189,25 @@ const OperationalTerritoryMap = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await loadPublicDashboard({
-        periodMode: filters.periodMode,
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-        conducta: filters.conducta,
-        comparison: 'none',
-        includeMap: true,
-        minLocationCount: 3,
-        force,
-      });
+      // Las dos capas se consultan con el mismo periodo para poder ver dónde coinciden; cada una con su corte.
+      const params = new URLSearchParams({ periodo: filters.periodMode });
+      if (filters.periodMode === 'custom') { params.set('desde', filters.startDate); params.set('hasta', filters.endDate); }
+      if (filters.articulo) params.set('articulo', filters.articulo);
+      const [response, capaComparendos] = await Promise.all([
+        loadPublicDashboard({
+          periodMode: filters.periodMode,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          conducta: filters.capa === 'delitos' ? filters.conducta : '',
+          comparison: 'none',
+          includeMap: true,
+          minLocationCount: 3,
+          force,
+        }),
+        apiJson(`/inspecciones/mapa?${params.toString()}`).catch(() => null),
+      ]);
       setData(response);
+      setComparendos(capaComparendos?.metadata?.available ? capaComparendos : null);
       setSelectedTerritory('');
     } catch (requestError) {
       setError(requestError.message || 'No fue posible consultar el mapa territorial.');
@@ -209,8 +223,12 @@ const OperationalTerritoryMap = () => {
   }, [appliedFilters]);
 
   const conductas = data?.filters?.available?.conductas || [];
-  const map = data?.map || {};
-  const territories = data?.territories || [];
+  const capa = appliedFilters.capa === 'comparendos' && comparendos ? 'comparendos' : 'delitos';
+  const capaDelitos = data?.map || {};
+  const capaComparendos = comparendos?.map || {};
+  const map = capa === 'comparendos' ? capaComparendos : capaDelitos;
+  const metadata = capa === 'comparendos' ? comparendos?.metadata : data?.metadata;
+  const territories = capa === 'comparendos' ? [] : (data?.territories || []);
   const territory = useMemo(
     () => (map.points || []).find((item) => item.name === selectedTerritory)
       || territories.find((item) => item.name === selectedTerritory)
@@ -218,6 +236,14 @@ const OperationalTerritoryMap = () => {
     [map.points, territories, selectedTerritory]
   );
   const latestCutoff = data?.metadata?.latest_event_date;
+  // Mismo territorio oficial en las dos capas: el nombre del polígono es la llave.
+  const totalEn = (capaMapa, nombre) => (capaMapa.points || []).find((item) => item.name === nombre)?.total;
+  const coincidencias = useMemo(() => {
+    const topComparendos = new Set((capaComparendos.points || []).slice(0, 10).map((item) => item.name));
+    return (capaDelitos.points || []).slice(0, 10)
+      .filter((item) => topComparendos.has(item.name))
+      .map((item) => ({ name: item.name, delitos: item.total, comparendos: totalEn(capaComparendos, item.name) }));
+  }, [capaDelitos.points, capaComparendos.points]);
 
   const applyFilters = () => {
     if (draftFilters.periodMode === 'custom' && (!draftFilters.startDate || !draftFilters.endDate)) {
@@ -257,12 +283,26 @@ const OperationalTerritoryMap = () => {
                 <input type="date" value={draftFilters.endDate} max={latestCutoff} onChange={(event) => setDraftFilters((current) => ({ ...current, endDate: event.target.value }))} className="mt-2 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-[#281FD0]" />
               </label>
             </div>}
-            <label className="mt-5 block text-[11px] font-black uppercase tracking-wide text-slate-500">Conducta
-              <select value={draftFilters.conducta} onChange={(event) => setDraftFilters((current) => ({ ...current, conducta: event.target.value }))} className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold normal-case text-slate-800 outline-none focus:border-[#281FD0]">
-                <option value="">Todas las conductas</option>
-                {conductas.map((conducta) => <option key={conducta.code} value={conducta.code}>{conducta.name}</option>)}
+            <label className="mt-5 block text-[11px] font-black uppercase tracking-wide text-slate-500">Capa
+              <select value={draftFilters.capa} onChange={(event) => setDraftFilters((current) => ({ ...current, capa: event.target.value }))} className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold normal-case text-slate-800 outline-none focus:border-[#281FD0]">
+                {CAPAS.map((option) => <option key={option.value} value={option.value} disabled={option.value === 'comparendos' && !comparendos}>{option.label}</option>)}
               </select>
             </label>
+            {draftFilters.capa === 'comparendos' ? (
+              <label className="mt-5 block text-[11px] font-black uppercase tracking-wide text-slate-500">Comportamiento
+                <select value={draftFilters.articulo} onChange={(event) => setDraftFilters((current) => ({ ...current, articulo: event.target.value }))} className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold normal-case text-slate-800 outline-none focus:border-[#281FD0]">
+                  <option value="">Todos los comportamientos</option>
+                  {(comparendos?.comportamientos || []).map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
+                </select>
+              </label>
+            ) : (
+              <label className="mt-5 block text-[11px] font-black uppercase tracking-wide text-slate-500">Conducta
+                <select value={draftFilters.conducta} onChange={(event) => setDraftFilters((current) => ({ ...current, conducta: event.target.value }))} className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold normal-case text-slate-800 outline-none focus:border-[#281FD0]">
+                  <option value="">Todas las conductas</option>
+                  {conductas.map((conducta) => <option key={conducta.code} value={conducta.code}>{conducta.name}</option>)}
+                </select>
+              </label>
+            )}
             <button onClick={applyFilters} disabled={loading} className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#281FD0] px-4 text-sm font-black text-white hover:bg-[#1F18A8] disabled:cursor-not-allowed disabled:opacity-50">
               {loading ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} />} Actualizar mapa
             </button>
@@ -282,8 +322,8 @@ const OperationalTerritoryMap = () => {
           {error && <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"><AlertTriangle className="mt-0.5 shrink-0" size={18} />{error}</div>}
           <section className="border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-3 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
-              <div><h2 className="text-lg font-black text-slate-950">Distribución por territorio oficial</h2><p className="mt-1 text-sm font-semibold text-slate-500">{formatDate(data?.metadata?.period_start)} - {formatDate(data?.metadata?.period_end)} | Corte disponible: {formatDate(latestCutoff)}</p></div>
-              <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">{data?.metadata?.source || 'Fuente en consulta'}</div>
+              <div><h2 className="text-lg font-black text-slate-950">{capa === 'comparendos' ? 'Comparendos por territorio oficial' : 'Distribución por territorio oficial'}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{formatDate(metadata?.period_start)} - {formatDate(metadata?.period_end)} | Corte disponible: {formatDate(metadata?.latest_event_date)}</p></div>
+              <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">{metadata?.source || 'Fuente en consulta'}</div>
             </div>
             {loading ? <div role="status" className="flex h-96 items-center justify-center gap-3 text-slate-500"><Loader2 className="animate-spin" size={22} />Actualizando territorios…</div> : <TerritoryExplorer map={map} selectedTerritory={selectedTerritory} onSelect={setSelectedTerritory} />}
             <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 text-xs font-semibold leading-5 text-slate-600 md:grid-cols-3"><p><strong className="text-slate-900">Método:</strong> el color indica volumen agregado, no riesgo individual.</p><p><strong className="text-slate-900">Privacidad:</strong> mínimo {formatNumber(map.min_location_count || 3)} casos por territorio.</p><p><strong className="text-slate-900">Cartografía:</strong> solo polígonos oficiales verificados.</p></div>
@@ -291,11 +331,34 @@ const OperationalTerritoryMap = () => {
 
           {territory && <section className="border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-[11px] font-black uppercase tracking-wide text-[#281FD0]">Territorio seleccionado</p>
-            <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-between"><div><h2 className="text-2xl font-black text-slate-950">{territory.name}</h2><p className="mt-1 text-sm font-semibold text-slate-600">Concentración de registros agregados en el periodo consultado.</p></div><p className="text-3xl font-black text-slate-950">{formatNumber(territory.total)} <span className="text-sm text-slate-500">casos</span></p></div>
-            {territory.conductas?.length > 0 && <p className="mt-4 text-sm font-semibold text-slate-700">Conductas registradas: {territory.conductas.slice(0, 4).join(', ')}.</p>}
+            <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-between"><div><h2 className="text-2xl font-black text-slate-950">{territory.name}</h2><p className="mt-1 text-sm font-semibold text-slate-600">Concentración de registros agregados en el periodo consultado.</p></div><p className="text-3xl font-black text-slate-950">{formatNumber(territory.total)} <span className="text-sm text-slate-500">{capa === 'comparendos' ? 'comparendos' : 'casos'}</span></p></div>
+            {territory.conductas?.length > 0 && <p className="mt-4 text-sm font-semibold text-slate-700">{capa === 'comparendos' ? 'Comportamientos más comunes' : 'Conductas registradas'}: {territory.conductas.slice(0, 4).join(', ')}.</p>}
+            {capa === 'comparendos'
+              ? totalEn(capaDelitos, territory.name) !== undefined && <p className="mt-2 text-sm font-semibold text-slate-700">En el mismo periodo, la sábana policial registra <strong>{formatNumber(totalEn(capaDelitos, territory.name))}</strong> delitos en este territorio.</p>
+              : totalEn(capaComparendos, territory.name) !== undefined && <p className="mt-2 text-sm font-semibold text-slate-700">En el mismo periodo, el RNMC registra <strong>{formatNumber(totalEn(capaComparendos, territory.name))}</strong> comparendos en este territorio.</p>}
           </section>}
 
-          <section className="border border-slate-200 bg-white p-5 text-sm font-semibold leading-6 text-slate-600 shadow-sm"><div className="flex items-start gap-3"><CalendarDays className="mt-0.5 shrink-0 text-[#281FD0]" size={19} /><p><strong className="text-slate-900">Fuentes institucionales separadas:</strong> Inspecciones de Policia y Comisarias de Familia conservan sus propios cortes y se consultan en sus modulos. No se mezclan ni se suman con los registros de Policia Nacional en este mapa.</p></div></section>
+          {coincidencias.length > 0 && <section className="border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-[11px] font-black uppercase tracking-wide text-[#281FD0]">Dónde coinciden</p>
+            <h2 className="mt-1 text-lg font-black text-slate-950">Territorios entre los 10 con más delitos y también entre los 10 con más comparendos</h2>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead><tr className="text-[10px] font-black uppercase tracking-widest text-slate-400"><th className="py-2 pr-3">Territorio</th><th className="py-2 pr-3 text-right">Delitos (sábana)</th><th className="py-2 text-right">Comparendos (RNMC)</th></tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {coincidencias.map((item) => (
+                    <tr key={item.name} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedTerritory(item.name)}>
+                      <td className="py-2 pr-3 font-black text-slate-900">{item.name}</td>
+                      <td className="py-2 pr-3 text-right font-bold tabular-nums">{formatNumber(item.delitos)}</td>
+                      <td className="py-2 text-right font-bold tabular-nums">{formatNumber(item.comparendos)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs font-semibold text-slate-500">Son dos fuentes distintas con su propio corte: se comparan, no se suman. Un comparendo refleja la actuación de la Policía, no solo el comportamiento de la gente.</p>
+          </section>}
+
+          <section className="border border-slate-200 bg-white p-5 text-sm font-semibold leading-6 text-slate-600 shadow-sm"><div className="flex items-start gap-3"><CalendarDays className="mt-0.5 shrink-0 text-[#281FD0]" size={19} /><p><strong className="text-slate-900">Fuentes separadas:</strong> los delitos salen de la sábana de la Policía y los comparendos del RNMC; cada capa conserva su corte y nunca se suman. Comisarías de Familia se consulta en su módulo.</p></div></section>
         </main>
       </div>
     </div>

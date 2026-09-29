@@ -125,6 +125,27 @@ def filtros_barrio() -> List:
         nombre.notin_(["NONE", "NAN", "NULL", "-"])]
 
 
+def comportamientos_por_barrio(db: Session, desde: date, hasta: date, nombres=None) -> dict:
+    """{barrio: [(etiqueta, comparendos), ...]} de mayor a menor, por artículo del Código de Convivencia."""
+    sub = primeras_fechas(db)
+    inicio, fin = _limites(desde, hasta)
+    query = (db.query(InspeccionExpediente.localidad, InspeccionMedida.articulo,
+                      func.count(func.distinct(sub.c.expediente_id)))
+             .select_from(sub)
+             .join(InspeccionExpediente, InspeccionExpediente.id == sub.c.expediente_id)
+             .join(InspeccionMedida, InspeccionMedida.expediente_id == InspeccionExpediente.id)
+             .filter(sub.c.fecha >= inicio, sub.c.fecha < fin, InspeccionMedida.articulo.isnot(None)))
+    if nombres is not None:
+        query = query.filter(InspeccionExpediente.localidad.in_(list(nombres)))
+    acumulado = {}
+    for barrio, texto, valor in query.group_by(InspeccionExpediente.localidad, InspeccionMedida.articulo).all():
+        numero = numero_articulo(texto) or texto
+        por_barrio = acumulado.setdefault(barrio, {})
+        por_barrio.setdefault(numero, [etiqueta_articulo(texto), 0])[1] += int(valor)
+    return {barrio: sorted((tuple(v) for v in datos.values()), key=lambda item: -item[1])
+            for barrio, datos in acumulado.items()}
+
+
 def resumen_convivencia(db: Session, desde: date, hasta: date, barrios: int = 10) -> dict:
     """Qué comportamientos y dónde: para la página de Inspecciones (uso institucional, nivel 2)."""
     sub = primeras_fechas(db)
@@ -140,21 +161,9 @@ def resumen_convivencia(db: Session, desde: date, hasta: date, barrios: int = 10
 
     top_barrios = agrupar(db, InspeccionExpediente.localidad, desde, hasta, filtros=filtros_barrio(), limite=barrios)
     nombres = [nombre for nombre, _ in top_barrios]
-    principal = {}
+    principal = comportamientos_por_barrio(db, desde, hasta, nombres) if nombres else {}
     fin_de_semana = {}
     if nombres:
-        cruce = (db.query(InspeccionExpediente.localidad, InspeccionMedida.articulo,
-                          func.count(func.distinct(sub.c.expediente_id)))
-                 .select_from(sub)
-                 .join(InspeccionExpediente, InspeccionExpediente.id == sub.c.expediente_id)
-                 .join(InspeccionMedida, InspeccionMedida.expediente_id == InspeccionExpediente.id)
-                 .filter(*en_periodo, InspeccionExpediente.localidad.in_(nombres), InspeccionMedida.articulo.isnot(None))
-                 .group_by(InspeccionExpediente.localidad, InspeccionMedida.articulo).all())
-        for barrio, texto, valor in cruce:
-            numero = numero_articulo(texto) or texto
-            por_barrio = principal.setdefault(barrio, {})
-            por_barrio[numero] = por_barrio.get(numero, [etiqueta_articulo(texto), 0])
-            por_barrio[numero][1] += int(valor)
         dia = func.extract("isodow", sub.c.fecha)
         for barrio, valor in (db.query(InspeccionExpediente.localidad, func.count(sub.c.expediente_id))
                               .select_from(sub)
@@ -165,8 +174,8 @@ def resumen_convivencia(db: Session, desde: date, hasta: date, barrios: int = 10
 
     lista_barrios = []
     for nombre, valor in top_barrios:
-        opciones = sorted(principal.get(nombre, {}).items(), key=lambda item: -item[1][1])
-        mayor = opciones[0][1] if opciones else None
+        opciones = principal.get(nombre, [])
+        mayor = opciones[0] if opciones else None
         lista_barrios.append({
             "barrio": nombre, "total": int(valor),
             "porcentaje": round(valor * 100 / total, 1) if total else 0,
@@ -206,4 +215,46 @@ def estado_carga(db: Session, hoy: Optional[date] = None) -> dict:
         "dias_alerta": DIAS_ALERTA,
         "atrasado": ultimo is None or dias > DIAS_ALERTA,
         "comparendos_anio": contar(db, date(ultimo.year, 1, 1), ultimo) if ultimo else 0,
+    }
+
+
+def capa_mapa(db: Session, desde: date, hasta: date, articulo: Optional[str] = None, minimo: int = 3) -> dict:
+    """Comparendos por territorio oficial (mismo polígono y punto interior que la capa de delitos)."""
+    from services.geocoding_service import GeocodingService
+
+    filtros = filtros_barrio()
+    if articulo:
+        filtros.append(InspeccionMedida.articulo.like(f"Art. {articulo} %"))
+    filas = agrupar(db, InspeccionExpediente.localidad, desde, hasta, filtros=filtros, limite=2000)
+    detalle = comportamientos_por_barrio(db, desde, hasta, [nombre for nombre, _ in filas])
+    puntos, sin_poligono, ocultos = {}, [], 0
+    for nombre, total in filas:
+        total = int(total)
+        if total < minimo:
+            ocultos += total
+            continue
+        territorio = GeocodingService.get_official_territory(nombre)
+        comportamientos = [etiqueta for etiqueta, _ in detalle.get(nombre, [])]
+        if not territorio:
+            sin_poligono.append({"name": nombre, "total": total, "reason": "sin polígono oficial para este nombre"})
+            continue
+        clave = territorio.get("name") or nombre
+        actual = puntos.get(clave)
+        if actual:
+            actual["total"] += total
+            actual["aliases"].append(nombre)
+            actual["conductas"] = list(dict.fromkeys(actual["conductas"] + comportamientos))
+            continue
+        lat, lng = territorio["coords"]
+        puntos[clave] = {"name": clave, "total": total, "aliases": [nombre], "lat": lat, "lng": lng,
+                         "geometry": territorio["geometry"], "source": territorio.get("source", "cartografia oficial"),
+                         "zones": [], "conductas": comportamientos}
+    return {
+        "type": "official_territory_polygons",
+        "min_location_count": minimo,
+        "suppressed_count": ocultos,
+        "excluded_non_territorial_count": 0,
+        "unmapped_count": len(sin_poligono),
+        "unmapped_names": sin_poligono,
+        "points": sorted(puntos.values(), key=lambda punto: -punto["total"]),
     }
