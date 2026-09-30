@@ -1,8 +1,11 @@
 """Metas de resultado del PISCC 2024-2027 (tabla 16) frente a lo que lleva el año.
 
 Cada indicador se mide con su propia fuente y su propio corte; los cortes no se mezclan.
-- Homicidios, hurto a motocicletas y lesiones: sábana policial, hechos únicos, sobre la
-  última entrega completa (reproducible).
+- Homicidios, hurto a motocicletas y lesiones: MinDefensa (datos.gov.co) hasta el último mes
+  publicado, porque la línea base 2023 y la meta están en esa fuente y cuentan víctimas. La
+  sábana policial (hechos únicos) cuenta un hecho con dos víctimas como uno: con ella el avance
+  quedaba por debajo (lesiones, un 10 % menos). La cifra de la sábana se conserva como dato
+  reciente ("reciente"), sin sumarla. Si MinDefensa no tiene meses del año, se usa la sábana.
 - Secuestro, extorsión y violencia intrafamiliar: MinDefensa; convivencia: RNMC.
 
 La meta es la cifra anual a la que el plan quiere llegar en 2027. Se compara con el año en
@@ -114,6 +117,36 @@ def _police_rows(db: Session, today: date, source_version_id: Optional[str] = No
     return rows
 
 
+MINDEFENSA_MENSUAL = ("homicidios", "motos", "lesiones")
+FUENTE_MINDEFENSA = "MinDefensa / Policía Nacional (víctimas, datos.gov.co)"
+
+
+def _mindefensa_rows(db: Session, today: date, datos: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, Any]]:
+    """Año corrido con MinDefensa: meses cerrados publicados hasta `today` (misma fuente y unidad de la meta)."""
+    from calendar import monthrange
+
+    from services import piscc_historico
+
+    datos = datos if datos is not None else piscc_historico.cargar()
+    publicado = piscc_historico._ultimo_publicado(datos)
+    if not publicado:
+        return {}
+    ultimo_cerrado = (today.year, today.month) if today.day == monthrange(today.year, today.month)[1] else (
+        (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12))
+    anio, mes = min(publicado, ultimo_cerrado)
+    if anio != today.year:
+        return {}  # sin meses publicados del año en curso
+    cutoff = date(anio, mes, monthrange(anio, mes)[1])
+    rows = {}
+    for key in MINDEFENSA_MENSUAL:
+        actual = piscc_historico.serie_mensual(key, anio, datos)[:mes]
+        previo = piscc_historico.serie_mensual(key, anio - 1, datos)[:mes]
+        count = sum(v or 0 for v in actual)
+        previous = sum(previo) if previo and all(v is not None for v in previo) else None
+        rows[key] = {**evaluate(count, cutoff, GOALS[key]), "previous": previous, "source": FUENTE_MINDEFENSA}
+    return rows
+
+
 def _external_rows(db: Session, today: date) -> Dict[str, Dict[str, Any]]:
     from services.piscc_sources_service import load_mindefensa, load_rnmc
 
@@ -172,6 +205,16 @@ def build_goals(db: Session, today: Optional[date] = None, source_version_id: Op
     from services import piscc_historico
 
     historico = piscc_historico.cargar()
+    try:
+        mindefensa = _mindefensa_rows(db, today, historico)
+    except Exception:
+        logger.exception("Metas PISCC: no se pudo leer la serie mensual de MinDefensa")
+        mindefensa = {}
+    for key, row in mindefensa.items():
+        sabana = measured.get(key) or {}
+        reciente = ({"count": sabana["count"], "cutoff": sabana["cutoff"], "source": sabana.get("source")}
+                    if sabana.get("count") is not None and sabana.get("cutoff", "") > row["cutoff"] else None)
+        measured[key] = {**row, "reciente": reciente}
     for key, label, baseline, goal, _indicator in TABLE_16:
         row = measured.get(key) or {"status": "SIN_DATOS", "detail": "La fuente de este indicador no tiene un corte disponible."}
         if row.get("cutoff"):

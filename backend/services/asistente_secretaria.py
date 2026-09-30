@@ -180,6 +180,12 @@ def _indicadores_piscc(db: Session, exp: Expediente, corte: date, ids: List[str]
         if g.get("previous") is not None:
             lineas.append(f"Mismo periodo del año pasado: {g['previous']} ({cambio(g['count'], g['previous'])}).")
         lineas.append(f"Meta del PISCC: {g.get('status_label')}. {g.get('detail') or ''}".strip())
+        if g.get("source"):
+            lineas.append(f"Fuente del seguimiento: {g['source']}.")
+        reciente = g.get("reciente")
+        if reciente:
+            lineas.append(f"Dato más reciente de la sábana (hechos únicos, otra unidad): {reciente['count']} al "
+                          f"{fecha_larga(reciente['cutoff'])}.")
         cerrados = [f"{a['anio']}: {a['total']}" for a in g.get("closed_years") or [] if a.get("completo")]
         if cerrados:
             lineas.append(f"Años cerrados: {'; '.join(cerrados)} (línea base 2023: {g.get('baseline_2023')}; "
