@@ -14,7 +14,7 @@ from datetime import date
 from typing import Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import extract, func, not_, or_, select, true, tuple_
+from sqlalchemy import and_, extract, func, not_, or_, select, true, tuple_
 from sqlalchemy.orm import Session
 
 from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, SabanaSnapshotRow
@@ -55,10 +55,15 @@ def filtro_hechos(db: Session, model=HechoSeguridad, entrega: Optional[EntregaVi
     if entrega is None or not entrega.ventanas:
         return true()
     en_ventana = or_(*[model.fecha_evento.between(inicio, fin) for inicio, fin in entrega.ventanas])
-    pares = select(SabanaSnapshotRow.hecho_key, SabanaSnapshotRow.conducta_estandar).where(
-        SabanaSnapshotRow.ingestion_id == entrega.run_id)
-    return or_(model.fecha_evento.is_(None), not_(en_ventana),
-               tuple_(hecho_key_expr(model), model.conducta_estandar).in_(pares))
+    # Hecho, conducta y FECHA de la entrega vigente: si la Policía corrigió la fecha de un hecho, la
+    # versión vieja (de una entrega anterior) no debe contarse otra vez en otro mes o semana.
+    triples = select(SabanaSnapshotRow.hecho_key, SabanaSnapshotRow.conducta_estandar,
+                     SabanaSnapshotRow.fecha_evento).where(SabanaSnapshotRow.ingestion_id == entrega.run_id)
+    claves = select(SabanaSnapshotRow.hecho_key).where(SabanaSnapshotRow.ingestion_id == entrega.run_id)
+    clave = hecho_key_expr(model)
+    return or_(model.fecha_evento.is_(None),
+               and_(not_(en_ventana), clave.notin_(claves)),
+               tuple_(clave, model.conducta_estandar, model.fecha_evento).in_(triples))
 
 
 def filtro_sql(db: Session, columna_fecha: str = "fecha_evento", prefijo: str = "",
@@ -75,5 +80,7 @@ def filtro_sql(db: Session, columna_fecha: str = "fecha_evento", prefijo: str = 
              f"WHEN NULLIF(BTRIM({p}fingerprint), '') IS NOT NULL THEN 'FP:' || BTRIM({p}fingerprint) "
              f"ELSE 'ROW:' || {p}id::text END")
     run_id = str(UUID(str(entrega.run_id)))
-    return (f" AND ({fecha} IS NULL OR NOT ({ventanas}) OR ({clave}, {p}conducta_estandar) IN "
-            f"(SELECT hecho_key, conducta_estandar FROM sabana_snapshot_rows WHERE ingestion_id = '{run_id}'))")
+    return (f" AND ({fecha} IS NULL"
+            f" OR (NOT ({ventanas}) AND {clave} NOT IN (SELECT hecho_key FROM sabana_snapshot_rows WHERE ingestion_id = '{run_id}'))"
+            f" OR ({clave}, {p}conducta_estandar, {fecha}) IN "
+            f"(SELECT hecho_key, conducta_estandar, fecha_evento FROM sabana_snapshot_rows WHERE ingestion_id = '{run_id}'))")

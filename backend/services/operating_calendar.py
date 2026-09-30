@@ -177,9 +177,19 @@ def weekly_items(db: Session, today: date) -> List[Dict[str, Any]]:
         SiscCifrasPublication.status == "PUBLISHED", SiscCifrasPublication.edition_type == "monthly",
         SiscCifrasPublication.period_start == month_start, SiscCifrasPublication.period_end == month_end).first()
     if today.day <= 10 or not monthly:
+        # Medicina Legal publica hacia el día 20 del mes siguiente: el mensual no la espera, va con su último mes publicado.
+        ml_text = "Medicina Legal va con su último mes publicado."
+        try:
+            from services import medicina_legal_bulletin as ml
+            latest = ml.latest_month(db, ml.latest_snapshots(db))
+            if latest:
+                ml_month = int(str(latest)[4:6])
+                ml_text = f"Medicina Legal va con su último mes publicado ({MONTHS[ml_month - 1]})."
+        except Exception:  # noqa: BLE001 - sin Medicina Legal el aviso sigue
+            db.rollback()
         rows.append(item("boletin-mensual", "Boletín", f"Publicar el boletín mensual de {MONTHS[month_end.month - 1]}", "hasta el día 7",
                          "HECHO" if monthly else ("PENDIENTE" if today.day <= 7 else "ATRASADO"),
-                         "Con la página de Medicina Legal.", {"page": "boletin_replica"}))
+                         ml_text, {"page": "boletin_replica"}))
     return rows
 
 
