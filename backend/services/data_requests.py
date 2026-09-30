@@ -48,12 +48,13 @@ def ensure_defaults(db: Session) -> None:
 
 
 def loaded_cutoffs(db: Session) -> Dict[str, Dict[str, Any]]:
-    """Último corte cargado por dependencia, desde los lotes institucionales no rechazados."""
+    """Último corte cargado por dependencia, desde los lotes institucionales aprobados o pendientes."""
     from db.models_institutional import InstitutionalDataBatch
 
     rows = db.query(InstitutionalDataBatch.reporting_entity, func.max(InstitutionalDataBatch.cutoff_date),
                     func.max(InstitutionalDataBatch.created_at)).filter(
-        InstitutionalDataBatch.validation_status != "REJECTED").group_by(InstitutionalDataBatch.reporting_entity).all()
+        # Solo lo vigente: una carga reemplazada o rechazada no es un corte real.
+        InstitutionalDataBatch.validation_status.in_(("APPROVED", "PENDING"))).group_by(InstitutionalDataBatch.reporting_entity).all()
     result: Dict[str, Dict[str, Any]] = {}
     for entity, cutoff, loaded_at in rows:
         key = match_key(entity)
