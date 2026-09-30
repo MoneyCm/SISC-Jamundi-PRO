@@ -29,3 +29,19 @@ def test_zero_baseline_is_distinguished_from_missing_data():
     assert "frente a 0" in text
     assert "base cero" in text
     assert "sin base comparable" not in text
+
+
+def comparendos(current, previous):
+    indicator = SiscCifrasService.indicator(
+        source="Inspecciones de Policía / RNMC", source_code="INSPECCIONES_RNMC", domain="CONVIVENCIA",
+        category="Comparendos", code="comparendos", name="Comparendos registrados", value=current, unit="comparendos",
+        start=date(2026, 9, 20), end=date(2026, 9, 26), comparison_value=previous, cutoff=date(2026, 9, 28), priority=1,
+    )
+    return SiscCifrasService.insight_from_indicator(indicator, "mismo periodo del año anterior").detail
+
+
+def test_big_change_in_fines_explains_it_may_be_enforcement():
+    """Caso real: 151 comparendos frente a 40 (+277,5 %) en la semana del 20 al 26 de septiembre de 2026."""
+    assert "actuación de la Policía" in comparendos(151, 40)
+    assert "actuación de la Policía" in comparendos(40, 151)
+    assert "actuación de la Policía" not in comparendos(110, 100)
