@@ -734,15 +734,20 @@ class SiscCifrasService:
                 continue
 
             if code == "POLICIA_SEMANAL":
+                from services.entrega_vigente import filtro_hechos
+
+                vigente = filtro_hechos(db)
                 period_records = db.query(hechos_unicos_expr()).filter(
                     HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
                     HechoSeguridad.fecha_evento >= start,
                     HechoSeguridad.fecha_evento <= min(end, today),
+                    vigente,
                 ).scalar() or 0
                 comparison_records = db.query(hechos_unicos_expr()).filter(
                     HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
                     HechoSeguridad.fecha_evento >= prev_start,
                     HechoSeguridad.fecha_evento <= prev_end,
+                    vigente,
                 ).scalar() or 0
             elif code == "INSPECCIONES_RNMC":
                 from services import comparendos_rnmc
@@ -1207,15 +1212,21 @@ class SiscCifrasService:
 
     @classmethod
     def police_indicators(cls, db: Session, start: date, end: date, prev_start: date, prev_end: date) -> List[Indicator]:
+        # Misma regla que el resto del SISC: en las fechas de la última entrega cuenta esa entrega.
+        from services.entrega_vigente import filtro_hechos
+
+        vigente = filtro_hechos(db)
         base_filter = [
             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
             HechoSeguridad.fecha_evento >= start,
             HechoSeguridad.fecha_evento <= end,
+            vigente,
         ]
         prev_filter = [
             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
             HechoSeguridad.fecha_evento >= prev_start,
             HechoSeguridad.fecha_evento <= prev_end,
+            vigente,
         ]
         cutoff = db.query(func.max(HechoSeguridad.fecha_evento)).filter(HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL").scalar()
         total = db.query(hechos_unicos_expr()).filter(*base_filter).scalar() or 0

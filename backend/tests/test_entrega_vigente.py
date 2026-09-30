@@ -18,7 +18,8 @@ def test_filtro_sql_con_ventanas_y_pares():
                                 ((date(2025, 1, 1), date(2025, 9, 12)), (date(2026, 1, 1), date(2026, 9, 12))))
     sql = ev.filtro_sql(None, prefijo="h", entrega=entrega)
     assert "h.fecha_evento BETWEEN DATE '2025-01-01' AND DATE '2025-09-12'" in sql
-    assert "h.conducta_estandar) IN (SELECT hecho_key, conducta_estandar FROM sabana_snapshot_rows" in sql
+    # Hecho, conducta y fecha de la entrega vigente (una fecha corregida no se cuenta dos veces).
+    assert "h.conducta_estandar, h.fecha_evento) IN (SELECT hecho_key, conducta_estandar, fecha_evento FROM sabana_snapshot_rows" in sql
     assert "ingestion_id = '44021d06-766a-47bd-9069-16a239477b17'" in sql
 
 
@@ -65,3 +66,20 @@ def test_fuera_de_la_entrega_se_usa_el_historico(db):
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL",
         HechoSeguridad.fecha_evento.between(inicio, fin)).scalar()
     assert analitica._hechos_total(db, inicio, fin) == historico
+
+
+def test_cada_mes_cuenta_lo_mismo_que_la_foto(db):
+    """Si la Policía corrige la fecha de un hecho, la versión vieja no se cuenta en otro mes (caso real: 40234501)."""
+    entrega = ev.entrega_vigente(db)
+    if entrega is None:
+        pytest.skip("Sin entrega vigente en la base")
+    inicio, fin = entrega.ventanas[-1]
+    for mes in range(inicio.month, fin.month + 1):
+        desde = date(inicio.year, mes, 1)
+        hasta = min(fin, date(inicio.year + (mes == 12), mes % 12 + 1, 1).replace(day=1) - (date(2000, 1, 2) - date(2000, 1, 1)))
+        foto = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
+            SabanaSnapshotRow.ingestion_id == entrega.run_id, SabanaSnapshotRow.fecha_evento.between(desde, hasta)).scalar()
+        sisc = db.query(hechos_unicos_expr()).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", ev.filtro_hechos(db, entrega=entrega),
+            HechoSeguridad.fecha_evento.between(desde, hasta)).scalar()
+        assert sisc == foto, (desde, hasta, sisc, foto)
