@@ -55,7 +55,7 @@ mindefensa_reference_sync_state.json
 # Copias de trabajo con documentos reservados o datos personales (no versionar)
 .codex-temp-*/
 .helicon/
-output/pdf/
+output/
 monitor_execution.json
 backend/monitor_execution.json
 # Página de QA local con datos de prueba

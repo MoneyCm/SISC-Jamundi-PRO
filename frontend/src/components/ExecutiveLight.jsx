@@ -3,9 +3,6 @@ import { Download, Film, Loader2, Share2 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { buildLightSlides, LIGHT_SIZE, lightSlideSvg } from '../utils/executiveLight';
 
-const SECONDS_PER_SLIDE = 6.5;
-const FADE_MS = 600;
-
 export async function svgToImage(svg) {
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
@@ -25,49 +22,6 @@ export async function svgToImage(svg) {
 const canvasToPng = (canvas) => new Promise((resolve, reject) =>
   canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo crear la imagen.'))), 'image/png'));
 
-// Video corto a partir de las mismas láminas: no inventa contenido nuevo.
-export async function slidesToVideo(canvases, onProgress) {
-  if (typeof MediaRecorder === 'undefined') throw new Error('Este navegador no puede grabar video. Use las imágenes.');
-  const mime = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
-    .find((type) => MediaRecorder.isTypeSupported(type));
-  if (!mime) throw new Error('Este navegador no puede grabar video. Use las imágenes.');
-  const canvas = document.createElement('canvas');
-  canvas.width = LIGHT_SIZE.width; canvas.height = LIGHT_SIZE.height;
-  const context = canvas.getContext('2d');
-  context.drawImage(canvases[0], 0, 0);
-  const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 4_000_000 });
-  const chunks = [];
-  recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-  const stopped = new Promise((resolve) => { recorder.onstop = resolve; });
-  const perSlide = SECONDS_PER_SLIDE * 1000;
-  const total = perSlide * canvases.length;
-  recorder.start(250);
-  const started = performance.now();
-  await new Promise((resolve) => {
-    const frame = () => {
-      const elapsed = performance.now() - started;
-      if (elapsed >= total) { resolve(); return; }
-      const index = Math.min(canvases.length - 1, Math.floor(elapsed / perSlide));
-      const local = elapsed - index * perSlide;
-      context.globalAlpha = 1;
-      context.drawImage(canvases[index], 0, 0);
-      if (local > perSlide - FADE_MS && index < canvases.length - 1) {
-        context.globalAlpha = (local - (perSlide - FADE_MS)) / FADE_MS;
-        context.drawImage(canvases[index + 1], 0, 0);
-        context.globalAlpha = 1;
-      }
-      context.fillStyle = '#ffe000';
-      context.fillRect(0, 0, LIGHT_SIZE.width * (elapsed / total), 12);
-      onProgress(Math.round((elapsed / total) * 100));
-      requestAnimationFrame(frame);
-    };
-    frame();
-  });
-  recorder.stop();
-  await stopped;
-  return { blob: new Blob(chunks, { type: mime.split(';')[0] }), extension: mime.startsWith('video/mp4') ? 'mp4' : 'webm' };
-}
-
 function saveBlob(blob, name) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -75,13 +29,12 @@ function saveBlob(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-export default function ExecutiveLight({ publication, council, isCurrent, authHeaders, escudo }) {
+export default function ExecutiveLight({ publication, council, isCurrent, authHeaders, escudo, onPrepareTikTok }) {
   const [recurrence, setRecurrence] = useState(null);
   const [sat, setSat] = useState(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -99,7 +52,7 @@ export default function ExecutiveLight({ publication, council, isCurrent, authHe
 
   const run = async (task) => {
     setBusy(true); setError(''); setStatus('');
-    try { await task(); } catch (err) { if (err?.name !== 'AbortError') setError(err.message); } finally { setBusy(false); setProgress(null); }
+    try { await task(); } catch (err) { if (err?.name !== 'AbortError') setError(err.message); } finally { setBusy(false); }
   };
 
   const imageFiles = async () => {
@@ -119,16 +72,6 @@ export default function ExecutiveLight({ publication, council, isCurrent, authHe
     }
   });
 
-  const video = () => run(async () => {
-    setStatus('Grabando el video (unos 20 segundos). Mantenga esta pestaña visible.');
-    const canvases = await Promise.all(svgs.map(svgToImage));
-    const { blob, extension } = await slidesToVideo(canvases, setProgress);
-    saveBlob(blob, `parte-ejecutivo-${period}.${extension}`);
-    setStatus(extension === 'mp4'
-      ? 'Video MP4 descargado: se puede enviar por WhatsApp.'
-      : 'Video descargado en formato WebM. Si algún celular no lo abre, envíe las láminas.');
-  });
-
   return (
     <section className="overflow-hidden rounded-lg border-2 border-[#281FD0] bg-white shadow-sm" aria-label="Parte ejecutivo rápido">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-6 py-5">
@@ -139,11 +82,11 @@ export default function ExecutiveLight({ publication, council, isCurrent, authHe
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={share} disabled={!ready} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#281FD0] px-4 text-xs font-black uppercase text-white hover:bg-[#1f18a8] disabled:opacity-40">
-            {busy && progress === null ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />} Compartir / descargar láminas
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />} Compartir / descargar láminas
           </button>
-          <button onClick={video} disabled={!ready} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#FFE000] px-4 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:opacity-40">
-            {progress !== null ? <Loader2 size={16} className="animate-spin" /> : <Film size={16} />} {progress !== null ? `Grabando ${progress} %` : 'Video de 20 segundos'}
-          </button>
+          {onPrepareTikTok && <button onClick={onPrepareTikTok} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#FFE000] px-4 text-xs font-black uppercase text-slate-950 disabled:opacity-40">
+            <Film size={16} /> Preparar TikTok ciudadano
+          </button>}
         </div>
       </div>
       {deck.draft && (
