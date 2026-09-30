@@ -795,8 +795,14 @@ def get_dashboard_kpis(
 
         population = _jamundi_population(end_date)
         tasa_homicidios = rate_per_100k(homicidios, population)
+        from services.cobertura_sabana import cobertura as cobertura_sabana
+        cobertura = cobertura_sabana(db, start_date, end_date)
+        if not cobertura["completa"]:
+            # Una tasa con meses faltantes parecería una baja real.
+            tasa_homicidios = None
 
         return {
+            "cobertura":         cobertura,
             "total_incidentes":  total,
             "total_general":     total,
             "total_hechos":      total,
@@ -932,6 +938,27 @@ def get_tendencia_delictiva(
         for r in results
     ]
     trend_data.reverse()
+    if intervalo == "month" and results:
+        # Meses sin datos en la sábana (por ejemplo, diciembre de 2025): se muestran vacíos, no se saltan.
+        from services.asistente_periodos import fin_de_mes
+        presentes = {r.full_date.date() if hasattr(r.full_date, "date") else r.full_date for r in results}
+        mes, ultimo = min(presentes), max(presentes)
+        from services.cobertura_sabana import limites
+        primero, corte = limites(db)
+        if start_date and primero:
+            mes = min(mes, max(start_date, primero).replace(day=1))
+        if end_date and corte:
+            ultimo = max(ultimo, min(end_date, corte).replace(day=1))
+        completo = []
+        filas = iter(trend_data)
+        while mes <= ultimo:
+            if mes in presentes:
+                completo.append(next(filas))
+            else:
+                completo.append({"name": format_label(mes), "homicidios": None, "hurtos": None, "vif": None,
+                                 "lesiones": None, "sin_datos": True})
+            mes = fin_de_mes(mes.year, mes.month) + timedelta(days=1)
+        trend_data = completo
     return trend_data
 
 

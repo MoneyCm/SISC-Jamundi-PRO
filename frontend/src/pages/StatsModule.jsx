@@ -9,6 +9,7 @@ import {
     MapPin, Calendar, RefreshCcw
 } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
+import { mesesIncompletos, mesesSinDatos, textoCobertura } from '../utils/cobertura';
 
 const COLORS_YEAR = { v2025: '#00b4ff', v2026: '#ffa500' };
 const PRIMARY = '#281FD0';
@@ -162,6 +163,8 @@ const StatsModule = ({ userRoles = [] }) => {
     }, []);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
+    const avisoCobertura = textoCobertura(mesesIncompletos([kpis2026?.cobertura, kpis2025?.cobertura]));
+    const vaciosTendencia = mesesSinDatos(tendencia);
 
     // ── Vista: Resumen General ──────────────────────────────────────────────
     const ViewResumen = () => (
@@ -194,6 +197,11 @@ const StatsModule = ({ userRoles = [] }) => {
                 {/* Tendencia mensual */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Tendencia Mensual</h3>
+                    {vaciosTendencia.length > 0 && (
+                        <p className="-mt-2 mb-3 text-xs text-amber-800">
+                            Sin datos en la sábana: {vaciosTendencia.join(', ')}. Esos meses aparecen vacíos; no significa que no hubo hechos.
+                        </p>
+                    )}
                     <ResponsiveContainer width="100%" height={280}>
                         <AreaChart data={tendencia}>
                             <defs>
@@ -456,6 +464,9 @@ const StatsModule = ({ userRoles = [] }) => {
                             <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Cargando datos SIEDCO...</p>
                         </div>
                     </div>
+                )}
+                {avisoCobertura && (
+                    <div role="status" className="bg-amber-50 text-amber-900 p-4 rounded-xl text-sm mb-4 border border-amber-200">{avisoCobertura}</div>
                 )}
                 {error && (
                     <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold mb-4 border border-red-100">{error}</div>

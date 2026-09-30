@@ -40,6 +40,7 @@ import RespaldoSabana from '../components/RespaldoSabana';
 import Avisos from '../components/Avisos';
 import { localToday } from '../utils/localDate';
 import { downloadHojaEjecutiva } from '../utils/hojaEjecutiva';
+import { mesesIncompletos, textoCobertura } from '../utils/cobertura';
 
 const METRIC_DEFINITIONS = [
     { key: 'homicidios', label: 'Homicidios', icon: Skull },
@@ -367,6 +368,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
         ...metricComparison(currentKpis[definition.key], previousKpis[definition.key]),
         ...(loading ? { changeText: 'Consultando', trend: 'neutral' } : {}),
     })), [currentKpis, previousKpis, loading]);
+    const avisoCobertura = textoCobertura(mesesIncompletos([currentKpis.cobertura, previousKpis.cobertura]));
 
     const comparisonLabel = comparisonMode === 'previous_year'
         ? 'mismo periodo del año anterior'
@@ -452,6 +454,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 <div className="p-3.5 flex items-center gap-3"><Layers size={18} className="text-slate-600" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Última carga</p><p className="text-sm font-bold text-slate-900">{formatDate(sourceStatus?.fecha_carga, true)}</p></div></div>
             </section>
 
+            {!loading && avisoCobertura && <div role="status" className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900 flex items-start gap-3"><AlertTriangle size={18} className="shrink-0 text-amber-600" /><span>{avisoCobertura}</span></div>}
             {error && <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-sm text-red-800 flex items-start gap-3"><AlertTriangle size={18} className="shrink-0" /><span className="flex-1">{error}</span><button onClick={() => loadDashboard(range, comparisonMode)} className="font-bold inline-flex items-center gap-1"><RefreshCw size={14} />Reintentar</button></div>}
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 className="text-lg font-black text-slate-900">Indicadores prioritarios</h3><p className="text-xs text-slate-500">Comparación con el {comparisonLabel}: {referenceRange ? `${formatDate(referenceRange.start)} – ${formatDate(referenceRange.end)}` : ''}.</p></div>{loading && <span className="text-xs font-bold text-primary inline-flex items-center gap-2"><LoaderCircle size={15} className="animate-spin" />Actualizando</span>}</div>
