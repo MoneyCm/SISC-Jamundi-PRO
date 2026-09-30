@@ -93,3 +93,51 @@ def test_selected_lines_show_each_title_once():
                                     '• Barrio Terranova: En el año: 63 casos.', exp)
     assert texto == 'Barrio Terranova:\n• Últimas cuatro semanas: 9 casos.\n• En el año: 63 casos.'
     assert svc.veces(1) == '1 vez' and svc.veces(6) == '6 veces'
+
+
+@pytest.mark.parametrize('question', ['Del 5 al 10 de agosto de 2025', 'Hurtos el 5 de agosto', 'Primera semana de agosto',
+                                      'Homicidios desde agosto', 'Los primeros días de agosto'])
+def test_days_or_ranges_inside_a_month_are_not_the_whole_month(question):
+    assert svc.periodo_mes(question, date(2026, 9, 30)) is None
+
+
+def test_days_inside_a_month_are_refused_not_replaced(monkeypatch):
+    def unexpected(*args, **kwargs):
+        raise AssertionError('Must not answer another period')
+    monkeypatch.setattr(svc, 'responder_mes', unexpected)
+    result = asyncio.run(svc.responder(None, 'Del 5 al 10 de agosto de 2025'))
+    assert 'rango de fechas' in result['respuesta']
+
+
+def test_relative_years_are_respected():
+    hoy = date(2026, 9, 30)
+    assert svc.periodo_mes('Agosto del año pasado', hoy) == (date(2025, 8, 1), date(2025, 8, 31))
+    assert svc.periodo_mes('Homicidios en agosto del año antepasado', hoy) == (date(2024, 8, 1), date(2024, 8, 31))
+    assert svc.periodo_mes('Diciembre de este año', hoy) == (date(2026, 12, 1), date(2026, 12, 31))
+
+
+def _rnmc_falso(monkeypatch, cubiertos):
+    from services import comparendos_rnmc
+    monkeypatch.setattr(comparendos_rnmc, 'corte', lambda db, hasta=None: date(2026, 9, 28))
+    monkeypatch.setattr(comparendos_rnmc, 'cubre', lambda db, desde, hasta, margen=20: desde.year in cubiertos)
+    monkeypatch.setattr(comparendos_rnmc, 'contar', lambda db, desde, hasta: 400 if desde.year == 2026 else 300)
+
+
+def test_monthly_fines_do_not_need_the_police_sheet(monkeypatch):
+    _rnmc_falso(monkeypatch, {2025, 2026})
+    monkeypatch.setattr(svc, 'detectar_temas', lambda db, q: {'delitos': [], 'entidades': [], 'barrios': [], 'piscc': []})
+    def sin_sabana(*args, **kwargs):
+        raise AssertionError('Comparendos must not query the police sheet')
+    monkeypatch.setattr(svc, 'filtro_hechos', sin_sabana)
+    result = svc.responder_mes(MagicMock(), '¿Cuántos comparendos hubo en agosto?', date(2026, 8, 1), date(2026, 8, 31), date(2026, 9, 30))
+    assert 'Comparendos del RNMC: 400 (en agosto de 2025: 300; subió en 100)' in result['respuesta']
+    assert result['fuentes'] == ['RNMC al 28 de septiembre de 2026']
+
+
+def test_monthly_fines_skip_comparison_when_last_year_is_incomplete(monkeypatch):
+    _rnmc_falso(monkeypatch, {2026})
+    linea, _ = svc._comparendos_mes(MagicMock(), date(2026, 8, 1), date(2026, 8, 31), None)
+    assert '300' not in linea and 'sin comparación' in linea
+    _rnmc_falso(monkeypatch, set())
+    linea, _ = svc._comparendos_mes(MagicMock(), date(2026, 8, 1), date(2026, 8, 31), None)
+    assert 'no cubre completo' in linea and '400' not in linea
