@@ -23,6 +23,8 @@ MIN_PUBLIC_TERRITORIAL_COUNT = 3
 # Con menos de este número de casos en ambos periodos, un porcentaje es ruido
 # (1 frente a 8 = -87,5%): se informa la diferencia absoluta, no el porcentaje.
 SMALL_BASE_THRESHOLD = 30
+# Variación de comparendos (RNMC) desde la cual el boletín advierte que puede ser efecto de controles o registro.
+COMPARENDOS_NOTE_PCT = 50
 # Días finales de una entrega policial que suelen completarse con reportes tardíos.
 PRELIMINARY_LAG_DAYS = 7
 MONTH_NAMES_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
@@ -1780,6 +1782,11 @@ class SiscCifrasService:
                 )
             if SiscCifrasService.is_preliminary(indicator):
                 detail += " Cifra preliminar: los últimos días pueden completarse con reportes tardíos."
+            if (indicator.source_code == "INSPECCIONES_RNMC" and indicator.variation_percentage is not None
+                    and abs(indicator.variation_percentage) >= COMPARENDOS_NOTE_PCT):
+                # Un comparendo lo impone la Policía: un salto grande puede ser de controles o de registro.
+                detail += (" Un comparendo muestra la actuación de la Policía: un cambio tan grande puede deberse a más o menos "
+                           "controles o a cambios en la forma de registrar, no solo a más o menos comportamientos contrarios a la convivencia.")
 
         return Insight(
             id=f"insight:{indicator.id}",
