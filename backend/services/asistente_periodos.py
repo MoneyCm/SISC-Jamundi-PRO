@@ -84,7 +84,7 @@ def periodo(pregunta: str, hoy: date) -> Optional[Periodo]:
 def _periodo(p: str, hoy: date) -> Optional[Periodo]:
     relativo = _anio_relativo(p, hoy)
     # Números sueltos (sin contar años de cuatro cifras): cada patrón debe usarlos todos, o no se adivina.
-    numeros = len(re.findall(r"(?<!\d)\d{1,2}(?!\d)", re.sub(r"(?:19|20)\d{2}", " ", p)))
+    numeros = len(re.findall(r"(?<!\d)\d{1,2}(?!\d)", re.sub(r"\b(?:19|20)\d{2}\b", " ", p)))
     # Días relativos a hoy.
     if re.search(r"\banteayer\b", p):
         return _crear(hoy - timedelta(days=2), hoy - timedelta(days=2))
