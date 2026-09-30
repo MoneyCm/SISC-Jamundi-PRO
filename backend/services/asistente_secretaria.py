@@ -405,6 +405,9 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
 
     hoy = hoy or date.today()
     historial = historial or []
+    from services.asistente_compromisos import es_consulta, responder_ranking
+    if es_consulta(pregunta):
+        return responder_ranking(db, normalizar(pregunta), hoy)
     expediente, extra = construir_expediente(db, pregunta, hoy)
     datos_texto = expediente.texto() + "\n" + fecha_larga(hoy)
     prompt = instrucciones(pregunta, historial, expediente, hoy)
