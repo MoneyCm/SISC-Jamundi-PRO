@@ -59,7 +59,8 @@ def test_texto_con_cifras_del_expediente_se_acepta(db, monkeypatch):
     except ValueError:
         pytest.skip("Sin sábana cargada")
     total = extra["datos"]["total"]
-    _preparar(monkeypatch, lambda p: f"Esta semana hubo {total['semana']} delitos y la anterior {total['semana_anterior']}.")
+    linea = next(line for line in asesor.lineas_verificables(expediente) if f": {total['semana']} esta semana" in line)
+    _preparar(monkeypatch, lambda p: linea)
     r = asyncio.run(asesor.responder(db, "¿Cómo vamos?"))
     assert r["redactada_por"] == "Gemini" and str(total["semana"]) in r["respuesta"]
 

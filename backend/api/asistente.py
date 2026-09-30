@@ -2,7 +2,7 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from api.auth import log_audit, require_role
@@ -21,6 +21,11 @@ class Mensaje(BaseModel):
 class Pregunta(BaseModel):
     pregunta: str = Field(min_length=2, max_length=500)
     historial: List[Mensaje] = Field(default_factory=list, max_length=12)
+
+    @field_validator('pregunta', mode='before')
+    @classmethod
+    def limpiar_pregunta(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 @router.get("/sugerencias")

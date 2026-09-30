@@ -558,7 +558,8 @@ async def call_gemini(contexto):
             candidate = response.json()['candidates'][0]
             if candidate.get('finishReason') == 'MAX_TOKENS':
                 raise RuntimeError("Respuesta de Gemini truncada por limite de tokens.")
-            return "".join(part.get('text', '') for part in candidate['content']['parts'])
+            # Sin texto (por ejemplo, cuando no hay nada pertinente) llega sin 'content'.
+            return "".join(part.get('text', '') for part in (candidate.get('content') or {}).get('parts', []))
         except httpx.HTTPStatusError as e:
             print(f"Error llamando a Gemini ({GEMINI_MODEL}): HTTP {e.response.status_code}")
             raise
