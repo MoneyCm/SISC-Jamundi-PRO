@@ -157,7 +157,47 @@ const PisccGoals = () => {
             <p className="text-sm font-semibold text-slate-600">
                 {data.source}. La meta es la cifra anual a la que el plan quiere llegar en 2027. Haga clic en un indicador para ver el detalle.
             </p>
-            <div className="overflow-x-auto">
+            {/* Celular: una tarjeta por meta, con los años y su semáforo a la vista; el detalle se abre al tocarla. */}
+            <div className="space-y-3 md:hidden">
+                {data.indicators.map((item) => {
+                    const isOpen = open === item.id;
+                    return (
+                        <div key={item.id} className="border border-slate-200 bg-white shadow-sm">
+                            <button type="button" onClick={() => setOpen(isOpen ? '' : item.id)} aria-expanded={isOpen} className="w-full p-3 text-left">
+                                <div className="flex items-start justify-between gap-2">
+                                    <p className="text-base font-black text-[#281FD0]">{item.label}</p>
+                                    {isOpen ? <ChevronDown size={18} className="mt-0.5 shrink-0 text-slate-400" /> : <ChevronRight size={18} className="mt-0.5 shrink-0 text-slate-400" />}
+                                </div>
+                                <p className="mt-0.5 text-xs font-semibold text-slate-500">Meta 2027: <b className="text-slate-900">{number(item.goal_2027)}</b> · Línea base 2023: {number(item.baseline_2023)}</p>
+                                <div className="mt-3 grid grid-cols-3 gap-2">
+                                    {(item.closed_years || []).map((year) => (
+                                        <div key={year.anio} className="bg-slate-50 p-2">
+                                            <p className="text-[11px] font-black text-slate-500">{year.anio}</p>
+                                            {year.total === null || year.total === undefined ? (
+                                                <p className="text-xs font-semibold text-slate-400">Sin dato</p>
+                                            ) : (
+                                                <p className="flex items-center gap-1.5 text-lg font-black tabular-nums text-slate-950">
+                                                    {SEMAFORO_STYLES[year.semaforo] && <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${SEMAFORO_STYLES[year.semaforo].dot}`} aria-hidden="true" />}
+                                                    {number(year.total)}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <div className="bg-slate-50 p-2">
+                                        <p className="text-[11px] font-black text-slate-500">Este año</p>
+                                        <p className="text-lg font-black tabular-nums text-slate-950">{item.count === undefined ? '—' : number(item.count)}</p>
+                                    </div>
+                                </div>
+                                <p className="mt-2"><span className={`inline-block px-2 py-0.5 text-[11px] font-black uppercase ${STATUS_STYLES[item.status]}`}>{item.status_label}</span></p>
+                                <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{goalReading(item)}</p>
+                                {item.cutoff && <p className="mt-1 text-[11px] font-semibold text-slate-500">{item.source} · hasta el {formatDate(item.cutoff)}</p>}
+                            </button>
+                            {isOpen && <div className="border-t border-slate-200 bg-slate-50 p-3"><GoalDetail goalId={item.id} /></div>}
+                        </div>
+                    );
+                })}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[900px] border-collapse bg-white text-sm shadow-sm">
                     <thead>
                         <tr className="border-b border-slate-200 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">

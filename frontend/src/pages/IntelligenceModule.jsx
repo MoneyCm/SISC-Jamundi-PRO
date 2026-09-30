@@ -664,15 +664,15 @@ const IntelligenceModule = () => {
                             )}
                             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                                    <table className="w-full sm:min-w-[760px] border-collapse text-left text-sm">
                                         <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
                                             <tr>
-                                                <th className="w-20 px-4 py-3 text-center">Posición</th>
+                                                <th className="w-12 px-2 py-3 text-center sm:w-20 sm:px-4">#</th>
                                                 <th className="px-4 py-3">Municipio</th>
-                                                <th className="px-4 py-3 text-right">{selectedComparisonItem?.isAggregate ? 'Registros priorizados' : 'Casos'}</th>
-                                                <th className="px-4 py-3 text-right">Población DANE</th>
+                                                <th className="hidden px-4 py-3 text-right sm:table-cell">{selectedComparisonItem?.isAggregate ? 'Registros priorizados' : 'Casos'}</th>
+                                                <th className="hidden px-4 py-3 text-right sm:table-cell">Población DANE</th>
                                                 <th className="px-4 py-3 text-right">Tasa por 100.000</th>
-                                                <th className="px-4 py-3 text-right">Diferencia de tasa vs {selectedMunicipioNombre}</th>
+                                                <th className="hidden px-4 py-3 text-right sm:table-cell">Diferencia de tasa vs {selectedMunicipioNombre}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -685,10 +685,10 @@ const IntelligenceModule = () => {
                                                             {row.es_objetivo && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] uppercase text-white">Municipio objetivo</span>}
                                                         </div>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right tabular-nums">{row.casos == null ? 'Sin dato' : Number(row.casos).toLocaleString('es-CO')}</td>
-                                                    <td className="px-4 py-3 text-right tabular-nums">{row.poblacion == null ? '—' : Number(row.poblacion).toLocaleString('es-CO')}</td>
+                                                    <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">{row.casos == null ? 'Sin dato' : Number(row.casos).toLocaleString('es-CO')}</td>
+                                                    <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">{row.poblacion == null ? '—' : Number(row.poblacion).toLocaleString('es-CO')}</td>
                                                     <td className="px-4 py-3 text-right font-bold tabular-nums">{row.tasa_por_100k == null ? '—' : Number(row.tasa_por_100k).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className={`px-4 py-3 text-right font-bold tabular-nums ${row.es_objetivo ? 'text-indigo-700' : row.diferencia_tasa_objetivo > 0 ? 'text-red-600' : row.diferencia_tasa_objetivo < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                                    <td className={`hidden px-4 py-3 text-right font-bold tabular-nums sm:table-cell ${row.es_objetivo ? 'text-indigo-700' : row.diferencia_tasa_objetivo > 0 ? 'text-red-600' : row.diferencia_tasa_objetivo < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
                                                         {row.es_objetivo || row.diferencia_tasa_objetivo == null
                                                             ? (row.es_objetivo ? 'Base' : 'No comparable')
                                                             : `${row.diferencia_tasa_objetivo > 0 ? '+' : ''}${Number(row.diferencia_tasa_objetivo).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts.`}

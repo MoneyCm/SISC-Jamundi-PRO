@@ -7,7 +7,7 @@ const numero = (valor) => new Intl.NumberFormat('es-CO').format(Number(valor || 
 const cambio = (valor) => (valor === null || valor === undefined ? '—' : `${valor > 0 ? '+' : ''}${String(valor).replace('.', ',')}%`);
 const colorCambio = (valor) => (valor === null || valor === undefined ? 'text-slate-400' : valor > 0 ? 'text-red-700' : valor < 0 ? 'text-emerald-700' : 'text-slate-600');
 const minuscula = (texto) => (texto ? texto.charAt(0).toLowerCase() + texto.slice(1) : '');
-const tarjeta = 'bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50';
+const tarjeta = 'bg-white p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50';
 
 // Lectura automática: solo describe las cifras; si dos comportamientos se mueven fuerte en sentidos
 // opuestos, advierte que puede ser un cambio en cómo se clasifican los comparendos.
