@@ -191,6 +191,7 @@ const PisccGoals = () => {
                                 <p className="mt-2"><span className={`inline-block px-2 py-0.5 text-[11px] font-black uppercase ${STATUS_STYLES[item.status]}`}>{item.status_label}</span></p>
                                 <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{goalReading(item)}</p>
                                 {item.cutoff && <p className="mt-1 text-[11px] font-semibold text-slate-500">{item.source} · hasta el {formatDate(item.cutoff)}</p>}
+                                {item.reciente && <p className="mt-0.5 text-[11px] text-slate-500">Más reciente, en la sábana: {item.reciente.count} hechos al {formatDate(item.reciente.cutoff)} (cuenta hechos, no víctimas).</p>}
                             </button>
                             {isOpen && <div className="border-t border-slate-200 bg-slate-50 p-3"><GoalDetail goalId={item.id} /></div>}
                         </div>
@@ -242,6 +243,7 @@ const PisccGoals = () => {
                                             {item.source || '—'}
                                             {item.cutoff && <span className="block">Hasta el {formatDate(item.cutoff)}</span>}
                                             {item.stale && <span className="block font-black text-amber-800">Corte con {item.lag_days} días de atraso</span>}
+                                            {item.reciente && <span className="block">Sábana: {item.reciente.count} hechos al {formatDate(item.reciente.cutoff)}</span>}
                                         </td>
                                     </tr>
                                     {isOpen && (

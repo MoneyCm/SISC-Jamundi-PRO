@@ -1,7 +1,7 @@
 /**
  * Página PISCC del boletín (tabla 16). No calcula nada: presenta las metas que el servidor
- * mide con la regla oficial (hechos únicos sobre la entrega fija; fuentes externas con su
- * corte), la misma que usa el Centro de análisis.
+ * mide con la regla oficial (MinDefensa hasta el último mes publicado, la misma fuente y unidad
+ * de la meta; RNMC para convivencia), la misma que usa el Centro de análisis.
  */
 
 export type PisccStatusType = 'favorable' | 'alerta' | 'critico' | 'preliminar' | 'requiere_fuente';
