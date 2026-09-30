@@ -1,3 +1,16 @@
+const MESES_SEMANA = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre',
+    'octubre', 'noviembre', 'diciembre'];
+
+// "del 31 de agosto al 6 de septiembre": los ciudadanos no usan números de semana (S36).
+export function weekLabel(item) {
+    if (!item?.start) return item?.name || '';
+    const inicio = new Date(`${item.start}T12:00:00`);
+    const fin = new Date(inicio.getTime() + 6 * 86400000);
+    const desde = inicio.getMonth() === fin.getMonth()
+        ? `${inicio.getDate()}` : `${inicio.getDate()} de ${MESES_SEMANA[inicio.getMonth()]}`;
+    return `del ${desde} al ${fin.getDate()} de ${MESES_SEMANA[fin.getMonth()]}`;
+}
+
 export const DEFAULT_PUBLIC_FILTERS = Object.freeze({
     year: '',
     periodMode: 'year_to_date',
@@ -124,11 +137,12 @@ export const buildCitizenInsights = (data, limit = 4) => {
         const difference = prior ? Number(latest.total || 0) - Number(prior.total || 0) : null;
         const notes = [];
         if (latest.preliminary) notes.push('Cifra preliminar: puede aumentar con reportes tardíos.');
-        if (ongoing) notes.push(`La semana ${ongoing.name} sigue en curso y no se compara.`);
+        // La semana final queda incompleta en la fecha de corte de los datos (no necesariamente "en curso").
+        if (ongoing) notes.push(`La semana ${weekLabel(ongoing)} quedó incompleta en el corte de los datos y no se compara.`);
         insights.push({
             id: 'latest-week',
             eyebrow: 'Última semana completa',
-            title: `${latest.name}: ${formatNumber(latest.total)} casos`,
+            title: `Semana ${weekLabel(latest)}: ${formatNumber(latest.total)} casos`,
             summary: [
                 difference === null
                     ? 'No hay una semana anterior completa en la consulta para comparar.'

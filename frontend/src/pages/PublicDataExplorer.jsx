@@ -18,6 +18,7 @@ import {
 } from '../utils/citizenInsights';
 import { buildOpenDataUrl, getCachedPublicDashboard, loadPublicDashboard } from '../utils/publicDashboardCache';
 import { downloadXlsxFile } from '../utils/publicDataDownloads';
+import { mesesIncompletos, motivoSinTasa, textoCobertura } from '../utils/cobertura';
 
 const CC_BY_URL = 'https://creativecommons.org/licenses/by/4.0/deed.es';
 
@@ -284,11 +285,16 @@ const PublicDataExplorer = ({ onBack, onNavigate, onLoginClick }) => {
                 </p>
 
                 {error && <div className="border-l-4 border-amber-500 bg-amber-50 p-4 text-sm font-bold text-amber-900" role="alert">Se conservan los últimos datos disponibles. {error}</div>}
+                {textoCobertura(mesesIncompletos([meta.cobertura, meta.cobertura_comparacion]), { publico: true }) && (
+                    <div className="border-l-4 border-amber-500 bg-amber-50 p-4 text-sm font-bold text-amber-900" role="status">
+                        {textoCobertura(mesesIncompletos([meta.cobertura, meta.cobertura_comparacion]), { publico: true })}
+                    </div>
+                )}
 
                 <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Indicadores principales">
                     <Metric label="Casos agregados" value={formatNumber(data.kpis?.total_hechos)} helper="Casos únicos en el periodo seleccionado." />
                     <Metric label="Cambio comparado" value={formatVariation(variation)} helper={meta.comparison_label || 'Sin comparación'} tone={tone === 'up' ? 'red' : tone === 'down' ? 'green' : 'blue'} />
-                    <Metric label="Homicidios" value={formatNumber(data.kpis?.homicidios)} helper={`${Number(data.kpis?.tasa_homicidios || 0).toLocaleString('es-CO', { maximumFractionDigits: 1 })} por cada 100.000 habitantes en el periodo (no es una tasa anual).`} tone="red" />
+                    <Metric label="Homicidios" value={formatNumber(data.kpis?.homicidios)} helper={data.kpis?.tasa_homicidios == null ? motivoSinTasa(meta, appliedFilters) : `${Number(data.kpis.tasa_homicidios).toLocaleString('es-CO', { maximumFractionDigits: 1 })} por cada 100.000 habitantes en el periodo (no es una tasa anual).`} tone="red" />
                     <Metric label="Territorios visibles" value={formatNumber(data.territories?.length)} helper={`Solo volúmenes de ${data.map?.min_location_count || 3} casos o más.`} />
                 </section>
 
