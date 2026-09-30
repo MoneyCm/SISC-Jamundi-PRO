@@ -182,16 +182,16 @@ const InspeccionesModule = ({ userRoles = [] }) => {
         : 0;
 
     return (
-        <div className="space-y-8 pb-20 p-6 max-w-7xl mx-auto">
+        <div className="space-y-6 md:space-y-8 pb-20 p-4 md:p-6 max-w-7xl mx-auto">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase">Inspecciones de Policía</h1>
+                    <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-slate-900 uppercase">Inspecciones de Policía</h1>
                     <p className="text-slate-500 font-bold tracking-tight">Comparendos y medidas correctivas del RNMC</p>
                     <p className="text-slate-400 text-sm font-semibold mt-1">Cada mes suba los dos reportes del RNMC: medidas pendientes (comparendos) y medidas gestionadas.</p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                {opera && <div className="flex items-center gap-3">
                     <button
                         onClick={() => fileInputRef.current.click()}
                         disabled={uploading}
@@ -201,7 +201,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                         Cargar reportes del RNMC
                     </button>
                     <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept=".xlsx,.xls" />
-                </div>
+                </div>}
             </div>
 
             {uploadStatus && (
@@ -223,30 +223,30 @@ const InspeccionesModule = ({ userRoles = [] }) => {
             )}
 
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
                 {kpis.map((k, i) => (
-                    <div key={i} className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50 transition-all hover:translate-y-[-4px]">
-                        <div className={`p-4 rounded-2xl w-fit mb-6 ${k.color}`}>
+                    <div key={i} className="bg-white p-4 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50 transition-all hover:translate-y-[-4px]">
+                        <div className={`hidden md:block p-4 rounded-2xl w-fit mb-6 ${k.color}`}>
                             <k.icon size={28} />
                         </div>
                         <p className="text-slate-400 text-xs font-black uppercase tracking-widest">{k.label}</p>
-                        <p className="text-4xl font-black text-slate-900 mt-2">{k.value}</p>
+                        <p className="text-2xl md:text-4xl font-black text-slate-900 mt-1 md:mt-2">{k.value}</p>
                     </div>
                 ))}
             </div>
             {stats?.corte && <p className="-mt-4 text-xs font-semibold text-slate-500">Cifras de {stats.anio} hasta el {stats.corte}. Cada comparendo se cuenta una vez; una medida es lo que se impuso en cada comparendo.</p>}
 
             {/* Tabs */}
-            <div className="flex gap-4 p-1.5 bg-slate-100 w-fit rounded-[2rem] border border-slate-200">
+            <div className="flex gap-1 md:gap-4 p-1.5 bg-slate-100 w-full md:w-fit rounded-[2rem] border border-slate-200">
                 <button
                     onClick={() => setActiveTab('operativo')}
-                    className={`px-10 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'operativo' ? 'bg-[#281FD0] text-white shadow-lg' : 'text-slate-500 hover:bg-white'}`}
+                    className={`flex-1 md:flex-none px-3 md:px-10 py-3 rounded-full text-[11px] md:text-xs font-black uppercase tracking-wide md:tracking-widest transition-all ${activeTab === 'operativo' ? 'bg-[#281FD0] text-white shadow-lg' : 'text-slate-500 hover:bg-white'}`}
                 >
                     Módulo Operativo
                 </button>
                 <button
                     onClick={() => setActiveTab('analitico')}
-                    className={`px-10 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'analitico' ? 'bg-[#281FD0] text-white shadow-lg' : 'text-slate-500 hover:bg-white'}`}
+                    className={`flex-1 md:flex-none px-3 md:px-10 py-3 rounded-full text-[11px] md:text-xs font-black uppercase tracking-wide md:tracking-widest transition-all ${activeTab === 'analitico' ? 'bg-[#281FD0] text-white shadow-lg' : 'text-slate-500 hover:bg-white'}`}
                 >
                     Convivencia: qué y dónde
                 </button>
@@ -365,14 +365,14 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                         </div>
                     ) : (
                         <>
-                            <div className="bg-[#281FD0] text-white p-8 rounded-[2.5rem] shadow-xl shadow-indigo-100">
+                            <div className="bg-[#281FD0] text-white p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] shadow-xl shadow-indigo-100">
                                 <p className="text-xs font-black uppercase tracking-widest text-indigo-200">Lectura del Observatorio · corte {convivencia.corte}</p>
-                                <p className="mt-3 text-lg font-bold leading-relaxed">{lectura}</p>
+                                <p className="mt-3 text-base md:text-lg font-bold leading-relaxed">{lectura}</p>
                                 <p className="mt-3 text-xs text-indigo-200 font-semibold">Cada comparendo se cuenta una vez. Fuente: RNMC, Policía Nacional (reportes de medidas pendientes y gestionadas).</p>
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                                <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
+                                <div className="bg-white p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
                                     <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
                                         <TrendingUp className="text-indigo-600" /> Comportamientos que más originan comparendos
                                     </h3>
@@ -394,7 +394,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                                     )}
                                 </div>
 
-                                <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
+                                <div className="bg-white p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
                                     <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
                                         <MapPin className="text-indigo-600" /> Barrios con más comparendos
                                     </h3>
@@ -425,7 +425,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                                     <p className="mt-4 text-xs text-slate-500 font-semibold">Fin de semana: parte de los comparendos del barrio que fueron sábado o domingo. Si se repartieran parejo en la semana, sería cerca del 29%.</p>
                                 </div>
 
-                                <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
+                                <div className="bg-white p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
                                     <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
                                         <Calendar className="text-indigo-600" /> Por día de la semana
                                     </h3>
@@ -440,7 +440,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                                     </ResponsiveContainer>
                                 </div>
 
-                                <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
+                                <div className="bg-white p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] shadow-xl shadow-slate-100 border border-slate-50">
                                     <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
                                         <Clock className="text-indigo-600" /> Por mes
                                     </h3>

@@ -60,10 +60,10 @@ const DeltaBadge = ({ v1, v2 }) => {
 
 const KpiCard = ({ label, value2026, value2025, color = PRIMARY, compareLabel = 'mismo periodo 2025' }) => (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-2">
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
         <p className="text-3xl font-black" style={{ color }}>{fmt(value2026)}</p>
         <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-400">vs {fmt(value2025)} {compareLabel}</span>
+            <span className="text-xs text-slate-500">vs {fmt(value2025)} {compareLabel}</span>
             <DeltaBadge v1={value2026} v2={value2025} />
         </div>
     </div>
@@ -215,7 +215,7 @@ const StatsModule = ({ userRoles = [] }) => {
                             <Area type="monotone" dataKey="hurtos"     stroke={PRIMARY}  fill="url(#gradO)" strokeWidth={2} name="Hurtos" />
                         </AreaChart>
                     </ResponsiveContainer>
-                    <p className="text-[9px] text-slate-400 mt-2">* Mes parcial: datos hasta la fecha de corte de la sábana.</p>
+                    <p className="text-[11px] text-slate-400 mt-2">* Mes parcial: datos hasta la fecha de corte de la sábana.</p>
                 </div>
             </div>
         </div>
@@ -230,7 +230,7 @@ const StatsModule = ({ userRoles = [] }) => {
                     <KpiCard label="Homicidios 2026" value2026={kpis2026?.homicidios} value2025={kpis2025?.homicidios} color="#ef4444" />
                     <KpiCard label="Tasa / 100k hab" value2026={kpis2026?.tasa_homicidios} value2025={kpis2025?.tasa_homicidios} color="#ef4444" />
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Sem. más crítica (2026)</p>
+                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Sem. más crítica (2026)</p>
                         {(() => {
                             const peak = [...semHom].sort((a,b) => b.v2026 - a.v2026)[0];
                             return peak ? (
@@ -341,7 +341,7 @@ const StatsModule = ({ userRoles = [] }) => {
             <div className="grid grid-cols-2 gap-4">
                 {zonas.map(z => (
                     <div key={z.zona} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{z.zona}</p>
+                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{z.zona}</p>
                         <p className="text-4xl font-black text-primary">{fmt(z.total)}</p>
                         <p className="text-[10px] text-slate-400">{((z.total / (kpis2026?.total_incidentes || 1)) * 100).toFixed(1)}% del total</p>
                     </div>
@@ -369,7 +369,7 @@ const StatsModule = ({ userRoles = [] }) => {
             <div className="space-y-6 animate-fade-in">
                 <div className="grid grid-cols-3 gap-4">
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Última Semana (2026)</p>
+                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Última Semana (2026)</p>
                         <p className="text-3xl font-black text-primary">{lastSem26?.semana ?? '—'}</p>
                         <p className="text-[10px] text-slate-400">{lastSem26?.v2026 ?? 0} hechos registrados</p>
                     </div>
@@ -417,7 +417,7 @@ const StatsModule = ({ userRoles = [] }) => {
                 </div>
                 <div className="flex items-center gap-3">
                     {lastUpdate && (
-                        <div className="text-white/70 text-[9px] font-bold uppercase tracking-widest">
+                        <div className="text-white/70 text-[11px] font-bold uppercase tracking-widest">
                             Al: {lastUpdate.ultima_fecha} · {fmt(lastUpdate.total_hechos)} registros
                         </div>
                     )}

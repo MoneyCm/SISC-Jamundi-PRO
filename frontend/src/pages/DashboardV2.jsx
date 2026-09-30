@@ -444,7 +444,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                 </div>
             </header>
 
-            <section className="grid sm:grid-cols-2 xl:grid-cols-4 bg-white border border-slate-200 rounded-lg divide-y sm:divide-y-0 sm:divide-x divide-slate-200" aria-label="Estado de la fuente">
+            <section className="hidden md:grid md:grid-cols-2 xl:grid-cols-4 bg-white border border-slate-200 rounded-lg md:divide-x divide-slate-200" aria-label="Estado de la fuente">
                 <div className="p-3.5 flex items-center gap-3"><Database size={18} className="text-primary" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Fuente principal</p><p className="text-sm font-bold text-slate-900">Sábana SIEDCO · Policía</p></div></div>
                 <div className="p-3.5 flex items-center gap-3"><RefreshCw size={18} className="text-emerald-700" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Corte disponible</p><p className="text-sm font-bold text-slate-900">{formatDate(sourceStatus?.ultima_fecha)}</p></div></div>
                 <div className="p-3.5 flex items-center gap-3"><Shield size={18} className="text-amber-700" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Base de conteo</p><p className="text-sm font-bold text-slate-900">Registros únicos consolidados</p></div></div>
@@ -458,6 +458,13 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
             <AvisoRNMC />
             {caveats?.incomplete && <DataCaveats caveats={caveats} onOpen={() => onNavigate?.('observatory')} />}
             <section className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3">{metrics.map((metric) => <MetricCard key={metric.key} metric={metric} />)}</section>
+            {/* En el celular los datos de la fuente van después de las cifras. */}
+            <section className="grid grid-cols-1 md:hidden bg-white border border-slate-200 rounded-lg divide-y divide-slate-200" aria-label="Estado de la fuente">
+                <div className="p-3.5 flex items-center gap-3"><Database size={18} className="text-primary" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Fuente principal</p><p className="text-sm font-bold text-slate-900">Sábana SIEDCO · Policía</p></div></div>
+                <div className="p-3.5 flex items-center gap-3"><RefreshCw size={18} className="text-emerald-700" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Corte disponible</p><p className="text-sm font-bold text-slate-900">{formatDate(sourceStatus?.ultima_fecha)}</p></div></div>
+                <div className="p-3.5 flex items-center gap-3"><Shield size={18} className="text-amber-700" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Base de conteo</p><p className="text-sm font-bold text-slate-900">Registros únicos consolidados</p></div></div>
+                <div className="p-3.5 flex items-center gap-3"><Layers size={18} className="text-slate-600" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Última carga</p><p className="text-sm font-bold text-slate-900">{formatDate(sourceStatus?.fecha_carga, true)}</p></div></div>
+            </section>
 
             {isInstitutional && (
                 <InstitutionalManagementSummary
