@@ -411,6 +411,9 @@ class SourceCenterService:
         status = overall_status(connected=bool(cutoff), monitor_status="CURRENT" if estado.get("ok") else "ERROR",
                                 freshness=freshness, last_checked_at=datetime.fromisoformat(estado["fecha"]) if estado.get("fecha") else None)
         warnings = [] if estado.get("ok") else [f"La última copia falló: {estado.get('mensaje')}"]
+        drive = estado.get("drive") or {}
+        if drive and not drive.get("ok"):
+            warnings.append(f"Copia cifrada en Drive: {drive.get('mensaje')}")
         connector.update({
             "status": status,
             "status_label": STATUS_LABELS[status],
@@ -422,7 +425,8 @@ class SourceCenterService:
             "last_success_at": exitosa,
             "record_count": int(estado.get("copias") or 0),
             "period_label": (f"Última copia: {estado.get('archivo')} ({estado.get('tamano_mb')} MB), "
-                             f"{estado.get('copias')} guardadas") if estado.get("ok") else None,
+                             f"{estado.get('copias')} guardadas"
+                             + (" · copia cifrada en el Drive institucional al día" if drive.get("ok") else "")) if estado.get("ok") else None,
             "warnings": warnings,
         })
         connector["action"]["enabled"] = False
