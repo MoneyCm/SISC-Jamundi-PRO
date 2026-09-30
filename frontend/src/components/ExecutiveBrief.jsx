@@ -15,7 +15,7 @@ async function renderCanvas(svg) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-export default function ExecutiveBrief({ publication, isCurrent, authHeaders }) {
+export default function ExecutiveBrief({ publication, isCurrent, authHeaders, onPrepareTikTok }) {
   const [followup, setFollowup] = useState(null);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
@@ -63,7 +63,7 @@ export default function ExecutiveBrief({ publication, isCurrent, authHeaders }) 
   };
 
   return <section className="space-y-4" aria-label="Parte ejecutivo SISC">
-    {followup && <ExecutiveLight publication={publication} council={followup.council} isCurrent={isCurrent} authHeaders={authHeaders} escudo={escudo} />}
+    {followup && <ExecutiveLight publication={publication} council={followup.council} isCurrent={isCurrent} authHeaders={authHeaders} escudo={escudo} onPrepareTikTok={onPrepareTikTok} />}
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-white px-6 py-5">
         <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#281FD0]">Redacción estadística automatizada</p>

@@ -1756,19 +1756,28 @@ class SiscCifrasService:
                     "No corresponde al periodo del boletín."
                 )
             elif indicator.variation_percentage is None:
-                detail = f"{value_text} {indicator.unit} en el periodo; sin base comparable."
+                detail = f"{indicator.indicator_name}: {value_text} {indicator.unit} en el periodo; sin base comparable."
+                if comparison == 0:
+                    detail = (
+                        f"{indicator.indicator_name}: {value_text} {indicator.unit} frente a 0 en el {comparison_label}. "
+                        "No se calcula variación porcentual con base cero."
+                    )
             elif comparison is not None and max(float(indicator.value), float(comparison)) < SMALL_BASE_THRESHOLD:
                 difference = int(round(float(indicator.value) - float(comparison)))
                 change = (
                     f"{abs(difference)} {'más' if difference > 0 else 'menos'}" if difference else "igual cifra"
                 )
                 detail = (
-                    f"{value_text} {indicator.unit} frente a {int(round(float(comparison)))} en el {comparison_label} "
+                    f"{indicator.indicator_name}: {value_text} {indicator.unit} frente a {int(round(float(comparison)))} en el {comparison_label} "
                     f"({change}). Con cifras pequeñas, la variación porcentual no es concluyente."
                 )
             else:
                 verb = "aumento" if indicator.variation_percentage > 0 else "disminuyo" if indicator.variation_percentage < 0 else "se mantuvo"
-                detail = f"{indicator.indicator_name} {verb} {abs(indicator.variation_percentage):.1f}% frente al {comparison_label}."
+                comparison_text = str(int(comparison) if float(comparison).is_integer() else comparison)
+                detail = (
+                    f"{indicator.indicator_name}: {value_text} {indicator.unit} frente a {comparison_text} en el {comparison_label}; "
+                    f"{verb} {abs(indicator.variation_percentage):.1f}%."
+                )
             if SiscCifrasService.is_preliminary(indicator):
                 detail += " Cifra preliminar: los últimos días pueden completarse con reportes tardíos."
 

@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Copy, Loader2, Mic, Printer, Send, ShieldCheck, Sparkles, Volume2, X } from 'lucide-react';
 import { apiJson } from '../utils/apiClient';
+import { asesorKey, readAsesor } from '../utils/asesorSession';
 
 // Asesor SISC: preguntas de la dirección con cifras oficiales verificadas (backend: /api/asistente).
 const ROLES = ['DIRECTIVE', 'ANALYST', 'FUNC_ADMIN', 'TI_ADMIN', 'DATA_OWNER'];
-const CLAVE = 'sisc_asesor_conversacion';
 const INICIALES = [
     '¿Cómo vamos esta semana?',
     '¿Qué le pido a la Policía en el próximo Consejo?',
@@ -13,10 +13,6 @@ const INICIALES = [
     '¿Cómo va la convivencia este año?',
     'Resúmame la semana para WhatsApp',
 ];
-
-const leerGuardado = () => {
-    try { return JSON.parse(sessionStorage.getItem(CLAVE) || '[]'); } catch { return []; }
-};
 
 const textoCompartible = (mensaje) => `${mensaje.texto}\n\nFuente: ${(mensaje.fuentes || []).join('; ')}. SISC Jamundí.`;
 
@@ -31,7 +27,7 @@ const imprimir = (pregunta, mensaje, nombre) => {
         </head><body><h1>Asesor SISC · Secretaría de Seguridad y Convivencia de Jamundí</h1>
         <p class="meta">Consulta de ${escapar(nombre)} · ${new Date().toLocaleString('es-CO')}</p>
         <p class="q">${escapar(pregunta)}</p><div class="a">${escapar(mensaje.texto)}</div>
-        <p class="f">Fuentes: ${escapar((mensaje.fuentes || []).join('; '))}. Cifras verificadas por el SISC. Documento de uso interno.</p>
+        <p class="f">Fuentes: ${escapar((mensaje.fuentes || []).join('; '))}. Datos del expediente consultado. Documento de uso interno.</p>
         <script>window.onload=()=>window.print()</script></body></html>`);
     ventana.document.close();
 };
@@ -43,7 +39,7 @@ const Burbuja = ({ mensaje, pregunta, nombre, onSugerencia }) => {
         return <div className="ml-10 self-end rounded-2xl rounded-br-sm bg-[#281FD0] px-4 py-2.5 text-[15px] text-white">{mensaje.texto}</div>;
     }
     const copiar = async () => {
-        try { await navigator.clipboard.writeText(textoCompartible(mensaje)); } catch { /* sin portapapeles */ }
+        try { await navigator.clipboard.writeText(textoCompartible(mensaje)); } catch { return; }
         setCopiado(true); setTimeout(() => setCopiado(false), 1800);
     };
     const escuchar = () => {
@@ -62,7 +58,7 @@ const Burbuja = ({ mensaje, pregunta, nombre, onSugerencia }) => {
                 {mensaje.fuentes?.length > 0 && (
                     <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
                         <ShieldCheck size={12} className="-mt-0.5 mr-1 inline text-emerald-600" />
-                        Cifras verificadas · {mensaje.fuentes.join(' · ')}
+                        Fuentes consultadas · {mensaje.fuentes.join(' · ')}
                     </p>
                 )}
             </div>
@@ -85,49 +81,66 @@ const Burbuja = ({ mensaje, pregunta, nombre, onSugerencia }) => {
     );
 };
 
-const AsesorSISC = ({ userRoles = [], currentUser }) => {
+const AsesorSession = ({ userRoles = [], currentUser }) => {
     const [abierto, setAbierto] = useState(false);
-    const [mensajes, setMensajes] = useState(leerGuardado);
+    const [mensajes, setMensajes] = useState(() => readAsesor(sessionStorage, currentUser));
     const [texto, setTexto] = useState('');
     const [ocupado, setOcupado] = useState(false);
     const [escuchando, setEscuchando] = useState(false);
     const fondo = useRef(null);
+    const peticion = useRef(null);
+    const reconocimiento = useRef(null);
+    const clave = asesorKey(currentUser);
+    useEffect(() => () => {
+        peticion.current?.abort();
+        reconocimiento.current?.abort();
+        window.speechSynthesis?.cancel();
+    }, []);
+    const nuevaConsulta = () => {
+        peticion.current?.abort(); peticion.current = null;
+        reconocimiento.current?.abort();
+        window.speechSynthesis?.cancel();
+        setMensajes([]); setTexto(''); setOcupado(false); setEscuchando(false);
+    };
     const nombre = (currentUser?.full_name || currentUser?.username || '').split(' ')[0];
     const Reconocimiento = typeof window !== 'undefined' && window.isSecureContext && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-    useEffect(() => { try { sessionStorage.setItem(CLAVE, JSON.stringify(mensajes.slice(-20))); } catch { /* sin almacenamiento */ } }, [mensajes]);
+    useEffect(() => { try { clave && sessionStorage.setItem(clave, JSON.stringify(mensajes.slice(-20))); } catch { /* sin almacenamiento */ } }, [mensajes, clave]);
     useEffect(() => { fondo.current?.scrollIntoView({ behavior: 'smooth' }); }, [mensajes, ocupado, abierto]);
 
     if (!userRoles.some((rol) => ROLES.includes(rol))) return null;
 
     const preguntar = async (pregunta) => {
         const limpia = (pregunta || '').trim();
-        if (!limpia || ocupado) return;
-        const historial = mensajes.filter((m) => !m.bienvenida).slice(-6).map((m) => ({ rol: m.rol, texto: m.texto }));
+        if (limpia.length < 2 || limpia.length > 500 || peticion.current) return;
+        const controller = new AbortController(); peticion.current = controller;
+        const historial = mensajes.filter((m) => !m.bienvenida).slice(-6).map((m) => ({ rol: m.rol, texto: m.texto.slice(0, 4000) }));
         setMensajes((actual) => [...actual, { rol: 'usuario', texto: limpia }]);
         setTexto(''); setOcupado(true);
         try {
-            const r = await apiJson('/asistente/preguntar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pregunta: limpia, historial }) });
+            const r = await apiJson('/asistente/preguntar', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pregunta: limpia, historial }) });
+            if (controller.signal.aborted) return;
             setMensajes((actual) => [...actual, { rol: 'asesor', texto: r.respuesta, fuentes: r.fuentes, sugerencias: r.sugerencias, pregunta: limpia }]);
         } catch (error) {
+            if (controller.signal.aborted) return;
             setMensajes((actual) => [...actual, { rol: 'asesor', texto: `No pude responder en este momento (${error.message || 'sin conexión'}). Intente de nuevo en un momento.`, pregunta: limpia }]);
         } finally {
-            setOcupado(false);
+            if (peticion.current === controller) { peticion.current = null; setOcupado(false); }
         }
     };
 
     const dictar = () => {
-        if (!Reconocimiento || escuchando) return;
-        const rec = new Reconocimiento();
+        if (!Reconocimiento || escuchando || ocupado) return;
+        const rec = new Reconocimiento(); reconocimiento.current = rec;
         rec.lang = 'es-CO'; rec.interimResults = false;
         rec.onresult = (e) => { const dicho = e.results[0][0].transcript; setTexto(dicho); preguntar(dicho); };
         rec.onend = () => setEscuchando(false);
         rec.onerror = () => setEscuchando(false);
-        setEscuchando(true); rec.start();
+        try { setEscuchando(true); rec.start(); } catch { setEscuchando(false); }
     };
 
     const bienvenida = { rol: 'asesor', bienvenida: true,
-        texto: `Hola${nombre ? `, ${nombre}` : ''}. Soy el Asesor SISC. Pregúnteme lo que necesite sobre la seguridad de Jamundí: le respondo con las cifras oficiales del sistema, y cada número va verificado.`,
+        texto: `Hola${nombre ? `, ${nombre}` : ''}. Soy el Asesor SISC. Pregúnteme lo que necesite sobre la seguridad de Jamundí: consulte la última semana disponible, el acumulado al corte y el seguimiento institucional. Cada respuesta indica sus fuentes.`,
         sugerencias: INICIALES };
     const visibles = mensajes.length ? mensajes : [bienvenida];
 
@@ -145,11 +158,11 @@ const AsesorSISC = ({ userRoles = [], currentUser }) => {
                     <header className="flex items-center justify-between rounded-t-2xl bg-[#281FD0] px-4 py-3 text-white">
                         <div className="flex items-center gap-2">
                             <Sparkles size={18} />
-                            <div><p className="text-sm font-black">Asesor SISC</p><p className="text-[11px] text-indigo-100">Cifras oficiales verificadas</p></div>
+                            <div><p className="text-sm font-black">Asesor SISC</p><p className="text-[11px] text-indigo-100">Datos y fuentes del SISC</p></div>
                         </div>
                         <div className="flex items-center gap-1">
-                            {mensajes.length > 0 && <button type="button" onClick={() => setMensajes([])} className="rounded-lg px-2 py-1 text-xs font-bold text-indigo-100 hover:bg-white/10">Nueva consulta</button>}
-                            <button type="button" onClick={() => { window.speechSynthesis?.cancel(); setAbierto(false); }} aria-label="Cerrar" className="rounded-lg p-1.5 hover:bg-white/10"><X size={18} /></button>
+                            {mensajes.length > 0 && <button type="button" onClick={nuevaConsulta} className="rounded-lg px-2 py-1 text-xs font-bold text-indigo-100 hover:bg-white/10">Nueva consulta</button>}
+                            <button type="button" onClick={() => { window.speechSynthesis?.cancel(); reconocimiento.current?.abort(); setAbierto(false); }} aria-label="Cerrar" className="rounded-lg p-1.5 hover:bg-white/10"><X size={18} /></button>
                         </div>
                     </header>
                     <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-3 py-4">
@@ -166,7 +179,7 @@ const AsesorSISC = ({ userRoles = [], currentUser }) => {
                         {Reconocimiento && (
                             <button type="button" onClick={dictar} aria-label="Dictar la pregunta" className={`rounded-xl p-3 ${escuchando ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-600'}`}><Mic size={18} /></button>
                         )}
-                        <button type="submit" disabled={ocupado || !texto.trim()} aria-label="Enviar" className="rounded-xl bg-[#281FD0] p-3 text-white disabled:opacity-40"><Send size={18} /></button>
+                        <button type="submit" disabled={ocupado || texto.trim().length < 2} aria-label="Enviar" className="rounded-xl bg-[#281FD0] p-3 text-white disabled:opacity-40"><Send size={18} /></button>
                     </form>
                 </section>
             )}
@@ -174,4 +187,6 @@ const AsesorSISC = ({ userRoles = [], currentUser }) => {
     );
 };
 
-export default AsesorSISC;
+export default function AsesorSISC(props) {
+    return <AsesorSession key={asesorKey(props.currentUser) || 'sin-usuario'} {...props} />;
+}

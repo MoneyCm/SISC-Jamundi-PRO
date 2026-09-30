@@ -8,9 +8,11 @@ import { institutionalSiscCifrasPeriods, suggestedSiscCifrasPeriod } from '../ut
 import { localToday } from '../utils/localDate';
 import { siscCifrasSelectionKey } from '../utils/siscCifrasPublication';
 import ExecutiveBrief from '../components/ExecutiveBrief';
+import PublicTikTok from '../components/PublicTikTok';
 import { briefPublicationPolicy } from '../utils/executiveBrief';
 import EditorialReview from '../components/EditorialReview';
 import { accentuate } from '../utils/accentuate';
+import { publicFacingText, publicInsightText, buildWhatsappText as formatWhatsappText } from '../utils/siscCifrasText';
 
 const QUICK_EDITIONS = [
   { id: 'weekly', label: 'Semanal' },
@@ -136,9 +138,6 @@ const slideFilename = (idx, slide, publication, extension = 'png') => {
 const carouselFilename = (publication) =>
   `sisc-en-cifras-carrusel-${publicationPeriodSlug(publication)}-${publication.id}.zip`;
 
-const videoScriptFilename = (publication) =>
-  `sisc-en-cifras-guion-video-${publicationPeriodSlug(publication)}.txt`;
-
 const textEncoder = new TextEncoder();
 const crcTable = Array.from({ length: 256 }, (_, index) => {
   let value = index;
@@ -261,96 +260,7 @@ const svgToPngBlob = (svgText, width = 1080, height = 1350) => new Promise((reso
   image.src = url;
 });
 
-const buildWhatsappText = (publication) => {
-  if (!publication) return '';
-  const period = publication.period ? `${publication.period.start} al ${publication.period.end}` : 'periodo seleccionado';
-  const label = comparisonLabel(publication);
-  const insightLines = (publication.insights || [])
-    .filter((insight) => publicFacingText(insight.title || insight.detail))
-    .slice(0, 3)
-    .map((insight) => `- ${publicInsightText(insight.detail, label)}`);
-  const sourceLines = (publication.sources || [])
-    .filter((source) => source.publication_level === 'PUBLICO' && source.in_bulletin !== false)
-    .map((source) => `${source.name}: corte ${source.last_cutoff_date || 'sin corte'}`);
-  const body = insightLines.length
-    ? insightLines.join('\n')
-    : '- Boletín generado sin hallazgos publicables. Revise disponibilidad y calidad de datos.';
-
-  return [
-    'SISC EN CIFRAS',
-    `Jamundí | ${period}`,
-    `Comparado con: ${label}`,
-    '',
-    body,
-    '',
-    `Fuentes: ${sourceLines.join(' | ') || 'SISC'}`,
-    'Secretaría de Seguridad y Convivencia',
-    'Cifras agregadas para información ciudadana.',
-    '',
-    `Boletín completo: ${BOLETIN_WEB_URL}`,
-  ].join('\n');
-};
-
-const buildTikTokPrompt = (publication) => {
-  if (!publication) return '';
-  const period = publication.period ? `${publication.period.start} al ${publication.period.end}` : 'periodo seleccionado';
-  const comparisonPeriod = publication.comparison_period
-    ? `${publication.comparison_period.start} al ${publication.comparison_period.end}`
-    : 'no disponible';
-  const label = comparisonLabel(publication);
-  const insightLines = (publication.insights || [])
-    .filter((insight) => publicFacingText(insight.title || insight.detail))
-    .slice(0, 3)
-    .map((insight) => {
-      const title = publicFacingText(insight.title);
-      const detail = publicInsightText(insight.detail, label);
-      return `- ${title}: ${insight.value_text || 'sin valor consolidado'}. ${detail}`;
-    });
-  const indicatorLines = (publication.indicators || [])
-    .filter((indicator) => isPublicIndicator(indicator))
-    .filter((indicator) => !indicator.geography || isPublicTerritoryName(indicator.geography))
-    .slice(0, 5)
-    .map((indicator) => {
-      const detail = indicatorPublicDetail(indicator);
-      const comparison = indicator.metadata?.small_base
-        ? `${fmt(indicator.comparison_value)} en el ${label}.`
-        : indicator.variation_percentage === null || indicator.variation_percentage === undefined
-        ? 'Sin comparación disponible.'
-        : `${Number(indicator.variation_percentage) > 0 ? '+' : ''}${Number(indicator.variation_percentage).toFixed(1)}% frente al ${label}.`;
-      return `- ${indicatorDisplayName(indicator)}: ${fmt(indicator.value)} ${indicator.unit || 'registros'}. ${comparison}${detail ? ` Nota: ${detail}` : ''}`;
-    });
-  const sourceLines = (publication.sources || [])
-    .filter((source) => source.publication_level === 'PUBLICO' && source.included !== false && source.in_bulletin !== false)
-    .map((source) => `- ${source.name}: corte ${source.last_cutoff_date || 'sin corte informado'}.`);
-  const dataLines = insightLines.length ? insightLines : indicatorLines;
-
-  return [
-    'Crea un video vertical breve 9:16 para TikTok, Reels o Estado de WhatsApp, de 20 a 25 segundos, en espanol de Colombia, para la Alcaldia de Jamundi.',
-    'Tema: SISC en cifras. Debe informar con claridad, sin sensacionalismo y con diseno institucional azul, amarillo y blanco.',
-    '',
-    'DATOS VERIFICADOS. Usa exclusivamente estos datos; no inventes ni redondees cifras:',
-    `- Periodo analizado: ${period}.`,
-    `- Comparación: ${label} (${comparisonPeriod}).`,
-    ...(dataLines.length ? dataLines : ['- No hay hallazgos publicables para este periodo.']),
-    '',
-    'FUENTES Y CORTES. Menciona las fuentes al cierre y no sumes sus valores entre si:',
-    ...(sourceLines.length ? sourceLines : ['- SISC | Secretaria de Seguridad y Convivencia.']),
-    '',
-    'GUION VISUAL:',
-    '0-3 s: titulo "SISC EN CIFRAS" y periodo en pantalla.',
-    '3-8 s: presenta la cifra principal con un número grande y el indicador completo.',
-    '8-16 s: presenta hasta dos cambios relevantes, un dato por escena, indicando la base de comparación.',
-    '16-21 s: explica en una frase sencilla lo que significa la cifra, sin atribuir causas que los datos no demuestran.',
-    '21-25 s: cierre "Boletín completo en jamundi.gov.co, Secretaría de Seguridad y Convivencia" y fuentes con fecha de corte.',
-    '',
-    'REGLAS OBLIGATORIAS:',
-    '- Usa texto grande, alto contraste, transiciones suaves y subtitulos sincronizados.',
-    '- No muestres victimas, personas identificables, escenas violentas ni ubicaciones sensibles.',
-    '- No conviertas comparendos, actuaciones de Inspecciones o atenciones de Comisarias en delitos.',
-    '- Si una fuente indica corte parcial o sin comparación, dilo de forma visible y no hagas inferencias.',
-    '- No incluyas logos ajenos. Mantiene el tono institucional, claro y cercano.',
-  ].join('\n');
-};
+const buildWhatsappText = (publication) => formatWhatsappText(publication, BOLETIN_WEB_URL);
 
 const escapeSvg = (text = '') => String(text).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
@@ -448,14 +358,6 @@ const publicMeasureName = (text = '') => {
   return clean;
 };
 
-const publicFacingText = (text = '') => publicMeasureName(text)
-  .replace(/MULTA\s+GENERAL\s+TIPO\s+4/gi, 'Comparendos con multa de mayor cuantía')
-  .replace(/MULTA\s+GENERAL\s+TIPO\s+3/gi, 'Comparendos con multa de cuantía alta')
-  .replace(/MULTA\s+GENERAL\s+TIPO\s+2/gi, 'Comparendos con multa de cuantía media')
-  .replace(/MULTA\s+GENERAL\s+TIPO\s+1/gi, 'Comparendos con multa de menor cuantía')
-  .replace(/PROHIBICI[OÃ“]N DE INGRESO A ACTIVIDAD QUE INVOLUCRA AGLOMERACIONES DE PUBLICO COMPLEJAS O NO COMPLEJAS/gi, 'Restricciones de ingreso a eventos públicos')
-  .replace(/MULTA\s+GENERAL/gi, 'Comparendos por convivencia ciudadana');
-
 const indicatorDisplayName = (indicator = {}) => publicMeasureName(indicator.indicator_name || indicator.title || '');
 const isPublicIndicator = (indicator = {}) => Boolean(indicatorDisplayName(indicator));
 
@@ -504,15 +406,6 @@ const comparisonShortLabel = (publication) => {
   if (label.includes('periodo anterior')) return 'periodo anterior';
   return label;
 };
-const normalizeComparisonText = (text = '', label = 'mismo periodo del ano anterior') => String(text)
-  .replace(/frente al periodo anterior/gi, `frente al ${label}`)
-  .replace(/frente al mismo periodo del a[nñ]o anterior/gi, `frente al ${label}`)
-  .replace(/vs periodo anterior/gi, `vs ${label}`)
-  .replace(/vs mismo periodo AA/gi, `vs ${label}`);
-
-const publicInsightText = (text = '', label = 'mismo periodo del año anterior') =>
-  accentuate(publicFacingText(normalizeComparisonText(text, label)));
-
 const editionLabel = (publication) => {
   const type = publication?.edition_type;
   if (type === 'monthly') return 'BOLETÍN MENSUAL';
@@ -1153,24 +1046,6 @@ const SiscCifras = ({ publicMode = false }) => {
     }
   };
 
-  const copyTikTokPrompt = async () => {
-    if (!ensureCurrentPublication()) return;
-    setShareStatus(null);
-    const prompt = buildTikTokPrompt(publication);
-    try {
-      await navigator.clipboard.writeText(prompt);
-      setShareStatus('Guion de video copiado. Pégalo en Gemini para crear la pieza vertical.');
-    } catch (_) {
-      setShareStatus('No fue posible copiar automáticamente. Selecciona el guion y cópialo desde la pantalla.');
-    }
-  };
-
-  const downloadTikTokPrompt = () => {
-    if (!ensureCurrentPublication()) return;
-    downloadBlob(buildTikTokPrompt(publication), videoScriptFilename(publication), 'text/plain;charset=utf-8');
-    setShareStatus('Guion de video descargado en formato TXT.');
-  };
-
   const shareWhatsappCarousel = async () => {
     if (!ensureCurrentPublication() || !publication?.slides?.length) return;
     setShareStatus(null);
@@ -1281,7 +1156,7 @@ const SiscCifras = ({ publicMode = false }) => {
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#281FD0]">Redacción estadística automatizada</p>
             <h1 className="mt-1 text-3xl font-black uppercase tracking-tight text-slate-900">SISC en cifras</h1>
           </div>
-          <div className={executiveMode ? 'hidden' : 'flex flex-wrap items-center gap-2'}>
+          <div className={executiveMode || outputMode === 'tiktok' ? 'hidden' : 'flex flex-wrap items-center gap-2'}>
             {!publicMode && (
               <>
                 <button onClick={fetchSources} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-50">
@@ -1322,7 +1197,7 @@ const SiscCifras = ({ publicMode = false }) => {
       </div>
 
       {!publicMode && <div className="flex flex-wrap gap-2 border-b border-slate-200 bg-white px-6 py-3" role="group" aria-label="Formato de salida">
-        {[['statistics', 'Publicación estadística'], ['executive', 'Parte ejecutivo']].map(([value, label]) => <button key={value} disabled={loading} aria-pressed={outputMode === value} onClick={() => setOutputMode(value)} className={`min-h-11 rounded-lg px-5 py-2 text-sm font-bold ${outputMode === value ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-700'}`}>{label}</button>)}
+        {[['statistics', 'Publicación estadística'], ['executive', 'Parte ejecutivo'], ['tiktok', 'TikTok ciudadano']].map(([value, label]) => <button key={value} disabled={loading} aria-pressed={outputMode === value} onClick={() => setOutputMode(value)} className={`min-h-11 rounded-lg px-5 py-2 text-sm font-bold ${outputMode === value ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-700'}`}>{label}</button>)}
       </div>}
       <div className="grid gap-6 p-6 xl:grid-cols-[360px_1fr]">
         <aside className="space-y-5">
@@ -1461,7 +1336,9 @@ const SiscCifras = ({ publicMode = false }) => {
         <main className="space-y-6">
           {error && <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">{error}</div>}
 
-          {!publication ? (
+          {!publicMode && outputMode === 'tiktok' ? (
+            <PublicTikTok publication={publication} isCurrent={!publication || (publicationIsCurrent && !loading)} />
+          ) : !publication ? (
             <section className="flex min-h-[560px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white">
               <div className="max-w-md text-center">
                 <BarChart3 className="mx-auto text-[#281FD0]" size={52} />
@@ -1470,7 +1347,7 @@ const SiscCifras = ({ publicMode = false }) => {
               </div>
             </section>
           ) : executiveMode ? (
-            <ExecutiveBrief publication={publication} isCurrent={publicationIsCurrent && !loading} authHeaders={authHeaders} />
+            <ExecutiveBrief publication={publication} isCurrent={publicationIsCurrent && !loading} authHeaders={authHeaders} onPrepareTikTok={() => setOutputMode('tiktok')} />
           ) : (
             <>
               {!publicationIsCurrent && (
@@ -1569,11 +1446,8 @@ const SiscCifras = ({ publicMode = false }) => {
                       </button>
                       {!publicMode && (
                         <>
-                          <button onClick={copyTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600] disabled:cursor-not-allowed disabled:opacity-40">
-                            <Video size={15} /> Copiar guion de video
-                          </button>
-                          <button onClick={downloadTikTokPrompt} disabled={!publicationIsCurrent} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-3 text-xs font-black uppercase text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-                            <Download size={15} /> Guion video TXT
+                          <button onClick={() => setOutputMode('tiktok')} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#FFE000] px-3 py-3 text-xs font-black uppercase text-slate-950 hover:bg-[#FFB600]">
+                            <Video size={15} /> Preparar TikTok ciudadano
                           </button>
                         </>
                       )}
@@ -1596,20 +1470,6 @@ const SiscCifras = ({ publicMode = false }) => {
                       className="mt-4 h-44 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-relaxed text-slate-700 outline-none"
                     />
                   </section>
-
-                  {!publicMode && (
-                  <section className="rounded-lg border border-slate-200 bg-white p-5">
-                    <div className="mb-4 flex items-center gap-2">
-                      <Video size={18} className="text-[#281FD0]" />
-                      <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">Guion para video breve</h2>
-                    </div>
-                    <textarea
-                      readOnly
-                      value={buildTikTokPrompt(publication)}
-                      className="h-80 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-xs font-semibold leading-relaxed text-slate-700 outline-none"
-                    />
-                  </section>
-                  )}
 
                   {!publicMode && (
                   <section className="rounded-lg border border-slate-200 bg-white p-5">
@@ -1645,7 +1505,7 @@ const SiscCifras = ({ publicMode = false }) => {
                       ))}
                     </div>
                     <p className="mt-4 rounded-md bg-amber-50 p-3 text-xs font-bold text-amber-800">
-                      Publicación automática de información agregada y anonimizada. Esta vista conserva fuentes, cortes, advertencias y trazabilidad para su correcta interpretación.
+                      Generación automática de información agregada y anonimizada, con revisión editorial antes de publicar. Esta vista conserva fuentes, cortes, advertencias y trazabilidad para su correcta interpretación.
                     </p>
                     {(publication.governance?.out_of_period || []).length > 0 && (
                       <ul className="mt-3 space-y-1 text-[11px] font-bold text-slate-500">

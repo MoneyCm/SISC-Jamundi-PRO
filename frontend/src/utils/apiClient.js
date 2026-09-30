@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './apiConfig';
+import { clearAsesor } from './asesorSession';
 
 export const SESSION_EXPIRED_EVENT = 'sisc:session-expired';
 
@@ -19,6 +20,7 @@ const resolveUrl = (endpoint) => {
 };
 
 export const clearStoredSession = () => {
+    clearAsesor(sessionStorage);
     localStorage.removeItem('token');
     localStorage.removeItem('userRoles');
     localStorage.removeItem('dataLevel');
