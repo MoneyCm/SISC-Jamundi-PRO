@@ -448,51 +448,47 @@ def periodo_no_soportado(pregunta: str) -> bool:
                 or re.search(r"\b(mes|trimestre|semestre|ayer|anteayer|hoy|historico)\b|semana pasada|ano pasado|ultimos?\s+\d+", p))
 
 
-def periodo_mes(pregunta: str, hoy: date) -> Optional[Tuple[date, date]]:
-    """Un solo mes completo ("agosto", "enero de 2025", "agosto del año pasado", "el mes pasado").
-
-    None si la pregunta pide otra cosa (días, semanas, rangos): así no se responde un periodo distinto.
-    """
-    p = normalizar(pregunta)
-    sin_anios = re.sub(r"\b(?:19|20)\d{2}\b", " ", p)
-    if re.search(r"\d", sin_anios) or re.search(r"\b(semana|quincena|desde|hasta|entre|primeros?|ultimos?|dia|dias)\b", p):
-        return None
-    if "mes pasado" in p:
-        fin = hoy.replace(day=1) - timedelta(days=1)
-        return fin.replace(day=1), fin
-    meses = re.findall(rf"\b({'|'.join(MESES)})\b(?:\s+(?:de|del)?\s*((?:19|20)\d{{2}}))?", p)
-    if len(meses) != 1:
-        return None
-    nombre, anio = meses[0]
-    mes = MESES.index(nombre) + 1
-    if anio:
-        anio = int(anio)
-    elif "ano antepasado" in p:
-        anio = hoy.year - 2
-    elif "ano pasado" in p or "ano anterior" in p:
-        anio = hoy.year - 1
-    elif "este ano" in p or "ano actual" in p:
-        anio = hoy.year
-    else:
-        anio = hoy.year if mes <= hoy.month else hoy.year - 1
-    siguiente = date(anio + (mes == 12), mes % 12 + 1, 1)
-    return date(anio, mes, 1), siguiente - timedelta(days=1)
+def _en(texto: str) -> str:
+    return texto if texto.startswith(("del ", "de ", "el ")) else f"en {texto}"
 
 
-def _comparendos_mes(db: Session, inicio: date, fin: date, barrio: Optional[str]) -> Tuple[str, Optional[str]]:
-    """Comparendos del RNMC de un mes, sin depender de la sábana; compara solo si el año anterior está completo."""
+def _mes_incompleto_sabana(db: Session, inicio: date, fin: date, corte: date) -> Optional[str]:
+    """El primer mes del periodo que la sábana no trae completo (por ejemplo, diciembre de 2025), o None."""
+    from services.asistente_periodos import fin_de_mes, meses_de
+    for a, _b in meses_de(inicio, fin):
+        desde, hasta = a.replace(day=1), min(fin_de_mes(a.year, a.month), corte)
+        primero, ultimo = db.query(func.min(HechoSeguridad.fecha_evento), func.max(HechoSeguridad.fecha_evento)).filter(
+            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db),
+            HechoSeguridad.fecha_evento.between(desde, hasta)).one()
+        if not primero or primero > desde + timedelta(days=5) or ultimo < hasta - timedelta(days=5):
+            return f"{MESES[a.month - 1]} de {a.year}"
+    return None
+
+
+def _mes_incompleto_rnmc(db: Session, inicio: date, fin: date, corte: date) -> Optional[str]:
+    from services import comparendos_rnmc
+    from services.asistente_periodos import fin_de_mes, meses_de
+    for a, _b in meses_de(inicio, fin):
+        if not comparendos_rnmc.cubre(db, a.replace(day=1), min(fin_de_mes(a.year, a.month), corte), margen=5):
+            return f"{MESES[a.month - 1]} de {a.year}"
+    return None
+
+
+def _comparendos_periodo(db: Session, inicio: date, fin: date, barrio: Optional[str]) -> Tuple[str, Optional[str]]:
+    """Comparendos del RNMC del periodo, sin depender de la sábana; compara solo si el año anterior está completo."""
     from db.models_inspecciones import InspeccionExpediente
     from services import comparendos_rnmc
+    from services.asistente_periodos import etiqueta
 
-    etiqueta = f"{MESES[inicio.month - 1]} de {inicio.year}"
     corte = comparendos_rnmc.corte(db)
     if not corte or inicio > corte:
-        return (f"• Todavía no hay comparendos de {etiqueta}"
+        return (f"• Todavía no hay comparendos de ese periodo"
                 + (f": el RNMC cargado llega hasta el {fecha_larga(corte)}." if corte else ".")), None
     hasta = min(fin, corte)
     fuente = f"RNMC al {fecha_larga(corte)}"
-    if not comparendos_rnmc.cubre(db, inicio, hasta, margen=5):
-        return f"• El RNMC cargado no cubre completo {etiqueta}; no se da una cifra que podría estar incompleta.", fuente
+    falta = _mes_incompleto_rnmc(db, inicio, hasta, corte)
+    if falta:
+        return f"• El RNMC cargado no tiene completo {falta}; no se da una cifra que podría estar incompleta.", fuente
     filtros = [func.upper(func.trim(InspeccionExpediente.localidad)) == normalizar(barrio).upper().strip()] if barrio else []
 
     def contar(desde, a):
@@ -504,30 +500,32 @@ def _comparendos_mes(db: Session, inicio: date, fin: date, barrio: Optional[str]
     n = contar(inicio, hasta)
     linea = f"• Comparendos del RNMC: {n}"
     antes = (_un_anio_antes(inicio), _un_anio_antes(hasta))
-    if comparendos_rnmc.cubre(db, *antes, margen=5):
+    falta_antes = _mes_incompleto_rnmc(db, *antes, corte)
+    if not falta_antes:
         previo = contar(*antes)
-        linea += f" (en {MESES[inicio.month - 1]} de {inicio.year - 1}: {previo}; {cambio(n, previo)})"
+        linea += f" ({etiqueta(*antes)}: {previo}; {cambio(n, previo)})"
     else:
-        linea += f" (sin comparación: el RNMC de {MESES[inicio.month - 1]} de {inicio.year - 1} no está completo)"
+        linea += f" (sin comparación: el RNMC no tiene completo {falta_antes})"
     if fin > corte:
-        linea += f"; hasta el {fecha_larga(corte)}, el mes aún no está completo"
+        linea += f"; hasta el {fecha_larga(corte)}, el periodo aún no está completo"
     return linea + ".", fuente
 
 
-def responder_mes(db: Session, pregunta: str, inicio: date, fin: date, hoy: date) -> Dict:
+def responder_periodo(db: Session, pregunta: str, periodo, hoy: date) -> Dict:
     from services import hoja_ejecutiva
+    from services.asistente_periodos import etiqueta
 
+    inicio, fin = periodo.inicio, periodo.fin
     temas = detectar_temas(db, pregunta)
     p = normalizar(pregunta)
-    etiqueta = f"{MESES[inicio.month - 1]} de {inicio.year}"
     resultado = {"verificada": True, "redactada_por": "SISC (sin IA)", "temas": temas, "fuentes": [],
                  "sugerencias": ["¿Cómo vamos esta semana?", "¿Cómo va el PISCC?"]}
     if temas["piscc"] and not temas["delitos"]:
         return {**resultado, "respuesta": (
             "La sábana semanal de la Policía no trae ese delito, y su cifra del PISCC (MinDefensa) se lleva como "
-            "acumulado del año, no por mes. Pregunte, por ejemplo, «¿Cómo va la extorsión?» para ver el acumulado.")}
+            "acumulado del año, no por fechas. Pregunte, por ejemplo, «¿Cómo va la extorsión?» para ver el acumulado.")}
     if len(temas["barrios"]) > 1:
-        return {**resultado, "respuesta": "Para un mes, pregunte por un barrio a la vez; así la cifra corresponde "
+        return {**resultado, "respuesta": "Para un periodo, pregunte por un barrio a la vez; así la cifra corresponde "
                 "exactamente a lo que pidió."}
     barrio = temas["barrios"][0] if temas["barrios"] else None
     donde = f" en {nombre_barrio(barrio)}" if barrio else ""
@@ -535,9 +533,10 @@ def responder_mes(db: Session, pregunta: str, inicio: date, fin: date, hoy: date
 
     if convivencia and not temas["delitos"]:
         # Comparendos: solo el RNMC, aunque la sábana no esté cargada.
-        linea, fuente = _comparendos_mes(db, inicio, fin, barrio)
+        linea, fuente = _comparendos_periodo(db, inicio, fin, barrio)
         return {**resultado, "fuentes": [fuente] if fuente else [],
-                "respuesta": f"Convivencia en {etiqueta}{donde}:\n{linea}\n\nCada comparendo se cuenta una vez, en su primera fecha."}
+                "respuesta": f"Convivencia {_en(periodo.etiqueta)}{donde}:\n{linea}\n\n"
+                             "Cada comparendo se cuenta una vez, en su primera fecha."}
 
     base = [HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db)]
     if barrio:
@@ -545,15 +544,19 @@ def responder_mes(db: Session, pregunta: str, inicio: date, fin: date, hoy: date
     primero, corte = db.query(func.min(HechoSeguridad.fecha_evento), func.max(HechoSeguridad.fecha_evento)).filter(
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db), HechoSeguridad.fecha_evento <= hoy).one()
     if not corte or inicio > corte:
-        return {**resultado, "respuesta": f"Todavía no hay datos de {etiqueta}: la sábana de la Policía llega hasta el "
-                f"{fecha_larga(corte) if corte else '(sin datos)'}."}
+        return {**resultado, "respuesta": f"Todavía no hay datos de ese periodo ({periodo.etiqueta}): la sábana de la "
+                f"Policía llega hasta el {fecha_larga(corte) if corte else '(sin datos)'}."}
     if inicio < primero:
         return {**resultado, "respuesta": f"El SISC tiene la sábana de la Policía desde el {fecha_larga(primero)}; "
-                f"no hay datos de {etiqueta}."}
-    resultado["fuentes"] = [f"Sábana de la Policía al {fecha_larga(corte)}"]
+                f"no hay datos de {periodo.etiqueta}."}
     hasta = min(fin, corte)
+    resultado["fuentes"] = [f"Sábana de la Policía al {fecha_larga(corte)}"]
+    falta = _mes_incompleto_sabana(db, inicio, hasta, corte)
+    if falta:
+        return {**resultado, "respuesta": f"La sábana de la Policía cargada en el SISC no tiene completo {falta}; "
+                "no doy una cifra que podría estar incompleta. Conviene pedir ese periodo a la Policía."}
     antes = (_un_anio_antes(inicio), _un_anio_antes(hasta))
-    con_previo = antes[0] >= primero
+    falta_antes = "sin datos" if antes[0] < primero else _mes_incompleto_sabana(db, *antes, corte)
 
     def contar(conductas, desde, a):
         filtro = [HechoSeguridad.conducta_estandar.in_(conductas)] if conductas else []
@@ -569,18 +572,21 @@ def responder_mes(db: Session, pregunta: str, inicio: date, fin: date, hoy: date
     for nombre, conductas in grupos:
         n = contar(conductas, inicio, hasta)
         linea = f"• {nombre}: {n}"
-        if con_previo:
+        if not falta_antes:
             previo = contar(conductas, *antes)
-            linea += f" (en {MESES[inicio.month - 1]} de {inicio.year - 1}: {previo}; {cambio(n, previo)})"
+            linea += f" ({etiqueta(*antes)}: {previo}; {cambio(n, previo)})"
         lineas.append(linea + ".")
+    if falta_antes:
+        motivo = f"la sábana no tiene completo {falta_antes}" if falta_antes != "sin datos" else "no hay datos de ese periodo"
+        lineas.append(f"Sin comparación con el año anterior: {motivo}.")
     if convivencia:
-        linea, fuente = _comparendos_mes(db, inicio, fin, barrio)
+        linea, fuente = _comparendos_periodo(db, inicio, fin, barrio)
         lineas.append(linea)
         resultado["fuentes"] += [fuente] if fuente else []
-    parcial = f" (hasta el {fecha_larga(hasta)}: el mes aún no está completo)" if fin > corte else ""
-    texto = (f"Hechos en {etiqueta}{donde}{parcial}:\n" + "\n".join(lineas) +
+    parcial = f" (hasta el {fecha_larga(hasta)}: el periodo aún no está completo)" if fin > corte else ""
+    texto = (f"Hechos {_en(periodo.etiqueta)}{donde}{parcial}:\n" + "\n".join(lineas) +
              f"\n\nSábana de la Policía al {fecha_larga(corte)}; cada hecho se cuenta una vez, con la última entrega. "
-             "Las cifras de los meses recientes pueden subir por reportes tardíos.")
+             "Las cifras de los días recientes pueden subir por reportes tardíos.")
     return {**resultado, "respuesta": texto}
 
 
@@ -595,17 +601,8 @@ def nota_periodo(datos: Dict) -> str:
             "La última semana puede estar incompleta por reportes tardíos. Las otras fuentes conservan su propio corte.")
 
 
-def respuesta_sin_ia(pregunta: str, expediente: Expediente, extra: Dict) -> str:
-    p = normalizar(pregunta)
-    if extra.get("whatsapp") and ("whatsapp" in p or "resum" in p):
-        return extra["whatsapp"]
-    datos = extra["datos"]
-    convivencia = next((c for t, c in expediente.bloques if t.startswith("Convivencia")), None)
-    if convivencia and any(w in p for w in CONVIVENCIA) and not expediente.temas.get("barrios"):
-        # Pregunta de convivencia: total, meta, dos comportamientos y el barrio con más comparendos.
-        filas = [l.lstrip("- ") for l in convivencia.split("\n")]
-        elegidas = filas[:2] + [l for l in filas if "artículo" in l][:2] + [l for l in filas if l.startswith("Barrio ")][:1]
-        return "• " + "\n• ".join(elegidas)
+def prefijos_pertinentes(p: str, expediente: Expediente) -> List[str]:
+    """Títulos de los bloques que tratan exactamente el tema preguntado (barrio, delito, meta, entidad...)."""
     prefijos = []
     if "piscc" in p or "meta" in p or "plan" in p:
         prefijos.append("Metas del PISCC")
@@ -619,6 +616,37 @@ def respuesta_sin_ia(pregunta: str, expediente: Expediente, extra: Dict) -> str:
         prefijos.append("Compromisos del Consejo a cargo")
     if any(w in p for w in ("fiscal", "judicial", "justicia")):
         prefijos.append("Procesos de la Fiscalía")
+    if any(w in p for w in CONVIVENCIA):
+        prefijos.append("Convivencia")
+    if any(w in p for w in ("oficial", "nacional", "compar")):
+        prefijos.append("Registro oficial")
+    if "valle" in p:
+        prefijos.append("Observatorio")
+    return prefijos
+
+
+def enfocar(expediente: Expediente, pregunta: str) -> Expediente:
+    """Solo los bloques del tema preguntado: la IA elige mejor y no mezcla cifras del municipio con las del barrio."""
+    prefijos = tuple(prefijos_pertinentes(normalizar(pregunta), expediente))
+    bloques = [(t, c) for t, c in expediente.bloques if prefijos and t.startswith(prefijos)]
+    if not bloques:
+        return expediente
+    return Expediente(bloques=bloques, fuentes=expediente.fuentes, temas=expediente.temas)
+
+
+def respuesta_sin_ia(pregunta: str, expediente: Expediente, extra: Dict) -> str:
+    p = normalizar(pregunta)
+    if extra.get("whatsapp") and ("whatsapp" in p or "resum" in p):
+        return extra["whatsapp"]
+    datos = extra["datos"]
+    convivencia = next((c for t, c in expediente.bloques if t.startswith("Convivencia")), None)
+    if convivencia and any(w in p for w in CONVIVENCIA) and not expediente.temas.get("barrios"):
+        # Pregunta de convivencia: total, meta, dos comportamientos y el barrio con más comparendos.
+        filas = [l.lstrip("- ") for l in convivencia.split("\n")]
+        elegidas = filas[:2] + [l for l in filas if "artículo" in l][:2] + [l for l in filas if l.startswith("Barrio ")][:1]
+        return "• " + "\n• ".join(elegidas)
+    prefijos = prefijos_pertinentes(p, expediente)
+    prefijos = [x for x in prefijos if not x.startswith(("Convivencia", "Registro oficial", "Observatorio"))]
     if prefijos:
         seleccion = [f"{titulo}:\n" + contenido.replace("- ", "• ", 1).replace("\n- ", "\n• ")
                      for titulo, contenido in expediente.bloques if titulo.startswith(tuple(prefijos))]
@@ -651,13 +679,14 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
     from services.asistente_compromisos import es_consulta, responder_ranking
     if es_consulta(pregunta) and not periodo_no_soportado(pregunta):
         return responder_ranking(db, normalizar(pregunta), hoy)
-    mes = periodo_mes(pregunta, hoy) if not es_consulta(pregunta) else None
-    if mes and not re.search(r"\b(ayer|anteayer|hoy|trimestre|semestre)\b", normalizar(pregunta)):
-        return responder_mes(db, pregunta, *mes, hoy)
+    from services.asistente_periodos import periodo as leer_periodo
+    pedido = leer_periodo(pregunta, hoy) if not es_consulta(pregunta) else None
+    if pedido:
+        return responder_periodo(db, pregunta, pedido, hoy)
     if periodo_no_soportado(pregunta):
-        return {"respuesta": "El asesor consulta la última semana disponible y el acumulado al corte de cada fuente; "
-                "todavía no calcula el rango de fechas que pidió. Use Explorar datos para seleccionar ese periodo. "
-                "No lo reemplazaré por cifras de otro periodo.", "verificada": False, "redactada_por": "SISC (sin IA)",
+        return {"respuesta": "No entendí las fechas que pidió y no las reemplazaré por cifras de otro periodo. "
+                "Puede preguntar, por ejemplo, «homicidios en agosto», «hurtos del 5 al 10 de agosto» o "
+                "«comparendos la primera semana de julio», o usar Explorar datos.", "verificada": False, "redactada_por": "SISC (sin IA)",
                 "fuentes": [], "sugerencias": SUGERENCIAS_INICIALES[:3], "temas": {}}
     expediente, extra = construir_expediente(db, pregunta, hoy)
     p = normalizar(pregunta)
@@ -669,7 +698,8 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
                 "redactada_por": "SISC (sin IA)", "fuentes": expediente.fuentes,
                 "sugerencias": sugerencias(temas, extra["datos"], pregunta), "temas": temas}
     datos_texto = expediente.texto() + "\n" + fecha_larga(hoy)
-    prompt = instrucciones(pregunta, historial, expediente, hoy)
+    foco = enfocar(expediente, pregunta)
+    prompt = instrucciones(pregunta, historial, foco, hoy)
     intentos, problemas = [], []
     proveedores = []
     if ia.GEMINI_API_KEY:
@@ -693,8 +723,8 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
             continue
         guardia = verify_ai_text(texto, datos_texto)
         intentos.append(nombre)
-        if guardia.ok and verificar_seleccion(texto, expediente):
-            return {"respuesta": formatear_seleccion(texto, expediente) + nota_periodo(extra["datos"]), "verificada": True, "redactada_por": nombre, "fuentes": expediente.fuentes,
+        if guardia.ok and verificar_seleccion(texto, foco):
+            return {"respuesta": formatear_seleccion(texto, foco) + nota_periodo(extra["datos"]), "verificada": True, "redactada_por": nombre, "fuentes": expediente.fuentes,
                     "sugerencias": sugerencias(expediente.temas, extra["datos"], pregunta), "temas": expediente.temas}
         problemas.append(f"{nombre}: {'; '.join(guardia.problems)[:200]}")
     respuesta = respuesta_sin_ia(pregunta, expediente, extra)
