@@ -12,6 +12,7 @@ import {
     formatNumber, formatVariation, parsePublicFilters, variationTone,
 } from '../utils/citizenInsights';
 import { getCachedPublicDashboard, loadPublicDashboard } from '../utils/publicDashboardCache';
+import { mesesIncompletos, motivoSinTasa, textoCobertura } from '../utils/cobertura';
 
 const formatDate = (value) => {
     if (!value) return 'Sin corte disponible';
@@ -236,12 +237,17 @@ const CitizenPortalHome = ({ onNavigate, onLoginClick }) => {
                             <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#281FD0]">Panorama público</p><h2 id="jamundi-hoy-title" className="mt-1 text-3xl font-black tracking-normal text-slate-950">Jamundí hoy</h2></div>
                             {data && <p className="max-w-xl text-right text-xs font-semibold leading-5 text-slate-500">Periodo: {formatDate(data.metadata?.period_start)} a {formatDate(data.metadata?.period_end)}. Fuente: SIEDCO / Policía Nacional.</p>}
                         </div>
+                        {data && textoCobertura(mesesIncompletos([data.metadata?.cobertura, data.metadata?.cobertura_comparacion]), { publico: true }) && (
+                            <p role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                                {textoCobertura(mesesIncompletos([data.metadata?.cobertura, data.metadata?.cobertura_comparacion]), { publico: true })}
+                            </p>
+                        )}
                         {loading && !data ? <DataSkeleton /> : data ? (
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                                 <KpiCard icon={Database} label="Casos agregados" value={formatNumber(data.kpis?.total_hechos)} helper="Casos únicos registrados en el periodo consultado." />
                                 <KpiCard icon={variationTone(variation) === 'down' ? TrendingDown : TrendingUp} label="Cambio del periodo" value={formatVariation(variation)} helper={comparisonHelper(data)} tone={variationTone(variation) === 'up' ? 'red' : variationTone(variation) === 'down' ? 'green' : 'slate'} />
                                 <KpiCard icon={ShieldAlert} label="Homicidios" value={formatNumber(data.kpis?.homicidios)} helper={data.kpis?.tasa_homicidios == null
-                                    ? 'Sin proyección de población disponible para calcular la tasa.'
+                                    ? motivoSinTasa(data.metadata, appliedFilters)
                                     : `${Number(data.kpis.tasa_homicidios).toLocaleString('es-CO', { maximumFractionDigits: 1 })} por cada 100.000 habitantes en el periodo consultado (no es una tasa anual).`} tone="red" />
                                 <KpiCard icon={BarChart3} label="Conducta más registrada" value={formatNumber(topConducta?.value)} helper={topConducta?.name || 'Sin conducta publicable'} tone="amber" />
                                 <KpiCard icon={MapPinned} label="Mayor concentración" value={formatNumber(topTerritory?.total)} helper={topTerritory ? `${topTerritory.name}. Registros agregados, no nivel de riesgo.` : 'Sin territorio publicable'} tone="slate" />

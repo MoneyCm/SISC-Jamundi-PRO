@@ -419,6 +419,12 @@ def get_public_dashboard(
     population = _jamundi_population(period_end)
     # La población es municipal: con filtro de territorio o zona la tasa no sería válida.
     tasa_homicidios = None if (territorio or zona) else rate_per_100k(homicidios, population)
+    # Meses que la sábana no trae (por ejemplo, diciembre de 2025): se avisan y no se calcula tasa.
+    from services.cobertura_sabana import cobertura as cobertura_sabana
+    cobertura = cobertura_sabana(db, period_start, period_end)
+    cobertura_comparacion = cobertura_sabana(db, previous_start, previous_end) if previous_start else None
+    if not cobertura["completa"]:
+        tasa_homicidios = None
 
     monthly = db.execute(text(f"""
         SELECT TO_CHAR(date_trunc('month', {source['date_col']}), 'YYYY-MM') AS bucket,
@@ -686,15 +692,15 @@ def get_public_dashboard(
             "comparison_start": previous_start.isoformat() if previous_start else None,
             "comparison_end": previous_end.isoformat() if previous_end else None,
             "population": population,
+            "cobertura": cobertura,
+            "cobertura_comparacion": cobertura_comparacion,
             "population_source": "DANE - Proyecciones municipales CNPV 2018",
             "population_year": period_end.year,
             "privacy": "Publicación agregada. No incluye nombres, identificadores, teléfonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
             "methodology": "Cada sábana oficial se valida y se conserva como evidencia. La publicación ciudadana usa una base maestra consolidada: las entregas más recientes actualizan hechos ya existentes y las entregas históricas completan hechos distintos. El mapa solo ubica territorios con polígono oficial verificado, mediante un punto interior de ese polígono; los demás se conservan en las tablas sin ubicación cartográfica.",
             "last_ingestion": {
-                "id": str(run.id) if run else None,
                 "filename": run.filename if run else None,
                 "loaded_at": run.fecha_fin.isoformat() if run and run.fecha_fin else None,
-                "loaded_by": run.usuario_carga if run else None,
                 "rows": run.total_filas if run else None,
                 "approved": run.aprobadas if run else None,
                 "rejected": run.rechazadas if run else None,

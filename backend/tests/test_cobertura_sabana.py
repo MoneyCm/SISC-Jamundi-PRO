@@ -62,3 +62,18 @@ def test_ano_corrido_completo(db):
     if not corte:
         pytest.skip("Sin sábana")
     assert cs.cobertura(db, date(corte.year, 1, 1), corte)["completa"] is True
+
+
+def test_portal_publico_avisa_meses_faltantes_y_no_publica_quien_cargo(db):
+    from fastapi import Response
+    mes = _mes_vacio(db)
+    if mes is None:
+        pytest.skip("La sábana cargada no tiene meses vacíos")
+    datos = analitica.get_public_dashboard(Response(), year=mes.year, period_mode="year_to_date",
+                                           comparison="same_period_previous_year", start_date=None, end_date=None,
+                                           conducta=None, zona=None, territorio=None, include_map=False,
+                                           min_location_count=3, db=db)
+    meta = datos["metadata"]
+    assert meta["cobertura"]["completa"] is False
+    assert datos["kpis"]["tasa_homicidios"] is None
+    assert "loaded_by" not in meta["last_ingestion"] and "id" not in meta["last_ingestion"]

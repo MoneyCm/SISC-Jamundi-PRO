@@ -729,7 +729,9 @@ async def get_public_rnmc_summary(db: Session = Depends(get_db)):
 
     def grouped(column, limit=10):
         rows = comparendos_rnmc.agrupar(db, column, year_start, latest_date, minimo=minimum_group_size, limite=limit)
-        return [{"name": name, "value": int(value)} for name, value in rows]
+        # Valores vacíos de la fuente ("NAN", "") no se publican como una categoría.
+        return [{"name": name if str(name or "").strip().upper() not in ("", "NAN", "NONE", "NULL") else "Sin dato registrado",
+                 "value": int(value)} for name, value in rows]
 
     month = func.extract("month", sub.c.fecha)
     monthly_rows = db.query(month.label("month"), func.count(sub.c.expediente_id).label("value")).filter(

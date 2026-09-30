@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mesesIncompletos, mesesSinDatos, textoCobertura } from './cobertura.js';
+import { mesesIncompletos, mesesSinDatos, motivoSinTasa, textoCobertura } from './cobertura.js';
 
 test('reúne los meses faltantes sin repetirlos', () => {
     const meses = mesesIncompletos([
@@ -19,4 +19,16 @@ test('sin meses faltantes no hay aviso', () => {
 
 test('lista los meses vacíos de la tendencia', () => {
     assert.deepEqual(mesesSinDatos([{ name: 'Nov 2025' }, { name: 'Dic 2025', sin_datos: true }]), ['Dic 2025']);
+});
+
+test('texto ciudadano sin instrucciones internas', () => {
+    const texto = textoCobertura(['diciembre de 2025'], { publico: true });
+    assert.match(texto, /no incluye completo: diciembre de 2025\./);
+    assert.doesNotMatch(texto, /conviene pedir/);
+});
+
+test('motivo de la tasa en blanco', () => {
+    assert.match(motivoSinTasa({ cobertura: { completa: false } }), /faltan meses/);
+    assert.match(motivoSinTasa({ cobertura: { completa: true } }, { territorio: 'Terranova' }), /todo el municipio/);
+    assert.match(motivoSinTasa({}), /proyección de población/);
 });
