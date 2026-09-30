@@ -4,6 +4,9 @@
 # - Antes de guardarla comprueba que la copia se pueda leer (pg_restore -l).
 # - Conserva las 14 copias mas recientes y la ultima de cada mes de los ultimos 12 meses;
 #   las demas van a la Papelera de reciclaje (nunca se borran de forma definitiva).
+# - Si existe la llave publica, sube ademas una copia CIFRADA al Drive institucional
+#   (G:\Mi unidad\SISC Respaldos cifrados), con la misma rotacion. Solo la llave privada que guarda
+#   la Secretaria fuera del computador puede abrirla (python scripts\respaldo_cifrado.py descifrar ...).
 # - Deja el resultado en backend\data\respaldo_estado.json, que el SISC muestra en el Centro de fuentes.
 #
 # Para restaurar una copia (solo con autorizacion y otra copia previa):
@@ -16,6 +19,26 @@ $estadoArchivo = Join-Path $PSScriptRoot '..\backend\data\respaldo_estado.json'
 $docker = 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
 $diarias = 14
 $mensuales = 12
+$python = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'
+$cifrador = Join-Path $PSScriptRoot 'respaldo_cifrado.py'
+$llavePublica = Join-Path $destino 'llave_publica_respaldo.pem'
+$carpetaDrive = 'G:\Mi unidad\SISC Respaldos cifrados'
+$script:estadoDrive = [ordered]@{ ok = $false; mensaje = 'Copia en Drive no configurada.'; archivo = '' }
+
+function Conservar-Rotacion([string]$carpeta, [string]$filtro) {
+    # 14 diarias + la ultima de cada mes (12 meses). Lo demas, a la Papelera.
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    $todas = @(Get-ChildItem -Path $carpeta -Filter $filtro | Sort-Object Name -Descending)
+    $conservar = @{}
+    $todas | Select-Object -First $diarias | ForEach-Object { $conservar[$_.Name] = $true }
+    $todas | Group-Object { $_.Name.Substring(5, 7) } | Select-Object -First ($mensuales + 1) |
+        ForEach-Object { $conservar[($_.Group | Select-Object -First 1).Name] = $true }
+    foreach ($copia in $todas) {
+        if (-not $conservar.ContainsKey($copia.Name)) {
+            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($copia.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin')
+        }
+    }
+}
 
 function Guardar-Estado([bool]$ok, [string]$mensaje, [string]$archivo, [double]$tamanoMb) {
     $copias = @(Get-ChildItem -Path $destino -Filter 'sisc-*.dump' -ErrorAction SilentlyContinue)
@@ -29,10 +52,12 @@ function Guardar-Estado([bool]$ok, [string]$mensaje, [string]$archivo, [double]$
         carpeta    = $destino
     }
     if ($ok) { $estado['ultima_exitosa'] = $estado['fecha'] }
-    elseif (Test-Path $estadoArchivo) {
-        $anterior = Get-Content $estadoArchivo -Raw | ConvertFrom-Json
-        if ($anterior.ultima_exitosa) { $estado['ultima_exitosa'] = $anterior.ultima_exitosa }
-    }
+    $anterior = $null
+    if (Test-Path $estadoArchivo) { $anterior = Get-Content $estadoArchivo -Raw | ConvertFrom-Json }
+    if (-not $ok -and $anterior -and $anterior.ultima_exitosa) { $estado['ultima_exitosa'] = $anterior.ultima_exitosa }
+    if ($script:estadoDrive.ok) { $script:estadoDrive['ultima_exitosa'] = $estado['fecha'] }
+    elseif ($anterior -and $anterior.drive -and $anterior.drive.ultima_exitosa) { $script:estadoDrive['ultima_exitosa'] = $anterior.drive.ultima_exitosa }
+    $estado['drive'] = $script:estadoDrive
     $json = $estado | ConvertTo-Json
     [System.IO.File]::WriteAllText($estadoArchivo, $json, (New-Object System.Text.UTF8Encoding($false)))
 }
@@ -50,17 +75,24 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'No se pudo copiar el archivo al computador.' }
     & $docker exec sisc_db rm -f /tmp/sisc_respaldo.dump
 
-    # Rotacion: 14 diarias + la ultima de cada mes (12 meses). Lo demas, a la Papelera.
-    Add-Type -AssemblyName Microsoft.VisualBasic
-    $todas = @(Get-ChildItem -Path $destino -Filter 'sisc-*.dump' | Sort-Object Name -Descending)
-    $conservar = @{}
-    $todas | Select-Object -First $diarias | ForEach-Object { $conservar[$_.Name] = $true }
-    $todas | Group-Object { $_.Name.Substring(5, 7) } | Select-Object -First ($mensuales + 1) |
-        ForEach-Object { $conservar[($_.Group | Select-Object -First 1).Name] = $true }
-    foreach ($copia in $todas) {
-        if (-not $conservar.ContainsKey($copia.Name)) {
-            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($copia.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin')
+    Conservar-Rotacion $destino 'sisc-*.dump'
+
+    # Copia cifrada en el Drive institucional (si falla, la copia local igual queda hecha).
+    if ((Test-Path $llavePublica) -and (Test-Path 'G:\Mi unidad')) {
+        try {
+            New-Item -ItemType Directory -Force -Path $carpetaDrive | Out-Null
+            $cifrado = Join-Path $carpetaDrive ($nombre + '.cifrado')
+            & $python $cifrador cifrar $final $llavePublica $cifrado
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $cifrado)) { throw 'No se pudo cifrar la copia.' }
+            Conservar-Rotacion $carpetaDrive 'sisc-*.dump.cifrado'
+            $script:estadoDrive = [ordered]@{ ok = $true; mensaje = 'Copia cifrada subida al Drive institucional.'; archivo = ($nombre + '.cifrado') }
         }
+        catch {
+            $script:estadoDrive = [ordered]@{ ok = $false; mensaje = ('Fallo la copia en Drive: ' + $_.Exception.Message); archivo = '' }
+        }
+    }
+    elseif (Test-Path $llavePublica) {
+        $script:estadoDrive = [ordered]@{ ok = $false; mensaje = 'Google Drive (G:) no esta disponible.'; archivo = '' }
     }
 
     $tamano = (Get-Item $final).Length / 1MB
