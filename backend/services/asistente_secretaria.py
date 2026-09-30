@@ -454,15 +454,9 @@ def _en(texto: str) -> str:
 
 def _mes_incompleto_sabana(db: Session, inicio: date, fin: date, corte: date) -> Optional[str]:
     """El primer mes del periodo que la sábana no trae completo (por ejemplo, diciembre de 2025), o None."""
-    from services.asistente_periodos import fin_de_mes, meses_de
-    for a, _b in meses_de(inicio, fin):
-        desde, hasta = a.replace(day=1), min(fin_de_mes(a.year, a.month), corte)
-        primero, ultimo = db.query(func.min(HechoSeguridad.fecha_evento), func.max(HechoSeguridad.fecha_evento)).filter(
-            HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db),
-            HechoSeguridad.fecha_evento.between(desde, hasta)).one()
-        if not primero or primero > desde + timedelta(days=5) or ultimo < hasta - timedelta(days=5):
-            return f"{MESES[a.month - 1]} de {a.year}"
-    return None
+    from services.cobertura_sabana import meses_incompletos, nombre_mes
+    faltan = meses_incompletos(db, inicio, fin, corte)
+    return nombre_mes(faltan[0]) if faltan else None
 
 
 def _mes_incompleto_rnmc(db: Session, inicio: date, fin: date, corte: date) -> Optional[str]:
