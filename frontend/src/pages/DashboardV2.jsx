@@ -37,7 +37,7 @@ import {
 import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
 import DataCaveats from '../components/DataCaveats';
 import RespaldoSabana from '../components/RespaldoSabana';
-import AvisoRNMC from '../components/AvisoRNMC';
+import Avisos from '../components/Avisos';
 import { localToday } from '../utils/localDate';
 import { downloadHojaEjecutiva } from '../utils/hojaEjecutiva';
 
@@ -443,6 +443,7 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
                     </div>
                 </div>
             </header>
+            <Avisos onNavigate={onNavigate} />
 
             <section className="hidden md:grid md:grid-cols-2 xl:grid-cols-4 bg-white border border-slate-200 rounded-lg md:divide-x divide-slate-200" aria-label="Estado de la fuente">
                 <div className="p-3.5 flex items-center gap-3"><Database size={18} className="text-primary" /><div><p className="text-[10px] uppercase font-bold text-slate-500">Fuente principal</p><p className="text-sm font-bold text-slate-900">Sábana SIEDCO · Policía</p></div></div>
@@ -455,7 +456,6 @@ const Dashboard = ({ userRoles = [], dataLevel = 1, onNavigate }) => {
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 className="text-lg font-black text-slate-900">Indicadores prioritarios</h3><p className="text-xs text-slate-500">Comparación con el {comparisonLabel}: {referenceRange ? `${formatDate(referenceRange.start)} – ${formatDate(referenceRange.end)}` : ''}.</p></div>{loading && <span className="text-xs font-bold text-primary inline-flex items-center gap-2"><LoaderCircle size={15} className="animate-spin" />Actualizando</span>}</div>
             <RespaldoSabana />
-            <AvisoRNMC />
             {caveats?.incomplete && <DataCaveats caveats={caveats} onOpen={() => onNavigate?.('observatory')} />}
             <section className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3">{metrics.map((metric) => <MetricCard key={metric.key} metric={metric} />)}</section>
             {/* En el celular los datos de la fuente van después de las cifras. */}

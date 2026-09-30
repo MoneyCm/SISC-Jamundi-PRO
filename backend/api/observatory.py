@@ -690,3 +690,11 @@ async def change_recommendation_status(rec_id: UUID, payload: RecommendationStat
                     target={"code": row.code, "status": row.status, "commitment": row.commitment_code}, level=1, request=request)
     study_code = db.query(ObservatoryStudy.code).filter(ObservatoryStudy.id == row.study_id).scalar() if row.study_id else None
     return serialize_recommendation(row, study_code)
+
+
+@router.get("/avisos")
+def get_avisos(db: Session = Depends(get_db), user: User = Depends(institutional_access)):
+    """Lo atrasado o próximo (sábana, comparendos, solicitudes, Consejo, copia de seguridad) para Inicio."""
+    from services.avisos import avisos
+
+    return avisos(db)
