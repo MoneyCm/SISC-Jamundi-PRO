@@ -146,8 +146,10 @@ class RNMCIngestor:
             return None
         if isinstance(val, (datetime, date)):
             return pd.to_datetime(val)
+        texto = str(val).strip()
         try:
-            return pd.to_datetime(str(val), dayfirst=True)
+            # "2026-10-01" (año primero) no se invierte; "01/10/2026" sí es día/mes/año.
+            return pd.to_datetime(texto, dayfirst=not re.match(r"\d{4}-\d{2}-\d{2}", texto))
         except:
             return None
 
