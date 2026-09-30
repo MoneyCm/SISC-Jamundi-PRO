@@ -24,6 +24,7 @@ def init_db():
             {"code": "DIRECTIVE", "name": "Directivo / Secretario", "description": "Acceso a dashboards estratégicos y alertas."},
             {"code": "SOURCE_UPLOADER", "name": "Cargador de Fuentes", "description": "Permiso para subir archivos a la plataforma."},
             {"code": "PORTAL_EDITOR", "name": "Editor de Portal", "description": "Edita boletines y contenido público."},
+            {"code": "PUBLICATION_APPROVER", "name": "Publica boletines", "description": "Aprueba y publica boletines en la web (Secretaría)."},
             {"code": "PORTAL_ADMIN", "name": "Admin de Portal", "description": "Publica y gestiona el Portal Ciudadano."}
         ]
 

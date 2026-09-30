@@ -33,6 +33,8 @@ from api.auth import get_optional_user
 router = APIRouter(prefix="/v1", tags=["sisc-cifras-v1"])
 
 PUBLICATION_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
+# Publicar: solo el permiso "Publica boletines" (la Secretaria) y la administración.
+PUBLISHER_ROLES = ["PUBLICATION_APPROVER", "FUNC_ADMIN", "TI_ADMIN"]
 ANALYSIS_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
 
 
@@ -219,9 +221,9 @@ def generate_v1(
         raise HTTPException(401, "Autenticación requerida para generar boletines.")
     user_role_codes = [r.code for r in (user.roles or [])]
     if "TI_ADMIN" not in user_role_codes:
-        has_role = any(role in user_role_codes for role in PUBLICATION_ROLES)
+        has_role = any(role in user_role_codes for role in PUBLISHER_ROLES)
         if not has_role:
-            raise HTTPException(403, "No tiene permiso para generar boletines.")
+            raise HTTPException(403, "Solo la Secretaria de Seguridad y la administración del SISC pueden publicar boletines.")
     if filters.mode != "OFFICIAL_PUBLICATION":
         raise HTTPException(400, "Este endpoint solo acepta mode=OFFICIAL_PUBLICATION.")
 

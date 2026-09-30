@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { MENSAJE_NO_PUBLICA, puedePublicar } from '../utils/permisos';
 import { AlertTriangle, CheckCircle2, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 
@@ -105,9 +106,10 @@ const EditorialReview = ({ publication, authHeaders, canApprove, onPublished, sh
                                 Revisé las {review.warnings} advertencia(s) y el boletín las presenta de forma que no induce a error.
                             </label>
                         )}
+                        {!puedePublicar() && <p className="text-sm font-bold text-slate-600">{MENSAJE_NO_PUBLICA}</p>}
                         <button
                             onClick={approve}
-                            disabled={working || (needsAck && !acknowledged)}
+                            disabled={working || (needsAck && !acknowledged) || !puedePublicar()}
                             className="inline-flex min-h-11 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                             {working ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Aprobar y publicar en el portal
