@@ -1,4 +1,5 @@
 import { bulletinFetch as fetch } from '../lib/bulletinApi';
+import { MENSAJE_NO_PUBLICA, puedePublicar } from '../../../utils/permisos';
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -1844,8 +1845,8 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
                     setReviewAcknowledged(false);
                     setShowPublishModal(true);
                   }}
-                  disabled={siscLoading || publishing || !publicationCanBeRegistered || officialPending}
-                  title={publicationCanBeRegistered
+                  disabled={siscLoading || publishing || !publicationCanBeRegistered || officialPending || !puedePublicar()}
+                  title={!puedePublicar() ? MENSAJE_NO_PUBLICA : publicationCanBeRegistered
                     ? `Generar boletín con cifra oficial ${officialResult ? `${officialResult.value} ${officialResult.unit} (${officialResult.indicator})` : ''}`
                     : officialPending
                       ? 'Consulta oficial en curso…'

@@ -19,6 +19,9 @@ from services.sisc_cifras_pdf import build_sisc_cifras_pdf
 
 router = APIRouter()
 PUBLICATION_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
+# Publicar en la web: solo quien tiene el permiso "Publica boletines" (la Secretaria) y la administración.
+PUBLISHER_ROLES = ["PUBLICATION_APPROVER", "FUNC_ADMIN", "TI_ADMIN"]
+NO_PUBLISHER = "Solo la Secretaria de Seguridad y la administración del SISC pueden publicar boletines."
 PUBLIC_SOURCE_CODES = ["POLICIA_SEMANAL", "INSPECCIONES_RNMC", "COMISARIAS_FAMILIA"]
 
 
@@ -154,6 +157,9 @@ async def generate_sisc_cifras(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Su rol no permite guardar publicaciones institucionales.",
         )
+
+    if payload.publish_automatically and not {role.code for role in (current_user.roles or [])}.intersection(PUBLISHER_ROLES):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=NO_PUBLISHER)
 
     _check_selected_delivery(db, payload)
     publication = SiscCifrasService.generate_publication(
@@ -363,7 +369,7 @@ async def approve_sisc_cifras_publication(
     request: Request,
     payload: Optional[ApprovePublicationRequest] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(PUBLICATION_ROLES)),
+    current_user: User = Depends(require_role(PUBLISHER_ROLES)),
 ):
     row = db.query(SiscCifrasPublication).filter(SiscCifrasPublication.id == publication_id).first()
     if not row:

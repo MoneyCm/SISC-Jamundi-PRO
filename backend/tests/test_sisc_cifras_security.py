@@ -155,7 +155,7 @@ def _publish(db, acknowledged=False):
     return asyncio.run(sisc_cifras.generate_sisc_cifras(
         sisc_cifras.GenerateSiscCifrasRequest(save_history=True, publish_automatically=True,
                                              warnings_acknowledged=acknowledged),
-        _request(), db, _user("ANALYST"),
+        _request(), db, _user("DIRECTIVE", "PUBLICATION_APPROVER"),
     ))
 
 
@@ -182,3 +182,14 @@ def test_bulletin_warnings_must_be_acknowledged(monkeypatch):
     assert approval["warnings_acknowledged"] == ["BASE_PEQUENA"]
     assert approval["channel"] == "BOLETIN_INSTITUCIONAL"
     assert result["governance"]["automatic_publication"] is False
+
+
+def test_directivo_sin_permiso_no_publica():
+    """Guardar borradores sí; publicar en la web solo con el permiso "Publica boletines" o la administración."""
+    with pytest.raises(sisc_cifras.HTTPException) as error:
+        asyncio.run(sisc_cifras.generate_sisc_cifras(
+            sisc_cifras.GenerateSiscCifrasRequest(save_history=True, publish_automatically=True),
+            _request(), MagicMock(), _user("DIRECTIVE"),
+        ))
+    assert error.value.status_code == 403
+
