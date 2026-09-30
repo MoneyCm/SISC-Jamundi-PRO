@@ -100,6 +100,7 @@ def test_consulta_mensual_por_barrio_cuenta_solo_ese_barrio(db, monkeypatch):
         pytest.skip("Sin barrios en el mes")
     barrio, esperado = fila
     monkeypatch.setattr(svc, "detectar_temas", lambda db, q: {"delitos": [], "entidades": [], "barrios": [barrio], "piscc": []})
-    texto = svc.responder_mes(db, "¿Qué pasó en el barrio este mes?", inicio, date(inicio.year, inicio.month, 28) if inicio.month == 2 else fin, fin)["respuesta"]
+    from services.asistente_periodos import Periodo
+    texto = svc.responder_periodo(db, "¿Qué pasó en el barrio?", Periodo(inicio, fin, "ese periodo"), fin)["respuesta"]
     assert f"Total de delitos: {esperado}" in texto
     assert svc.nombre_barrio(barrio) in texto

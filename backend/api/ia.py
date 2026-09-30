@@ -19,7 +19,8 @@ router = APIRouter()
 # ConfiguraciÃ³n de Modelos
 # gemini-2.0-flash-lite fue retirado por Google; el modelo se configura por entorno.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
-MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-2603")
+# La cuenta no tiene cupo para mistral-small (límite 0 por minuto); ministral-8b sí (188 por minuto).
+MISTRAL_MODEL = os.getenv("MISTRAL_MODEL", "ministral-8b-latest")
 
 # ConfiguraciÃ³n desde .env
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
