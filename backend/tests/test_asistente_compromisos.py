@@ -57,7 +57,7 @@ def test_exact_user_question_does_not_need_police_or_ai(monkeypatch):
     db.query.return_value.filter.return_value.all.return_value = [row('CS-1', 4, date(2026, 8, 1))]
     result = asyncio.run(responder(db, 'Cual es el compromiso mas incumplido de los concejos de seguridad', hoy=date(2026, 9, 30)))
     assert 'CS-1:' in result['respuesta']
-    assert '2026-09-30' in result['respuesta']
+    assert '30 de septiembre de 2026' in result['respuesta']
     assert 'policial' not in result['respuesta'].lower()
 
 
@@ -72,3 +72,25 @@ def test_general_commitment_question_does_not_load_police(monkeypatch):
     assert 'sábana' not in result['respuesta'].lower()
     assert 'Secretaría Técnica' not in result['respuesta']
     assert all('Policía al' not in source for source in result['fuentes'])
+
+
+def test_list_of_overdue_commitments_for_an_entity():
+    from services.asistente_compromisos import listar
+    rows = [row('CS-NEW', 1, date(2026, 9, 1)), row('CS-OLD', 1, date(2026, 1, 15)),
+            row('CS-OPEN', 6, None), row('CS-FUT', 2, date(2026, 12, 1))]
+    texto = listar(rows, date(2026, 9, 30), 'la Policía', solo_vencidos=True)
+    assert texto.startswith('La Policía tiene 4 compromisos abiertos del Consejo de Seguridad; 2 con el plazo vencido.')
+    assert texto.index('CS-OLD:') < texto.index('CS-NEW:')
+    assert 'CS-OPEN' not in texto and 'CS-FUT' not in texto
+    assert 'pedido 1 vez;' in texto and '258 días de atraso' in texto
+    todos = listar(rows, date(2026, 9, 30), 'la Policía')
+    assert 'CS-OPEN' in todos and 'sin fecha límite registrada' in todos
+
+
+def test_police_question_lists_only_police_commitments():
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = [
+        row('CS-POL', 1, date(2026, 1, 15), responsible='Policía Nacional'),
+        row('CS-SEC', 1, date(2026, 1, 15), responsible='Secretaría de Seguridad y Convivencia')]
+    result = asyncio.run(responder(db, '¿Qué compromisos tiene vencidos la Policía?', hoy=date(2026, 9, 30)))
+    assert 'CS-POL' in result['respuesta'] and 'CS-SEC' not in result['respuesta']
