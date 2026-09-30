@@ -449,8 +449,14 @@ def periodo_no_soportado(pregunta: str) -> bool:
 
 
 def periodo_mes(pregunta: str, hoy: date) -> Optional[Tuple[date, date]]:
-    """Un solo mes ("agosto", "enero de 2025", "el mes pasado"); None si no es un mes puntual."""
+    """Un solo mes completo ("agosto", "enero de 2025", "agosto del año pasado", "el mes pasado").
+
+    None si la pregunta pide otra cosa (días, semanas, rangos): así no se responde un periodo distinto.
+    """
     p = normalizar(pregunta)
+    sin_anios = re.sub(r"\b(?:19|20)\d{2}\b", " ", p)
+    if re.search(r"\d", sin_anios) or re.search(r"\b(semana|quincena|desde|hasta|entre|primeros?|ultimos?|dia|dias)\b", p):
+        return None
     if "mes pasado" in p:
         fin = hoy.replace(day=1) - timedelta(days=1)
         return fin.replace(day=1), fin
@@ -459,9 +465,53 @@ def periodo_mes(pregunta: str, hoy: date) -> Optional[Tuple[date, date]]:
         return None
     nombre, anio = meses[0]
     mes = MESES.index(nombre) + 1
-    anio = int(anio) if anio else (hoy.year if mes <= hoy.month else hoy.year - 1)
+    if anio:
+        anio = int(anio)
+    elif "ano antepasado" in p:
+        anio = hoy.year - 2
+    elif "ano pasado" in p or "ano anterior" in p:
+        anio = hoy.year - 1
+    elif "este ano" in p or "ano actual" in p:
+        anio = hoy.year
+    else:
+        anio = hoy.year if mes <= hoy.month else hoy.year - 1
     siguiente = date(anio + (mes == 12), mes % 12 + 1, 1)
     return date(anio, mes, 1), siguiente - timedelta(days=1)
+
+
+def _comparendos_mes(db: Session, inicio: date, fin: date, barrio: Optional[str]) -> Tuple[str, Optional[str]]:
+    """Comparendos del RNMC de un mes, sin depender de la sábana; compara solo si el año anterior está completo."""
+    from db.models_inspecciones import InspeccionExpediente
+    from services import comparendos_rnmc
+
+    etiqueta = f"{MESES[inicio.month - 1]} de {inicio.year}"
+    corte = comparendos_rnmc.corte(db)
+    if not corte or inicio > corte:
+        return (f"• Todavía no hay comparendos de {etiqueta}"
+                + (f": el RNMC cargado llega hasta el {fecha_larga(corte)}." if corte else ".")), None
+    hasta = min(fin, corte)
+    fuente = f"RNMC al {fecha_larga(corte)}"
+    if not comparendos_rnmc.cubre(db, inicio, hasta, margen=5):
+        return f"• El RNMC cargado no cubre completo {etiqueta}; no se da una cifra que podría estar incompleta.", fuente
+    filtros = [func.upper(func.trim(InspeccionExpediente.localidad)) == normalizar(barrio).upper().strip()] if barrio else []
+
+    def contar(desde, a):
+        if not filtros:
+            return comparendos_rnmc.contar(db, desde, a)
+        filas = comparendos_rnmc.agrupar(db, InspeccionExpediente.localidad, desde, a, filtros=filtros)
+        return filas[0][1] if filas else 0
+
+    n = contar(inicio, hasta)
+    linea = f"• Comparendos del RNMC: {n}"
+    antes = (_un_anio_antes(inicio), _un_anio_antes(hasta))
+    if comparendos_rnmc.cubre(db, *antes, margen=5):
+        previo = contar(*antes)
+        linea += f" (en {MESES[inicio.month - 1]} de {inicio.year - 1}: {previo}; {cambio(n, previo)})"
+    else:
+        linea += f" (sin comparación: el RNMC de {MESES[inicio.month - 1]} de {inicio.year - 1} no está completo)"
+    if fin > corte:
+        linea += f"; hasta el {fecha_larga(corte)}, el mes aún no está completo"
+    return linea + ".", fuente
 
 
 def responder_mes(db: Session, pregunta: str, inicio: date, fin: date, hoy: date) -> Dict:
@@ -470,22 +520,37 @@ def responder_mes(db: Session, pregunta: str, inicio: date, fin: date, hoy: date
     temas = detectar_temas(db, pregunta)
     p = normalizar(pregunta)
     etiqueta = f"{MESES[inicio.month - 1]} de {inicio.year}"
-    base = [HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db)]
-    primero, corte = db.query(func.min(HechoSeguridad.fecha_evento), func.max(HechoSeguridad.fecha_evento)).filter(
-        *base, HechoSeguridad.fecha_evento <= hoy).one()
-    resultado = {"verificada": True, "redactada_por": "SISC (sin IA)", "temas": temas,
-                 "fuentes": [f"Sábana de la Policía al {fecha_larga(corte)}"] if corte else [],
+    resultado = {"verificada": True, "redactada_por": "SISC (sin IA)", "temas": temas, "fuentes": [],
                  "sugerencias": ["¿Cómo vamos esta semana?", "¿Cómo va el PISCC?"]}
     if temas["piscc"] and not temas["delitos"]:
-        return {**resultado, "fuentes": [], "respuesta": (
+        return {**resultado, "respuesta": (
             "La sábana semanal de la Policía no trae ese delito, y su cifra del PISCC (MinDefensa) se lleva como "
             "acumulado del año, no por mes. Pregunte, por ejemplo, «¿Cómo va la extorsión?» para ver el acumulado.")}
+    if len(temas["barrios"]) > 1:
+        return {**resultado, "respuesta": "Para un mes, pregunte por un barrio a la vez; así la cifra corresponde "
+                "exactamente a lo que pidió."}
+    barrio = temas["barrios"][0] if temas["barrios"] else None
+    donde = f" en {nombre_barrio(barrio)}" if barrio else ""
+    convivencia = any(w in p for w in CONVIVENCIA)
+
+    if convivencia and not temas["delitos"]:
+        # Comparendos: solo el RNMC, aunque la sábana no esté cargada.
+        linea, fuente = _comparendos_mes(db, inicio, fin, barrio)
+        return {**resultado, "fuentes": [fuente] if fuente else [],
+                "respuesta": f"Convivencia en {etiqueta}{donde}:\n{linea}\n\nCada comparendo se cuenta una vez, en su primera fecha."}
+
+    base = [HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db)]
+    if barrio:
+        base.append(HechoSeguridad.barrio_normalizado == barrio)
+    primero, corte = db.query(func.min(HechoSeguridad.fecha_evento), func.max(HechoSeguridad.fecha_evento)).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", filtro_hechos(db), HechoSeguridad.fecha_evento <= hoy).one()
     if not corte or inicio > corte:
         return {**resultado, "respuesta": f"Todavía no hay datos de {etiqueta}: la sábana de la Policía llega hasta el "
                 f"{fecha_larga(corte) if corte else '(sin datos)'}."}
-    if primero and inicio < primero:
+    if inicio < primero:
         return {**resultado, "respuesta": f"El SISC tiene la sábana de la Policía desde el {fecha_larga(primero)}; "
                 f"no hay datos de {etiqueta}."}
+    resultado["fuentes"] = [f"Sábana de la Policía al {fecha_larga(corte)}"]
     hasta = min(fin, corte)
     antes = (_un_anio_antes(inicio), _un_anio_antes(hasta))
     con_previo = antes[0] >= primero
@@ -494,11 +559,10 @@ def responder_mes(db: Session, pregunta: str, inicio: date, fin: date, hoy: date
         filtro = [HechoSeguridad.conducta_estandar.in_(conductas)] if conductas else []
         return db.query(hechos_unicos_expr()).filter(*base, *filtro, HechoSeguridad.fecha_evento.between(desde, a)).scalar() or 0
 
-    convivencia = any(w in p for w in CONVIVENCIA)
     if temas["delitos"]:
-        grupos = [(", ".join(temas["delitos"]), temas["delitos"])]
-    elif convivencia:
-        grupos, resultado["fuentes"] = [], []
+        nombre = ("Hurtos (todos los tipos)" if set(temas["delitos"]) == set(DELITOS["hurto"])
+                  else ", ".join(temas["delitos"]))
+        grupos = [(nombre, temas["delitos"])]
     else:
         grupos = hoja_ejecutiva.DELITOS + [("Total de delitos", None)]
     lineas = []
@@ -510,21 +574,11 @@ def responder_mes(db: Session, pregunta: str, inicio: date, fin: date, hoy: date
             linea += f" (en {MESES[inicio.month - 1]} de {inicio.year - 1}: {previo}; {cambio(n, previo)})"
         lineas.append(linea + ".")
     if convivencia:
-        from services import comparendos_rnmc
-        corte_rnmc = comparendos_rnmc.corte(db)
-        if corte_rnmc and corte_rnmc >= inicio:
-            hasta_rnmc = min(fin, corte_rnmc)
-            n = comparendos_rnmc.contar(db, inicio, hasta_rnmc)
-            previo = comparendos_rnmc.contar(db, _un_anio_antes(inicio), _un_anio_antes(hasta_rnmc))
-            lineas.append(f"• Comparendos del RNMC: {n} (en {MESES[inicio.month - 1]} de {inicio.year - 1}: {previo}; "
-                          f"{cambio(n, previo)}).")
-            resultado["fuentes"].append(f"RNMC al {fecha_larga(corte_rnmc)}")
-    if not grupos:
-        texto = (f"Convivencia en {etiqueta}:\n" + ("\n".join(lineas) or "• Todavía no hay comparendos de ese mes.") +
-                 "\n\nCada comparendo se cuenta una vez, en su primera fecha.")
-        return {**resultado, "respuesta": texto}
+        linea, fuente = _comparendos_mes(db, inicio, fin, barrio)
+        lineas.append(linea)
+        resultado["fuentes"] += [fuente] if fuente else []
     parcial = f" (hasta el {fecha_larga(hasta)}: el mes aún no está completo)" if fin > corte else ""
-    texto = (f"Hechos en {etiqueta}{parcial}:\n" + "\n".join(lineas) +
+    texto = (f"Hechos en {etiqueta}{donde}{parcial}:\n" + "\n".join(lineas) +
              f"\n\nSábana de la Policía al {fecha_larga(corte)}; cada hecho se cuenta una vez, con la última entrega. "
              "Las cifras de los meses recientes pueden subir por reportes tardíos.")
     return {**resultado, "respuesta": texto}
@@ -598,7 +652,7 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
     if es_consulta(pregunta) and not periodo_no_soportado(pregunta):
         return responder_ranking(db, normalizar(pregunta), hoy)
     mes = periodo_mes(pregunta, hoy) if not es_consulta(pregunta) else None
-    if mes and not re.search(r"\b(ayer|anteayer|hoy|trimestre|semestre)\b|ultimos?\s+\d+|\d{1,2}[/-]\d{1,2}", normalizar(pregunta)):
+    if mes and not re.search(r"\b(ayer|anteayer|hoy|trimestre|semestre)\b", normalizar(pregunta)):
         return responder_mes(db, pregunta, *mes, hoy)
     if periodo_no_soportado(pregunta):
         return {"respuesta": "El asesor consulta la última semana disponible y el acumulado al corte de cada fuente; "

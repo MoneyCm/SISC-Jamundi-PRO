@@ -83,3 +83,23 @@ def test_cada_mes_cuenta_lo_mismo_que_la_foto(db):
             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", ev.filtro_hechos(db, entrega=entrega),
             HechoSeguridad.fecha_evento.between(desde, hasta)).scalar()
         assert sisc == foto, (desde, hasta, sisc, foto)
+
+
+def test_consulta_mensual_por_barrio_cuenta_solo_ese_barrio(db, monkeypatch):
+    from services import asistente_secretaria as svc
+    entrega = ev.entrega_vigente(db)
+    if entrega is None:
+        pytest.skip("Sin entrega vigente en la base")
+    inicio = entrega.ventanas[-1][1].replace(day=1)
+    fin = entrega.ventanas[-1][1]
+    fila = db.query(HechoSeguridad.barrio_normalizado, hechos_unicos_expr().label("n")).filter(
+        HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", ev.filtro_hechos(db, entrega=entrega),
+        HechoSeguridad.barrio_normalizado.isnot(None), HechoSeguridad.fecha_evento.between(inicio, fin)
+    ).group_by(HechoSeguridad.barrio_normalizado).order_by(hechos_unicos_expr().desc()).first()
+    if fila is None:
+        pytest.skip("Sin barrios en el mes")
+    barrio, esperado = fila
+    monkeypatch.setattr(svc, "detectar_temas", lambda db, q: {"delitos": [], "entidades": [], "barrios": [barrio], "piscc": []})
+    texto = svc.responder_mes(db, "¿Qué pasó en el barrio este mes?", inicio, date(inicio.year, inicio.month, 28) if inicio.month == 2 else fin, fin)["respuesta"]
+    assert f"Total de delitos: {esperado}" in texto
+    assert svc.nombre_barrio(barrio) in texto
