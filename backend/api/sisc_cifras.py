@@ -379,6 +379,18 @@ async def approve_sisc_cifras_publication(
     # Solo se aprueban borradores: una versión reemplazada o retirada no vuelve a publicarse.
     if row.status != "DRAFT":
         raise HTTPException(status_code=409, detail="Este boletín fue reemplazado o retirado. Genere uno nuevo.")
+    # Un borrador armado con una sábana que ya fue reemplazada publicaría cifras viejas
+    # (caso real: agosto con 100 hechos cuando la entrega nueva trae 105).
+    delivery = (row.source_version_ids or {}).get("POLICIA_SEMANAL")
+    if delivery:
+        from services.indicator_calculation import _latest_completed_run
+        latest = _latest_completed_run(db)
+        if latest and str(latest.id) != str(delivery):
+            raise HTTPException(
+                status_code=409,
+                detail=("Este borrador se armó con una sábana anterior de la Policía. "
+                        "Genere de nuevo el boletín para publicarlo con la entrega vigente."),
+            )
 
     publication = dict(row.publication_json or {})
     governance = dict(publication.get("governance") or {})

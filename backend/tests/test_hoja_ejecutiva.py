@@ -92,7 +92,10 @@ def test_construir_con_la_base(db):
         pytest.skip("Sin sábana cargada en esta base")
     assert [f["delito"] for f in datos["filas"]][0] == "Homicidios" and len(datos["filas"]) == 6
     assert datos["semana"][1] == datos["corte"] and (datos["semana"][1] - datos["semana"][0]).days == 6
-    assert sum(f["semana"] for f in datos["filas"]) <= datos["total"]["semana"]
+    # Un hecho puede tener varios delitos (caso real: homicidio y lesiones el 22/09/2026), así que las
+    # filas pueden sumar más que el total; pero ninguna fila supera el total de hechos únicos.
+    assert max(f["semana"] for f in datos["filas"]) <= datos["total"]["semana"]
+    assert max(f["anio"] for f in datos["filas"]) <= datos["total"]["anio"]
 
 
 def client(monkeypatch, *roles):

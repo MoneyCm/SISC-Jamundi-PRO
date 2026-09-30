@@ -422,6 +422,8 @@ def render_pdf(datos: Dict[str, Any]) -> bytes:
     historia.append(Paragraph(
         f"Datos policiales al {fecha_larga(datos['corte'])} ({datos['dias_retraso']} días de retraso), "
         f"entrega {datos.get('entrega') or 'vigente'}. "
+        "Un mismo hecho puede incluir más de un delito (por ejemplo, un homicidio con un herido): "
+        "por eso los delitos pueden sumar más que el total. "
         f"Generado por el SISC el {fecha_larga(datos['hoy'])}. Documento de uso interno.", pie))
 
     salida = io.BytesIO()
