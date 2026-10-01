@@ -517,6 +517,56 @@ def get_public_sisc_cifras_pdf(
     )
 
 
+@router.get("/publications/drafts")
+def list_drafts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(PUBLICATION_ROLES)),
+):
+    """Borradores guardados que esperan aprobación, con su contenido tal como se generó."""
+    from services.indicator_calculation import _latest_completed_run
+    latest = _latest_completed_run(db)
+    rows = (db.query(SiscCifrasPublication).filter(SiscCifrasPublication.status == "DRAFT")
+            .order_by(SiscCifrasPublication.created_at.desc()).limit(50).all())
+    result = []
+    for row in rows:
+        delivery = (row.source_version_ids or {}).get("POLICIA_SEMANAL")
+        result.append({
+            "id": str(row.id), "title": row.title, "edition_type": row.edition_type,
+            "period_start": row.period_start.isoformat(), "period_end": row.period_end.isoformat(),
+            "created_by": row.created_by, "created_at": row.created_at.isoformat() if row.created_at else None,
+            "source_codes": row.source_codes,
+            # Armado con una sábana ya reemplazada: no se puede aprobar (ver approve).
+            "stale": bool(delivery and latest and str(latest.id) != str(delivery)),
+            "publication_json": {**(row.publication_json or {}), "id": str(row.id), "status": row.status},
+        })
+    return result
+
+
+@router.post("/publications/{publication_id}/discard")
+async def discard_draft(
+    publication_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(PUBLISHER_ROLES)),
+):
+    """Descarta un borrador: queda como reemplazado (no se borra) y se registra en la auditoría."""
+    row = db.query(SiscCifrasPublication).filter(SiscCifrasPublication.id == publication_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="No existe el boletín solicitado.")
+    if row.status != "DRAFT":
+        raise HTTPException(status_code=409, detail="Solo se pueden descartar borradores; este boletín ya fue publicado o retirado.")
+    row.status = "SUPERSEDED"
+    snapshot = dict(row.publication_json or {})
+    snapshot["status"] = "SUPERSEDED"
+    snapshot["descartado_por"] = current_user.username
+    row.publication_json = snapshot
+    db.commit()
+    await log_audit(db, "SISC_CIFRAS_DRAFT_DISCARDED", actor_id=str(current_user.id), module="SISC_CIFRAS",
+                    target={"publication_id": str(row.id), "edition_type": row.edition_type,
+                            "period": f"{row.period_start} a {row.period_end}"}, level=2, request=request)
+    return {"id": str(row.id), "status": row.status}
+
+
 @router.get("/publications")
 def list_publications(
     limit: int = Query(default=20, ge=1, le=100),
