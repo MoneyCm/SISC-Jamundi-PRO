@@ -423,6 +423,7 @@ def read_act_for_review(db: Session, content: bytes, filename: str, instance_hin
     # La misma acta subida dos veces sin confirmar: se retoma la lectura pendiente en vez de duplicarla.
     pending = db.query(CouncilActRead).filter(CouncilActRead.sha256 == sha, CouncilActRead.status == "PENDIENTE").first()
     if pending and (not instance_hint or instance_hint == pending.instance):
+        save_act_file(db, pending, content, filename, username)
         return open_act_read(db, str(pending.id))
     reading, reread = read_act(content, filename, instance_hint, use_ocr=use_ocr)
     data = reading.to_dict()
@@ -437,7 +438,91 @@ def read_act_for_review(db: Session, content: bytes, filename: str, instance_hin
     db.add(record)
     db.commit()
     db.refresh(record)
+    save_act_file(db, record, content, filename, username)
     return _read_payload(record, data)
+
+
+# ------------------------------------------------------------------ archivo de actas
+
+ACT_FILE_MAX_BYTES = 25 * 1024 * 1024
+ACT_CONTENT_TYPES = {".pdf": "application/pdf", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                     ".doc": "application/msword", ".txt": "text/plain"}
+
+
+def save_act_file(db: Session, record: CouncilActRead, content: bytes, filename: str, username: str) -> None:
+    """Guarda (o reemplaza) el archivo original de un acta leída."""
+    import hashlib
+    from pathlib import Path
+
+    from db.models_council import CouncilActFile
+
+    if len(content) > ACT_FILE_MAX_BYTES:
+        return
+    existing = db.query(CouncilActFile).filter(CouncilActFile.read_id == record.id).first()
+    row = existing or CouncilActFile(read_id=record.id)
+    row.filename = filename[:255]
+    row.content_type = ACT_CONTENT_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
+    row.size_bytes = len(content)
+    row.sha256 = hashlib.sha256(content).hexdigest()
+    row.content = content
+    row.uploaded_by = username
+    if existing is None:
+        db.add(row)
+    db.commit()
+
+
+def attach_act_file(db: Session, read_id: str, content: bytes, filename: str, username: str) -> Dict[str, Any]:
+    """Adjunta el original a un acta ya leída. Debe ser el mismo archivo que se leyó (misma huella)."""
+    import hashlib
+
+    record = _get_read(db, read_id)
+    if hashlib.sha256(content).hexdigest() != record.sha256:
+        raise ValueError("Este archivo no es el mismo que se leyó para esta acta. Suba el archivo original exacto.")
+    if len(content) > ACT_FILE_MAX_BYTES:
+        raise ValueError("El archivo supera el límite de 25 MB.")
+    save_act_file(db, record, content, filename, username)
+    return {"read_id": str(record.id), "has_file": True}
+
+
+def get_act_file(db: Session, read_id: str):
+    from db.models_council import CouncilActFile
+
+    record = _get_read(db, read_id)
+    row = db.query(CouncilActFile).filter(CouncilActFile.read_id == record.id).first()
+    if row is None:
+        raise LookupError("Esta acta no tiene el archivo original guardado.")
+    return record, row
+
+
+def _cuantos(valor) -> int:
+    return len(valor) if isinstance(valor, (list, tuple)) else int(valor or 0)
+
+
+def act_archive(db: Session) -> List[Dict[str, Any]]:
+    """Todas las actas digitalizadas, de todas las instancias y estados, con su archivo original si está."""
+    from db.models_council import CouncilActFile
+
+    files = {row.read_id: row for row in db.query(CouncilActFile.read_id, CouncilActFile.filename,
+                                                    CouncilActFile.size_bytes).all()}
+    rows = db.query(CouncilActRead).order_by(CouncilActRead.act_date.desc().nullslast(), CouncilActRead.created_at.desc()).all()
+    result = []
+    for row in rows:
+        reading = row.reading or {}
+        outcome = row.result or {}
+        archivo = files.get(row.id)
+        result.append({
+            "read_id": str(row.id), "filename": row.filename, "instance": row.instance,
+            "instance_label": INSTANCES.get(row.instance, INSTANCES["OTRA"])["label"],
+            "act_number": row.act_number, "act_date": row.act_date.isoformat() if row.act_date else None,
+            "status": row.status,
+            # Confirmada: compromisos creados o enlazados; pendiente o histórica: los que propuso la lectura.
+            "commitments": (_cuantos(outcome.get("created")) + _cuantos(outcome.get("linked"))) if row.status == "CONFIRMADA"
+            else len(reading.get("proposals", [])),
+            "created_by": row.created_by, "created_at": row.created_at.isoformat() if row.created_at else None,
+            "confirmed_by": row.confirmed_by, "confirmed_at": row.confirmed_at.isoformat() if row.confirmed_at else None,
+            "has_file": archivo is not None, "file_size": archivo.size_bytes if archivo else None,
+        })
+    return result
 
 
 def _read_key(read_id: str):
@@ -501,6 +586,7 @@ def store_historical_act(db: Session, content: bytes, filename: str, username: s
     db.add(record)
     db.commit()
     db.refresh(record)
+    save_act_file(db, record, content, filename, username)
     return {"read_id": str(record.id), "status": record.status, "duplicate": False, "filename": record.filename,
             "instance": record.instance, "act_number": record.act_number,
             "act_date": reading.act_date, "proposals": len(data["proposals"]),

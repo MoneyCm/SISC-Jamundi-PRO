@@ -16,6 +16,7 @@ export const INSTITUTIONAL_PAGE_LABELS = {
     intelligence: 'Contexto comparado',
     alerts: 'Bandeja de alertas',
     council_commitments: 'Compromisos y acuerdos',
+    actas_archive: 'Archivo de actas',
     narrative_alerts: 'Resúmenes para WhatsApp',
     inspecciones: 'Inspecciones de Policía',
     comisarias: 'Comisarías de Familia',

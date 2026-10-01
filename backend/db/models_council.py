@@ -6,7 +6,7 @@ sesión; cada cambio queda en el historial con autor, fecha y nota.
 """
 import uuid
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text, func, LargeBinary
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from db.session import Base
@@ -64,6 +64,22 @@ class CouncilActRead(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     confirmed_by = Column(String(120))
     confirmed_at = Column(DateTime(timezone=True))
+
+
+class CouncilActFile(Base):
+    """Archivo original (PDF o Word) de un acta leída, para consultarla completa desde el archivo de actas."""
+
+    __tablename__ = "council_act_files"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    read_id = Column(UUID(as_uuid=True), ForeignKey("council_act_reads.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    filename = Column(String(255), nullable=False)
+    content_type = Column(String(120))
+    size_bytes = Column(Integer, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    content = Column(LargeBinary, nullable=False)
+    uploaded_by = Column(String(120), nullable=False)
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class CouncilCommitmentUpdate(Base):

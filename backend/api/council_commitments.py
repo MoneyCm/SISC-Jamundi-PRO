@@ -135,6 +135,56 @@ def list_act_reads(
     return service.list_act_reads(db, status)
 
 
+@router.get("/acts/archive")
+def act_archive(db: Session = Depends(get_db), current_user: User = Depends(require_role(ACTAS_ROLES))):
+    """Archivo de actas: todas las digitalizadas, de todas las instancias, con su archivo original si está."""
+    return service.act_archive(db)
+
+
+@router.get("/acts/{read_id}/file")
+async def download_act_file(
+    read_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
+):
+    from urllib.parse import quote
+
+    from fastapi.responses import Response
+
+    try:
+        record, archivo = service.get_act_file(db, read_id)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from error
+    await log_audit(db, "COUNCIL_ACT_FILE_DOWNLOADED", actor_id=str(current_user.id), module="COUNCIL",
+                    target={"read_id": read_id, "filename": archivo.filename}, level=2, request=request)
+    return Response(content=archivo.content, media_type=archivo.content_type or "application/octet-stream",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(archivo.filename)}"})
+
+
+@router.post("/acts/{read_id}/file")
+async def attach_act_file(
+    read_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
+):
+    """Adjunta el archivo original a un acta ya leída (debe ser exactamente el mismo archivo)."""
+    content = await file.read(25 * 1024 * 1024 + 1)
+    if not content:
+        raise HTTPException(400, "El archivo está vacío.")
+    try:
+        result = service.attach_act_file(db, read_id, content, file.filename or "acta", current_user.username)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    await log_audit(db, "COUNCIL_ACT_FILE_ATTACHED", actor_id=str(current_user.id), module="COUNCIL",
+                    target={"read_id": read_id, "filename": file.filename}, level=1, request=request)
+    return result
+
+
 @router.get("/acts/{read_id}")
 def open_act_read(read_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_role(ACTAS_ROLES))):
     try:
