@@ -48,9 +48,6 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
     fechaCorteInicio,
     fechaCorteFin,
     fechaExtraccion,
-    nombreArchivo,
-    hashArchivo,
-    versionBoletin
   } = stats;
 
   const formatIsoDate = (isoStr?: string, withYear = false) => {
@@ -370,10 +367,10 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                 <tr>
                   <th className="px-3 py-1.5 font-bold uppercase">{selectedConducta === 'Todos' ? 'Delito' : 'Barrio'}</th>
                   <th className="px-2 py-1.5 font-bold uppercase text-center">Mismo Per. {prevYear}</th>
-                  <th className="px-2 py-1.5 font-bold uppercase text-center">Per. Actual</th>
-                  <th className="px-2 py-1.5 font-bold uppercase text-center">Per. Anterior</th>
-                  <th className="px-2 py-1.5 font-bold uppercase text-center">Var. YoY</th>
-                  <th className="px-2 py-1.5 font-bold uppercase text-center">{isWeekly ? 'Var. WoW' : 'Var. PoP'}</th>
+                  <th className="px-2 py-1.5 font-bold uppercase text-center">{isWeekly ? 'Esta semana' : 'Este periodo'}</th>
+                  <th className="px-2 py-1.5 font-bold uppercase text-center">{isWeekly ? 'Semana anterior' : 'Periodo anterior'}</th>
+                  <th className="px-2 py-1.5 font-bold uppercase text-center">Frente a {prevYear}</th>
+                  <th className="px-2 py-1.5 font-bold uppercase text-center">{isWeekly ? 'Frente a la semana anterior' : 'Frente al periodo anterior'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 border border-gray-200">
@@ -398,7 +395,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
             
             <div className="bg-blue-50 border border-blue-100 p-2 rounded-md shadow-sm">
                <p className="text-[10px] text-blue-900 leading-tight">
-                  <strong>Dif. YoY:</strong> Periodo actual vs Mismo periodo año anterior. <strong>Dif. PoP:</strong> Periodo actual vs Periodo inmediatamente anterior.
+                  <strong>Frente a {prevYear}:</strong> diferencia con las mismas fechas del año anterior. <strong>{isWeekly ? 'Frente a la semana anterior' : 'Frente al periodo anterior'}:</strong> diferencia con {isWeekly ? 'la semana' : 'el periodo'} inmediatamente anterior.
                </p>
             </div>
         </div>
@@ -441,16 +438,12 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
               <p><strong>Fuente:</strong> Registros oficiales (SIEDCO - Policía Nacional - Jamundí).</p>
               <p><strong>Página 2</strong> | Observatorio del Delito - Alcaldía de Jamundí</p>
            </div>
-           <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-1.5 text-[8px] text-gray-400 font-mono mt-1">
-              <div>
-                 <strong>Archivo origen:</strong> {nombreArchivo || 'SABANAS MANUALES.xlsx'}<br/>
-                 <strong>Hash de contenido:</strong> {hashArchivo || 'hash_manual'}
-              </div>
-              <div className="text-right">
-                 <strong>Fecha de extracción:</strong> {fechaExtraccion || 'No disponible'}<br/>
-                 <strong>Versión del boletín:</strong> {versionBoletin || 'v1.0 (Borrador)'}
-              </div>
-           </div>
+           {/* El archivo de origen, su huella y la versión quedan en el registro interno de la publicación. */}
+           {fechaExtraccion && (
+              <p className="border-t border-gray-100 pt-1.5 text-[8px] text-gray-400 mt-1">
+                 <strong>Fecha de extracción de la base:</strong> {fechaExtraccion}
+              </p>
+           )}
         </div>
 
       </div>
@@ -479,7 +472,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
           </div>
 
           {siscPublication && (
-            <div className={`mb-4 border-l-4 px-3 py-2 text-[10px] ${siscPublication.governance.publication_ready ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-amber-500 bg-amber-50 text-amber-900'}`}>
+            <div data-html2canvas-ignore="true" className={`solo-pantalla mb-4 border-l-4 px-3 py-2 text-[10px] ${siscPublication.governance.publication_ready ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-amber-500 bg-amber-50 text-amber-900'}`}>
               <strong>{siscPublication.governance.publication_ready ? 'Fuentes alineadas.' : 'Revisión de cobertura pendiente.'}</strong>{' '}
               {siscPublication.governance.publication_ready
                 ? 'El periodo está listo para generar el boletín público.'
@@ -589,7 +582,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
 
           {siscPublication && (
             <section className="mb-3">
-              <h3 className="font-extrabold text-xs text-gray-800 mb-2">COBERTURA DEL BOLETÍN</h3>
+              <h3 className="font-extrabold text-xs text-gray-800 mb-2">FUENTES Y FECHAS DE CORTE</h3>
               <div className="grid grid-cols-3 gap-2">
                 {siscPublication.sources.filter(source => source.coverage_status !== 'not_applicable').map(source => (
                   <div key={source.code} className={`border-l-4 px-2.5 py-2 ${coverageTone[source.coverage_status]}`}>
@@ -604,7 +597,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
 
           {siscPublication && (
             <section
-              className={`border-l-4 px-4 py-3 text-white flex flex-col justify-center ${familyIndicators.length === 0 ? 'min-h-[170px]' : 'min-h-[90px]'}`}
+              className="border-l-4 px-4 py-3 text-white flex flex-col justify-center min-h-[70px]"
               style={{ backgroundColor: colorAzul, borderColor: colorAmarillo }}
             >
               <h3 className="text-[10px] font-extrabold uppercase" style={{ color: colorAmarillo }}>Lectura del periodo</h3>
@@ -614,6 +607,9 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
 
           <div className="mt-auto border border-gray-200 bg-gray-50 px-3 py-2 text-[9px] text-gray-600">
             <strong>Lectura correcta:</strong> los valores de Seguridad, Inspecciones y Comisarías describen gestiones distintas y no deben sumarse entre sí. Las cifras son agregadas y anonimizadas; cada fuente conserva su fecha de corte y advertencias de cobertura.
+          </div>
+          <div className="mt-2 border border-red-200 bg-red-50 px-3 py-2 text-[9px] text-red-900">
+            <strong>¿Necesitas ayuda?</strong> Emergencias <strong>123</strong> · Mujeres víctimas de violencia <strong>155</strong> · Niñas, niños y adolescentes (ICBF) <strong>141</strong> · Comisarías de Familia: Centro Comercial Caña Dulce, lunes a viernes.
           </div>
 
           <div className="absolute bottom-[40px] left-[50px] right-[50px] border-t border-gray-200 pt-3 flex justify-between items-center text-[9px] text-gray-400">
@@ -709,17 +705,17 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
             </p>
           </div>
 
-          {/* DIAGNÓSTICO ESTRATÉGICO PARA CONSEJO DE SEGURIDAD */}
+          {/* CÓMO VA EL PLAN */}
           <div
             className="border-l-4 px-4 py-2.5 text-white mb-3.5 rounded-r-md shadow-sm"
             style={{ backgroundColor: colorAzul, borderColor: colorAmarillo }}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: colorAmarillo }}>
-                DIAGNÓSTICO ESTRATÉGICO PARA CONSEJO DE SEGURIDAD
+                CÓMO VA EL PLAN AL CORTE
               </span>
               <span className="text-[9px] bg-white/20 px-2 py-0.5 rounded font-mono">
-                Avance: {stats.pisccTracking.cutoffDescription}{stats.pisccTracking.semanasTranscurridas ? ` (${stats.pisccTracking.semanasTranscurridas}/52 sem)` : ''}
+                Avance: {stats.pisccTracking.cutoffDescription}
               </span>
             </div>
             <p className="text-[10.5px] font-medium leading-relaxed">
@@ -818,7 +814,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                 Criterio Metodológico de Proyección
               </h3>
               <p className="text-[9px] text-gray-600 leading-relaxed">
-                Homicidios, hurto a motocicletas y lesiones se cuentan en hechos únicos de la sábana policial; las demás, con su fuente y su corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
+                Cada indicador se mide con la misma fuente de su línea base 2023: MinDefensa / Policía Nacional (víctimas, hasta el último mes publicado) y, para convivencia, los comparendos del RNMC. Cada uno conserva su fecha de corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
               </p>
             </div>
 
@@ -829,7 +825,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
               </h3>
               <p className="text-[9px] text-gray-600 leading-relaxed">
                 {stats.pisccTracking.fueraDeTrayectoria.length
-                  ? <>Se apartan de la meta: <strong>{stats.pisccTracking.fueraDeTrayectoria.join(', ')}</strong>. Las recomendaciones del Observatorio sobre estos indicadores se presentan al Consejo de Seguridad.</>
+                  ? <>Se apartan de la meta: <strong>{stats.pisccTracking.fueraDeTrayectoria.join(', ')}</strong>.</>
                   : 'Ningún indicador medido se aparta de su meta al corte de este boletín.'}
               </p>
             </div>
@@ -847,7 +843,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
 
           {/* FOOTER */}
           <div className="absolute bottom-[40px] left-[50px] right-[50px] border-t border-gray-200 pt-3 flex justify-between items-center text-[9px] text-gray-400">
-            <p><strong>Fuente:</strong> Sábana policial (hechos únicos), MinDefensa y RNMC | Plan Integral de Seguridad y Convivencia Ciudadana (PISCC), tabla 16.</p>
+            <p><strong>Fuente:</strong> MinDefensa / Policía Nacional (datos.gov.co) y RNMC | Plan Integral de Seguridad y Convivencia Ciudadana (PISCC), tabla 16.</p>
             <p><strong>Página {pisccPage}</strong> | Observatorio del Delito - Alcaldía de Jamundí</p>
           </div>
         </div>

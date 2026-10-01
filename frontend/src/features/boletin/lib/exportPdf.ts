@@ -25,7 +25,7 @@ async function waitForChartsToFit(root: HTMLElement, maxMs = 5000) {
 
 // Lo que la hoja de impresión oculta o muestra (clases print:* de Tailwind y ayudas de boletin.css).
 function applyPrintLook(page: HTMLElement) {
-  page.querySelectorAll<HTMLElement>('[class*="print:hidden"], .hide-on-print').forEach((node) => { node.style.display = 'none'; });
+  page.querySelectorAll<HTMLElement>('[class*="print:hidden"], .hide-on-print, .solo-pantalla').forEach((node) => { node.style.display = 'none'; });
   page.querySelectorAll<HTMLElement>('[class*="print:block"]').forEach((node) => { node.style.display = 'block'; });
   Object.assign(page.style, {
     width: `${PAGE_WIDTH}px`, maxWidth: `${PAGE_WIDTH}px`, height: `${PAGE_HEIGHT}px`,
