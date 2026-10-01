@@ -207,3 +207,10 @@
   width: 900px !important;
   max-width: 900px !important;
 }
+
+/* Mensajes para quien arma el boletín: se ven en pantalla, no salen al imprimir. */
+@media print {
+  .solo-pantalla {
+    display: none !important;
+  }
+}
