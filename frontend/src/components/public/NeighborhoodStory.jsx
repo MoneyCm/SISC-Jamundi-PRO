@@ -105,6 +105,16 @@ const NeighborhoodStory = ({ name, profile, municipalTotal, shareUrl, onNavigate
         }
     };
 
+    if (profile?.suppressed) {
+        return (
+            <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
+                <p className="text-xs font-black uppercase tracking-wide">{name}</p>
+                <p className="mt-2 text-base font-bold leading-7">{profile.suppressed.message}</p>
+                <p className="mt-2 text-sm font-semibold">Así se protege la identidad de las víctimas cuando hay muy pocos casos.</p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div>

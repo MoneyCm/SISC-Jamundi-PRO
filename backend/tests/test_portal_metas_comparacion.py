@@ -51,3 +51,33 @@ def test_delito_desconocido_usa_homicidio(db):
         pytest.skip("Sin cifras municipales de MinDefensa en esta base")
     assert comparacion_publica.comparar(db, "inventado")["delito"] == "homicidio"
     assert comparacion_publica._nombre("VALLE DEL CAUCA") == "Valle del Cauca"
+
+
+def _tablero(db, **filtros):
+    base = dict(year=None, period_mode="year_to_date", comparison="same_period_previous_year", start_date=None,
+                end_date=None, conducta=None, zona=None, territorio=None, include_map=False, min_location_count=3)
+    return analitica.get_public_dashboard(Response(), db=db, **{**base, **filtros})
+
+
+def test_barrio_con_pocos_casos_no_publica_cifras(db):
+    """Caso real: Libertadores en los últimos 7 días mostraba "1 homicidio"."""
+    todos = _tablero(db)
+    barrios = [t["name"] for t in todos["filters"]["available"]["territories"]]
+    if not barrios:
+        pytest.skip("Sin sábana en esta base")
+    for barrio in barrios:
+        datos = _tablero(db, period_mode="last_7_days", territorio=barrio)
+        if datos.get("suppressed"):
+            assert datos["kpis"]["total_hechos"] is None and datos["conductas"] == [] and datos["weekday"] == []
+            assert "privacidad" in datos["suppressed"]["message"]
+            break
+    else:
+        pytest.skip("Ningún barrio con menos de 3 casos en 7 días")
+
+
+def test_la_lista_de_barrios_no_depende_del_periodo(db):
+    anual = _tablero(db)["filters"]["available"]["territories"]
+    semana = _tablero(db, period_mode="last_7_days")["filters"]["available"]["territories"]
+    if not anual:
+        pytest.skip("Sin sábana en esta base")
+    assert [t["name"] for t in anual] == [t["name"] for t in semana]

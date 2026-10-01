@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     buildCitizenInsights,
     filtersToSearchParams,
+    formatNumber,
     formatVariation,
     parsePublicFilters,
 } from './citizenInsights.js';
@@ -64,4 +65,10 @@ test('weekly insight uses the last complete week and skips non-consecutive weeks
     const gap = buildCitizenInsights({ ...base, weekly_trend: [week('S32', '2026-08-03', 2), week('S34', '2026-08-17', 1)] }, 4)
         .find((item) => item.id === 'latest-week');
     assert.match(gap.summary, /No hay una semana anterior completa/);
+});
+
+test('sin dato se muestra con raya, no con cero', () => {
+    assert.equal(formatNumber(null), '—');
+    assert.equal(formatNumber(undefined), '—');
+    assert.equal(formatNumber(0), '0');
 });
