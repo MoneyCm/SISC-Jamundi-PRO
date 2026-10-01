@@ -834,7 +834,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
           {/* CONTROL Y TRAZABILIDAD */}
           <div className="mt-auto border border-gray-200 bg-gray-50 px-3 py-2 text-[9px] text-gray-600 flex justify-between items-center">
             <div>
-              <strong>Control Documental:</strong> Elaboró: César Alfonso Forero Molano (Obs. Delito) | Aprobó: Carolina Obando Gómez (Secretaria de Seguridad)
+              <strong>Control documental:</strong> Elaboró: Observatorio del Delito | Aprobó: Secretaría de Seguridad y Convivencia
             </div>
             <div className="font-mono text-[8px] text-gray-500">
               PISCC Jamundí 2024–2027 · Plan de Desarrollo Municipal
