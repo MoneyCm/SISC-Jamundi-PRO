@@ -6,6 +6,8 @@ const NAV_ITEMS = [
     { label: 'Explorar datos', page: 'transparency' },
     { label: 'Mapa', page: 'transparency', hash: 'mapa' },
     { label: 'Mi barrio', page: 'hub', hash: 'mi-barrio' },
+    { label: 'Metas del plan', page: 'hub', hash: 'metas' },
+    { label: 'Comparar', page: 'hub', hash: 'comparar' },
     { label: 'SISC en cifras', page: 'sisc-cifras' },
     { label: 'Boletines', page: 'technical-bulletins' },
     { label: 'Datos abiertos', page: 'open-data' },
