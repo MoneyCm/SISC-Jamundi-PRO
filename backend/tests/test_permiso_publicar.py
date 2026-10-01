@@ -65,3 +65,17 @@ def test_descartar_borrador_solo_quien_publica_y_solo_borradores(monkeypatch):
     with pytest.raises(HTTPException) as error:
         asyncio.run(sisc_cifras.discard_draft(publicado.id, MagicMock(), db, usuario))
     assert error.value.status_code == 409 and publicado.status == "PUBLISHED"
+
+
+def test_gestor_de_actas_solo_en_las_rutas_de_actas():
+    from api import council_commitments as cc
+    guardias = {}
+    for ruta in cc.router.routes:
+        for d in ruta.dependant.dependencies:
+            roles = getattr(d.call, "allowed_roles", None)
+            if roles is not None:
+                guardias[(tuple(sorted(ruta.methods)), ruta.path)] = set(roles)
+    actas = {k: v for k, v in guardias.items() if "/acts" in k[1]}
+    otras = {k: v for k, v in guardias.items() if "/acts" not in k[1]}
+    assert len(actas) == 6 and all("ACTAS_OPERATOR" in v for v in actas.values())
+    assert otras and all("ACTAS_OPERATOR" not in v for v in otras.values())

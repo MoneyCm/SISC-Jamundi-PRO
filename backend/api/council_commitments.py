@@ -18,6 +18,8 @@ router = APIRouter()
 
 # Opción (a): el equipo de la Secretaría actualiza el seguimiento.
 FOLLOWUP_ROLES = ["ANALYST", "DIRECTIVE", "FUNC_ADMIN", "TI_ADMIN"]
+# Subir, leer y archivar actas: también el gestor de actas (personal operativo), sin el resto del seguimiento.
+ACTAS_ROLES = FOLLOWUP_ROLES + ["ACTAS_OPERATOR"]
 
 
 class StatusUpdate(BaseModel):
@@ -70,7 +72,7 @@ async def read_act_endpoint(
     instance: Optional[str] = Form(default=None),
     use_ocr: bool = Form(default=False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(FOLLOWUP_ROLES)),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
 ):
     """Lee un acta (Word o PDF) y devuelve propuestas de compromisos para revisión. No guarda compromisos.
 
@@ -105,7 +107,7 @@ async def store_historical_act(
     file: UploadFile = File(...),
     use_ocr: bool = Form(default=False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(FOLLOWUP_ROLES)),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
 ):
     """Acta de años anteriores: se guarda solo para medir qué temas vuelven; no crea compromisos."""
     content = await file.read()
@@ -128,13 +130,13 @@ async def store_historical_act(
 def list_act_reads(
     status: Optional[str] = Query(default="PENDIENTE", pattern="^(PENDIENTE|CONFIRMADA|HISTORICA)$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(FOLLOWUP_ROLES)),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
 ):
     return service.list_act_reads(db, status)
 
 
 @router.get("/acts/{read_id}")
-def open_act_read(read_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_role(FOLLOWUP_ROLES))):
+def open_act_read(read_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_role(ACTAS_ROLES))):
     try:
         return service.open_act_read(db, read_id)
     except LookupError as error:
@@ -146,7 +148,7 @@ async def discard_act_read(
     read_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(FOLLOWUP_ROLES)),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
 ):
     try:
         service.discard_act_read(db, read_id)
@@ -165,7 +167,7 @@ async def confirm_act_endpoint(
     payload: ConfirmAct,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(FOLLOWUP_ROLES)),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
 ):
     try:
         result = service.confirm_act(
