@@ -2267,6 +2267,16 @@ def _mindefensa_source_filter(db: Session, target_municipio: str, anio: int):
     return source_filter, reference_source_id
 
 
+def _referencia_departamento(db, tipo_delito, anio, hasta_mes, codigo_local):
+    """El Valle del Cauca completo en los mismos meses; si falla, la comparación sigue sin él."""
+    from services.comparacion_publica import referencia_departamento
+    try:
+        return referencia_departamento(db, tipo_delito, anio, hasta_mes, codigo_local)
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        return {"available": False, "reason": "No fue posible calcular la tasa del Valle del Cauca."}
+
+
 @router.get("/stats")
 async def get_national_stats(
     municipio: str = "JAMUNDI",
@@ -2493,6 +2503,7 @@ async def get_national_stats(
             "territorial_benchmark": territorial_benchmark,
             "territorial_comparison": territorial_comparison,
             "national_benchmark": national_benchmark,
+            "departmental_benchmark": _referencia_departamento(db, row.tipo_delito, anio, period_end_month, local_code),
         })
 
     # 5. Datos específicos y trazabilidad de fuente

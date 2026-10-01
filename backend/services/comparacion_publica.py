@@ -98,3 +98,24 @@ def comparar(db: Session, delito: str = "homicidio", anio: Optional[int] = None)
                  "El puesto 1 es la tasa más alta del Valle."),
     }
 
+
+def referencia_departamento(db: Session, tipo_delito: str, anio: int, hasta_mes: int, codigo_local: str,
+                            departamento: str = VALLE) -> Dict:
+    """Tasa del departamento (todos sus municipios) en los mismos meses, y el puesto del municipio local."""
+    filas = db.query(NationalCrimeStats.codigo_dane, func.sum(NationalCrimeStats.cantidad)).filter(
+        NationalCrimeStats.source_id == SOURCE_ID, NationalCrimeStats.anio == anio,
+        NationalCrimeStats.tipo_delito == tipo_delito, NationalCrimeStats.mes <= hasta_mes,
+    ).group_by(NationalCrimeStats.codigo_dane).all()
+    if not filas:
+        return {"available": False, "reason": "MinDefensa no tiene cifras municipales de ese delito y año."}
+    ranking = national_municipal_ranking(year=anio, target_code=codigo_local, totals_by_code={c: int(t) for c, t in filas})
+    depto = [f for f in ranking if str(f["codigo_dane"]).startswith(departamento) and f.get("poblacion")]
+    if not depto:
+        return {"available": False, "reason": "Sin población DANE del departamento para ese año."}
+    casos = sum(int(f["casos"]) for f in depto)
+    poblacion = sum(int(f["poblacion"]) for f in depto)
+    orden = sorted(depto, key=lambda f: -(f["tasa_por_100k"] or 0))
+    puesto = next((i for i, f in enumerate(orden, start=1) if f["es_objetivo"]), None)
+    return {"available": True, "name": _nombre(depto[0]["departamento"]) or "Valle del Cauca", "cases": casos,
+            "population": poblacion, "rate_per_100k": rate_per_100k(casos, poblacion),
+            "position": puesto, "of": len(orden), "period_end_month": hasta_mes}

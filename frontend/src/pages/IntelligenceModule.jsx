@@ -293,10 +293,16 @@ const IntelligenceModule = () => {
                 : null,
             nationalRate: item.national_benchmark?.available
                 ? item.national_benchmark.national_rate_per_100k
-                : null
+                : null,
+            departmentalRate: item.departmental_benchmark?.available
+                ? item.departmental_benchmark.rate_per_100k
+                : null,
+            departmentalPosition: item.departmental_benchmark?.available ? item.departmental_benchmark.position : null,
+            departmentalOf: item.departmental_benchmark?.available ? item.departmental_benchmark.of : null,
         }));
     const hasRegionalReference = rateComparisonData.some(item => item.regionalRate != null);
     const hasNationalReference = rateComparisonData.some(item => item.nationalRate != null);
+    const hasDepartmentalReference = rateComparisonData.some(item => item.departmentalRate != null);
     const nationalComparableCount = rateComparisonData.filter(item => item.nationalRate != null).length;
 
     const fetchNationalRanking = async () => {
@@ -797,10 +803,10 @@ const IntelligenceModule = () => {
                     <div className="mb-5 flex flex-col gap-1">
                         <CardTitle className="flex items-center text-lg text-slate-800">
                             <BarChart2 className="mr-2 h-5 w-5 text-indigo-600" />
-                            {selectedMunicipioNombre} frente a la región y Colombia
+                            {selectedMunicipioNombre} frente a la región, el Valle del Cauca y Colombia
                         </CardTitle>
                         <p className="text-sm text-slate-600">
-                            Comparación por 100.000 habitantes. La referencia regional agrupa municipios comparables; la nacional usa el agregado oficial de Colombia.
+                            Comparación por 100.000 habitantes. La referencia regional agrupa municipios comparables; la del Valle del Cauca suma sus 42 municipios en los mismos meses; la nacional usa el agregado oficial de Colombia.
                         </p>
                     </div>
                     <div className={`mb-5 flex items-start gap-3 border-l-4 px-4 py-3 ${hasNationalReference ? 'border-amber-400 bg-amber-50 text-amber-950' : 'border-slate-300 bg-slate-100 text-slate-700'}`}>
@@ -833,10 +839,31 @@ const IntelligenceModule = () => {
                                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '14px' }} />
                                 <Bar name={selectedMunicipioNombre} dataKey="localRate" fill="#4338ca" radius={[3, 3, 0, 0]} maxBarSize={30} />
                                 {hasRegionalReference && <Bar name="Referencia regional" dataKey="regionalRate" fill="#0f766e" radius={[3, 3, 0, 0]} maxBarSize={30} />}
+                                {hasDepartmentalReference && <Bar name="Valle del Cauca" dataKey="departmentalRate" fill="#0284c7" radius={[3, 3, 0, 0]} maxBarSize={30} />}
                                 {hasNationalReference && <Bar name="Referencia nacional" dataKey="nationalRate" fill="#eab308" radius={[3, 3, 0, 0]} maxBarSize={30} />}
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
+                    {hasDepartmentalReference && (
+                        <div className="mt-4 overflow-x-auto">
+                            <table className="w-full min-w-[520px] text-left text-sm">
+                                <caption className="mb-2 text-left text-sm font-semibold text-slate-700">{selectedMunicipioNombre} en el Valle del Cauca (1 = tasa más alta de los 42 municipios)</caption>
+                                <thead className="bg-slate-100 text-xs uppercase text-slate-600">
+                                    <tr><th className="px-3 py-2">Conducta</th><th className="px-3 py-2 text-right">{selectedMunicipioNombre}</th><th className="px-3 py-2 text-right">Valle del Cauca</th><th className="px-3 py-2 text-right">Puesto en el Valle</th></tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {rateComparisonData.filter(item => item.departmentalRate != null).map(item => (
+                                        <tr key={item.delito}>
+                                            <td className="px-3 py-2 font-medium text-slate-800">{item.delito}</td>
+                                            <td className={`px-3 py-2 text-right font-bold tabular-nums ${item.localRate > item.departmentalRate ? 'text-rose-700' : 'text-emerald-700'}`}>{Number(item.localRate).toLocaleString('es-CO', { maximumFractionDigits: 1 })}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{Number(item.departmentalRate).toLocaleString('es-CO', { maximumFractionDigits: 1 })}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{item.departmentalPosition ? `${item.departmentalPosition} de ${item.departmentalOf}` : '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                     <p className="mt-3 text-xs text-slate-500">
                         Fuente de casos: MinDefensa. Denominadores: proyecciones municipales DANE. Use la tabla superior para explorar la región comparable o la clasificación nacional.
                     </p>

@@ -81,3 +81,14 @@ def test_la_lista_de_barrios_no_depende_del_periodo(db):
     if not anual:
         pytest.skip("Sin sábana en esta base")
     assert [t["name"] for t in anual] == [t["name"] for t in semana]
+
+
+def test_valle_en_contexto_comparado_igual_que_en_el_portal(db):
+    if not comparacion_publica.anios_disponibles(db):
+        pytest.skip("Sin cifras municipales de MinDefensa en esta base")
+    portal = comparacion_publica.comparar(db, "homicidio")
+    meses = 12 if portal["anio_completo"] else [i for i, m in enumerate(comparacion_publica.MESES, 1) if portal["periodo"].endswith(f"{m} de {portal['anio']}")][0]
+    valle = comparacion_publica.referencia_departamento(db, "Homicidio Intencional", portal["anio"], meses, comparacion_publica.JAMUNDI)
+    assert valle["available"] and valle["of"] == 42
+    assert valle["rate_per_100k"] == portal["valle"]["tasa"]
+    assert valle["position"] == portal["puesto_valle"]["puesto"]
