@@ -34,3 +34,34 @@ def test_no_se_aprueba_un_borrador_de_una_sabana_reemplazada(monkeypatch):
     with pytest.raises(HTTPException) as error:
         asyncio.run(sisc_cifras.approve_sisc_cifras_publication(uuid4(), MagicMock(), None, db, MagicMock()))
     assert error.value.status_code == 409 and "sábana anterior" in error.value.detail
+
+
+def test_descartar_borrador_solo_quien_publica_y_solo_borradores(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+    from uuid import uuid4
+
+    import pytest
+    from fastapi import HTTPException
+
+    from api import sisc_cifras
+
+    ruta = next(r for r in sisc_cifras.router.routes if getattr(r, "path", "").endswith("/discard"))
+    guardia = next(d.call for d in ruta.dependant.dependencies if getattr(d.call, "allowed_roles", None) is not None)
+    assert set(guardia.allowed_roles) == set(sisc_cifras.PUBLISHER_ROLES)
+
+    monkeypatch.setattr(sisc_cifras, "log_audit", AsyncMock())
+    usuario = SimpleNamespace(id=uuid4(), username="cobando")
+    borrador = SimpleNamespace(id=uuid4(), status="DRAFT", publication_json={"status": "DRAFT"}, edition_type="monthly",
+                               period_start="2026-08-01", period_end="2026-08-31")
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = borrador
+    resultado = asyncio.run(sisc_cifras.discard_draft(borrador.id, MagicMock(), db, usuario))
+    assert resultado["status"] == "SUPERSEDED" and borrador.publication_json["descartado_por"] == "cobando"
+
+    publicado = SimpleNamespace(id=uuid4(), status="PUBLISHED", publication_json={})
+    db.query.return_value.filter.return_value.first.return_value = publicado
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(sisc_cifras.discard_draft(publicado.id, MagicMock(), db, usuario))
+    assert error.value.status_code == 409 and publicado.status == "PUBLISHED"

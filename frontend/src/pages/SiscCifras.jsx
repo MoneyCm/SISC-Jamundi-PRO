@@ -11,6 +11,7 @@ import ExecutiveBrief from '../components/ExecutiveBrief';
 import PublicTikTok from '../components/PublicTikTok';
 import { briefPublicationPolicy } from '../utils/executiveBrief';
 import EditorialReview from '../components/EditorialReview';
+import BorradoresPendientes from '../components/BorradoresPendientes';
 import { accentuate } from '../utils/accentuate';
 import { publicFacingText, publicInsightText, buildWhatsappText as formatWhatsappText } from '../utils/siscCifrasText';
 
@@ -1108,6 +1109,29 @@ const SiscCifras = ({ publicMode = false }) => {
     setShareStatus('Cargado el boletín publicado: mismo periodo y mismas cifras que el PDF de la web.');
   };
 
+  // Abre un borrador guardado tal como se generó (sin recalcular), para revisarlo y aprobarlo.
+  const openDraft = (draft) => {
+    if (!draft?.publication_json) return;
+    const stored = draft.publication_json;
+    const sourceCodes = draft.source_codes?.length ? draft.source_codes : selectedSources;
+    const mode = stored.comparison_mode || 'auto';
+    setOutputMode('statistics');
+    setEdition(draft.edition_type);
+    setPeriodStart(draft.period_start);
+    setPeriodEnd(draft.period_end);
+    setComparisonMode(mode);
+    setSelectedSources(sourceCodes);
+    setInstitutionalPeriod('');
+    setPublication({ ...stored, status: 'DRAFT' });
+    setPublicationSelectionKey(siscCifrasSelectionKey({
+      edition: draft.edition_type, periodStart: draft.period_start, periodEnd: draft.period_end,
+      comparisonMode: mode, sourceCodes,
+    }));
+    setActiveSlide(0);
+    setError(null);
+    setShareStatus('Borrador abierto. Revise la sección «Revisión antes de publicar» más abajo.');
+  };
+
   const showsPublishedBulletin = Boolean(
     latestPublished && publication?.id && publication.id === latestPublished.id && publicationIsCurrent
   );
@@ -1221,6 +1245,10 @@ const SiscCifras = ({ publicMode = false }) => {
                 Ver la página de la web donde se publica
               </a>
             </section>
+          )}
+          {!publicMode && (
+            <BorradoresPendientes authHeaders={authHeaders} onOpen={openDraft}
+              refreshKey={`${publication?.id || ''}-${publication?.status || ''}`} openId={publication?.id} />
           )}
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-2 text-slate-900">
