@@ -62,3 +62,15 @@ def test_al_descartar_una_lectura_se_va_su_archivo(db):
     svc.discard_act_read(db, str(fila.id))
     db.expire_all()
     assert db.query(CouncilActFile).filter(CouncilActFile.read_id == fila.id).count() == 0
+
+
+def test_actas_faltantes_por_mes(db, monkeypatch):
+    monkeypatch.setattr(svc, "ACTAS_ESPERADAS", {"PRUEBA_MENSUAL": {"frecuencia": "mensual", "responsables": "Secretaría técnica"}})
+    for dia, nombre in ((date(2026, 1, 20), "Acta 01.pdf"), (date(2026, 3, 18), "Nota de Gemini – reunión (sin acta oficial)")):
+        db.add(CouncilActRead(filename=nombre, sha256=hashlib.sha256(nombre.encode()).hexdigest(), instance="PRUEBA_MENSUAL",
+                              act_date=dia, reading={}, status="CONFIRMADA", created_by="prueba"))
+    db.commit()
+    [faltan] = svc.actas_faltantes(db, hoy=date(2026, 5, 10))
+    assert faltan["desde"] == "2026-01" and faltan["responsables"] == "Secretaría técnica"
+    assert faltan["faltan"] == ["2026-02", "2026-04"]       # mayo aún no termina
+    assert faltan["sin_acta_oficial"] == ["2026-03"]

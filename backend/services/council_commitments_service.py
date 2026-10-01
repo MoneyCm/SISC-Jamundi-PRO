@@ -494,6 +494,40 @@ def get_act_file(db: Session, read_id: str):
     return record, row
 
 
+# Reuniones con periodicidad fija: de ellas se espera un acta por periodo y se sabe a quién pedirla.
+ACTAS_ESPERADAS = {
+    "CONSEJO_SEGURIDAD": {"frecuencia": "mensual", "responsables": "Luis Araque y Nelson"},
+}
+SIN_ACTA_OFICIAL = ("sin acta oficial", "nota de gemini")
+
+
+def actas_faltantes(db: Session, hoy: Optional[date] = None) -> List[Dict[str, Any]]:
+    """Por cada reunión mensual: meses sin acta y meses que solo tienen una nota (falta el acta oficial)."""
+    hoy = hoy or date.today()
+    ultimo_mes_cerrado = (hoy.year, hoy.month - 1) if hoy.month > 1 else (hoy.year - 1, 12)
+    resultado = []
+    for instancia, regla in ACTAS_ESPERADAS.items():
+        filas = db.query(CouncilActRead.act_date, CouncilActRead.filename).filter(
+            CouncilActRead.instance == instancia, CouncilActRead.act_date.isnot(None)).all()
+        if not filas:
+            continue
+        oficiales, notas = set(), set()
+        for fecha, nombre in filas:
+            mes = (fecha.year, fecha.month)
+            (notas if any(t in (nombre or "").lower() for t in SIN_ACTA_OFICIAL) else oficiales).add(mes)
+        inicio = min(oficiales | notas)
+        faltan, sin_oficial = [], []
+        anio, mes = inicio
+        while (anio, mes) <= ultimo_mes_cerrado:
+            if (anio, mes) not in oficiales:
+                (sin_oficial if (anio, mes) in notas else faltan).append(f"{anio}-{mes:02d}")
+            anio, mes = (anio, mes + 1) if mes < 12 else (anio + 1, 1)
+        resultado.append({"instance": instancia, "instance_label": INSTANCES.get(instancia, INSTANCES["OTRA"])["label"],
+                          "frecuencia": regla["frecuencia"], "responsables": regla["responsables"],
+                          "desde": f"{inicio[0]}-{inicio[1]:02d}", "faltan": faltan, "sin_acta_oficial": sin_oficial})
+    return resultado
+
+
 def _cuantos(valor) -> int:
     return len(valor) if isinstance(valor, (list, tuple)) else int(valor or 0)
 

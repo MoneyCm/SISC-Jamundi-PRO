@@ -1,7 +1,52 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Archive, Download, FileText, Loader2, Paperclip, RefreshCw, Upload } from 'lucide-react';
+import { AlertTriangle, Archive, CalendarX, ChevronDown, ChevronUp, Download, Eye, FileText, Loader2, Paperclip, RefreshCw, Upload } from 'lucide-react';
 import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
-import { ESTADOS_ACTA, anioActa, fechaActa, filtrarActas, resumenPorInstancia, sinActaOficial, tamanoArchivo } from '../utils/archivoActas';
+import { ESTADOS_ACTA, anioActa, esPdf, fechaActa, filtrarActas, mesLegible, resumenPorInstancia, sinActaOficial, tamanoArchivo } from '../utils/archivoActas';
+
+// Ficha de un acta: lo que el SISC leyó de ella (objetivo, compromisos y acuerdos, temas, advertencias).
+const FichaActa = ({ readId }) => {
+    const [ficha, setFicha] = useState(null);
+    const [error, setError] = useState('');
+    useEffect(() => {
+        let vigente = true;
+        apiJson(`/council-commitments/acts/${readId}`)
+            .then((data) => { if (vigente) setFicha(data); })
+            .catch((requestError) => { if (vigente) setError(requestError.message); });
+        return () => { vigente = false; };
+    }, [readId]);
+    if (error) return <p className="text-sm font-bold text-red-700">{error}</p>;
+    if (!ficha) return <p className="flex items-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={15} className="animate-spin" /> Cargando la ficha…</p>;
+    const compromisos = ficha.proposals || [];
+    const temas = Object.keys(ficha.topics || {});
+    return (
+        <div className="space-y-3 text-sm">
+            {ficha.objective && <p><span className="font-black text-slate-900">Objetivo de la reunión: </span><span className="text-slate-700">{ficha.objective}</span></p>}
+            <div>
+                <p className="font-black text-slate-900">Compromisos y acuerdos ({compromisos.length})</p>
+                {compromisos.length ? (
+                    <ol className="mt-1 list-decimal space-y-1.5 pl-5 text-slate-700">
+                        {compromisos.map((item, i) => (
+                            <li key={item.index ?? i}>
+                                <span className="font-semibold">{item.text}</span>
+                                {(item.responsible || item.deadline_text) && (
+                                    <span className="block text-xs text-slate-500">
+                                        {item.responsible ? `Responsable: ${item.responsible}` : ''}{item.responsible && item.deadline_text ? ' · ' : ''}{item.deadline_text ? `Plazo: ${item.deadline_text}` : ''}
+                                    </span>
+                                )}
+                            </li>
+                        ))}
+                    </ol>
+                ) : <p className="text-slate-500">El acta no registra compromisos ni acuerdos concretos.</p>}
+            </div>
+            {temas.length > 0 && <p><span className="font-black text-slate-900">Temas tratados: </span><span className="text-slate-700">{temas.join(', ')}</span></p>}
+            {(ficha.warnings || []).length > 0 && (
+                <ul className="space-y-1 text-xs font-semibold text-amber-800">
+                    {ficha.warnings.map((w) => <li key={w.code}>⚠ {w.message}</li>)}
+                </ul>
+            )}
+        </div>
+    );
+};
 
 // Archivo de actas: todas las actas digitalizadas de las reuniones (Consejo, comités, planeación), con su original.
 const ArchivoActas = ({ onNavigate }) => {
@@ -11,6 +56,8 @@ const ArchivoActas = ({ onNavigate }) => {
     const [aviso, setAviso] = useState('');
     const [filtros, setFiltros] = useState({ instancia: '', anio: '', estado: '' });
     const [trabajando, setTrabajando] = useState(null);
+    const [faltantes, setFaltantes] = useState([]);
+    const [abierta, setAbierta] = useState(null);
     const archivoRef = useRef(null);
     const destino = useRef(null);
 
@@ -18,7 +65,12 @@ const ArchivoActas = ({ onNavigate }) => {
         setCargando(true);
         setError('');
         try {
-            setActas(await apiJson('/council-commitments/acts/archive'));
+            const [archivo, faltan] = await Promise.all([
+                apiJson('/council-commitments/acts/archive'),
+                apiJson('/council-commitments/acts/missing').catch(() => []),
+            ]);
+            setActas(archivo);
+            setFaltantes(faltan);
         } catch (requestError) {
             setError(requestError.message || 'No se pudo consultar el archivo de actas.');
         } finally {
@@ -44,6 +96,27 @@ const ArchivoActas = ({ onNavigate }) => {
             enlace.click();
             setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (requestError) {
+            setAviso(requestError.message);
+        } finally {
+            setTrabajando(null);
+        }
+    };
+
+    // Los PDF se abren en una pestaña nueva; los Word se descargan.
+    const ver = async (acta) => {
+        if (!esPdf(acta)) { descargar(acta); return; }
+        const pestana = window.open('', '_blank');
+        setTrabajando(acta.read_id);
+        setAviso('');
+        try {
+            const response = await apiFetch(`/council-commitments/acts/${acta.read_id}/file?inline=true`);
+            if (!response.ok) throw new Error(await readApiError(response));
+            const blob = new Blob([await response.blob()], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            if (pestana) pestana.location.href = url; else window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (requestError) {
+            pestana?.close();
             setAviso(requestError.message);
         } finally {
             setTrabajando(null);
@@ -119,6 +192,21 @@ const ArchivoActas = ({ onNavigate }) => {
                 ))}
             </section>
 
+            {faltantes.filter((f) => f.faltan.length || f.sin_acta_oficial.length).map((f) => (
+                <section key={f.instance} className="border-l-4 border-red-400 bg-red-50 p-4" aria-label={`Actas que faltan: ${f.instance_label}`}>
+                    <h2 className="flex items-center gap-2 text-base font-black text-red-900"><CalendarX size={18} /> Actas que faltan del {f.instance_label}</h2>
+                    <p className="mt-1 text-sm font-semibold text-red-900/80">Se reúne cada mes (desde {mesLegible(f.desde)}). Pedirlas a: <strong>{f.responsables}</strong>.</p>
+                    {f.faltan.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                            {f.faltan.map((mes) => <span key={mes} className="rounded border border-red-200 bg-white px-2 py-0.5 text-xs font-bold text-red-800">{mesLegible(mes)}</span>)}
+                        </div>
+                    )}
+                    {f.sin_acta_oficial.length > 0 && (
+                        <p className="mt-2 text-xs font-bold text-red-900">Solo hay una nota, falta el acta oficial: {f.sin_acta_oficial.map(mesLegible).join(', ')}.</p>
+                    )}
+                </section>
+            ))}
+
             <section className="flex flex-wrap gap-3 border border-slate-200 bg-white p-4" aria-label="Filtros">
                 <label className="text-xs font-black uppercase text-slate-500">Instancia
                     <select value={filtros.instancia} onChange={filtro('instancia')} className="mt-1 block min-h-10 border border-slate-300 px-2 text-sm font-bold text-slate-800">
@@ -152,14 +240,15 @@ const ArchivoActas = ({ onNavigate }) => {
                             <tr>
                                 <th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Instancia</th><th className="px-3 py-2">Acta</th>
                                 <th className="px-3 py-2">Estado</th><th className="px-3 py-2 text-right">Compromisos</th>
-                                <th className="px-3 py-2">Cargada</th><th className="px-3 py-2">Original</th>
+                                <th className="px-3 py-2">Cargada</th><th className="px-3 py-2">Ver</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {visibles.map((acta) => {
                                 const estado = ESTADOS_ACTA[acta.status] || ESTADOS_ACTA.HISTORICA;
                                 return (
-                                    <tr key={acta.read_id} className="align-top">
+                                    <React.Fragment key={acta.read_id}>
+                                    <tr className="align-top">
                                         <td className="px-3 py-2 font-bold text-slate-900">{fechaActa(acta.act_date)}</td>
                                         <td className="px-3 py-2 text-slate-700">{acta.instance_label}</td>
                                         <td className="px-3 py-2">
@@ -170,19 +259,35 @@ const ArchivoActas = ({ onNavigate }) => {
                                         <td className="px-3 py-2 text-right font-bold tabular-nums text-slate-800">{acta.commitments}</td>
                                         <td className="px-3 py-2 text-xs font-semibold text-slate-500">{acta.created_by}<br />{acta.created_at ? fechaActa(acta.created_at) : ''}</td>
                                         <td className="px-3 py-2">
+                                            <div className="flex flex-wrap gap-1.5">
+                                            <button type="button" onClick={() => setAbierta(abierta === acta.read_id ? null : acta.read_id)} aria-expanded={abierta === acta.read_id}
+                                                className="inline-flex min-h-9 items-center gap-1 border border-slate-300 px-2.5 text-xs font-black text-slate-700 hover:bg-slate-50">
+                                                {abierta === acta.read_id ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Ficha
+                                            </button>
                                             {acta.has_file ? (
-                                                <button type="button" disabled={trabajando === acta.read_id} onClick={() => descargar(acta)}
-                                                    className="inline-flex min-h-9 items-center gap-1.5 border border-slate-300 px-2.5 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-40">
-                                                    {trabajando === acta.read_id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Descargar ({tamanoArchivo(acta.file_size)})
+                                                <>
+                                                <button type="button" disabled={trabajando === acta.read_id} onClick={() => ver(acta)}
+                                                    className="inline-flex min-h-9 items-center gap-1.5 bg-[#281FD0] px-2.5 text-xs font-black text-white hover:bg-[#1F18A8] disabled:opacity-40">
+                                                    {trabajando === acta.read_id ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />} Ver
                                                 </button>
+                                                <button type="button" disabled={trabajando === acta.read_id} onClick={() => descargar(acta)} title={`Descargar (${tamanoArchivo(acta.file_size)})`}
+                                                    className="inline-flex min-h-9 items-center gap-1.5 border border-slate-300 px-2.5 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+                                                    <Download size={14} />
+                                                </button>
+                                                </>
                                             ) : (
                                                 <button type="button" disabled={trabajando === acta.read_id} onClick={() => elegirOriginal(acta)} title="Debe ser exactamente el mismo archivo que se leyó"
                                                     className="inline-flex min-h-9 items-center gap-1.5 border border-dashed border-slate-400 px-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-40">
                                                     {trabajando === acta.read_id ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />} Adjuntar original
                                                 </button>
                                             )}
+                                            </div>
                                         </td>
                                     </tr>
+                                    {abierta === acta.read_id && (
+                                        <tr className="bg-slate-50"><td colSpan={7} className="px-4 py-3"><FichaActa readId={acta.read_id} /></td></tr>
+                                    )}
+                                    </React.Fragment>
                                 );
                             })}
                             {!visibles.length && <tr><td colSpan={7} className="px-3 py-8 text-center text-sm font-bold text-slate-500">No hay actas para este filtro.</td></tr>}
