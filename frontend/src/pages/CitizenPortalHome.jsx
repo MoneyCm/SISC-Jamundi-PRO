@@ -7,6 +7,8 @@ import {
 import CitizenFilterBar from '../components/public/CitizenFilterBar';
 import PublicPortalHeader from '../components/public/PublicPortalHeader';
 import NeighborhoodStory from '../components/public/NeighborhoodStory';
+import MetasPiscc from '../components/public/MetasPiscc';
+import ComparacionMunicipios from '../components/public/ComparacionMunicipios';
 import {
     buildCitizenInsights, DEFAULT_PUBLIC_FILTERS, filtersToSearchParams,
     formatNumber, formatVariation, parsePublicFilters, variationTone,
@@ -294,6 +296,10 @@ const CitizenPortalHome = ({ onNavigate, onLoginClick }) => {
                             </div>
                         </section>
                     ) : null}
+
+                    <MetasPiscc />
+
+                    <ComparacionMunicipios />
 
                     <section id="mi-barrio" className="scroll-mt-24 border border-slate-200 bg-white" aria-labelledby="neighborhood-title">
                         <div className="grid lg:grid-cols-[0.72fr_1.28fr]">

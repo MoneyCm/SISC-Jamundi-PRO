@@ -1409,6 +1409,33 @@ def open_data_filename(package, extension):
     return f"sisc-jamundi-datos-abiertos-{cutoff}-{digest}.{extension}"
 
 
+# Campos de las metas del PISCC que se publican (sin identificadores internos de carga).
+PISCC_PUBLICO = ("id", "label", "baseline_2023", "goal_2027", "status", "status_label", "detail", "count", "cutoff",
+                 "projection", "compares", "previous", "source", "closed_years", "reciente", "stale", "lag_days")
+
+
+@router.get("/public/piscc")
+def get_public_piscc(response: Response, db: Session = Depends(get_db)):
+    """Rendición de cuentas: metas de resultado del PISCC 2024-2027 y cómo van (datos agregados)."""
+    from services.piscc_goals import build_goals
+    metas = build_goals(db)
+    response.headers["Cache-Control"] = "public, max-age=600"
+    return {
+        "as_of": metas["as_of"], "source": metas["source"], "note": metas["note"],
+        "closed_years_source": metas["closed_years_source"], "closed_years_legend": metas["closed_years_legend"],
+        "indicators": [{k: item.get(k) for k in PISCC_PUBLICO} for item in metas["indicators"]],
+    }
+
+
+@router.get("/public/comparacion")
+def get_public_comparacion(response: Response, delito: str = "homicidio", anio: Optional[int] = None,
+                           db: Session = Depends(get_db)):
+    """Jamundí frente a otros municipios, el Valle y Colombia, en tasa por 100.000 habitantes (MinDefensa)."""
+    from services.comparacion_publica import comparar
+    response.headers["Cache-Control"] = "public, max-age=600"
+    return comparar(db, delito, anio)
+
+
 @router.get("/public/open-data")
 def get_public_open_data(
     response: Response,
