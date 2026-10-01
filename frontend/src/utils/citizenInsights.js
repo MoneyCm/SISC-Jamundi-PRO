@@ -71,7 +71,8 @@ export const filtersToSearchParams = (filters = {}, page = '') => {
 const numberFormatter = new Intl.NumberFormat('es-CO');
 const percentFormatter = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 });
 
-export const formatNumber = (value) => numberFormatter.format(Number(value) || 0);
+// Sin dato (por ejemplo, cifras ocultas por privacidad) se muestra '—', nunca 0.
+export const formatNumber = (value) => (value === null || value === undefined || value === '' ? '—' : numberFormatter.format(Number(value) || 0));
 
 export const formatVariation = (value) => {
     if (value === null || value === undefined || Number.isNaN(Number(value))) return 'Sin base comparable';

@@ -342,6 +342,20 @@ def _volumen_fuente(db: Session, start: date = None, end: date = None) -> dict:
 # ─────────────────────────────────────────────
 
 
+def _suprimir_territorio(payload: dict, minimo: int) -> dict:
+    """Respuesta sin cifras para un territorio con menos de `minimo` casos en el periodo."""
+    vacio = {"total_hechos": None, "total_registros": None, "homicidios": None, "tasa_homicidios": None,
+             "previous_total": None, "variation_pct": None}
+    return {**payload, "kpis": vacio,
+            "interannual": {**(payload.get("interannual") or {}), "current": None, "previous": None, "variation_pct": None},
+            "monthly_trend": [], "comparison_monthly_trend": [], "weekday": [], "weekly_trend": [],
+            "conductas": [], "priority_kpis": [], "zones": [], "territories": [],
+            "map": {**(payload.get("map") or {}), "points": [], "features": []},
+            "suppressed": {"reason": "territorio_pocos_casos", "minimum": minimo,
+                           "message": f"Este territorio tiene menos de {minimo} casos en el periodo elegido. Por privacidad no se "
+                                      "muestran cifras: elija un periodo más largo."}}
+
+
 @router.get("/public/dashboard")
 def get_public_dashboard(
     response: Response,
@@ -581,7 +595,7 @@ def get_public_dashboard(
         GROUP BY 1
         ORDER BY total DESC, name ASC
         LIMIT 300
-    """), catalog_params).fetchall()
+    """), {**catalog_params, "start": min_date, "end": max_date}).fetchall()
     available_year_rows = db.execute(text(f"""
         SELECT DISTINCT EXTRACT(YEAR FROM {source['date_col']})::int AS year
         FROM {source['source_table']}
@@ -677,7 +691,7 @@ def get_public_dashboard(
         if _is_publishable_location(row.name) and row.total >= min_location_count
     ]
 
-    return {
+    payload = {
         "metadata": {
             "source": "SÁBANA SIEDCO/PONAL - Policía Nacional",
             "basis": "BASE_MAESTRA_CONSOLIDADA",
@@ -772,6 +786,10 @@ def get_public_dashboard(
             "points": map_points,
         },
     }
+    if territorio and total_actual < min_location_count:
+        # Pocos casos en un barrio y un periodo corto pueden identificar un hecho y a sus víctimas.
+        return _suprimir_territorio(payload, min_location_count)
+    return payload
 
 
 @router.get("/estadisticas/kpis")

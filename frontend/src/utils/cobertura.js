@@ -21,7 +21,8 @@ export function textoCobertura(meses, { publico = false } = {}) {
 }
 
 // Por qué no se muestra la tasa de homicidios en el portal ciudadano.
-export function motivoSinTasa(metadata = {}, filtros = {}) {
+export function motivoSinTasa(metadata = {}, filtros = {}, suprimido = null) {
+    if (suprimido) return 'Sin cifras: muy pocos casos para este filtro.';
     if (metadata?.cobertura?.completa === false) return 'Sin tasa: faltan meses de datos en este periodo.';
     if (filtros?.territorio || filtros?.zona) return 'La tasa se calcula solo para todo el municipio.';
     return 'Sin proyección de población disponible para calcular la tasa.';

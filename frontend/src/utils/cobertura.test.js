@@ -32,3 +32,7 @@ test('motivo de la tasa en blanco', () => {
     assert.match(motivoSinTasa({ cobertura: { completa: true } }, { territorio: 'Terranova' }), /todo el municipio/);
     assert.match(motivoSinTasa({}), /proyección de población/);
 });
+
+test('sin cifras cuando el filtro tiene muy pocos casos', () => {
+    assert.match(motivoSinTasa({}, {}, { reason: 'territorio_pocos_casos' }), /muy pocos casos/);
+});
