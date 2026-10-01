@@ -34,7 +34,7 @@ CONJUNTOS = {
 }
 FUENTE = "MinDefensa / Policía Nacional (datos.gov.co), año completo"
 SEMAFORO = {
-    "VERDE": "En la meta",
+    "VERDE": "Dentro de la meta",
     "AMARILLO": "Mejor que 2023, sin llegar a la meta",
     "ROJO": "Igual o peor que la línea base 2023",
 }

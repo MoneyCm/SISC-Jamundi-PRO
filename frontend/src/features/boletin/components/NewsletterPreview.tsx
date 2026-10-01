@@ -50,6 +50,16 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
     fechaExtraccion,
   } = stats;
 
+  // Color del año anterior: mismo criterio que el estado del año en curso (la meta es un límite).
+  const COLOR_ANTERIOR: Record<string, string> = {
+    favorable: 'bg-emerald-50 text-emerald-800',
+    alerta: 'bg-amber-50 text-amber-800',
+    critico: 'bg-rose-50 text-rose-800',
+  };
+  const ETIQUETA_ANTERIOR: Record<string, string> = {
+    favorable: 'Dentro de la meta', alerta: 'En riesgo de pasar el límite', critico: 'Pasó el límite de la meta',
+  };
+
   const formatIsoDate = (isoStr?: string, withYear = false) => {
     if (!isoStr) return '';
     const parts = isoStr.split('-');
@@ -752,19 +762,19 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                   if (ind.status === 'favorable') {
                     statusBadge = (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[8.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
-                        🟢 En Meta / Favorable
+                        🟢 Dentro de la meta
                       </span>
                     );
                   } else if (ind.status === 'alerta') {
                     statusBadge = (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[8.5px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
-                        🟡 Desviación de la meta
+                        🟡 En riesgo de pasar el límite
                       </span>
                     );
                   } else if (ind.status === 'critico') {
                     statusBadge = (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[8.5px] font-bold bg-rose-50 text-rose-800 border border-rose-300">
-                        🔴 Meta superada en el año
+                        🔴 Pasó el límite de la meta
                       </span>
                     );
                   }
@@ -784,7 +794,8 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                       <td className="px-1.5 py-1.5 text-center font-bold text-blue-900 bg-blue-50/40">
                         {ind.meta2027.toLocaleString('es-CO')}
                       </td>
-                      <td className="px-1.5 py-1.5 text-center text-gray-600">
+                      <td className={`px-1.5 py-1.5 text-center font-bold ${COLOR_ANTERIOR[ind.statusPrev || ''] || 'text-gray-600'}`}
+                        title={ind.statusPrev ? ETIQUETA_ANTERIOR[ind.statusPrev] : undefined}>
                         {ind.countPrev !== null ? ind.countPrev.toLocaleString('es-CO') : '—'}
                       </td>
                       <td className="px-1.5 py-1.5 text-center font-black text-gray-900 bg-gray-100/50">
@@ -814,7 +825,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                 Criterio Metodológico de Proyección
               </h3>
               <p className="text-[9px] text-gray-600 leading-relaxed">
-                Cada indicador se mide con la misma fuente de su línea base 2023: MinDefensa / Policía Nacional (víctimas, hasta el último mes publicado) y, para convivencia, los comparendos del RNMC. Cada uno conserva su fecha de corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
+                La meta 2027 es un límite: el número de casos no debería pasar de esa cifra en el año. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual. La columna del año anterior usa los mismos colores para el mismo tramo de fechas. Cada indicador se mide con la misma fuente de su línea base 2023: MinDefensa / Policía Nacional (víctimas, hasta el último mes publicado) y, para convivencia, los comparendos del RNMC. Cada uno conserva su fecha de corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
               </p>
             </div>
 

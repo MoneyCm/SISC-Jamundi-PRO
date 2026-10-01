@@ -23,6 +23,7 @@ export interface BackendPisccGoal {
   days_elapsed?: number;
   source?: string;
   stale?: boolean;
+  previous_status?: BackendPisccGoal['status'];
 }
 
 export interface BackendPisccGoals {
@@ -39,6 +40,8 @@ export interface PisccIndicatorTracking {
   lineaBase2023: number;
   meta2027: number;
   countPrev: number | null;
+  /** Cómo iba el mismo tramo del año anterior frente a la meta (mismo criterio que el año en curso). */
+  statusPrev: PisccStatusType | null;
   countBase: number | null;
   diferenciaAbs: number | null;
   variacionPct: number | null;
@@ -96,6 +99,7 @@ export function toPisccTracking(
       lineaBase2023: goal.baseline_2023,
       meta2027: goal.goal_2027,
       countPrev: measured ? goal.previous ?? null : null,
+      statusPrev: measured && goal.previous_status ? STATUS[goal.previous_status] : null,
       countBase: measured ? goal.count! : null,
       diferenciaAbs: measured && goal.previous !== null && goal.previous !== undefined ? goal.count! - goal.previous : null,
       variacionPct: variation.pct,

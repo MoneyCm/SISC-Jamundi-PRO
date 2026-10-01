@@ -38,3 +38,17 @@ def test_la_sabana_queda_como_dato_reciente(monkeypatch):
     metas = {g["id"]: g for g in piscc_goals.build_goals(None, date(2026, 9, 30))["indicators"]}
     assert metas["homicidios"]["count"] == 96
     assert metas["homicidios"]["reciente"] == {"count": 78, "cutoff": "2026-09-12", "source": "Sábana policial (hechos únicos)"}
+
+
+def test_estado_del_anio_anterior_y_etiquetas_claras(monkeypatch):
+    monkeypatch.setattr(piscc_goals, "_police_rows", lambda db, today, sv=None: {})
+    monkeypatch.setattr(piscc_goals, "_external_rows", lambda db, today: {})
+    monkeypatch.setattr(piscc_goals, "_convivencia_anios", lambda db, base, meta, hoy: [])
+    from services import piscc_historico
+    monkeypatch.setattr(piscc_historico, "cargar", lambda archivo=None: _datos())
+    metas = {g["id"]: g for g in piscc_goals.build_goals(None, date(2026, 9, 30))["indicators"]}
+    # 2025 a agosto: 80 casos frente a la meta de 105 -> ritmo ≈120: en riesgo de pasar el límite.
+    assert metas["homicidios"]["previous"] == 80
+    assert metas["homicidios"]["previous_status"] == "DESVIACION"
+    assert metas["homicidios"]["previous_status_label"] == "En riesgo de pasar el límite"
+    assert "superada" not in " ".join(piscc_goals.STATUS_LABELS.values()).lower()

@@ -42,9 +42,10 @@ MIN_DAYS = 56  # 8 semanas
 STALE_DAYS = 45  # un corte más viejo que esto se advierte al lado de la cifra
 
 STATUS_LABELS = {
-    "EN_META": "En la meta",
-    "DESVIACION": "Desviación",
-    "SUPERADA": "Meta superada en el año",
+    # La meta es un límite (no pasar de N casos): "superada" se leía como "logro cumplido".
+    "EN_META": "Dentro de la meta",
+    "DESVIACION": "En riesgo de pasar el límite",
+    "SUPERADA": "Pasó el límite de la meta",
     "PRELIMINAR": "Preliminar",
     "SIN_DATOS": "Sin datos",
 }
@@ -220,6 +221,12 @@ def build_goals(db: Session, today: Optional[date] = None, source_version_id: Op
         if row.get("cutoff"):
             lag = (today - date.fromisoformat(row["cutoff"])).days
             row = {**row, "stale": lag > STALE_DAYS, "lag_days": lag}
+            if row.get("previous") is not None:
+                # El mismo tramo del año anterior, medido con la misma regla que el año en curso.
+                corte = date.fromisoformat(row["cutoff"])
+                corte_anterior = corte.replace(year=corte.year - 1, day=28 if (corte.month, corte.day) == (2, 29) else corte.day)
+                anterior = evaluate(int(row["previous"]), corte_anterior, goal)
+                row = {**row, "previous_status": anterior["status"], "previous_status_label": STATUS_LABELS[anterior["status"]]}
         if key == "convivencia":
             anios = _convivencia_anios(db, baseline, goal, today)
         else:
