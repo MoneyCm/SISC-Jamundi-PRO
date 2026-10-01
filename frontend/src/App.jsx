@@ -283,7 +283,7 @@ const App = () => {
         case 'public-inspections':
           return withPortalMenu(<PublicInspectionManagement onBack={() => navigatePublic('hub')} onNavigate={navigatePublic} />);
         case 'public-family-protection':
-          return withPortalMenu(<PublicFamilyProtection onBack={() => navigatePublic('hub')} />);
+          return withPortalMenu(<PublicFamilyProtection onBack={() => navigatePublic('hub')} onNavigate={navigatePublic} />);
         case 'victim-support':
           return withPortalMenu(<VictimRoutes onBack={() => navigatePublic('hub')} />);
         case 'reporting':
