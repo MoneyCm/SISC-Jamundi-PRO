@@ -35,6 +35,7 @@ const RegionalContext = lazy(() => import('./pages/RegionalContext'));
 const RNMCModule = lazy(() => import('./pages/RNMCModule'));
 const AlertsFeed = lazy(() => import('./pages/AlertsFeed'));
 const CouncilCommitments = lazy(() => import('./pages/CouncilCommitments'));
+const ArchivoActas = lazy(() => import('./pages/ArchivoActas'));
 const NarrativeAlerts = lazy(() => import('./pages/NarrativeAlerts'));
 const ComisariasModule = lazy(() => import('./pages/ComisariasModule'));
 const ObservatoryCenter = lazy(() => import('./pages/ObservatoryCenter'));
@@ -339,6 +340,8 @@ const App = () => {
         return <StatsModule userRoles={userRoles} dataLevel={dataLevel} />;
       case 'alerts':
         return <AlertsFeed onPageChange={setActivePage} setExternalFilters={setRnmcFilters} />;
+      case 'actas_archive':
+        return <ArchivoActas onNavigate={setActivePage} />;
       case 'council_commitments':
         return <CouncilCommitments onNavigate={puedeArmarResumenes ? setActivePage : undefined} />;
       case 'narrative_alerts':

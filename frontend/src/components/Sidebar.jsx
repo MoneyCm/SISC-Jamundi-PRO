@@ -1,6 +1,6 @@
 import React from 'react';
 import { INSTITUTIONAL_PAGE_LABELS } from '../utils/pageLabels';
-import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks, Compass, MessageSquareText, HeartHandshake } from 'lucide-react';
+import { LayoutDashboard, Map, FileText, Database, ChevronRight, X, Globe2, ShieldCheck, ShieldAlert, Layers, Bell, Activity, BarChart2, Newspaper, ClipboardCheck, ListChecks, Compass, MessageSquareText, HeartHandshake, Archive } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPublic, userRoles = [] }) => {
     const isAdmin = userRoles.includes('TI_ADMIN') || userRoles.includes('FUNC_ADMIN');
@@ -32,6 +32,7 @@ const Sidebar = ({ activePage, setActivePage, isOpen, onClose, onLogout, isPubli
         // Los arma el Observatorio; la dirección los recibe ya listos por WhatsApp.
         { id: 'narrative_alerts', label: 'Resúmenes para WhatsApp', icon: MessageSquareText, category: 'ESTRATEGIA', show: isAnalyst },
         // Aquí se suben cada mes los reportes del RNMC (comparendos y medidas gestionadas).
+        { id: 'actas_archive', label: 'Archivo de actas', icon: Archive, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective || userRoles.includes('ACTAS_OPERATOR') },
         { id: 'inspecciones', label: 'Inspecciones de Policía', icon: FileText, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective || isUploader },
         { id: 'comisarias', label: 'Comisarías de Familia', icon: HeartHandshake, category: 'GESTIÓN INSTITUCIONAL', show: isAnalyst || isDirective || isUploader || isSteward },
 

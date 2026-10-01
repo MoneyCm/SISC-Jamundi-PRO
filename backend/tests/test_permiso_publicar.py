@@ -77,5 +77,5 @@ def test_gestor_de_actas_solo_en_las_rutas_de_actas():
                 guardias[(tuple(sorted(ruta.methods)), ruta.path)] = set(roles)
     actas = {k: v for k, v in guardias.items() if "/acts" in k[1]}
     otras = {k: v for k, v in guardias.items() if "/acts" not in k[1]}
-    assert len(actas) == 6 and all("ACTAS_OPERATOR" in v for v in actas.values())
+    assert len(actas) >= 9 and all("ACTAS_OPERATOR" in v for v in actas.values())
     assert otras and all("ACTAS_OPERATOR" not in v for v in otras.values())
