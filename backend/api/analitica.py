@@ -1429,7 +1429,8 @@ def open_data_filename(package, extension):
 
 # Campos de las metas del PISCC que se publican (sin identificadores internos de carga).
 PISCC_PUBLICO = ("id", "label", "baseline_2023", "goal_2027", "status", "status_label", "detail", "count", "cutoff",
-                 "projection", "compares", "previous", "source", "closed_years", "reciente", "stale", "lag_days")
+                 "projection", "compares", "previous", "previous_status", "previous_status_label", "source",
+                 "closed_years", "reciente", "stale", "lag_days")
 
 
 @router.get("/public/piscc")

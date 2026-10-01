@@ -30,7 +30,7 @@ const MetasPiscc = () => {
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[#281FD0]">Rendición de cuentas</p>
                 <h2 id="metas-title" className="mt-1 text-3xl font-black tracking-normal text-slate-950">¿Se está cumpliendo el plan de seguridad?</h2>
                 <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
-                    Metas del Plan Integral de Seguridad y Convivencia Ciudadana (PISCC) 2024–2027: la cifra anual a la que el plan quiere llegar en 2027 y cómo va este año.
+                    Metas del Plan Integral de Seguridad y Convivencia Ciudadana (PISCC) 2024–2027: el máximo de casos al año que el plan se propone no superar en 2027, y cómo va este año.
                 </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -46,6 +46,12 @@ const MetasPiscc = () => {
                             </div>
                             <p className="mt-2 text-3xl font-black tabular-nums">{meta.count ?? '—'}</p>
                             <p className="text-xs font-bold opacity-80">{textoMeta(meta)}</p>
+                            {meta.previous != null && meta.cutoff && (
+                                <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded bg-white/70 px-2 py-0.5 text-[11px] font-bold" title={meta.previous_status_label || ''}>
+                                    <span className={`h-2 w-2 rounded-full ${PUNTOS[semaforoMeta(meta.previous_status)]}`} aria-hidden="true" />
+                                    Mismo periodo de {Number(String(meta.cutoff).slice(0, 4)) - 1}: {meta.previous}{meta.previous_status_label ? ` · ${meta.previous_status_label}` : ''}
+                                </p>
+                            )}
                             <p className="mt-2 text-sm font-semibold leading-5">{meta.detail}</p>
                             {meta.closed_years?.some((a) => a.completo) && (
                                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
@@ -65,6 +71,7 @@ const MetasPiscc = () => {
                 })}
             </div>
             <p className="mt-4 text-xs font-semibold leading-5 text-slate-500">
+                La meta 2027 es un límite: los casos del año no deberían pasar de esa cifra. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual.
                 Línea base 2023 y metas: {data.source}. Años cerrados: {data.closed_years_source}. {data.note}
             </p>
         </section>

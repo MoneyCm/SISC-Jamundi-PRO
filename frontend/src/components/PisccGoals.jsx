@@ -155,7 +155,7 @@ const PisccGoals = () => {
     return (
         <div className="space-y-4">
             <p className="text-sm font-semibold text-slate-600">
-                {data.source}. La meta es la cifra anual a la que el plan quiere llegar en 2027. Haga clic en un indicador para ver el detalle.
+                {data.source}. La meta es el máximo de casos al año que el plan se propone no superar en 2027. Haga clic en un indicador para ver el detalle.
             </p>
             {/* Celular: una tarjeta por meta, con los años y su semáforo a la vista; el detalle se abre al tocarla. */}
             <div className="space-y-3 md:hidden">
