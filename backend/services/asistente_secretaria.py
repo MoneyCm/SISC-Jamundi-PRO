@@ -183,9 +183,9 @@ def _indicadores_piscc(db: Session, exp: Expediente, corte: date, ids: List[str]
         if g.get("source"):
             lineas.append(f"Fuente del seguimiento: {g['source']}.")
         reciente = g.get("reciente")
-        if reciente:
-            lineas.append(f"Dato más reciente de la sábana (hechos únicos, otra unidad): {reciente['count']} al "
-                          f"{fecha_larga(reciente['cutoff'])}.")
+        if reciente and reciente.get("since") is not None:
+            lineas.append(f"Después del corte, la sábana registra {reciente['since']} hechos más del "
+                          f"{fecha_larga(reciente['since_start'])} al {fecha_larga(reciente['cutoff'])} (cuenta hechos, no víctimas).")
         cerrados = [f"{a['anio']}: {a['total']}" for a in g.get("closed_years") or [] if a.get("completo")]
         if cerrados:
             lineas.append(f"Años cerrados: {'; '.join(cerrados)} (línea base 2023: {g.get('baseline_2023')}; "

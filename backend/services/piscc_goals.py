@@ -17,7 +17,7 @@ Antes de 8 semanas el resultado es preliminar y no se señala desviación.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -211,10 +211,23 @@ def build_goals(db: Session, today: Optional[date] = None, source_version_id: Op
     except Exception:
         logger.exception("Metas PISCC: no se pudo leer la serie mensual de MinDefensa")
         mindefensa = {}
+    # Lo ocurrido después del corte de MinDefensa, según la sábana: hechos nuevos, no un total.
+    # MinDefensa cuenta víctimas y la sábana hechos; comparar sus totales confundía (215 frente a 198).
+    al_corte_mindefensa = {}
+    if mindefensa:
+        corte_mindefensa = date.fromisoformat(next(iter(mindefensa.values()))["cutoff"])
+        try:
+            al_corte_mindefensa = _police_rows(db, corte_mindefensa, source_version_id)
+        except Exception:
+            logger.exception("Metas PISCC: no se pudo contar la sábana al corte de MinDefensa")
     for key, row in mindefensa.items():
         sabana = measured.get(key) or {}
-        reciente = ({"count": sabana["count"], "cutoff": sabana["cutoff"], "source": sabana.get("source")}
-                    if sabana.get("count") is not None and sabana.get("cutoff", "") > row["cutoff"] else None)
+        base = al_corte_mindefensa.get(key) or {}
+        reciente = None
+        if sabana.get("count") is not None and sabana.get("cutoff", "") > row["cutoff"] and base.get("count") is not None:
+            desde = date.fromisoformat(row["cutoff"]) + timedelta(days=1)
+            reciente = {"count": sabana["count"], "cutoff": sabana["cutoff"], "source": sabana.get("source"),
+                        "since": max(int(sabana["count"]) - int(base["count"]), 0), "since_start": desde.isoformat()}
         measured[key] = {**row, "reciente": reciente}
     for key, label, baseline, goal, _indicator in TABLE_16:
         row = measured.get(key) or {"status": "SIN_DATOS", "detail": "La fuente de este indicador no tiene un corte disponible."}
