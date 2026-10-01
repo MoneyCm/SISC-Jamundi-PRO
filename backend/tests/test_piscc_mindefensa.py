@@ -29,15 +29,19 @@ def test_sin_meses_del_ano_en_curso_se_deja_la_sabana():
 
 
 def test_la_sabana_queda_como_dato_reciente(monkeypatch):
+    # La sábana: 75 hechos al 31 de agosto (corte de MinDefensa) y 78 al 12 de septiembre.
     monkeypatch.setattr(piscc_goals, "_police_rows", lambda db, today, sv=None: {
-        "homicidios": {**piscc_goals.evaluate(78, date(2026, 9, 12), 105), "source": "Sábana policial (hechos únicos)"}})
+        "homicidios": {**piscc_goals.evaluate(75 if today <= date(2026, 8, 31) else 78, min(today, date(2026, 9, 12)), 105),
+                       "source": "Sábana policial (hechos únicos)"}})
     monkeypatch.setattr(piscc_goals, "_external_rows", lambda db, today: {})
     monkeypatch.setattr(piscc_goals, "_convivencia_anios", lambda db, base, meta, hoy: [])
     from services import piscc_historico
     monkeypatch.setattr(piscc_historico, "cargar", lambda archivo=None: _datos())
     metas = {g["id"]: g for g in piscc_goals.build_goals(None, date(2026, 9, 30))["indicators"]}
     assert metas["homicidios"]["count"] == 96
-    assert metas["homicidios"]["reciente"] == {"count": 78, "cutoff": "2026-09-12", "source": "Sábana policial (hechos únicos)"}
+    reciente = metas["homicidios"]["reciente"]
+    # Se muestran los hechos nuevos después del corte de MinDefensa, no un total que se confunda con el oficial.
+    assert reciente["since"] == 3 and reciente["since_start"] == "2026-09-01" and reciente["cutoff"] == "2026-09-12"
 
 
 def test_estado_del_anio_anterior_y_etiquetas_claras(monkeypatch):

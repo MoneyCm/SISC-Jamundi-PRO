@@ -25,7 +25,7 @@ export interface BackendPisccGoal {
   stale?: boolean;
   previous_status?: BackendPisccGoal['status'];
   /** Cifra más reciente de la sábana (hechos), cuando MinDefensa va hasta un mes anterior. */
-  reciente?: { count: number; cutoff: string; source?: string } | null;
+  reciente?: { count: number; cutoff: string; source?: string; since?: number; since_start?: string } | null;
   closed_years?: { anio: number; total: number | null; completo: boolean; semaforo: 'VERDE' | 'AMARILLO' | 'ROJO' | null; semaforo_label?: string }[];
 }
 
@@ -49,7 +49,7 @@ export interface PisccIndicatorTracking {
   aniosCerrados: { anio: number; total: number | null; completo: boolean; semaforo: string | null; etiqueta: string }[];
   countBase: number | null;
   /** Dato más reciente de la sábana policial (hechos): se muestra aparte, no se compara con la meta. */
-  reciente: { count: number; cutoff: string } | null;
+  reciente: { since: number; desde: string; hasta: string } | null;
   diferenciaAbs: number | null;
   variacionPct: number | null;
   variacionStr: string;
@@ -112,7 +112,8 @@ export function toPisccTracking(
         etiqueta: year.semaforo_label || (year.completo ? '' : 'Año incompleto'),
       })),
       countBase: measured ? goal.count! : null,
-      reciente: measured && goal.reciente ? { count: goal.reciente.count, cutoff: goal.reciente.cutoff } : null,
+      reciente: measured && goal.reciente && goal.reciente.since !== undefined && goal.reciente.since_start
+        ? { since: goal.reciente.since, desde: goal.reciente.since_start, hasta: goal.reciente.cutoff } : null,
       diferenciaAbs: measured && goal.previous !== null && goal.previous !== undefined ? goal.count! - goal.previous : null,
       variacionPct: variation.pct,
       variacionStr: variation.text,

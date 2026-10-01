@@ -819,7 +819,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                         {hasData ? ind.countBase!.toLocaleString('es-CO') : '—'}
                         {hasData && ind.reciente && (
                           <span className="block text-[7.5px] font-semibold leading-tight text-gray-500">
-                            Sábana al {formatIsoDate(ind.reciente.cutoff)}: {ind.reciente.count.toLocaleString('es-CO')} hechos
+                            +{ind.reciente.since.toLocaleString('es-CO')} {ind.reciente.since === 1 ? 'hecho' : 'hechos'} del {formatIsoDate(ind.reciente.desde)} al {formatIsoDate(ind.reciente.hasta)} (sábana)
                           </span>
                         )}
                       </td>
@@ -847,7 +847,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                 Criterio Metodológico de Proyección
               </h3>
               <p className="text-[9px] text-gray-600 leading-relaxed">
-                La meta 2027 es un límite: el número de casos no debería pasar de esa cifra en el año. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual. Cuando MinDefensa va hasta un mes anterior al boletín, debajo del año en curso se muestra la cifra más reciente de la sábana de la Policía (cuenta hechos, no víctimas; no se compara con la meta). La columna "Mismo periodo" usa esos colores para las mismas fechas del año anterior. En los años completos (2024, 2025…): verde, dentro de la meta; amarillo, mejor que la línea base 2023 sin llegar a la meta; rojo, igual o peor que 2023. Cada indicador se mide con la misma fuente de su línea base 2023: MinDefensa / Policía Nacional (víctimas, hasta el último mes publicado) y, para convivencia, los comparendos del RNMC. Cada uno conserva su fecha de corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
+                La meta 2027 es un límite: el número de casos no debería pasar de esa cifra en el año. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual. Cuando MinDefensa va hasta un mes anterior al boletín, debajo del año en curso se muestran los hechos que registró después la sábana de la Policía (cuenta hechos, no víctimas; no se suma a la cifra oficial ni se compara con la meta). La columna "Mismo periodo" usa esos colores para las mismas fechas del año anterior. En los años completos (2024, 2025…): verde, dentro de la meta; amarillo, mejor que la línea base 2023 sin llegar a la meta; rojo, igual o peor que 2023. Cada indicador se mide con la misma fuente de su línea base 2023: MinDefensa / Policía Nacional (víctimas, hasta el último mes publicado) y, para convivencia, los comparendos del RNMC. Cada uno conserva su fecha de corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
               </p>
             </div>
 
