@@ -141,10 +141,17 @@ def act_archive(db: Session = Depends(get_db), current_user: User = Depends(requ
     return service.act_archive(db)
 
 
+@router.get("/acts/missing")
+def missing_acts(db: Session = Depends(get_db), current_user: User = Depends(require_role(ACTAS_ROLES))):
+    """Actas que faltan de las reuniones periódicas (por ahora, el Consejo de Seguridad: una por mes)."""
+    return service.actas_faltantes(db)
+
+
 @router.get("/acts/{read_id}/file")
 async def download_act_file(
     read_id: str,
     request: Request,
+    inline: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(ACTAS_ROLES)),
 ):
@@ -159,7 +166,7 @@ async def download_act_file(
     await log_audit(db, "COUNCIL_ACT_FILE_DOWNLOADED", actor_id=str(current_user.id), module="COUNCIL",
                     target={"read_id": read_id, "filename": archivo.filename}, level=2, request=request)
     return Response(content=archivo.content, media_type=archivo.content_type or "application/octet-stream",
-                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(archivo.filename)}"})
+                    headers={"Content-Disposition": f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(archivo.filename)}"})
 
 
 @router.post("/acts/{read_id}/file")

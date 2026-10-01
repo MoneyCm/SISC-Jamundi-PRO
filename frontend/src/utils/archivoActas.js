@@ -41,5 +41,13 @@ export function fechaActa(valor) {
     return `${dia} de ${MESES[mes - 1]} de ${anio}`;
 }
 
+// "2024-02" -> "febrero de 2024"
+export function mesLegible(valor) {
+    const [anio, mes] = String(valor || '').split('-').map(Number);
+    return mes ? `${MESES[mes - 1]} de ${anio}` : String(valor || '');
+}
+
+export const esPdf = (acta = {}) => /\.pdf$/i.test(acta.filename || '') || acta.content_type === 'application/pdf';
+
 export const tamanoArchivo = (bytes) => (bytes == null ? '' : bytes < 1024 * 1024
     ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`);
