@@ -25,7 +25,8 @@ def init_db():
             {"code": "SOURCE_UPLOADER", "name": "Cargador de Fuentes", "description": "Permiso para subir archivos a la plataforma."},
             {"code": "PORTAL_EDITOR", "name": "Editor de Portal", "description": "Edita boletines y contenido público."},
             {"code": "PUBLICATION_APPROVER", "name": "Publica boletines", "description": "Aprueba y publica boletines en la web (Secretaría)."},
-            {"code": "PORTAL_ADMIN", "name": "Admin de Portal", "description": "Publica y gestiona el Portal Ciudadano."}
+            {"code": "PORTAL_ADMIN", "name": "Admin de Portal", "description": "Publica y gestiona el Portal Ciudadano."},
+            {"code": "ACTAS_OPERATOR", "name": "Gestor de actas", "description": "Sube, lee y archiva las actas del Consejo de Seguridad y sus compromisos."}
         ]
 
         print("--- Creando/Actualizando Roles ---")

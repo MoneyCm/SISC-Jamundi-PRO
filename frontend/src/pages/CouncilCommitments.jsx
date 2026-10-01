@@ -6,6 +6,7 @@ import InterventionPanel from '../components/InterventionPanel';
 import DecisionReportPanel from '../components/DecisionReportPanel';
 import { STAGE_LABELS } from '../utils/interventions';
 import { apiFetch, apiJson } from '../utils/apiClient';
+import { puedeHacerSeguimiento } from '../utils/permisos';
 
 const STATUS_STYLES = {
     SIN_INFORMACION: 'bg-slate-100 text-slate-600',
@@ -39,7 +40,7 @@ const Tile = ({ label, value, helper, tone = 'slate' }) => {
     );
 };
 
-const CommitmentCard = ({ item, statuses, onSaved, interventions = [], onInterventionChanged }) => {
+const CommitmentCard = ({ item, statuses, onSaved, interventions = [], onInterventionChanged, seguimiento = true }) => {
     const [showIntervention, setShowIntervention] = useState(false);
     const [status, setStatus] = useState(item.status);
     const [note, setNote] = useState('');
@@ -130,15 +131,15 @@ const CommitmentCard = ({ item, statuses, onSaved, interventions = [], onInterve
                 <label className="min-w-[240px] flex-1 text-[11px] font-black uppercase tracking-wide text-slate-500">Enlace al soporte (opcional)
                     <input value={evidence} onChange={(event) => setEvidence(event.target.value)} maxLength={1000} placeholder="https://drive.google.com/…" className="mt-1 w-full border border-slate-300 px-2 py-2 text-sm font-semibold normal-case text-slate-800" />
                 </label>
-                <button onClick={save} disabled={!changed || saving || needsSupport} className="inline-flex min-h-10 items-center gap-2 bg-[#281FD0] px-4 text-sm font-black text-white hover:bg-[#1F18A8] disabled:cursor-not-allowed disabled:opacity-40">
+                {seguimiento && <button onClick={save} disabled={!changed || saving || needsSupport} className="inline-flex min-h-10 items-center gap-2 bg-[#281FD0] px-4 text-sm font-black text-white hover:bg-[#1F18A8] disabled:cursor-not-allowed disabled:opacity-40">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Guardar
-                </button>
+                </button>}
                 <button onClick={toggleHistory} className="inline-flex min-h-10 items-center gap-2 border border-slate-300 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
                     <History size={16} /> Historial
                 </button>
-                <button onClick={() => setShowIntervention((open) => !open)} aria-expanded={showIntervention} className="inline-flex min-h-10 items-center gap-2 border border-slate-300 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                {seguimiento && <button onClick={() => setShowIntervention((open) => !open)} aria-expanded={showIntervention} className="inline-flex min-h-10 items-center gap-2 border border-slate-300 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
                     <Target size={16} /> Intervención
-                </button>
+                </button>}
             </div>
             {needsSupport && <p className="mt-2 text-xs font-bold text-amber-700">Para cerrar un compromiso escriba cómo se verificó o agregue el enlace al soporte.</p>}
             {error && <p className="mt-2 text-sm font-bold text-red-700" role="alert">{error}</p>}
@@ -159,6 +160,8 @@ const CommitmentCard = ({ item, statuses, onSaved, interventions = [], onInterve
 };
 
 const CouncilCommitments = ({ onNavigate }) => {
+    // El gestor de actas sube y archiva actas; el seguimiento (estados, informes, importar) es de analistas y directivos.
+    const seguimiento = puedeHacerSeguimiento();
     const [items, setItems] = useState([]);
     const [statuses, setStatuses] = useState([]);
     const [themes, setThemes] = useState([]);
@@ -290,9 +293,9 @@ const CouncilCommitments = ({ onNavigate }) => {
                     <button onClick={() => { setOpenReadId(null); setReader(true); }} className="inline-flex min-h-11 items-center gap-2 bg-[#281FD0] px-4 text-sm font-black text-white hover:bg-[#1F18A8]">
                         <FileText size={17} /> Leer acta
                     </button>
-                    <button onClick={() => setDecisionReport(true)} className="inline-flex min-h-11 items-center gap-2 bg-[#FFE000] px-4 text-sm font-black text-slate-950 hover:bg-[#FFB600]">
+                    {seguimiento && <button onClick={() => setDecisionReport(true)} className="inline-flex min-h-11 items-center gap-2 bg-[#FFE000] px-4 text-sm font-black text-slate-950 hover:bg-[#FFB600]">
                         <FileText size={17} /> Informe para decisión
-                    </button>
+                    </button>}
                     {onNavigate && (
                         <button onClick={() => onNavigate('narrative_alerts')} className="inline-flex min-h-11 items-center gap-2 bg-[#25D366] px-4 text-sm font-black text-slate-950 hover:bg-[#1FB855]">
                             <MessageSquareText size={17} /> Resúmenes para WhatsApp
@@ -301,9 +304,9 @@ const CouncilCommitments = ({ onNavigate }) => {
                     <button onClick={buildAgenda} className="inline-flex min-h-11 items-center gap-2 border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">
                         <ClipboardCopy size={17} /> Lectura para el próximo Consejo
                     </button>
-                    <button onClick={() => fileRef.current?.click()} className="inline-flex min-h-11 items-center gap-2 border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                    {seguimiento && <button onClick={() => fileRef.current?.click()} className="inline-flex min-h-11 items-center gap-2 border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">
                         <Upload size={17} /> Importar hoja (CSV o XLSX)
-                    </button>
+                    </button>}
                     <input ref={fileRef} type="file" accept=".csv,.xlsx" onChange={importFile} className="hidden" />
                     <button onClick={load} className="inline-flex min-h-11 items-center gap-2 border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50" aria-label="Recargar">
                         <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
@@ -408,7 +411,7 @@ const CouncilCommitments = ({ onNavigate }) => {
                 ) : visible.length === 0 ? (
                     <p className="bg-white p-6 text-center text-sm font-semibold text-slate-500">No hay compromisos con este filtro.</p>
                 ) : (
-                    visible.map((item) => <CommitmentCard key={`${item.code}-${item.version}`} item={item} statuses={statuses} onSaved={onSaved}
+                    visible.map((item) => <CommitmentCard key={`${item.code}-${item.version}`} item={item} statuses={statuses} onSaved={onSaved} seguimiento={seguimiento}
                         interventions={interventions[item.code]} onInterventionChanged={loadInterventions} />)
                 )}
             </section>
