@@ -56,6 +56,13 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
     alerta: 'bg-amber-50 text-amber-800',
     critico: 'bg-rose-50 text-rose-800',
   };
+  // Años cerrados: verde dentro de la meta; amarillo mejor que 2023 sin llegar; rojo igual o peor que 2023.
+  const COLOR_CERRADO: Record<string, string> = {
+    VERDE: 'bg-emerald-50 text-emerald-800',
+    AMARILLO: 'bg-amber-50 text-amber-800',
+    ROJO: 'bg-rose-50 text-rose-800',
+  };
+  const ANIOS_CERRADOS = Array.from({ length: Math.max(0, baseYear - 2024) }, (_, i) => 2024 + i);
   const ETIQUETA_ANTERIOR: Record<string, string> = {
     favorable: 'Dentro de la meta', alerta: 'En riesgo de pasar el límite', critico: 'Pasó el límite de la meta',
   };
@@ -739,10 +746,12 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
               <thead className="text-white" style={{ backgroundColor: colorAzul }}>
                 <tr>
                   <th className="px-2.5 py-1.5 font-bold uppercase">Indicador de Resultado (PISCC)</th>
-                  <th className="px-1.5 py-1.5 font-bold uppercase text-center">Unidad</th>
                   <th className="px-1.5 py-1.5 font-bold uppercase text-center bg-blue-900/40">Línea Base 2023</th>
                   <th className="px-1.5 py-1.5 font-bold uppercase text-center bg-blue-900/60">Meta 2027</th>
-                  <th className="px-1.5 py-1.5 font-bold uppercase text-center">Acum. {prevYear}</th>
+                  {ANIOS_CERRADOS.map(anio => (
+                    <th key={anio} className="px-1.5 py-1.5 font-bold uppercase text-center">Año {anio}</th>
+                  ))}
+                  <th className="px-1.5 py-1.5 font-bold uppercase text-center">Mismo periodo {prevYear}</th>
                   <th className="px-1.5 py-1.5 font-bold uppercase text-center font-extrabold bg-blue-950/50">Acum. {baseYear}</th>
                   <th className="px-1.5 py-1.5 font-bold uppercase text-center">Var. %</th>
                   <th className="px-2 py-1.5 font-bold uppercase text-center bg-yellow-400 text-blue-950 font-black">Proy. {baseYear}</th>
@@ -787,13 +796,21 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                           Fuente: {ind.fuenteDescripcion}{ind.fechaCorte ? ` · Corte: ${formatIsoDate(ind.fechaCorte, true)}` : ''}{ind.corteAtrasado ? ' (corte atrasado)' : ''}
                         </span>
                       </td>
-                      <td className="px-1.5 py-1.5 text-center text-gray-600">{ind.unidad}</td>
                       <td className="px-1.5 py-1.5 text-center font-semibold text-gray-700 bg-gray-50/50">
                         {ind.lineaBase2023.toLocaleString('es-CO')}
                       </td>
                       <td className="px-1.5 py-1.5 text-center font-bold text-blue-900 bg-blue-50/40">
                         {ind.meta2027.toLocaleString('es-CO')}
                       </td>
+                      {ANIOS_CERRADOS.map(anio => {
+                        const cerrado = ind.aniosCerrados.find(year => year.anio === anio);
+                        return (
+                          <td key={anio} className={`px-1.5 py-1.5 text-center font-bold ${cerrado?.completo ? (COLOR_CERRADO[cerrado.semaforo || ''] || 'text-gray-600') : 'text-gray-400'}`}
+                            title={cerrado?.etiqueta}>
+                            {cerrado?.completo && cerrado.total !== null ? cerrado.total.toLocaleString('es-CO') : '—'}
+                          </td>
+                        );
+                      })}
                       <td className={`px-1.5 py-1.5 text-center font-bold ${COLOR_ANTERIOR[ind.statusPrev || ''] || 'text-gray-600'}`}
                         title={ind.statusPrev ? ETIQUETA_ANTERIOR[ind.statusPrev] : undefined}>
                         {ind.countPrev !== null ? ind.countPrev.toLocaleString('es-CO') : '—'}
@@ -825,7 +842,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                 Criterio Metodológico de Proyección
               </h3>
               <p className="text-[9px] text-gray-600 leading-relaxed">
-                La meta 2027 es un límite: el número de casos no debería pasar de esa cifra en el año. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual. La columna del año anterior usa los mismos colores para el mismo tramo de fechas. Cada indicador se mide con la misma fuente de su línea base 2023: MinDefensa / Policía Nacional (víctimas, hasta el último mes publicado) y, para convivencia, los comparendos del RNMC. Cada uno conserva su fecha de corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
+                La meta 2027 es un límite: el número de casos no debería pasar de esa cifra en el año. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual. La columna "Mismo periodo" usa esos colores para las mismas fechas del año anterior. En los años completos (2024, 2025…): verde, dentro de la meta; amarillo, mejor que la línea base 2023 sin llegar a la meta; rojo, igual o peor que 2023. Cada indicador se mide con la misma fuente de su línea base 2023: MinDefensa / Policía Nacional (víctimas, hasta el último mes publicado) y, para convivencia, los comparendos del RNMC. Cada uno conserva su fecha de corte. La proyección es lineal (<code className="text-gray-800 font-semibold">acumulado / días transcurridos × días del año</code>) y solo indica el ritmo. Si la meta es menor de 20 se compara el acumulado, y antes de 8 semanas el resultado es preliminar.
               </p>
             </div>
 

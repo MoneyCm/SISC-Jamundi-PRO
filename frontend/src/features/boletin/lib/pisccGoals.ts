@@ -24,6 +24,7 @@ export interface BackendPisccGoal {
   source?: string;
   stale?: boolean;
   previous_status?: BackendPisccGoal['status'];
+  closed_years?: { anio: number; total: number | null; completo: boolean; semaforo: 'VERDE' | 'AMARILLO' | 'ROJO' | null; semaforo_label?: string }[];
 }
 
 export interface BackendPisccGoals {
@@ -42,6 +43,8 @@ export interface PisccIndicatorTracking {
   countPrev: number | null;
   /** Cómo iba el mismo tramo del año anterior frente a la meta (mismo criterio que el año en curso). */
   statusPrev: PisccStatusType | null;
+  /** Años cerrados (enero a diciembre) con su semáforo frente a la línea base y la meta. */
+  aniosCerrados: { anio: number; total: number | null; completo: boolean; semaforo: string | null; etiqueta: string }[];
   countBase: number | null;
   diferenciaAbs: number | null;
   variacionPct: number | null;
@@ -100,6 +103,10 @@ export function toPisccTracking(
       meta2027: goal.goal_2027,
       countPrev: measured ? goal.previous ?? null : null,
       statusPrev: measured && goal.previous_status ? STATUS[goal.previous_status] : null,
+      aniosCerrados: (goal.closed_years || []).map(year => ({
+        anio: year.anio, total: year.total, completo: year.completo, semaforo: year.semaforo,
+        etiqueta: year.semaforo_label || (year.completo ? '' : 'Año incompleto'),
+      })),
       countBase: measured ? goal.count! : null,
       diferenciaAbs: measured && goal.previous !== null && goal.previous !== undefined ? goal.count! - goal.previous : null,
       variacionPct: variation.pct,
