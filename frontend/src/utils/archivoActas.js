@@ -51,6 +51,20 @@ export function mesLegible(valor) {
 export const periodoLegible = (valor, frecuencia = 'mensual') => (frecuencia === 'semanal'
     ? `semana del ${fechaActa(valor)}` : mesLegible(valor));
 
+// Mensaje para pedir las actas (se copia y se pega en el correo o WhatsApp).
+export function mensajePedido(reunion = {}, periodos = [], destinatario = '') {
+    const lista = [...periodos].sort().map((p) => `- ${periodoLegible(p, reunion.frecuencia)}`).join('\n');
+    const saludo = destinatario ? `Buen día, ${destinatario}.` : 'Buen día.';
+    return `${saludo}\n\nPara el archivo de actas del SISC necesitamos las actas del ${reunion.instance_label || 'la reunión'} de:\n${lista}\n\n`
+        + 'Por favor envíelas en PDF (firmadas, si es posible). Muchas gracias.';
+}
+
+// Resumen de lo pedido en una reunión: cuántas se pidieron y cuántas pasaron el plazo sin llegar.
+export function resumenPedidas(reunion = {}) {
+    const solicitudes = Object.values(reunion.solicitudes || {});
+    return { pedidas: solicitudes.length, vencidas: solicitudes.filter((s) => s.vencida).length };
+}
+
 export const esPdf = (acta = {}) => /\.pdf$/i.test(acta.filename || '') || acta.content_type === 'application/pdf';
 
 export const tamanoArchivo = (bytes) => (bytes == null ? '' : bytes < 1024 * 1024

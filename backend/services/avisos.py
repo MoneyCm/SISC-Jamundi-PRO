@@ -6,6 +6,7 @@ Cada aviso sale de algo que el SISC ya calcula; aquí solo se junta y se ordena:
 - las solicitudes de datos vencidas (Centro de análisis → Solicitudes de datos);
 - tareas atrasadas de la agenda semanal (por ejemplo, el boletín mensual);
 - el próximo Consejo de Seguridad, cuando faltan 14 días o menos, con los compromisos vencidos;
+- las actas pedidas que no han llegado después de 15 días (Archivo de actas);
 - la copia de seguridad, si falló o lleva más de dos días sin hacerse.
 
 Nivel: "alto" (hay que actuar ya) o "medio" (conviene revisarlo esta semana).
@@ -106,6 +107,24 @@ def _consejo(db: Session, hoy: date) -> List[Dict]:
                    detalle, {"page": "council_commitments"})]
 
 
+def _actas(db: Session, hoy: date) -> List[Dict]:
+    from services.council_commitments_service import DIAS_ACTA_PEDIDA, actas_faltantes
+
+    partes, total, a_quien = [], 0, set()
+    for reunion in actas_faltantes(db, hoy):
+        vencidas = [s for s in reunion["solicitudes"].values() if s["vencida"]]
+        if vencidas:
+            total += len(vencidas)
+            a_quien |= {s["pedida_a"] for s in vencidas}
+            partes.append(f"{reunion['instance_label']}: {len(vencidas)}")
+    if not total:
+        return []
+    titulo = (f"1 acta pedida hace más de {DIAS_ACTA_PEDIDA} días no ha llegado" if total == 1
+              else f"{total} actas pedidas hace más de {DIAS_ACTA_PEDIDA} días no han llegado")
+    return [_aviso("actas", "medio", titulo,
+                   "; ".join(partes) + f". Conviene recordarle a {', '.join(sorted(a_quien))}.", {"page": "actas_archive"})]
+
+
 def _respaldo(hoy: date) -> List[Dict]:
     if not ESTADO_RESPALDO.exists():
         return [_aviso("respaldo", "alto", "No hay copias de seguridad automáticas",
@@ -127,7 +146,7 @@ def _respaldo(hoy: date) -> List[Dict]:
     return avisos
 
 
-FUENTES: List[Callable] = [_respaldo, _sabana, _rnmc, _solicitudes, _consejo, _agenda]
+FUENTES: List[Callable] = [_respaldo, _sabana, _rnmc, _solicitudes, _consejo, _actas, _agenda]
 
 
 def avisos(db: Session, hoy: Optional[date] = None) -> Dict:
