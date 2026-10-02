@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2, Plus, Send } from 'lucide-react';
+import { BellRing, Copy, Loader2, Plus, Send } from 'lucide-react';
 import { apiJson } from '../utils/apiClient';
 import { localToday } from '../utils/localDate';
 import {
-    CADENCE_LABELS, PROGRAM_LABELS, REQUEST_STATUS_LABELS, STATE_LABELS, defaultRequest, stateDetail,
+    CADENCE_LABELS, PROGRAM_LABELS, REQUEST_STATUS_LABELS, STATE_LABELS, defaultRequest, reminderMessage, reminderSummary, stateDetail,
 } from '../utils/dataRequests';
 
 const inputClass = 'w-full border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 focus:border-[#281FD0] focus:outline-none';
@@ -64,7 +64,7 @@ const RequestForm = ({ entities, onSaved, onCancel }) => {
                 <Field label="Periodo hasta"><input type="date" className={inputClass} value={form.period_end} onChange={set('period_end')} /></Field>
                 <Field label="Medio">
                     <select className={inputClass} value={form.channel} onChange={set('channel')}>
-                        {['Correo', 'Oficio', 'WhatsApp', 'Llamada', 'Reunión'].map((item) => <option key={item}>{item}</option>)}
+                        {CHANNELS.map((item) => <option key={item}>{item}</option>)}
                     </select>
                 </Field>
                 <Field label="Fecha de la solicitud"><input type="date" className={inputClass} value={form.requested_on} onChange={set('requested_on')} required /></Field>
@@ -81,9 +81,64 @@ const RequestForm = ({ entities, onSaved, onCancel }) => {
     );
 };
 
-const OpenRequest = ({ request, onSaved }) => {
+const CHANNELS = ['Correo', 'Oficio', 'WhatsApp', 'Llamada', 'Reunión'];
+
+// Recordar una solicitud vencida: copiar el mensaje y anotar cuándo y por qué medio se recordó.
+const ReminderForm = ({ entity, request, onSaved, onCancel }) => {
+    const [form, setForm] = useState({ reminded_on: localToday(), channel: request.channel || 'Correo', note: '' });
+    const [saving, setSaving] = useState(false);
+    const [info, setInfo] = useState('');
+    const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(reminderMessage(entity, request));
+            setInfo('Mensaje copiado: péguelo en el correo o en WhatsApp y envíelo. Después anote el recordatorio.');
+        } catch {
+            setInfo('No se pudo copiar el mensaje en este navegador.');
+        }
+    };
+    const save = async (event) => {
+        event.preventDefault();
+        setSaving(true);
+        setInfo('');
+        try {
+            await apiJson(`/observatory/data-requests/${request.id}/reminders`, json('POST', { ...form, note: form.note || null }));
+            onSaved();
+        } catch (saveError) {
+            setInfo(saveError.message);
+            setSaving(false);
+        }
+    };
+    return (
+        <form onSubmit={save} className="mt-2 space-y-3 border border-amber-200 bg-amber-50 p-3">
+            <div className="grid gap-3 md:grid-cols-3">
+                <Field label="Se recordó el"><input type="date" className={inputClass} value={form.reminded_on} max={localToday()} min={request.requested_on} onChange={set('reminded_on')} required /></Field>
+                <Field label="Medio">
+                    <select className={inputClass} value={form.channel} onChange={set('channel')}>
+                        {CHANNELS.map((item) => <option key={item}>{item}</option>)}
+                    </select>
+                </Field>
+                <Field label="Nota (opcional)"><input className={inputClass} value={form.note} onChange={set('note')} maxLength={1000} placeholder="Por ejemplo: dijo que lo envía el viernes" /></Field>
+            </div>
+            {info && <p role="status" className="text-xs font-bold text-amber-950">{info}</p>}
+            <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={copy} className="inline-flex min-h-10 items-center gap-1.5 border border-slate-300 bg-white px-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                    <Copy size={15} /> Copiar mensaje de recordatorio
+                </button>
+                <button type="submit" disabled={saving} className="inline-flex min-h-10 items-center gap-1.5 bg-[#281FD0] px-3 text-sm font-black text-white disabled:opacity-60">
+                    {saving ? <Loader2 size={15} className="animate-spin" /> : <BellRing size={15} />} Anotar recordatorio
+                </button>
+                <button type="button" onClick={onCancel} className="min-h-10 border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700">Cancelar</button>
+            </div>
+        </form>
+    );
+};
+
+const OpenRequest = ({ entity, request, onSaved }) => {
     const [busy, setBusy] = useState('');
     const [error, setError] = useState('');
+    const [reminding, setReminding] = useState(false);
+    const late = request.due_on < localToday();
     const mark = async (status) => {
         setBusy(status);
         setError('');
@@ -100,13 +155,20 @@ const OpenRequest = ({ request, onSaved }) => {
             <p className="text-xs font-semibold text-slate-600">
                 {request.what}{request.period_start ? ` · ${shortDate(request.period_start)} al ${shortDate(request.period_end)}` : ''} · pedido el {shortDate(request.requested_on)}{request.channel ? ` por ${request.channel.toLowerCase()}` : ''}
             </p>
+            {request.reminders > 0 && <p className="text-xs font-bold text-amber-800">{reminderSummary(request)}</p>}
             <div className="mt-1 flex flex-wrap gap-3">
                 {[['RECIBIDA', 'Llegó hoy'], ['INCOMPLETA', 'Llegó incompleta'], ['SIN_RESPUESTA', 'No respondió']].map(([status, label]) => (
                     <button key={status} disabled={Boolean(busy)} onClick={() => mark(status)} className="inline-flex items-center gap-1 text-xs font-black text-[#281FD0] hover:underline disabled:opacity-50">
                         {busy === status && <Loader2 size={12} className="animate-spin" />} {label}
                     </button>
                 ))}
+                {!reminding && (
+                    <button onClick={() => setReminding(true)} className={`inline-flex items-center gap-1 text-xs font-black hover:underline ${late ? 'text-red-700' : 'text-slate-600'}`}>
+                        <BellRing size={12} /> Recordar
+                    </button>
+                )}
             </div>
+            {reminding && <ReminderForm entity={entity} request={request} onSaved={() => { setReminding(false); onSaved(); }} onCancel={() => setReminding(false)} />}
             {error && <p role="alert" className="mt-1 text-xs font-bold text-red-700">{error}</p>}
         </div>
     );
@@ -232,7 +294,7 @@ const DataRequests = () => {
                                     <CadenceSelect entity={entity} onSaved={load} />
                                 </div>
                             </div>
-                            {entity.open_requests.map((request) => <OpenRequest key={`${request.id}-${request.version}`} request={request} onSaved={load} />)}
+                            {entity.open_requests.map((request) => <OpenRequest key={`${request.id}-${request.version}`} entity={entity} request={request} onSaved={load} />)}
                         </article>
                     );
                 })}

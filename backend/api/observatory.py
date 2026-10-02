@@ -252,6 +252,13 @@ class DataRequestUpdate(BaseModel):
     expected_version: int = Field(ge=0)
 
 
+class DataRequestReminderIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    reminded_on: date
+    channel: Optional[str] = Field(default=None, max_length=60)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
 class DataEntityIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=3, max_length=200)
@@ -337,6 +344,25 @@ async def update_data_request(request_id: UUID, payload: DataRequestUpdate, requ
     await log_audit(db, "DATA_REQUEST_UPDATED", actor_id=str(user.id), module="OBSERVATORY",
                     target={"entity": entity.name, "status": row.status}, level=1, request=request)
     return serialize_request(row, entity.name)
+
+
+@router.post("/data-requests/{request_id}/reminders", status_code=201)
+async def remind_data_request(request_id: UUID, payload: DataRequestReminderIn, request: Request,
+                              db: Session = Depends(get_db), user: User = Depends(require_role(ANALYSIS_ROLES))):
+    """Anota un recordatorio a una dependencia que no ha respondido."""
+    from db.models_data_requests import DataEntity
+    from services.data_requests import add_reminder, reminders_by_request, serialize_request
+
+    try:
+        row = add_reminder(db, request_id, payload.reminded_on, payload.channel, payload.note, user.username)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    entity = db.get(DataEntity, row.entity_id)
+    await log_audit(db, "DATA_REQUEST_REMINDED", actor_id=str(user.id), module="OBSERVATORY",
+                    target={"entity": entity.name, "channel": payload.channel}, level=1, request=request)
+    return serialize_request(row, entity.name, reminders_by_request(db, [row.id]).get(row.id))
 
 
 @router.post("/data-entities", status_code=201)

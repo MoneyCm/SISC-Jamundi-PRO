@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from api import observatory
 from api.auth import get_current_user
 from db.models import get_db
-from db.models_data_requests import DataEntity, DataRequest
+from db.models_data_requests import DataEntity, DataRequest, DataRequestReminder
 from db.session import engine
 from services import data_requests as dr
 
@@ -117,3 +117,53 @@ def test_api_flow(db):
     board = api.get("/api/observatory/data-requests").json()
     assert any(row["name"] == "Inspección Prueba API" for row in board["entities"])
     assert client(db, "CITIZEN").get("/api/observatory/data-requests").status_code == 403
+
+
+def test_recordatorios(db):
+    from services import avisos
+
+    db.query(DataEntity).update({DataEntity.active: False})  # solo las de la prueba
+    silent = entity(db, "Comisaría Prueba Recordatorio", cadence="MENSUAL")
+    pedida = DataRequest(entity_id=silent.id, what="Informe mensual", requested_on=TODAY - timedelta(days=20),
+                         due_on=TODAY - timedelta(days=17), created_by="prueba")
+    db.add(pedida)
+    db.commit()
+    [aviso] = avisos._solicitudes(db, TODAY)
+    assert aviso["nivel"] == "alto" and "se le recordó" not in aviso["detalle"]
+
+    with pytest.raises(ValueError, match="futura"):
+        dr.add_reminder(db, pedida.id, TODAY + timedelta(days=1), "Correo", None, "prueba", today=TODAY)
+    with pytest.raises(ValueError, match="anterior"):
+        dr.add_reminder(db, pedida.id, TODAY - timedelta(days=30), "Correo", None, "prueba", today=TODAY)
+    dr.add_reminder(db, pedida.id, TODAY - timedelta(days=10), "Correo", None, "prueba", today=TODAY)
+    dr.add_reminder(db, pedida.id, TODAY - timedelta(days=1), "WhatsApp", "Dijo que esta semana", "prueba", today=TODAY)
+
+    [fila] = [e for e in dr.board(db, TODAY)["entities"] if e["name"] == "Comisaría Prueba Recordatorio"]
+    assert fila["open_requests"][0]["reminders"] == 2
+    assert fila["open_requests"][0]["last_reminded_on"] == (TODAY - timedelta(days=1)).isoformat()
+    [aviso] = avisos._solicitudes(db, TODAY)
+    assert aviso["nivel"] == "medio"  # se le recordó hace poco
+    assert "se le recordó el" in aviso["detalle"] and "(2 veces)" in aviso["detalle"]
+
+    pedida.status = "RECIBIDA"
+    pedida.received_on = TODAY
+    db.commit()
+    with pytest.raises(ValueError, match="cerró"):
+        dr.add_reminder(db, pedida.id, TODAY, "Correo", None, "prueba", today=TODAY)
+    assert db.query(DataRequestReminder).filter(DataRequestReminder.request_id == pedida.id).count() == 2
+
+
+def test_api_recordatorio(db):
+    api = client(db, "ANALYST")
+    hoy = date.today()
+    nueva = entity(db, "Inspección Prueba Recordar")
+    pedida = DataRequest(entity_id=nueva.id, what="Semana", requested_on=hoy - timedelta(days=6), due_on=hoy - timedelta(days=3),
+                         created_by="prueba")
+    db.add(pedida)
+    db.commit()
+    url = f"/api/observatory/data-requests/{pedida.id}/reminders"
+    ok = api.post(url, json={"reminded_on": hoy.isoformat(), "channel": "Llamada"})
+    assert ok.status_code == 201 and ok.json()["reminders"] == 1 and ok.json()["version"] == 1
+    assert api.post(url, json={"reminded_on": (hoy + timedelta(days=2)).isoformat()}).status_code == 422
+    assert api.post(f"/api/observatory/data-requests/{uuid4()}/reminders", json={"reminded_on": hoy.isoformat()}).status_code == 404
+    assert client(db, "CITIZEN").post(url, json={"reminded_on": hoy.isoformat()}).status_code == 403

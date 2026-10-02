@@ -7,7 +7,8 @@ Estados de una dependencia, según su periodicidad (semanal, quincenal, mensual)
 - TOCA_PEDIR: no hay solicitud abierta y la última respuesta ya es vieja (o nunca hubo).
 
 Junto a cada dependencia se muestra el último corte cargado en el SISC (lotes institucionales),
-que confirma si lo recibido llegó de verdad al sistema.
+que confirma si lo recibido llegó de verdad al sistema. A una solicitud sin respuesta se le pueden
+anotar recordatorios (cuándo y por qué medio), para saber cuántas veces se ha insistido.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from db.models_data_requests import DataEntity, DataRequest
+from db.models_data_requests import DataEntity, DataRequest, DataRequestReminder
 
 CADENCE_DAYS = {"SEMANAL": 7, "QUINCENAL": 14, "MENSUAL": 31}
 GRACE_DAYS = {"SEMANAL": 3, "QUINCENAL": 4, "MENSUAL": 7}
@@ -95,7 +96,9 @@ def entity_state(cadence: str, requests: Iterable[DataRequest], today: date) -> 
     return {**base, "state": "TOCA_PEDIR"}
 
 
-def serialize_request(row: DataRequest, entity_name: Optional[str] = None) -> Dict[str, Any]:
+def serialize_request(row: DataRequest, entity_name: Optional[str] = None,
+                      reminders: Optional[List[date]] = None) -> Dict[str, Any]:
+    reminders = sorted(reminders or [])
     return {
         "id": str(row.id), "entity_id": str(row.entity_id), "entity": entity_name, "what": row.what,
         "period_start": row.period_start.isoformat() if row.period_start else None,
@@ -104,7 +107,39 @@ def serialize_request(row: DataRequest, entity_name: Optional[str] = None) -> Di
         "channel": row.channel, "status": row.status,
         "received_on": row.received_on.isoformat() if row.received_on else None,
         "note": row.note, "created_by": row.created_by, "updated_by": row.updated_by, "version": row.version,
+        "reminders": len(reminders), "last_reminded_on": reminders[-1].isoformat() if reminders else None,
     }
+
+
+def reminders_by_request(db: Session, request_ids: Iterable) -> Dict[Any, List[date]]:
+    ids = list(request_ids)
+    result: Dict[Any, List[date]] = {}
+    if ids:
+        for request_id, reminded_on in db.query(DataRequestReminder.request_id, DataRequestReminder.reminded_on).filter(
+                DataRequestReminder.request_id.in_(ids)).all():
+            result.setdefault(request_id, []).append(reminded_on)
+    return result
+
+
+def add_reminder(db: Session, request_id, reminded_on: date, channel: Optional[str], note: Optional[str],
+                 username: str, today: Optional[date] = None) -> DataRequest:
+    """Anota que se le recordó a la dependencia una solicitud que sigue sin respuesta."""
+    today = today or date.today()
+    row = db.get(DataRequest, request_id)
+    if not row:
+        raise LookupError("La solicitud no existe.")
+    if row.status != "PEDIDA":
+        raise ValueError("Esta solicitud ya se cerró; no hace falta recordarla.")
+    if reminded_on > today:
+        raise ValueError("La fecha del recordatorio no puede ser futura.")
+    if reminded_on < row.requested_on:
+        raise ValueError("El recordatorio no puede ser anterior a la solicitud.")
+    db.add(DataRequestReminder(request_id=row.id, reminded_on=reminded_on, channel=channel, note=note, created_by=username))
+    row.version += 1
+    row.updated_by = username
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 def board(db: Session, today: Optional[date] = None, include_inactive: bool = False) -> Dict[str, Any]:
@@ -116,6 +151,7 @@ def board(db: Session, today: Optional[date] = None, include_inactive: bool = Fa
     entities = query.order_by(DataEntity.program, DataEntity.name).all()
     requests = db.query(DataRequest).filter(DataRequest.entity_id.in_([entity.id for entity in entities])).all() if entities else []
     loaded = loaded_cutoffs(db)
+    reminders = reminders_by_request(db, [row.id for row in requests if row.status == "PEDIDA"])
     rows = []
     for entity in entities:
         own = [row for row in requests if row.entity_id == entity.id]
@@ -125,15 +161,17 @@ def board(db: Session, today: Optional[date] = None, include_inactive: bool = Fa
             "id": str(entity.id), "name": entity.name, "program": entity.program, "cadence": entity.cadence,
             "contact": entity.contact, "active": entity.active, **state,
             "loaded_cutoff": data["cutoff"].isoformat() if data and data["cutoff"] else None,
-            "open_requests": [serialize_request(row, entity.name) for row in sorted(own, key=lambda r: r.requested_on) if row.status == "PEDIDA"],
+            "open_requests": [serialize_request(row, entity.name, reminders.get(row.id))
+                              for row in sorted(own, key=lambda r: r.requested_on) if row.status == "PEDIDA"],
         })
     rows.sort(key=lambda row: (STATE_ORDER[row["state"]], row["name"]))
     names = {entity.id: entity.name for entity in entities}
     recent = sorted(requests, key=lambda row: (row.requested_on, row.created_at), reverse=True)[:30]
+    reminders.update(reminders_by_request(db, [row.id for row in recent if row.id not in reminders]))
     return {
         "as_of": today.isoformat(),
         "entities": rows,
-        "recent": [serialize_request(row, names.get(row.entity_id)) for row in recent],
+        "recent": [serialize_request(row, names.get(row.entity_id), reminders.get(row.id)) for row in recent],
         "counts": {state: sum(1 for row in rows if row["state"] == state) for state in STATE_ORDER},
         "rule": ("Una dependencia está al día si respondió dentro de su periodicidad (semanal: 10 días, quincenal: 18, "
                  "mensual: 38). Una solicitud abierta se vuelve atrasada al vencer su plazo."),
