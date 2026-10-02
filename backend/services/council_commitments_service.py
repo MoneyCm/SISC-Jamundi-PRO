@@ -19,7 +19,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from sqlalchemy.orm import Session
 
-from db.models_council import COMMITMENT_STATUSES, CouncilActRead, CouncilCommitment, CouncilCommitmentUpdate
+from db.models_council import COMMITMENT_STATUSES, CouncilActRead, CouncilActRequest, CouncilCommitment, CouncilCommitmentUpdate
 from services.act_reader import INSTANCES, normalize, read_act
 from services.council_topics import LABELS as TOPIC_LABELS
 from services.council_topics import topics_in, theme_for
@@ -502,6 +502,7 @@ ACTAS_ESPERADAS = {
     "PLANEACION_SEMANAL": {"frecuencia": "semanal", "responsables": "Nelson Ortiz"},
 }
 SIN_ACTA_OFICIAL = ("sin acta oficial", "nota de gemini")
+DIAS_ACTA_PEDIDA = 15  # si una acta pedida no llega en este plazo, sale un aviso en Inicio
 
 
 def _periodo(fecha: date, frecuencia: str) -> date:
@@ -521,6 +522,7 @@ def actas_faltantes(db: Session, hoy: Optional[date] = None) -> List[Dict[str, A
     Mensual: claves "AAAA-MM". Semanal: el lunes de cada semana, "AAAA-MM-DD".
     """
     hoy = hoy or date.today()
+    pedidas = {(fila.instance, fila.periodo): fila for fila in db.query(CouncilActRequest).all()}
     resultado = []
     for instancia, regla in ACTAS_ESPERADAS.items():
         frecuencia = regla["frecuencia"]
@@ -540,11 +542,63 @@ def actas_faltantes(db: Session, hoy: Optional[date] = None) -> List[Dict[str, A
                 (sin_oficial if periodo in notas else faltan).append(clave(periodo))
             periodo = _siguiente(periodo, frecuencia)
         ultima = max(fecha for fecha, _nombre in filas)
+        solicitudes = {}
+        for periodo_clave in faltan + sin_oficial:
+            pedida = pedidas.get((instancia, periodo_clave))
+            if pedida:
+                dias = (hoy - pedida.requested_on).days
+                solicitudes[periodo_clave] = {"pedida_el": pedida.requested_on.isoformat(), "pedida_a": pedida.requested_to,
+                                              "nota": pedida.note, "veces": pedida.times, "dias": dias,
+                                              "vencida": dias > DIAS_ACTA_PEDIDA}
         resultado.append({"instance": instancia, "instance_label": INSTANCES.get(instancia, INSTANCES["OTRA"])["label"],
                           "frecuencia": frecuencia, "responsables": regla["responsables"],
                           "desde": clave(inicio), "ultima": ultima.isoformat(),
-                          "faltan": faltan, "sin_acta_oficial": sin_oficial})
+                          "faltan": faltan, "sin_acta_oficial": sin_oficial, "solicitudes": solicitudes,
+                          "dias_plazo": DIAS_ACTA_PEDIDA})
     return resultado
+
+
+def _periodos_que_faltan(db: Session, instancia: str, hoy: date) -> set:
+    if instancia not in ACTAS_ESPERADAS:
+        raise ValueError("Esa reunión no tiene actas periódicas.")
+    for item in actas_faltantes(db, hoy):
+        if item["instance"] == instancia:
+            return set(item["faltan"]) | set(item["sin_acta_oficial"])
+    return set()
+
+
+def registrar_solicitud(db: Session, instancia: str, periodos: Iterable[str], pedida_el: date, pedida_a: str,
+                        nota: Optional[str], usuario: str, hoy: Optional[date] = None) -> Dict[str, Any]:
+    """Anota que se pidieron estas actas (si ya estaban pedidas, se actualiza la fecha y se cuenta otra vez)."""
+    hoy = hoy or date.today()
+    if pedida_el > hoy:
+        raise ValueError("La fecha en que se pidió no puede ser futura.")
+    periodos = sorted(set(periodos))
+    validos = _periodos_que_faltan(db, instancia, hoy)
+    ajenos = [p for p in periodos if p not in validos]
+    if ajenos:
+        raise ValueError(f"Estas actas no están en la lista de las que faltan: {', '.join(ajenos)}.")
+    existentes = {fila.periodo: fila for fila in db.query(CouncilActRequest).filter(
+        CouncilActRequest.instance == instancia, CouncilActRequest.periodo.in_(periodos)).all()}
+    for periodo in periodos:
+        fila = existentes.get(periodo)
+        if fila:
+            fila.times = (fila.times or 1) + 1
+            fila.requested_on, fila.requested_to, fila.note = pedida_el, pedida_a, nota or fila.note
+            fila.updated_by, fila.updated_at = usuario, datetime.utcnow()
+        else:
+            db.add(CouncilActRequest(instance=instancia, periodo=periodo, requested_on=pedida_el, requested_to=pedida_a,
+                                     note=nota, times=1, created_by=usuario))
+    db.commit()
+    return {"registradas": len(periodos), "repetidas": len(existentes)}
+
+
+def quitar_solicitudes(db: Session, instancia: str, periodos: Iterable[str]) -> Dict[str, Any]:
+    """Quita la marca de «pedida» (por ejemplo, si se anotó por error)."""
+    borradas = db.query(CouncilActRequest).filter(CouncilActRequest.instance == instancia,
+                                                  CouncilActRequest.periodo.in_(list(periodos))).delete(synchronize_session=False)
+    db.commit()
+    return {"quitadas": borradas}
 
 
 def _cuantos(valor) -> int:

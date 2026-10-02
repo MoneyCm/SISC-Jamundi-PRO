@@ -6,7 +6,7 @@ sesión; cada cambio queda en el historial con autor, fecha y nota.
 """
 import uuid
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text, func, LargeBinary
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, LargeBinary
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from db.session import Base
@@ -80,6 +80,25 @@ class CouncilActFile(Base):
     content = Column(LargeBinary, nullable=False)
     uploaded_by = Column(String(120), nullable=False)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CouncilActRequest(Base):
+    """Petición de un acta que falta: a quién y cuándo se pidió, para hacerle seguimiento hasta que llegue."""
+
+    __tablename__ = "council_act_requests"
+    __table_args__ = (UniqueConstraint("instance", "periodo", name="uq_council_act_requests_periodo"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    instance = Column(String(40), nullable=False)
+    periodo = Column(String(10), nullable=False)  # "AAAA-MM" (mensual) o el lunes "AAAA-MM-DD" (semanal)
+    requested_on = Column(Date, nullable=False)
+    requested_to = Column(String(200), nullable=False)
+    note = Column(Text)
+    times = Column(Integer, nullable=False, default=1)  # cuántas veces se ha pedido
+    created_by = Column(String(120), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_by = Column(String(120))
+    updated_at = Column(DateTime(timezone=True))
 
 
 class CouncilCommitmentUpdate(Base):

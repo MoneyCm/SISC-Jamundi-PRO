@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { esPdf, fechaActa, filtrarActas, mesLegible, periodoLegible, resumenPorInstancia, sinActaOficial, tamanoArchivo } from './archivoActas.js';
+import { esPdf, fechaActa, filtrarActas, mensajePedido, mesLegible, periodoLegible, resumenPedidas, resumenPorInstancia, sinActaOficial, tamanoArchivo } from './archivoActas.js';
 
 const actas = [
     { read_id: '1', instance: 'CONSEJO_SEGURIDAD', instance_label: 'Consejo de Seguridad', act_date: '2026-09-21', status: 'CONFIRMADA', has_file: false, filename: 'Nota de Gemini – Consejo (sin acta oficial)' },
@@ -27,4 +27,14 @@ test('filtros y marcas', () => {
     assert.equal(periodoLegible('2024-02'), 'febrero de 2024');
     assert.equal(esPdf({ filename: 'Acta 03.PDF' }), true);
     assert.equal(esPdf({ filename: 'COP julio.docx' }), false);
+});
+
+test('pedir actas: mensaje y resumen', () => {
+    const reunion = { instance_label: 'Consejo de Seguridad', frecuencia: 'mensual',
+        solicitudes: { '2025-11': { vencida: true }, '2025-12': { vencida: false } } };
+    const texto = mensajePedido(reunion, ['2025-12', '2025-11'], 'Nelson Ortiz');
+    assert.match(texto, /^Buen día, Nelson Ortiz\./);
+    assert.match(texto, /- noviembre de 2025\n- diciembre de 2025/);
+    assert.match(mensajePedido({ instance_label: 'Planeación', frecuencia: 'semanal' }, ['2026-09-21']), /- semana del 21 de septiembre de 2026/);
+    assert.deepEqual(resumenPedidas(reunion), { pedidas: 2, vencidas: 1 });
 });

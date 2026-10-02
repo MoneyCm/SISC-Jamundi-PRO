@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 from sqlalchemy.orm import Session
 
-from db.models_council import CouncilActFile, CouncilActRead
+from db.models_council import CouncilActFile, CouncilActRead, CouncilActRequest
 from db.session import engine
 from services import council_commitments_service as svc
 
@@ -87,3 +87,52 @@ def test_actas_faltantes_por_semana(db, monkeypatch):
     assert faltan["frecuencia"] == "semanal" and faltan["responsables"] is None
     assert faltan["desde"] == "2026-08-31" and faltan["ultima"] == "2026-09-17"
     assert faltan["faltan"] == ["2026-09-07", "2026-09-21"]  # la semana del 28-sep aún no termina
+
+
+def _consejo_con_faltantes(db, monkeypatch):
+    monkeypatch.setattr(svc, "ACTAS_ESPERADAS", {"PRUEBA_MENSUAL": {"frecuencia": "mensual", "responsables": "Nelson Ortiz"}})
+    nombre = "Acta 01.pdf"
+    db.add(CouncilActRead(filename=nombre, sha256=hashlib.sha256(nombre.encode()).hexdigest(), instance="PRUEBA_MENSUAL",
+                          act_date=date(2026, 1, 20), reading={}, status="CONFIRMADA", created_by="prueba"))
+    db.commit()
+
+
+def test_pedir_actas_que_faltan(db, monkeypatch):
+    _consejo_con_faltantes(db, monkeypatch)
+    hoy = date(2026, 5, 10)
+    assert svc.registrar_solicitud(db, "PRUEBA_MENSUAL", ["2026-02", "2026-03"], date(2026, 4, 1), "Nelson Ortiz",
+                                   "por correo", "mospina", hoy=hoy) == {"registradas": 2, "repetidas": 0}
+    [item] = svc.actas_faltantes(db, hoy=hoy)
+    assert set(item["solicitudes"]) == {"2026-02", "2026-03"}
+    assert item["solicitudes"]["2026-02"]["vencida"] is True and item["solicitudes"]["2026-02"]["dias"] == 39
+    # pedirla otra vez actualiza la fecha y cuenta la vez
+    svc.registrar_solicitud(db, "PRUEBA_MENSUAL", ["2026-02"], date(2026, 5, 5), "Nelson Ortiz", None, "mospina", hoy=hoy)
+    [item] = svc.actas_faltantes(db, hoy=hoy)
+    assert item["solicitudes"]["2026-02"]["veces"] == 2 and item["solicitudes"]["2026-02"]["vencida"] is False
+    assert item["solicitudes"]["2026-02"]["nota"] == "por correo"
+    assert svc.quitar_solicitudes(db, "PRUEBA_MENSUAL", ["2026-03"]) == {"quitadas": 1}
+    assert set(svc.actas_faltantes(db, hoy=hoy)[0]["solicitudes"]) == {"2026-02"}
+
+
+def test_no_se_pide_lo_que_no_falta(db, monkeypatch):
+    _consejo_con_faltantes(db, monkeypatch)
+    hoy = date(2026, 5, 10)
+    with pytest.raises(ValueError, match="no están en la lista"):
+        svc.registrar_solicitud(db, "PRUEBA_MENSUAL", ["2026-01"], hoy, "Nelson Ortiz", None, "mospina", hoy=hoy)
+    with pytest.raises(ValueError, match="futura"):
+        svc.registrar_solicitud(db, "PRUEBA_MENSUAL", ["2026-02"], date(2026, 6, 1), "Nelson Ortiz", None, "mospina", hoy=hoy)
+    with pytest.raises(ValueError, match="no tiene actas"):
+        svc.registrar_solicitud(db, "OTRA", ["2026-02"], hoy, "Nelson Ortiz", None, "mospina", hoy=hoy)
+    assert db.query(CouncilActRequest).filter(CouncilActRequest.instance == "PRUEBA_MENSUAL").count() == 0
+
+
+def test_aviso_de_actas_pedidas_que_no_llegan(db, monkeypatch):
+    from services import avisos
+
+    _consejo_con_faltantes(db, monkeypatch)
+    hoy = date(2026, 5, 10)
+    svc.registrar_solicitud(db, "PRUEBA_MENSUAL", ["2026-02", "2026-03"], date(2026, 4, 1), "Nelson Ortiz", None, "mospina", hoy=hoy)
+    [aviso] = avisos._actas(db, hoy)
+    assert aviso["titulo"] == "2 actas pedidas hace más de 15 días no han llegado"
+    assert "Nelson Ortiz" in aviso["detalle"] and aviso["destino"] == {"page": "actas_archive"}
+    assert avisos._actas(db, date(2026, 4, 10)) == []  # todavía dentro del plazo

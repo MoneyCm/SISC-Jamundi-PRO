@@ -143,8 +143,55 @@ def act_archive(db: Session = Depends(get_db), current_user: User = Depends(requ
 
 @router.get("/acts/missing")
 def missing_acts(db: Session = Depends(get_db), current_user: User = Depends(require_role(ACTAS_ROLES))):
-    """Actas que faltan de las reuniones periódicas (por ahora, el Consejo de Seguridad: una por mes)."""
+    """Actas que faltan de las reuniones periódicas, con las que ya se pidieron (a quién y cuándo)."""
     return service.actas_faltantes(db)
+
+
+class ActRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    instance: str = Field(max_length=40)
+    periodos: List[str] = Field(min_length=1, max_length=400)
+    requested_on: date
+    requested_to: str = Field(min_length=2, max_length=200)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class ActRequestRemoval(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    instance: str = Field(max_length=40)
+    periodos: List[str] = Field(min_length=1, max_length=400)
+
+
+@router.post("/acts/requests")
+async def request_missing_acts(
+    payload: ActRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
+):
+    """Anota que se pidieron actas que faltan, para hacerles seguimiento hasta que lleguen."""
+    try:
+        result = service.registrar_solicitud(db, payload.instance, payload.periodos, payload.requested_on,
+                                             payload.requested_to, payload.note, current_user.username)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    await log_audit(db, "COUNCIL_ACT_REQUESTED", actor_id=str(current_user.id), module="COUNCIL",
+                    target={"instance": payload.instance, "periodos": len(payload.periodos), "to": payload.requested_to},
+                    level=1, request=request)
+    return result
+
+
+@router.post("/acts/requests/remove")
+async def unrequest_missing_acts(
+    payload: ActRequestRemoval,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ACTAS_ROLES)),
+):
+    result = service.quitar_solicitudes(db, payload.instance, payload.periodos)
+    await log_audit(db, "COUNCIL_ACT_REQUEST_REMOVED", actor_id=str(current_user.id), module="COUNCIL",
+                    target={"instance": payload.instance, "periodos": len(payload.periodos)}, level=1, request=request)
+    return result
 
 
 @router.get("/acts/{read_id}/file")
