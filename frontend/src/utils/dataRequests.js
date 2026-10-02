@@ -41,6 +41,27 @@ export const defaultRequest = (today, cadence = 'SEMANAL') => {
     };
 };
 
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const longDate = (value) => { const [y, m, d] = value.split('-').map(Number); return `${d} de ${MONTHS[m - 1]} de ${y}`; };
+
+/** Mensaje de recordatorio para una dependencia que no ha respondido (se copia al correo o WhatsApp). */
+export const reminderMessage = (entity = {}, request = {}) => {
+    const period = request.period_start && request.period_end ? `, del ${longDate(request.period_start)} al ${longDate(request.period_end)}` : '';
+    const again = request.reminders ? ' Ya le habíamos escrito antes sobre esto.' : '';
+    return `Buen día, ${entity.name || ''}.\n\n`
+        + `Le recordamos que el ${longDate(request.requested_on)} le pedimos: ${request.what}${period}. `
+        + `El plazo de respuesta era el ${longDate(request.due_on)} y todavía no lo hemos recibido.${again}\n\n`
+        + 'Esta información alimenta el Observatorio del Delito y los informes de la Secretaría de Seguridad y Convivencia. '
+        + 'Le agradecemos enviarla lo antes posible o avisarnos si hay alguna dificultad.\n\nMuchas gracias.';
+};
+
+/** "Recordado 2 veces, la última el 01/10" */
+export const reminderSummary = (request = {}) => {
+    if (!request.reminders) return '';
+    const last = request.last_reminded_on.split('-').reverse().slice(0, 2).join('/');
+    return request.reminders === 1 ? `Recordado el ${last}` : `Recordado ${request.reminders} veces, la última el ${last}`;
+};
+
 export const stateDetail = (entity) => {
     const date = (value) => value ? value.split('-').reverse().slice(0, 2).join('/') : '';
     if (entity.state === 'ATRASADA') return `Pedido el ${date(entity.open_since)}; el plazo venció el ${date(entity.due_on)}.`;

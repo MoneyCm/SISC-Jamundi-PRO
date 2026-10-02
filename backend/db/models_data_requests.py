@@ -46,3 +46,17 @@ class DataRequest(Base):
     version = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DataRequestReminder(Base):
+    """Recordatorio enviado por una solicitud que no ha respondido (cuándo y por qué medio)."""
+
+    __tablename__ = "data_request_reminders"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    request_id = Column(UUID(as_uuid=True), ForeignKey("data_requests.id", ondelete="CASCADE"), nullable=False, index=True)
+    reminded_on = Column(Date, nullable=False)
+    channel = Column(String(60))
+    note = Column(Text)
+    created_by = Column(String(120), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

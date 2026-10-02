@@ -3,7 +3,7 @@
 Cada aviso sale de algo que el SISC ya calcula; aquí solo se junta y se ordena:
 - la sábana de la Policía (más de 14 días sin llegar; a los 21 la reemplaza el aviso con cifras de MinDefensa);
 - los comparendos del RNMC (más de 35 días sin datos nuevos);
-- las solicitudes de datos vencidas (Centro de análisis → Solicitudes de datos);
+- las solicitudes de datos vencidas, con el último recordatorio (Centro de análisis → Solicitudes de datos);
 - tareas atrasadas de la agenda semanal (por ejemplo, el boletín mensual);
 - el próximo Consejo de Seguridad, cuando faltan 14 días o menos, con los compromisos vencidos;
 - las actas pedidas que no han llegado después de 15 días (Archivo de actas);
@@ -67,8 +67,22 @@ def _solicitudes(db: Session, hoy: date) -> List[Dict]:
     vencidas = [e for e in board(db, hoy)["entities"] if e.get("state") == "ATRASADA"]
     if not vencidas:
         return []
-    partes = [f"{e['name']} (se pidió el {_fecha(e['open_since'])})" if e.get("open_since") else e["name"] for e in vencidas]
-    nivel = "alto" if any((e.get("days_late") or 0) >= 14 for e in vencidas) else "medio"
+
+    def ultimo_recordatorio(entidad):
+        fechas = [r["last_reminded_on"] for r in entidad.get("open_requests", []) if r.get("last_reminded_on")]
+        return max(fechas) if fechas else None
+
+    partes = []
+    for e in vencidas:
+        detalle = [f"se pidió el {_fecha(e['open_since'])}"] if e.get("open_since") else []
+        recordado = ultimo_recordatorio(e)
+        if recordado:
+            veces = sum(r.get("reminders") or 0 for r in e.get("open_requests", []))
+            detalle.append(f"se le recordó el {_fecha(recordado)}" + (f" ({veces} veces)" if veces > 1 else ""))
+        partes.append(f"{e['name']} ({'; '.join(detalle)})" if detalle else e["name"])
+    # Alto: lleva dos semanas vencida y nadie le ha recordado en los últimos 3 días.
+    recien = lambda e: ultimo_recordatorio(e) and (hoy - date.fromisoformat(ultimo_recordatorio(e))).days <= 3  # noqa: E731
+    nivel = "alto" if any((e.get("days_late") or 0) >= 14 and not recien(e) for e in vencidas) else "medio"
     return [_aviso("solicitudes", nivel,
                    f"{len(vencidas)} {'dependencia no ha' if len(vencidas) == 1 else 'dependencias no han'} respondido a tiempo",
                    "; ".join(partes) + ". Conviene recordarles.", {"page": "observatory", "tab": "solicitudes"})]
