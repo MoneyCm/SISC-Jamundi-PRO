@@ -496,7 +496,7 @@ def get_act_file(db: Session, read_id: str):
 
 # Reuniones con periodicidad fija: de ellas se espera un acta por periodo y se sabe a quién pedirla.
 ACTAS_ESPERADAS = {
-    "CONSEJO_SEGURIDAD": {"frecuencia": "mensual", "responsables": "Luis Araque y Nelson"},
+    "CONSEJO_SEGURIDAD": {"frecuencia": "mensual", "responsables": "Nelson Ortiz"},
     "COMITE_ORDEN_PUBLICO": {"frecuencia": "mensual", "responsables": None},
     "COMITE_CIVIL_CONVIVENCIA": {"frecuencia": "mensual", "responsables": None},
     "PLANEACION_SEMANAL": {"frecuencia": "semanal", "responsables": None},
