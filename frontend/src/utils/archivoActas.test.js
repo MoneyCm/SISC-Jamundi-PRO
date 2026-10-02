@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { esPdf, fechaActa, filtrarActas, mesLegible, resumenPorInstancia, sinActaOficial, tamanoArchivo } from './archivoActas.js';
+import { esPdf, fechaActa, filtrarActas, mesLegible, periodoLegible, resumenPorInstancia, sinActaOficial, tamanoArchivo } from './archivoActas.js';
 
 const actas = [
     { read_id: '1', instance: 'CONSEJO_SEGURIDAD', instance_label: 'Consejo de Seguridad', act_date: '2026-09-21', status: 'CONFIRMADA', has_file: false, filename: 'Nota de Gemini – Consejo (sin acta oficial)' },
@@ -23,6 +23,8 @@ test('filtros y marcas', () => {
     assert.equal(tamanoArchivo(350 * 1024), '350 KB');
     assert.equal(tamanoArchivo(2.5 * 1024 * 1024), '2,5 MB');
     assert.equal(mesLegible('2024-02'), 'febrero de 2024');
+    assert.equal(periodoLegible('2025-08-04', 'semanal'), 'semana del 4 de agosto de 2025');
+    assert.equal(periodoLegible('2024-02'), 'febrero de 2024');
     assert.equal(esPdf({ filename: 'Acta 03.PDF' }), true);
     assert.equal(esPdf({ filename: 'COP julio.docx' }), false);
 });

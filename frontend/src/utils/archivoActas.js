@@ -47,6 +47,10 @@ export function mesLegible(valor) {
     return mes ? `${MESES[mes - 1]} de ${anio}` : String(valor || '');
 }
 
+// Periodo de una reunión: "febrero de 2024" (mensual) o "semana del 4 de agosto de 2025" (semanal).
+export const periodoLegible = (valor, frecuencia = 'mensual') => (frecuencia === 'semanal'
+    ? `semana del ${fechaActa(valor)}` : mesLegible(valor));
+
 export const esPdf = (acta = {}) => /\.pdf$/i.test(acta.filename || '') || acta.content_type === 'application/pdf';
 
 export const tamanoArchivo = (bytes) => (bytes == null ? '' : bytes < 1024 * 1024

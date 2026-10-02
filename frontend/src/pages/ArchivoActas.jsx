@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Archive, CalendarX, ChevronDown, ChevronUp, Download, Eye, FileText, Loader2, Paperclip, RefreshCw, Upload } from 'lucide-react';
 import { apiFetch, apiJson, readApiError } from '../utils/apiClient';
-import { ESTADOS_ACTA, anioActa, esPdf, fechaActa, filtrarActas, mesLegible, resumenPorInstancia, sinActaOficial, tamanoArchivo } from '../utils/archivoActas';
+import { ESTADOS_ACTA, anioActa, esPdf, fechaActa, filtrarActas, periodoLegible, resumenPorInstancia, sinActaOficial, tamanoArchivo } from '../utils/archivoActas';
 
 // Ficha de un acta: lo que el SISC leyó de ella (objetivo, compromisos y acuerdos, temas, advertencias).
 const FichaActa = ({ readId }) => {
@@ -47,6 +47,9 @@ const FichaActa = ({ readId }) => {
         </div>
     );
 };
+
+// Cuántos periodos sin acta se muestran por reunión (los más recientes); el resto se cuenta.
+const MAX_FALTANTES = 12;
 
 // Archivo de actas: todas las actas digitalizadas de las reuniones (Consejo, comités, planeación), con su original.
 const ArchivoActas = ({ onNavigate }) => {
@@ -195,14 +198,21 @@ const ArchivoActas = ({ onNavigate }) => {
             {faltantes.filter((f) => f.faltan.length || f.sin_acta_oficial.length).map((f) => (
                 <section key={f.instance} className="border-l-4 border-red-400 bg-red-50 p-4" aria-label={`Actas que faltan: ${f.instance_label}`}>
                     <h2 className="flex items-center gap-2 text-base font-black text-red-900"><CalendarX size={18} /> Actas que faltan del {f.instance_label}</h2>
-                    <p className="mt-1 text-sm font-semibold text-red-900/80">Se reúne cada mes (desde {mesLegible(f.desde)}). Pedirlas a: <strong>{f.responsables}</strong>.</p>
+                    <p className="mt-1 text-sm font-semibold text-red-900/80">
+                        Se reúne cada {f.frecuencia === 'semanal' ? 'semana' : 'mes'}; última acta: {fechaActa(f.ultima)}.{' '}
+                        {f.responsables ? <>Pedirlas a: <strong>{f.responsables}</strong>.</> : <>Falta definir a quién se le piden.</>}
+                    </p>
                     {f.faltan.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                            {f.faltan.map((mes) => <span key={mes} className="rounded border border-red-200 bg-white px-2 py-0.5 text-xs font-bold text-red-800">{mesLegible(mes)}</span>)}
-                        </div>
+                        <>
+                            <p className="mt-2 text-xs font-black uppercase text-red-900">{f.faltan.length} {f.frecuencia === 'semanal' ? (f.faltan.length === 1 ? 'semana' : 'semanas') : (f.faltan.length === 1 ? 'mes' : 'meses')} sin acta</p>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                                {f.faltan.slice(-MAX_FALTANTES).map((periodo) => <span key={periodo} className="rounded border border-red-200 bg-white px-2 py-0.5 text-xs font-bold text-red-800">{periodoLegible(periodo, f.frecuencia)}</span>)}
+                                {f.faltan.length > MAX_FALTANTES && <span className="px-1 text-xs font-bold text-red-900">y {f.faltan.length - MAX_FALTANTES} anteriores</span>}
+                            </div>
+                        </>
                     )}
                     {f.sin_acta_oficial.length > 0 && (
-                        <p className="mt-2 text-xs font-bold text-red-900">Solo hay una nota, falta el acta oficial: {f.sin_acta_oficial.map(mesLegible).join(', ')}.</p>
+                        <p className="mt-2 text-xs font-bold text-red-900">Solo hay una nota, falta el acta oficial: {f.sin_acta_oficial.map((p) => periodoLegible(p, f.frecuencia)).join(', ')}.</p>
                     )}
                 </section>
             ))}
