@@ -74,3 +74,16 @@ def test_actas_faltantes_por_mes(db, monkeypatch):
     assert faltan["desde"] == "2026-01" and faltan["responsables"] == "Secretaría técnica"
     assert faltan["faltan"] == ["2026-02", "2026-04"]       # mayo aún no termina
     assert faltan["sin_acta_oficial"] == ["2026-03"]
+
+
+def test_actas_faltantes_por_semana(db, monkeypatch):
+    monkeypatch.setattr(svc, "ACTAS_ESPERADAS", {"PRUEBA_SEMANAL": {"frecuencia": "semanal", "responsables": None}})
+    for dia in (date(2026, 9, 2), date(2026, 9, 17)):  # semanas del 31-ago y del 14-sep
+        nombre = f"Acta {dia}.pdf"
+        db.add(CouncilActRead(filename=nombre, sha256=hashlib.sha256(nombre.encode()).hexdigest(), instance="PRUEBA_SEMANAL",
+                              act_date=dia, reading={}, status="CONFIRMADA", created_by="prueba"))
+    db.commit()
+    [faltan] = svc.actas_faltantes(db, hoy=date(2026, 10, 1))
+    assert faltan["frecuencia"] == "semanal" and faltan["responsables"] is None
+    assert faltan["desde"] == "2026-08-31" and faltan["ultima"] == "2026-09-17"
+    assert faltan["faltan"] == ["2026-09-07", "2026-09-21"]  # la semana del 28-sep aún no termina

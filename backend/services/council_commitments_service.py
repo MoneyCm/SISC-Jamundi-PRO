@@ -14,7 +14,7 @@ import csv
 import io
 import re
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
 from sqlalchemy.orm import Session
@@ -497,34 +497,53 @@ def get_act_file(db: Session, read_id: str):
 # Reuniones con periodicidad fija: de ellas se espera un acta por periodo y se sabe a quién pedirla.
 ACTAS_ESPERADAS = {
     "CONSEJO_SEGURIDAD": {"frecuencia": "mensual", "responsables": "Luis Araque y Nelson"},
+    "COMITE_ORDEN_PUBLICO": {"frecuencia": "mensual", "responsables": None},
+    "COMITE_CIVIL_CONVIVENCIA": {"frecuencia": "mensual", "responsables": None},
+    "PLANEACION_SEMANAL": {"frecuencia": "semanal", "responsables": None},
 }
 SIN_ACTA_OFICIAL = ("sin acta oficial", "nota de gemini")
 
 
+def _periodo(fecha: date, frecuencia: str) -> date:
+    """Mes: el día 1. Semana: el lunes."""
+    return fecha - timedelta(days=fecha.weekday()) if frecuencia == "semanal" else fecha.replace(day=1)
+
+
+def _siguiente(periodo: date, frecuencia: str) -> date:
+    if frecuencia == "semanal":
+        return periodo + timedelta(days=7)
+    return date(periodo.year + (periodo.month == 12), periodo.month % 12 + 1, 1)
+
+
 def actas_faltantes(db: Session, hoy: Optional[date] = None) -> List[Dict[str, Any]]:
-    """Por cada reunión mensual: meses sin acta y meses que solo tienen una nota (falta el acta oficial)."""
+    """Por cada reunión periódica: periodos cerrados sin acta y los que solo tienen una nota (falta el acta oficial).
+
+    Mensual: claves "AAAA-MM". Semanal: el lunes de cada semana, "AAAA-MM-DD".
+    """
     hoy = hoy or date.today()
-    ultimo_mes_cerrado = (hoy.year, hoy.month - 1) if hoy.month > 1 else (hoy.year - 1, 12)
     resultado = []
     for instancia, regla in ACTAS_ESPERADAS.items():
+        frecuencia = regla["frecuencia"]
         filas = db.query(CouncilActRead.act_date, CouncilActRead.filename).filter(
             CouncilActRead.instance == instancia, CouncilActRead.act_date.isnot(None)).all()
         if not filas:
             continue
         oficiales, notas = set(), set()
         for fecha, nombre in filas:
-            mes = (fecha.year, fecha.month)
-            (notas if any(t in (nombre or "").lower() for t in SIN_ACTA_OFICIAL) else oficiales).add(mes)
+            (notas if any(t in (nombre or "").lower() for t in SIN_ACTA_OFICIAL) else oficiales).add(_periodo(fecha, frecuencia))
+        clave = (lambda p: p.isoformat()) if frecuencia == "semanal" else (lambda p: f"{p.year}-{p.month:02d}")
+        ultimo_cerrado = _periodo(hoy, frecuencia)  # el periodo en curso todavía no se exige
         inicio = min(oficiales | notas)
-        faltan, sin_oficial = [], []
-        anio, mes = inicio
-        while (anio, mes) <= ultimo_mes_cerrado:
-            if (anio, mes) not in oficiales:
-                (sin_oficial if (anio, mes) in notas else faltan).append(f"{anio}-{mes:02d}")
-            anio, mes = (anio, mes + 1) if mes < 12 else (anio + 1, 1)
+        faltan, sin_oficial, periodo = [], [], inicio
+        while periodo < ultimo_cerrado:
+            if periodo not in oficiales:
+                (sin_oficial if periodo in notas else faltan).append(clave(periodo))
+            periodo = _siguiente(periodo, frecuencia)
+        ultima = max(fecha for fecha, _nombre in filas)
         resultado.append({"instance": instancia, "instance_label": INSTANCES.get(instancia, INSTANCES["OTRA"])["label"],
-                          "frecuencia": regla["frecuencia"], "responsables": regla["responsables"],
-                          "desde": f"{inicio[0]}-{inicio[1]:02d}", "faltan": faltan, "sin_acta_oficial": sin_oficial})
+                          "frecuencia": frecuencia, "responsables": regla["responsables"],
+                          "desde": clave(inicio), "ultima": ultima.isoformat(),
+                          "faltan": faltan, "sin_acta_oficial": sin_oficial})
     return resultado
 
 
