@@ -361,6 +361,23 @@ async def decision_report_pdf(request: Request, instance: str = Query(default="C
         "Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
 
 
+@router.get("/session-sheet.pdf")
+async def session_sheet_pdf(request: Request, instance: str = Query(default="CONSEJO_SEGURIDAD"),
+                            session_date: Optional[date] = Query(default=None), db: Session = Depends(get_db),
+                            current_user: User = Depends(require_role(FOLLOWUP_ROLES))):
+    """Hoja de una página para la sesión: lo acordado la vez pasada, atrasados por responsable y cifras."""
+    from fastapi.responses import Response
+    from services.council_decision_report_pdf import build_council_sheet_pdf
+
+    report = _decision_report(db, instance, session_date)
+    pdf = build_council_sheet_pdf(report)
+    await log_audit(db, "COUNCIL_SESSION_SHEET", actor_id=str(current_user.id), module="COUNCIL",
+                    target={"instance": instance, "session_date": report["session_date"]}, level=2, request=request)
+    filename = f"hoja-sesion-{INSTANCES[instance]['prefix'].lower()}-{report['session_date']}.pdf"
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
+
+
 @router.get("/{code}/history")
 def commitment_history(code: str, db: Session = Depends(get_db), current_user: User = Depends(institutional_access)):
     row = db.query(CouncilCommitment).filter(CouncilCommitment.code == code).first()
