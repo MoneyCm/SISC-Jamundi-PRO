@@ -94,6 +94,28 @@ def attention(rows: List[CouncilCommitment], today: date, limit: int = 8) -> Lis
     return items[:limit]
 
 
+def last_session_items(rows: List[CouncilCommitment], last: Optional[date], today: date) -> List[Dict[str, Any]]:
+    """Lo que salió de la última sesión: compromisos nuevos y los que se volvieron a pedir ese día."""
+    if not last:
+        return []
+    items = [commitments.serialize(row, today) for row in rows
+             if row.status != "DESCARTADO" and last in (row.origin_date, row.last_mention_date)]
+    return sorted(items, key=lambda item: item["code"])
+
+
+def overdue_by_owner(rows: List[CouncilCommitment], today: date) -> List[Dict[str, Any]]:
+    """Atrasados agrupados por responsable, del que más tiene al que menos."""
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        item = commitments.serialize(row, today)
+        if "ATRASADO" in item["flags"]:
+            groups.setdefault(item["responsible"] or "Por definir", []).append(item)
+    result = [{"responsible": owner, "count": len(items),
+               "items": sorted(items, key=lambda item: item["deadline_date"] or "")}
+              for owner, items in groups.items()]
+    return sorted(result, key=lambda group: (-group["count"], group["responsible"]))
+
+
 def commitments_block(db: Session, instance: str, session_date: date) -> Dict[str, Any]:
     rows = db.query(CouncilCommitment).filter(CouncilCommitment.instance == instance).all()
     data = commitments.summary(rows, session_date)
@@ -117,6 +139,8 @@ def commitments_block(db: Session, instance: str, session_date: date) -> Dict[st
         "without_information": data["without_information"], "without_deadline": data["without_deadline"],
         "fulfilled_since_last": fulfilled,
         "attention": attention(rows, session_date),
+        "last_session_items": last_session_items(rows, last, session_date),
+        "overdue_by_owner": overdue_by_owner(rows, session_date),
     }
 
 

@@ -1,4 +1,4 @@
-"""PDF de dos páginas del informe para decisión del Consejo (estilo del boletín institucional)."""
+"""PDF del informe para decisión del Consejo (dos páginas) y hoja de una página para la sesión (estilo del boletín institucional)."""
 from __future__ import annotations
 
 from datetime import date
@@ -96,7 +96,7 @@ def _crest():
     return ImageReader(buffer)
 
 
-def _header_footer(report):
+def _header_footer(report, title="INFORME PARA DECISIÓN"):
     def draw(canvas, doc):
         canvas.saveState()
         width, height = A4
@@ -104,7 +104,7 @@ def _header_footer(report):
         if crest:
             canvas.drawImage(crest, 1.28 * cm, height - 2.45 * cm, width=0.9 * cm, height=1.2 * cm, preserveAspectRatio=True, mask="auto")
         canvas.setFillColor(BLUE); canvas.setFont("Helvetica-Bold", 13)
-        canvas.drawString(2.45 * cm, height - 1.55 * cm, "INFORME PARA DECISIÓN")
+        canvas.drawString(2.45 * cm, height - 1.55 * cm, title)
         canvas.setFillColor(INK); canvas.setFont("Helvetica-Bold", 8)
         canvas.drawString(2.45 * cm, height - 2.0 * cm, f"{report['instance_label'].upper()} | SESIÓN DEL {_long_date(report['session_date']).upper()}")
         canvas.setFillColor(BLUE); canvas.setFont("Helvetica-Bold", 8)
@@ -222,5 +222,97 @@ def build_decision_report_pdf(report: dict) -> bytes:
         story.append(Paragraph(_t(note), styles["small"]))
 
     draw = _header_footer(report)
+    doc.build(story, onFirstPage=draw, onLaterPages=draw)
+    return buffer.getvalue()
+
+
+SHEET_LAST_ITEMS = 16
+SHEET_OWNERS = 8
+
+
+def _short(text, limit: int) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip(" ,.;") + "…"
+
+
+def _sheet_date(iso) -> str:
+    return date.fromisoformat(iso).strftime("%d/%m/%Y") if iso else "Sin fecha"
+
+
+def build_council_sheet_pdf(report: dict) -> bytes:
+    """Una página para llevar a la sesión: lo acordado la vez pasada, quién tiene vencidos y cómo va el periodo."""
+    styles = _styles()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=1.3 * cm, rightMargin=1.3 * cm, topMargin=3.0 * cm,
+                            bottomMargin=1.45 * cm, title=f"Hoja para la sesión - {report['instance_label']}",
+                            author="SISC Jamundí - Observatorio del Delito")
+    block = report["commitments"]
+    story = [Paragraph(
+        f"<b>{block['open']}</b> compromisos abiertos | <font color='#ED3237'><b>{block['overdue']}</b> atrasados</font> | "
+        f"<b>{block['without_information']}</b> sin reporte de avance | <b>{len(block['fulfilled_since_last'])}</b> cumplidos "
+        "desde la última sesión", styles["body"])]
+    if block["open"] and block["without_information"] == block["open"]:
+        story.append(Paragraph("<font color='#ED3237'><b>Ningún compromiso abierto tiene reporte de avance.</b></font> "
+                               "Se sugiere pedir a cada responsable que informe en la sesión.", styles["td"]))
+
+    # 1. Lo acordado en la última sesión
+    last = block.get("last_session")
+    items = block.get("last_session_items", [])
+    story.append(_section(1, f"Lo acordado en la última sesión ({_long_date(last)})" if last else "Lo acordado en la última sesión", styles))
+    if not items:
+        story.append(Paragraph("No hay compromisos registrados de la última sesión.", styles["body"]))
+    else:
+        sources = sorted({item["origin_act"] for item in items if item.get("origin_act")})
+        if sources:
+            story.append(Paragraph(f"Fuente: {_t('; '.join(sources))}.", styles["small"]))
+        data = [[_th("Código", styles), _th("Compromiso", styles), _th("Responsable", styles), _th("Plazo", styles)]]
+        for item in items[:SHEET_LAST_ITEMS]:
+            deadline = _sheet_date(item["deadline_date"]) if item["deadline_date"] else _short(item["deadline_text"] or "Sin plazo", 16)
+            data.append([Paragraph(_t(item["code"]), styles["td"]), Paragraph(_t(_short(item["text"], 80)), styles["td"]),
+                         Paragraph(_t(_short(item["responsible"] or "Por definir", 40)), styles["td"]),
+                         Paragraph(_t(deadline), styles["td"])])
+        story.append(_grid(data, [2.2 * cm, 10.6 * cm, 3.3 * cm, 2.3 * cm], styles))
+        if len(items) > SHEET_LAST_ITEMS:
+            story.append(Paragraph(f"Y {len(items) - SHEET_LAST_ITEMS} más en el SISC.", styles["small"]))
+
+    # 2. Atrasados por responsable
+    owners = block.get("overdue_by_owner", [])
+    story.append(_section(2, "Compromisos atrasados por responsable", styles))
+    if not owners:
+        story.append(Paragraph("No hay compromisos atrasados.", styles["body"]))
+    else:
+        data = [[_th("Responsable", styles), _th("Atrasados", styles), _th("Cuáles (código y fecha límite)", styles)]]
+        for group in owners[:SHEET_OWNERS]:
+            listed = ", ".join(f"{item['code']} ({_sheet_date(item['deadline_date'])})" for item in group["items"][:6])
+            if group["count"] > 6:
+                listed += f" y {group['count'] - 6} más"
+            data.append([Paragraph(f"<b>{_t(_short(group['responsible'], 70))}</b>", styles["td"]),
+                         Paragraph(str(group["count"]), styles["num"]), Paragraph(_t(listed), styles["td"])])
+        story.append(_grid(data, [5.4 * cm, 1.8 * cm, 11.2 * cm], styles))
+        rest = owners[SHEET_OWNERS:]
+        if rest:
+            story.append(Paragraph(f"Y {sum(group['count'] for group in rest)} atrasados más de otros {len(rest)} responsables.", styles["small"]))
+
+    # 3. Cifras
+    situation = report["situation"]
+    story.append(_section(3, "Cifras del periodo", styles))
+    if situation["status"] != "OK":
+        story.append(Paragraph(_t(situation["reason"]), styles["body"]))
+    else:
+        data = [[_th("Conducta", styles), _th(f"Últimas 4 semanas ({situation['recent_label']})", styles), _th("Cambio", styles),
+                 _th(f"Año corrido ({situation['year_label']})", styles), _th("Cambio", styles)]]
+        for row in situation["rows"]:
+            recent, year = row["recent"], row["year"]
+            data.append([
+                Paragraph(f"<b>{_t(row['label'])}</b>", styles["td"]),
+                Paragraph(f"{_number(recent['current'])} <font color='#667085'>(antes {_number(recent['previous'])})</font>", styles["td"]),
+                Paragraph(_t(_change(recent)), styles["num"]),
+                Paragraph(f"{_number(year['current'])} <font color='#667085'>(antes {_number(year['previous'])})</font>", styles["td"]),
+                Paragraph(_t(_change(year)), styles["num"]),
+            ])
+        story.append(_grid(data, [4.6 * cm, 4.4 * cm, 2.3 * cm, 4.8 * cm, 2.3 * cm], styles))
+        story.append(Paragraph(f"Cifras: {_t(situation['unit'])}. Con menos de 30 hechos el año anterior se da la diferencia en casos.", styles["small"]))
+
+    draw = _header_footer(report, "HOJA PARA LA SESIÓN")
     doc.build(story, onFirstPage=draw, onLaterPages=draw)
     return buffer.getvalue()
