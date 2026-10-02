@@ -32,8 +32,8 @@ test('filtros y marcas', () => {
 test('pedir actas: mensaje y resumen', () => {
     const reunion = { instance_label: 'Consejo de Seguridad', frecuencia: 'mensual',
         solicitudes: { '2025-11': { vencida: true }, '2025-12': { vencida: false } } };
-    const texto = mensajePedido(reunion, ['2025-12', '2025-11'], 'Nelson Ortiz');
-    assert.match(texto, /^Buen día, Nelson Ortiz\./);
+    const texto = mensajePedido(reunion, ['2025-12', '2025-11'], 'Nelson Cortés');
+    assert.match(texto, /^Buen día, Nelson Cortés\./);
     assert.match(texto, /- noviembre de 2025\n- diciembre de 2025/);
     assert.match(mensajePedido({ instance_label: 'Planeación', frecuencia: 'semanal' }, ['2026-09-21']), /- semana del 21 de septiembre de 2026/);
     assert.deepEqual(resumenPedidas(reunion), { pedidas: 2, vencidas: 1 });
