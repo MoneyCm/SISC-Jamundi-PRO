@@ -693,7 +693,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
 
       {/* PÁGINA PISCC (TABLA 16) - SEGUIMIENTO CONSEJO DE SEGURIDAD */}
       {includePisccPage && stats.pisccTracking && (
-        <div className="newsletter-document bg-white shadow-2xl relative slide-page" style={{ padding: '40px 50px', fontFamily: '"Inter", "Outfit", sans-serif', color: '#333' }}>
+        <div className="newsletter-document bg-white shadow-2xl relative slide-page" style={{ padding: '28px 50px 40px', fontFamily: '"Inter", "Outfit", sans-serif', color: '#333' }}>
           {/* HEADER INSTITUCIONAL */}
           <div className="flex justify-between items-center border-b-[4px] pb-2 mb-4" style={{ borderColor: colorAmarillo }}>
             <div className="flex items-center gap-3">
@@ -790,32 +790,32 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
 
                   return (
                     <tr key={ind.id} className={`${rowBg} hover:bg-blue-50/40 transition-colors`}>
-                      <td className="px-2.5 py-1.5 font-semibold text-gray-800">
+                      <td className="px-2.5 py-1 font-semibold text-gray-800">
                         {ind.indicador}
                         <span className="block text-[8px] font-normal text-gray-500">
                           Fuente: {ind.fuenteDescripcion}{ind.fechaCorte ? ` · Corte: ${formatIsoDate(ind.fechaCorte, true)}` : ''}{ind.corteAtrasado ? ' (corte atrasado)' : ''}
                         </span>
                       </td>
-                      <td className="px-1.5 py-1.5 text-center font-semibold text-gray-700 bg-gray-50/50">
+                      <td className="px-1.5 py-1 text-center font-semibold text-gray-700 bg-gray-50/50">
                         {ind.lineaBase2023.toLocaleString('es-CO')}
                       </td>
-                      <td className="px-1.5 py-1.5 text-center font-bold text-blue-900 bg-blue-50/40">
+                      <td className="px-1.5 py-1 text-center font-bold text-blue-900 bg-blue-50/40">
                         {ind.meta2027.toLocaleString('es-CO')}
                       </td>
                       {ANIOS_CERRADOS.map(anio => {
                         const cerrado = ind.aniosCerrados.find(year => year.anio === anio);
                         return (
-                          <td key={anio} className={`px-1.5 py-1.5 text-center font-bold ${cerrado?.completo ? (COLOR_CERRADO[cerrado.semaforo || ''] || 'text-gray-600') : 'text-gray-400'}`}
+                          <td key={anio} className={`px-1.5 py-1 text-center font-bold ${cerrado?.completo ? (COLOR_CERRADO[cerrado.semaforo || ''] || 'text-gray-600') : 'text-gray-400'}`}
                             title={cerrado?.etiqueta}>
                             {cerrado?.completo && cerrado.total !== null ? cerrado.total.toLocaleString('es-CO') : '—'}
                           </td>
                         );
                       })}
-                      <td className={`px-1.5 py-1.5 text-center font-bold ${COLOR_ANTERIOR[ind.statusPrev || ''] || 'text-gray-600'}`}
+                      <td className={`px-1.5 py-1 text-center font-bold ${COLOR_ANTERIOR[ind.statusPrev || ''] || 'text-gray-600'}`}
                         title={ind.statusPrev ? ETIQUETA_ANTERIOR[ind.statusPrev] : undefined}>
                         {ind.countPrev !== null ? ind.countPrev.toLocaleString('es-CO') : '—'}
                       </td>
-                      <td className="px-1.5 py-1.5 text-center font-black text-gray-900 bg-gray-100/50">
+                      <td className="px-1.5 py-1 text-center font-black text-gray-900 bg-gray-100/50">
                         {hasData ? ind.countBase!.toLocaleString('es-CO') : '—'}
                         {hasData && ind.reciente && (
                           <span className="block text-[7.5px] font-semibold leading-tight text-gray-500">
@@ -823,13 +823,13 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
                           </span>
                         )}
                       </td>
-                      <td className="px-1.5 py-1.5 text-center font-bold" style={{ color: (ind.variacionPct || 0) > 0 ? '#E53E3E' : (ind.variacionPct || 0) < 0 ? '#00A34F' : '#4B5563' }}>
+                      <td className="px-1.5 py-1 text-center font-bold" style={{ color: (ind.variacionPct || 0) > 0 ? '#E53E3E' : (ind.variacionPct || 0) < 0 ? '#00A34F' : '#4B5563' }}>
                         {hasData ? ind.variacionStr : '—'}
                       </td>
-                      <td className="px-2 py-1.5 text-center font-black text-[11px] text-blue-950 bg-yellow-50/70">
+                      <td className="px-2 py-1 text-center font-black text-[11px] text-blue-950 bg-yellow-50/70">
                         {hasData && ind.proyeccionAnual !== null ? `≈ ${ind.proyeccionAnual.toLocaleString('es-CO')}` : '—'}
                       </td>
-                      <td className="px-2.5 py-1.5 text-center">
+                      <td className="px-2.5 py-1 text-center">
                         {statusBadge}
                       </td>
                     </tr>
@@ -840,7 +840,7 @@ const NewsletterPreview: React.FC<NewsletterPreviewProps> = ({ stats, operations
           </div>
 
           {/* CRITERIO Y RECOMENDACIÓN ESTRATÉGICA */}
-          <div className="grid grid-cols-2 gap-3 mb-3.5">
+          <div className="grid grid-cols-[2.4fr_1fr] gap-3 mb-3">
             <div className="bg-gray-50 border border-gray-200 p-2.5 rounded-md">
               <h3 className="text-[9.5px] font-extrabold uppercase text-gray-800 mb-1 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
