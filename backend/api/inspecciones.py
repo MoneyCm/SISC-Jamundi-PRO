@@ -1,10 +1,12 @@
-from datetime import datetime
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from db.session import get_db
 from services.inspeccion_service import InspeccionService
-from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion
+from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion, InspeccionFuncionario
+from services import inspeccion_despachos
 from sqlalchemy import func, text
 
 from api.auth import institutional_access, require_role
@@ -52,6 +54,9 @@ async def upload_inspecciones(
         )
 
     result = await service.ingest_excel(content, file.filename)
+    # La inspección de cada expediente sale de las anotaciones y de quién registró: se recalcula con lo nuevo.
+    result["inspecciones"] = inspeccion_despachos.asignar(db)
+    db.commit()
     result["quality"] = {
         "report_id": str(db_quality_report.id),
         "semaforo": quality_report.get("semaforo"),
@@ -65,6 +70,7 @@ def get_expedientes(
     skip: int = 0,
     limit: int = 100,
     localidad: Optional[str] = None,
+    inspeccion: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(institutional_access),
 ):
@@ -72,14 +78,15 @@ def get_expedientes(
 
     # Los comparendos más recientes primero (fecha del hecho), con su comportamiento y el estado de sus medidas.
     # La búsqueda sirve por barrio o por número de expediente.
-    filtro = "(:localidad IS NULL OR e.localidad ILIKE :localidad_pattern OR e.numero_expediente ILIKE :localidad_pattern)"
+    filtro = ("(:localidad IS NULL OR e.localidad ILIKE :localidad_pattern OR e.numero_expediente ILIKE :localidad_pattern)"
+              " AND (:inspeccion IS NULL OR COALESCE(e.inspeccion, :sin_identificar) = :inspeccion)")
     sql = text(f"""
         WITH primera AS (
             SELECT m.expediente_id, MIN(a.fecha_actuacion) AS fecha
             FROM inspeccion_medidas m JOIN inspeccion_actuaciones a ON a.medida_id = m.id
             GROUP BY m.expediente_id
         )
-        SELECT e.id, e.numero_expediente, e.localidad,
+        SELECT e.id, e.numero_expediente, e.localidad, e.inspeccion,
                ST_X(e.geom_punto) AS lng, ST_Y(e.geom_punto) AS lat, primera.fecha,
                (SELECT m.articulo FROM inspeccion_medidas m
                  WHERE m.expediente_id = e.id AND m.articulo IS NOT NULL LIMIT 1) AS articulo,
@@ -95,6 +102,8 @@ def get_expedientes(
     params = {
         "localidad": localidad.strip() if (localidad and localidad.strip()) else None,
         "localidad_pattern": f"%{localidad.strip()}%" if (localidad and localidad.strip()) else "%%",
+        "inspeccion": inspeccion.strip().upper() if (inspeccion and inspeccion.strip()) else None,
+        "sin_identificar": inspeccion_despachos.SIN_IDENTIFICAR,
         "limit": limit,
         "skip": skip
     }
@@ -280,3 +289,114 @@ def get_tendencia(
     from services import comparendos_rnmc
 
     return comparendos_rnmc.tendencia(db)
+
+
+@router.get("/stats/por-inspeccion")
+def get_por_inspeccion(
+    anio: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
+    """Gestión del año por inspección (despacho). Sin año, el del último comparendo cargado."""
+    from services import comparendos_rnmc
+
+    hoy = date.today()
+    if anio is None:
+        corte = comparendos_rnmc.corte(db, hoy)
+        anio = corte.year if corte else hoy.year
+    return inspeccion_despachos.gestion_por_inspeccion(db, anio, hoy)
+
+
+class FuncionarioIn(BaseModel):
+    documento: str = Field(min_length=3, max_length=30)
+    nombre: Optional[str] = Field(default=None, max_length=150)
+    inspeccion: str
+    desde: date
+    hasta: Optional[date] = None
+
+
+class FuncionarioCambio(BaseModel):
+    nombre: Optional[str] = Field(default=None, max_length=150)
+    hasta: Optional[date] = None
+
+
+def _funcionario_json(funcionario: InspeccionFuncionario) -> dict:
+    return {
+        "id": str(funcionario.id), "documento": funcionario.documento, "nombre": funcionario.nombre,
+        "inspeccion": funcionario.inspeccion, "desde": funcionario.desde.isoformat(),
+        "hasta": funcionario.hasta.isoformat() if funcionario.hasta else None,
+    }
+
+
+def _validar_fechas(desde: date, hasta: Optional[date]):
+    if hasta and hasta < desde:
+        raise HTTPException(status_code=422, detail="La fecha final no puede ser anterior a la inicial.")
+
+
+@router.get("/funcionarios")
+def listar_funcionarios(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(INSPECTIONS_UPLOAD_ROLES)),
+):
+    """Quién registra en el RNMC por cada inspección (vigentes primero)."""
+    funcionarios = db.query(InspeccionFuncionario).order_by(
+        InspeccionFuncionario.hasta.isnot(None), InspeccionFuncionario.inspeccion, InspeccionFuncionario.desde.desc()
+    ).all()
+    return {"inspecciones": inspeccion_despachos.INSPECCIONES, "items": [_funcionario_json(f) for f in funcionarios]}
+
+
+@router.post("/funcionarios")
+def crear_funcionario(
+    datos: FuncionarioIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(INSPECTIONS_UPLOAD_ROLES)),
+):
+    inspeccion = datos.inspeccion.strip().upper()
+    if inspeccion not in inspeccion_despachos.INSPECCIONES:
+        raise HTTPException(status_code=422, detail="Inspección no válida.")
+    documento = inspeccion_despachos.documento_limpio(datos.documento)
+    if not documento:
+        raise HTTPException(status_code=422, detail="Documento no válido.")
+    _validar_fechas(datos.desde, datos.hasta)
+    # Un documento solo puede estar en una inspección a la vez.
+    for otro in db.query(InspeccionFuncionario).filter_by(documento=documento).all():
+        termina_otro = otro.hasta or date.max
+        termina_nuevo = datos.hasta or date.max
+        if otro.desde <= termina_nuevo and datos.desde <= termina_otro:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ese documento ya está en la inspección {otro.inspeccion.lower()} en esas fechas. "
+                       "Ponga fecha final a ese registro antes de crear el nuevo.",
+            )
+    funcionario = InspeccionFuncionario(
+        documento=documento, nombre=(datos.nombre or "").strip() or None, inspeccion=inspeccion,
+        desde=datos.desde, hasta=datos.hasta,
+    )
+    db.add(funcionario)
+    db.flush()
+    inspeccion_despachos.asignar(db)
+    db.commit()
+    return _funcionario_json(funcionario)
+
+
+@router.patch("/funcionarios/{funcionario_id}")
+def cambiar_funcionario(
+    funcionario_id: str,
+    datos: FuncionarioCambio,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(INSPECTIONS_UPLOAD_ROLES)),
+):
+    """Cambia el nombre o pone la fecha final (cuando trasladan al funcionario)."""
+    funcionario = db.query(InspeccionFuncionario).filter(InspeccionFuncionario.id == funcionario_id).first()
+    if not funcionario:
+        raise HTTPException(status_code=404, detail="Funcionario no encontrado.")
+    cambios = datos.model_dump(exclude_unset=True) if hasattr(datos, "model_dump") else datos.dict(exclude_unset=True)
+    if "hasta" in cambios:
+        _validar_fechas(funcionario.desde, cambios["hasta"])
+        funcionario.hasta = cambios["hasta"]
+    if "nombre" in cambios:
+        funcionario.nombre = (cambios["nombre"] or "").strip() or None
+    db.flush()
+    inspeccion_despachos.asignar(db)
+    db.commit()
+    return _funcionario_json(funcionario)

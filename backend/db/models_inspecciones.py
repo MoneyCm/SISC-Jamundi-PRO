@@ -12,6 +12,10 @@ class InspeccionExpediente(Base):
     departamento = Column(String(100), default="VALLE DEL CAUCA")
     municipio = Column(String(100), default="JAMUNDÍ")
     localidad = Column(String(150), index=True)
+    # Despacho que tramita el expediente (PRIMERA, SEGUNDA, TERCERA...). Lo calcula
+    # services/inspeccion_despachos.py: de las anotaciones o de quién registró la actuación.
+    inspeccion = Column(String(30), index=True)
+    inspeccion_origen = Column(String(20))  # ANOTACION o FUNCIONARIO
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -77,3 +81,21 @@ class InspeccionFinanza(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     medida = relationship("InspeccionMedida", back_populates="finanza")
+
+
+class InspeccionFuncionario(Base):
+    """Quién registra en el RNMC por cada inspección y desde cuándo (el reporte solo trae el documento).
+
+    Si cambian a un funcionario de despacho, se cierra su registro (hasta) y se abre otro: las
+    actuaciones viejas siguen asignadas a la inspección donde estaba en esa fecha.
+    """
+    __tablename__ = "inspeccion_funcionarios"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    documento = Column(String(30), nullable=False, index=True)
+    nombre = Column(String(150))
+    inspeccion = Column(String(30), nullable=False)
+    desde = Column(Date, nullable=False)
+    hasta = Column(Date)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

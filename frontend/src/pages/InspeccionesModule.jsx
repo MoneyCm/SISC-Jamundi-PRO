@@ -10,6 +10,8 @@ import {
 
 import { API_BASE_URL } from '../utils/apiConfig';
 import TendenciaConvivencia from '../components/TendenciaConvivencia';
+import GestionPorInspeccion from '../components/GestionPorInspeccion';
+import { etiquetaInspeccion, SIN_IDENTIFICAR } from '../utils/inspecciones';
 
 const COLORS = ['#281FD0', '#34D399', '#FBBF24', '#EF4444', '#8B5CF6'];
 
@@ -26,7 +28,8 @@ const InspeccionesModule = ({ userRoles = [] }) => {
     const [loading, setLoading] = useState(false);
     const [stats, setStats] = useState(null);
     const [expedientes, setExpedientes] = useState({ items: [], total: 0 });
-    const [filters, setFilters] = useState({ localidad: '' });
+    const [filters, setFilters] = useState({ localidad: '', inspeccion: '' });
+    const [recargarGestion, setRecargarGestion] = useState(0);
     const [selectedExp, setSelectedExp] = useState(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -63,7 +66,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const params = new URLSearchParams(filters);
+            const params = new URLSearchParams(Object.entries(filters).filter(([, valor]) => valor));
             const res = await fetch(`${API_BASE_URL}/inspecciones/expedientes?${params.toString()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -122,6 +125,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                 fetchExpedientes();
                 fetchStats();
                 fetchConvivencia();
+                setRecargarGestion((n) => n + 1);
             } else {
                 const detail = result.detail;
                 const message = typeof detail === 'object' ? detail?.message : detail;
@@ -253,6 +257,8 @@ const InspeccionesModule = ({ userRoles = [] }) => {
             </div>
 
             {activeTab === 'operativo' ? (
+                <div className="space-y-8">
+                <GestionPorInspeccion opera={opera} recargar={recargarGestion} onCambio={fetchExpedientes} />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     {/* List */}
                     <div className={`${selectedExp ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white rounded-[3rem] shadow-2xl shadow-slate-100 overflow-hidden border border-slate-50`}>
@@ -261,13 +267,26 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                                 <h3 className="font-black text-slate-900 uppercase tracking-tighter text-xl">Comparendos más recientes</h3>
                                 <p className="text-xs font-semibold text-slate-500">{numero(expedientes.total)} expedientes · los más recientes primero</p>
                             </div>
-                            <div className="flex items-center bg-white rounded-2xl px-4 py-2 border border-slate-200">
-                                <Search size={16} className="text-slate-400 mr-2" />
-                                <input
-                                    placeholder="Barrio o expediente..."
-                                    className="text-sm font-bold outline-none w-32"
-                                    onChange={e => setFilters({localidad: e.target.value})}
-                                />
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                <select
+                                    aria-label="Inspección"
+                                    value={filters.inspeccion}
+                                    onChange={e => setFilters({ ...filters, inspeccion: e.target.value })}
+                                    className="bg-white rounded-2xl px-3 py-2 border border-slate-200 text-sm font-bold text-slate-700"
+                                >
+                                    <option value="">Todas las inspecciones</option>
+                                    {['PRIMERA', 'SEGUNDA', 'TERCERA', SIN_IDENTIFICAR].map((nombre) => (
+                                        <option key={nombre} value={nombre}>{etiquetaInspeccion(nombre)}</option>
+                                    ))}
+                                </select>
+                                <div className="flex items-center bg-white rounded-2xl px-4 py-2 border border-slate-200">
+                                    <Search size={16} className="text-slate-400 mr-2" />
+                                    <input
+                                        placeholder="Barrio o expediente..."
+                                        className="text-sm font-bold outline-none w-32"
+                                        onChange={e => setFilters({ ...filters, localidad: e.target.value })}
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="overflow-x-auto">
@@ -278,6 +297,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Expediente</th>
                                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Barrio</th>
                                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Comportamiento</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Inspección</th>
                                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Estado</th>
                                         <th className="px-6 py-4" aria-label="Detalle" />
                                     </tr>
@@ -290,6 +310,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-slate-900">{exp.numero_expediente}</td>
                                             <td className="px-6 py-4 text-sm font-bold text-slate-600">{barrio(exp.localidad)}</td>
                                             <td className="px-6 py-4 text-sm font-semibold text-slate-600">{exp.comportamiento || 'Sin artículo'}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-slate-600">{etiquetaInspeccion(exp.inspeccion)}</td>
                                             <td className="px-6 py-4 text-xs font-black uppercase text-slate-500">{exp.estados || '—'}</td>
                                             <td className="px-6 py-4 text-[#281FD0]"><ChevronRight size={16} /></td>
                                         </tr>
@@ -311,6 +332,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                                     <p className="flex items-center gap-2 text-indigo-200/60 font-bold mt-2">
                                         <MapPin size={16} /> {barrio(selectedExp.expediente.localidad)}
                                     </p>
+                                    <p className="text-indigo-200/60 font-bold mt-1 text-sm">Inspección: {etiquetaInspeccion(selectedExp.expediente.inspeccion)}</p>
                                 </div>
 
                                 <div className="space-y-6">
@@ -356,6 +378,7 @@ const InspeccionesModule = ({ userRoles = [] }) => {
                             </div>
                     </div>
                     )}
+                </div>
                 </div>
             ) : (
                 <div className="space-y-8">
