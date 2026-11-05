@@ -5,12 +5,15 @@ inspeccion_*. Un mismo comparendo (expediente) puede tener varias actuaciones y 
 la cifra oficial cuenta cada expediente una sola vez, en la fecha de su primer registro (la del
 hecho en el reporte de comparendos). La usan la meta del PISCC, SISC en cifras y el boletín.
 
-Se excluyen los archivos de prueba y las fechas posteriores a hoy.
+Se excluyen los archivos de prueba y las fechas posteriores a hoy. También se excluyen los expedientes
+de arrastre: el reporte de medidas gestionadas trae actuaciones de este año sobre expedientes de años
+anteriores (por ejemplo 76-364-6-2019-123). Si el comparendo original no está cargado, su primer registro
+sería esa actuación y se contaría como un comparendo nuevo de este año.
 """
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Tuple
 
-from sqlalchemy import desc, func
+from sqlalchemy import Integer, cast, desc, extract, func, or_
 from sqlalchemy.orm import Session
 
 from db.models_inspecciones import InspeccionActuacion, InspeccionExpediente, InspeccionMedida
@@ -25,14 +28,30 @@ def _manana() -> datetime:
     return datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
 
 
+# Año del expediente en el número del RNMC: 76-364-6-2026-3043 -> 2026 (el penúltimo tramo).
+ANIO_EXPEDIENTE = r"-(\d{4})-\d+$"
+
+
+def anio_expediente():
+    """Año del número de expediente, o NULL si el número no trae año."""
+    return cast(func.substring(InspeccionExpediente.numero_expediente, ANIO_EXPEDIENTE), Integer)
+
+
 def primeras_fechas(db: Session):
-    """Subconsulta (expediente_id, fecha): primer registro de cada comparendo."""
+    """Subconsulta (expediente_id, fecha): primer registro de cada comparendo.
+
+    Deja por fuera los expedientes de arrastre: los que tienen en el número un año anterior al de su
+    primer registro cargado (son gestiones de la Inspección, no comparendos nuevos).
+    """
+    primera = func.min(InspeccionActuacion.fecha_actuacion)
+    anio = anio_expediente()
     return (
-        db.query(InspeccionMedida.expediente_id.label("expediente_id"),
-                 func.min(InspeccionActuacion.fecha_actuacion).label("fecha"))
+        db.query(InspeccionMedida.expediente_id.label("expediente_id"), primera.label("fecha"))
         .join(InspeccionActuacion, InspeccionActuacion.medida_id == InspeccionMedida.id)
+        .join(InspeccionExpediente, InspeccionExpediente.id == InspeccionMedida.expediente_id)
         .filter(*filtros_publicos(), InspeccionActuacion.fecha_actuacion < _manana())
-        .group_by(InspeccionMedida.expediente_id)
+        .group_by(InspeccionMedida.expediente_id, InspeccionExpediente.numero_expediente)
+        .having(or_(anio.is_(None), anio >= extract("year", primera)))
         .subquery()
     )
 

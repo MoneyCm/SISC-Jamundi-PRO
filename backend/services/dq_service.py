@@ -7,6 +7,8 @@ from typing import Any, Dict, Iterable, List, Optional
 import numpy as np
 import pandas as pd
 
+from services.file_reader import normalizar_am_pm
+
 
 NULL_TEXT_VALUES = {
     "",
@@ -303,7 +305,7 @@ def _run_frame(
     date_field = config.get("date_field")
     parsed_dates = None
     if date_field and date_field in prepared.columns:
-        raw_dates = prepared[date_field]
+        raw_dates = prepared[date_field].map(normalizar_am_pm)
         parsed_dates = pd.to_datetime(raw_dates, errors="coerce", dayfirst=True)
         iso_mask = raw_dates.astype(str).str.match(r"^\d{4}-\d{1,2}-\d{1,2}")
         if iso_mask.any():
@@ -407,8 +409,8 @@ def _run_frame(
         )
 
     if profile == "INSPECCIONES" and {"FECHA_INICIO", "FECHA_FIN"}.issubset(prepared.columns):
-        start_dates = pd.to_datetime(prepared["FECHA_INICIO"], errors="coerce")
-        end_dates = pd.to_datetime(prepared["FECHA_FIN"], errors="coerce")
+        start_dates = pd.to_datetime(prepared["FECHA_INICIO"].map(normalizar_am_pm), errors="coerce", dayfirst=True)
+        end_dates = pd.to_datetime(prepared["FECHA_FIN"].map(normalizar_am_pm), errors="coerce", dayfirst=True)
         inverted_dates = start_dates.notna() & end_dates.notna() & (end_dates < start_dates)
         _append_issue(
             issues,
