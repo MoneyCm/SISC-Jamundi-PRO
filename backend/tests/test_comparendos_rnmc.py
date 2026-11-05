@@ -72,3 +72,27 @@ def test_no_compara_con_un_periodo_sin_datos_completos():
 def test_mismo_tramo_en_otro_anio():
     assert comparendos_rnmc._mismo_tramo(2025, date(2026, 9, 28)) == date(2025, 9, 28)
     assert comparendos_rnmc._mismo_tramo(2025, date(2024, 2, 29)) == date(2025, 2, 28)
+
+
+def test_carry_over_expediente_is_not_a_new_comparendo():
+    """Una actuación de 2002 sobre un expediente de 2001 no suma un comparendo de 2002."""
+    db = SessionLocal()
+    try:
+        assert comparendos_rnmc.contar(db, date(2002, 1, 1), date(2002, 12, 31)) == 0
+        for numero, fecha in (("76-364-6-2001-509", datetime(2002, 3, 11, 16, 15)),   # arrastre
+                              ("76-364-6-2002-77", datetime(2002, 4, 2)),           # comparendo nuevo
+                              ("SIN-ANIO", datetime(2002, 5, 1))):                  # número sin año: cuenta
+            expediente = InspeccionExpediente(numero_expediente=numero, localidad="CENTRO")
+            db.add(expediente)
+            db.flush()
+            medida = InspeccionMedida(expediente_id=expediente.id, nombre_medida="MULTA GENERAL TIPO 2")
+            db.add(medida)
+            db.flush()
+            db.add(InspeccionActuacion(medida_id=medida.id, fecha_actuacion=fecha, fuente_archivo="gestionadas.xls",
+                                       fingerprint_hash=f"arrastre-{numero}"))
+        db.flush()
+
+        assert comparendos_rnmc.contar(db, date(2002, 1, 1), date(2002, 12, 31)) == 2
+    finally:
+        db.rollback()
+        db.close()

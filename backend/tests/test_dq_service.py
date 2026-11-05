@@ -157,3 +157,22 @@ def test_geo_profile_rejects_invalid_coordinates():
 
     assert report["semaforo"] == "ROJO"
     assert any(issue["field"] == "COORDENADAS" for issue in report["issues"])
+
+
+def test_inspections_accept_rnmc_spanish_am_pm_times():
+    # El reporte de medidas gestionadas del RNMC trae la hora como "04:15:31 p. m.". Si la primera fila es
+    # "a. m.", pandas no debe marcar como inválidas las filas "p. m." (eso bloqueaba la carga en rojo).
+    rows = [
+        {"EXPEDIENTE": "76-364-1-2026-1", "MEDIDA": "Multa General Tipo 2", "MUNICIPIO": "JAMUNDI",
+         "FECHA_ACTUACION": "15/10/2026 09:00:33 a. m.", "LOCALIDAD": "CENTRO", "ESTADO": "PAGADO"},
+        {"EXPEDIENTE": "76-364-1-2026-2", "MEDIDA": "Multa General Tipo 4", "MUNICIPIO": "JAMUNDI",
+         "FECHA_ACTUACION": "11/03/2026 04:15:31 p. m.", "LOCALIDAD": "CENTRO", "ESTADO": "MEDIDA RATIFICADA"},
+    ]
+
+    report = dq_service.run_frame_dq(
+        pd.DataFrame(rows), "Rpt_Medidas_Gestionadas_Ent.xls",
+        source_name="INSPECCIONES_POLICIA", profile="INSPECCIONES",
+    )
+
+    assert report["semaforo"] == "VERDE"
+    assert not any(issue["field"] == "FECHA_ACTUACION" for issue in report["issues"])

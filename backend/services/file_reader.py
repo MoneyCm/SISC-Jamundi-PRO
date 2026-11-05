@@ -7,6 +7,20 @@ import unicodedata
 logger = logging.getLogger("sisc_reader")
 
 
+_AM_PM = re.compile(r"(?<=\d)\s*([ap])\.?\s*m\.?\s*$", re.IGNORECASE)
+
+
+def normalizar_am_pm(valor):
+    """Cambia la hora en español del RNMC ("04:15:31 p. m.") por "04:15:31 PM", que pandas sí entiende.
+
+    Sin esto, al leer una columna completa pandas toma el formato de la primera fila ("a. m.") y
+    deja como fecha inválida todas las filas con "p. m.". Los valores que no son texto no se tocan.
+    """
+    if not isinstance(valor, str):
+        return valor
+    return _AM_PM.sub(lambda m: " " + m.group(1).upper() + "M", valor.strip())
+
+
 def normalize_sheet_token(value):
     """Normaliza un texto de celda para comparar encabezados (igual que el preflight)."""
     text = unicodedata.normalize("NFKD", str(value if value is not None else ""))

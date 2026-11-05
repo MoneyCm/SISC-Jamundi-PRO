@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from db.models_inspecciones import InspeccionExpediente, InspeccionMedida, InspeccionActuacion, InspeccionFinanza
 from db.models_intelligence import IngestionFile
 from services.geocoding_service import GeocodingService
+from services.file_reader import normalizar_am_pm
 from sqlalchemy import text
 
 logger = logging.getLogger("sisc_api")
@@ -34,7 +35,7 @@ class InspeccionService:
         if isinstance(val, (int, float)) and 1 <= float(val) <= 100000:
             parsed = pd.to_datetime(float(val), unit="D", origin="1899-12-30", errors="coerce")
         else:
-            text_value = str(val).strip()
+            text_value = normalizar_am_pm(str(val).strip())
             if len(text_value) >= 10 and text_value[4:5] == "-" and text_value[7:8] == "-":
                 try:
                     return datetime.fromisoformat(text_value.replace("Z", "+00:00"))
