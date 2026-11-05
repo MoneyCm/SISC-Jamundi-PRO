@@ -112,6 +112,9 @@ def create_tables():
                 conn.execute(text("ALTER TABLE institutional_data_batches ADD COLUMN IF NOT EXISTS reporting_basis VARCHAR(20) DEFAULT 'CUMULATIVE';"))
                 conn.execute(text("ALTER TABLE inspeccion_medidas ADD COLUMN IF NOT EXISTS articulo TEXT;"))
                 conn.execute(text("ALTER TABLE inspeccion_medidas ADD COLUMN IF NOT EXISTS comportamiento TEXT;"))
+                conn.execute(text("ALTER TABLE inspeccion_expedientes ADD COLUMN IF NOT EXISTS inspeccion VARCHAR(30);"))
+                conn.execute(text("ALTER TABLE inspeccion_expedientes ADD COLUMN IF NOT EXISTS inspeccion_origen VARCHAR(20);"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_inspeccion_expedientes_inspeccion ON inspeccion_expedientes (inspeccion);"))
                 
                 # create_all no añade columnas a tablas que ya existen.
                 from db.conciliacion_schema import ensure_conciliacion_schema
