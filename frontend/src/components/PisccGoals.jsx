@@ -1,7 +1,9 @@
 import React, { Fragment, useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ImageDown, Loader2 } from 'lucide-react';
 import { apiJson } from '../utils/apiClient';
 import { formatVersusLastYear, goalReading } from '../utils/pisccGoals';
+import { crearImagenMetas } from '../utils/metasImagen';
+import { compartirImagen } from '../utils/rankingImage';
 
 const STATUS_STYLES = {
     DESVIACION: 'bg-amber-100 text-amber-900',
@@ -140,6 +142,8 @@ const PisccGoals = () => {
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [open, setOpen] = useState('');
+    const [imagenEstado, setImagenEstado] = useState('');
+    const [creandoImagen, setCreandoImagen] = useState(false);
 
     useEffect(() => {
         let alive = true;
@@ -150,13 +154,42 @@ const PisccGoals = () => {
     if (error) return <p role="alert" className="bg-red-50 p-3 text-sm font-bold text-red-800">{error}</p>;
     if (!data) return <p className="flex items-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={16} className="animate-spin" /> Calculando…</p>;
 
+    // Imagen sencilla para WhatsApp (concejales y Policía) con las mismas cifras de esta tabla.
+    const descargarImagen = async () => {
+        setCreandoImagen(true);
+        setImagenEstado('Preparando la imagen…');
+        try {
+            const blob = await crearImagenMetas(data);
+            const resultado = await compartirImagen(blob, `metas-piscc-${data.as_of}.png`, `Metas de seguridad del PISCC 2024-2027 (${data.as_of}). Observatorio del Delito, Jamundí.`);
+            setImagenEstado(resultado === 'descargada' ? 'Imagen descargada: adjúntela en WhatsApp.' : resultado === 'compartida' ? 'Imagen compartida.' : '');
+        } catch (imageError) {
+            setImagenEstado(imageError.message || 'No se pudo crear la imagen.');
+        } finally {
+            setCreandoImagen(false);
+        }
+    };
+
     const closedYears = data.indicators[0]?.closed_years?.map((year) => year.anio) || [];
     const columns = 7 + closedYears.length;
     return (
         <div className="space-y-4">
-            <p className="text-sm font-semibold text-slate-600">
-                {data.source}. La meta es el máximo de casos al año que el plan se propone no superar en 2027. Haga clic en un indicador para ver el detalle.
-            </p>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <p className="text-sm font-semibold text-slate-600">
+                    {data.source}. La meta es el máximo de casos al año que el plan se propone no superar en 2027. Haga clic en un indicador para ver el detalle.
+                </p>
+                <div className="shrink-0 md:text-right">
+                    <button
+                        type="button"
+                        onClick={descargarImagen}
+                        disabled={creandoImagen}
+                        className="inline-flex items-center gap-2 bg-[#14325C] px-4 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-[#0F2747] disabled:opacity-50"
+                    >
+                        {creandoImagen ? <Loader2 size={16} className="animate-spin" /> : <ImageDown size={16} />}
+                        Descargar imagen para WhatsApp
+                    </button>
+                    {imagenEstado && <p role="status" className="mt-1 text-xs font-semibold text-slate-600">{imagenEstado}</p>}
+                </div>
+            </div>
             {/* Celular: una tarjeta por meta, con los años y su semáforo a la vista; el detalle se abre al tocarla. */}
             <div className="space-y-3 md:hidden">
                 {data.indicators.map((item) => {
