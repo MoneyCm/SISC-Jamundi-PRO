@@ -32,6 +32,8 @@ async def lifespan(app: FastAPI):
         # El portal ciudadano no migra tablas, no crea usuarios ni corre sincronizaciones:
         # todo eso lo hace el SISC institucional. Asi puede usar una base de solo lectura.
         logger.info("[Modo publico] Sin migraciones, usuarios ni tareas programadas.")
+        from core.public_mode import start_portal_files_sync
+        start_portal_files_sync()
         yield
         return
     # Iniciamos las migraciones en un hilo separado para NO bloquear el inicio del servidor.

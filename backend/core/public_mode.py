@@ -11,9 +11,11 @@ Los formularios ciudadanos (reporte seguro, propuestas, frentes de seguridad)
 escriben en la base. Quedan apagados salvo que SISC_PUBLIC_ALLOW_WRITES=true,
 para poder desplegar contra una base de solo lectura.
 """
+import json
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Iterable, List, Tuple
 
 from fastapi import FastAPI
@@ -102,3 +104,63 @@ def restrict_to_public(app: FastAPI) -> List[str]:
         logger.warning("[Modo publico] Ruta descartada porque exige usuario: %s", path)
     logger.info("[Modo publico] %d rutas publicas activas.", len(kept))
     return kept
+
+
+# --- Archivos del PISCC -------------------------------------------------------------------------
+# Las metas del PISCC se calculan con data/piscc/historico.json y mindefensa.json, que la oficina
+# actualiza cada semana desde datos.gov.co. scripts/actualizar_portal.ps1 los sube a la tabla
+# portal_archivos de Neon; el backend publico los baja aqui (no tiene permiso de escribir en la base).
+PORTAL_FILES = {"historico.json", "mindefensa.json"}
+PORTAL_FILES_DIR = Path(__file__).resolve().parents[1] / "data" / "piscc"
+
+
+def sync_portal_files(session_factory=None) -> List[str]:
+    """Escribe en data/piscc los archivos guardados en portal_archivos. Devuelve los que cambiaron."""
+    from sqlalchemy import text
+
+    if session_factory is None:
+        from db.session import SessionLocal as session_factory
+    db = session_factory()
+    try:
+        exists = db.execute(text("SELECT to_regclass('public.portal_archivos')")).scalar()
+        if not exists:
+            return []
+        rows = db.execute(text("SELECT nombre, contenido FROM portal_archivos")).fetchall()
+    finally:
+        db.close()
+
+    changed = []
+    for name, content in rows:
+        if name not in PORTAL_FILES or not content:
+            continue
+        try:
+            json.loads(content)  # nunca se escribe un archivo dañado
+        except ValueError:
+            logger.warning("[Modo publico] %s en portal_archivos no es JSON valido; se ignora.", name)
+            continue
+        target = PORTAL_FILES_DIR / name
+        current = target.read_text(encoding="utf-8-sig") if target.exists() else None
+        if current != content:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_suffix(".tmp")
+            tmp.write_text(content, encoding="utf-8")
+            tmp.replace(target)
+            changed.append(name)
+    if changed:
+        logger.info("[Modo publico] Archivos del PISCC actualizados desde Neon: %s", ", ".join(changed))
+    return changed
+
+
+def start_portal_files_sync(interval_seconds: int = 900) -> None:
+    import threading
+    import time
+
+    def loop():
+        while True:
+            try:
+                sync_portal_files()
+            except Exception as exc:  # la base puede estar en plena copia; se reintenta luego
+                logger.warning("[Modo publico] No se pudieron bajar los archivos del PISCC: %s", exc)
+            time.sleep(interval_seconds)
+
+    threading.Thread(target=loop, daemon=True, name="portal-files-sync").start()

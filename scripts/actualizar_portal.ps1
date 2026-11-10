@@ -55,6 +55,9 @@ try {
     Paso '1/6 Revisando la base de la oficina'
     $huella = (& $docker exec sisc_db psql -U sisc_user -d sisc_jamundi -tAc $consultaHuella 2>$null | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $huella) { Falla 'No pude leer la base de la oficina. Revise que Docker y el contenedor sisc_db esten encendidos.' }
+    # Las metas del PISCC salen de dos archivos (no de la base): sus cambios tambien cuentan.
+    $archivosPiscc = @('historico.json', 'mindefensa.json') | ForEach-Object { Join-Path $raiz "backend\data\piscc\$_" }
+    $huella = $huella + ':' + (($archivosPiscc | Where-Object { Test-Path $_ } | ForEach-Object { (Get-FileHash $_ -Algorithm MD5).Hash }) -join ',')
     $anterior = if (Test-Path $estadoArchivo) { (Get-Content $estadoArchivo -Raw).Trim() } else { '' }
     if ($Auto -and $huella -eq $anterior) {
         Write-Host 'Sin datos nuevos desde la ultima actualizacion. No se copia nada.'
@@ -92,7 +95,22 @@ try {
     & $docker run --rm -v "${raiz}:/w" postgres:17 psql $neon -v ON_ERROR_STOP=1 -q -f /w/docs/despliegue/permisos_portal.sql
     if ($LASTEXITCODE -ne 0) { Falla 'No se pudieron aplicar los permisos. Ejecute docs\despliegue\permisos_portal.sql en el SQL Editor de Neon.' }
 
-    Paso '6/6 Comprobando'
+    Paso '6/6 Subiendo los archivos de metas del PISCC y comprobando'
+    $sqlArchivos = Join-Path $raiz 'portal_archivos.tmp.sql'
+    $lineas = @('CREATE TABLE IF NOT EXISTS portal_archivos (nombre text PRIMARY KEY, contenido text NOT NULL, actualizado timestamptz NOT NULL DEFAULT now());')
+    foreach ($ruta in $archivosPiscc) {
+        if (-not (Test-Path $ruta)) { continue }
+        $contenido = Get-Content $ruta -Raw -Encoding UTF8
+        $nombre = Split-Path $ruta -Leaf
+        $lineas += "INSERT INTO portal_archivos (nombre, contenido, actualizado) VALUES ('$nombre', `$json`$$contenido`$json`$, now()) ON CONFLICT (nombre) DO UPDATE SET contenido = EXCLUDED.contenido, actualizado = now();"
+    }
+    $lineas += 'GRANT SELECT ON portal_archivos TO sisc_portal;'
+    [System.IO.File]::WriteAllText($sqlArchivos, ($lineas -join "`n"), (New-Object System.Text.UTF8Encoding($false)))
+    & $docker run --rm -v "${raiz}:/w" postgres:17 psql $neon -v ON_ERROR_STOP=1 -q -f /w/portal_archivos.tmp.sql
+    $codigoArchivos = $LASTEXITCODE
+    Remove-Item $sqlArchivos -Force
+    if ($codigoArchivos -ne 0) { Falla 'No se pudieron subir los archivos de metas del PISCC.' }
+
     & $docker run --rm postgres:17 psql $neon -c "select max(fecha_evento) as ultimo_hecho, count(*) as hechos from hechos_seguridad;" -c "select conducta_estandar, count(*) from hechos_seguridad group by 1 order by 2 desc limit 6;"
     Set-Content -Path $estadoArchivo -Value $huella -NoNewline
     Write-Host "`nListo. El portal ya muestra los datos de la oficina: https://sisc-portal.onrender.com" -ForegroundColor Green
