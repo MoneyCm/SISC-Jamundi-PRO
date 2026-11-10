@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import PublicPortalHeader from '../components/public/PublicPortalHeader';
 import { API_BASE_URL } from '../utils/apiConfig';
+import { HIDDEN_PUBLIC_PAGES } from '../utils/publicBuild';
 import { downloadCsvFile, downloadJsonFile, downloadXlsxFile } from '../utils/publicDataDownloads';
 import { localToday } from '../utils/localDate';
 import { bulletinPeriod, editionLabel, groupByEdition } from '../utils/bulletinEditions';
@@ -25,7 +26,7 @@ const SECTIONS = [
     { id: 'open-data', label: 'Datos abiertos', icon: Database },
     { id: 'technical-bulletins', label: 'Boletines técnicos', icon: FileText },
     { id: 'accountability', label: 'Rendición de cuentas', icon: CheckCircle2, href: 'https://www.jamundi.gov.co/Paginas/Rendici%C3%B3n-de-cuentas.aspx' },
-];
+].filter((section) => !HIDDEN_PUBLIC_PAGES.includes(section.id));
 
 const OPEN_DATA_DICTIONARY = [
     { field: 'indicator', description: 'Nombre público del indicador consolidado.' },
