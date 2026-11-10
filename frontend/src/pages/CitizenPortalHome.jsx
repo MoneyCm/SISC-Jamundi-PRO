@@ -203,9 +203,9 @@ const CitizenPortalHome = ({ onNavigate, onLoginClick }) => {
                                 </div>
                             </div>
                             <h1 className="max-w-4xl text-4xl font-black leading-[1.05] tracking-normal md:text-6xl">Seguridad y convivencia en Jamundí</h1>
-                            <p className="mt-5 max-w-3xl text-lg font-semibold leading-7 text-white/85 md:text-xl">Consulta datos públicos, comparables y protegidos para comprender lo que ocurre en el municipio.</p>
+                            <p className="mt-5 max-w-3xl text-lg font-semibold leading-7 text-white/85 md:text-xl">Consulta datos públicos y comparables, sin información personal, para comprender lo que ocurre en el municipio.</p>
                             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm font-bold text-white/85">
-                                <span className="inline-flex items-center gap-2"><CalendarClock size={18} className="text-[#FFE000]" /> Corte: {formatDate(data?.metadata?.latest_event_date)}</span>
+                                <span className="inline-flex items-center gap-2"><CalendarClock size={18} className="text-[#FFE000]" /> Corte de la Policía: {formatDate(data?.metadata?.latest_event_date)} · cada indicador muestra el suyo</span>
                                 <span className="inline-flex items-center gap-2"><CheckCircle2 size={18} className="text-[#FFE000]" /> Datos agregados, sin información personal</span>
                             </div>
                             <div className="mt-8 flex flex-wrap gap-3">
@@ -283,7 +283,7 @@ const CitizenPortalHome = ({ onNavigate, onLoginClick }) => {
                             <div>
                                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[#281FD0]">Conductas registradas</p>
                                 <h2 id="conductas-title" className="mt-1 text-2xl font-black text-slate-950">¿Qué se reportó más?</h2>
-                                <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">Casos únicos agrupados con nombres ciudadanos. Las variantes técnicas de la fuente se consolidan en una sola categoría.</p>
+                                <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">Casos únicos agrupados con nombres ciudadanos. Las variantes técnicas de la fuente se consolidan en una sola categoría. Un mismo caso puede incluir más de una conducta; por eso la suma de conductas puede superar el total de casos únicos.</p>
                                 <button onClick={() => onNavigate?.('transparency')} className="mt-5 inline-flex min-h-11 items-center gap-2 font-black text-[#281FD0]">Ver todas las tendencias <ArrowRight size={17} /></button>
                             </div>
                             <div className="space-y-4">

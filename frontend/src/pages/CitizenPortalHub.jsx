@@ -87,13 +87,13 @@ const CitizenPortalHub = ({ onNavigate, onLoginClick }) => {
             <div className="bg-gradient-to-br from-[#281FD0] via-[#384CF5] to-indigo-800 text-white py-16 md:py-24 px-6 relative overflow-hidden">
                 {/* Orla Institucional Superior */}
                 <div className="absolute top-0 left-0 orla-hidirica"></div>
-                <button
+                {onLoginClick && <button
                     onClick={onLoginClick}
                     className="absolute right-4 top-5 z-20 inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-white backdrop-blur-md transition-colors hover:bg-white/20 md:right-10 md:top-8 md:px-4"
                 >
                     <Lock size={14} />
                     Ingreso institucional
-                </button>
+                </button>}
                 <div className="max-w-6xl mx-auto relative z-10 text-center">
                     <button
                         onClick={() => onNavigate('pqr')}

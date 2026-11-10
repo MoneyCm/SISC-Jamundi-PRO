@@ -5,6 +5,7 @@ import CitizenPortalHome from './pages/CitizenPortalHome';
 import PublicPortalHeader from './components/public/PublicPortalHeader';
 import { loadPublicDashboard } from './utils/publicDashboardCache';
 import { apiJson, clearStoredSession, SESSION_EXPIRED_EVENT } from './utils/apiClient';
+import { PUBLIC_ONLY } from './utils/publicBuild';
 
 const Dashboard = lazy(() => import('./pages/DashboardV2'));
 const MapPage = lazy(() => import('./pages/MapPage'));
@@ -111,7 +112,7 @@ const App = () => {
   useEffect(() => {
     let cancelled = false;
     const initApp = async () => {
-      const storedToken = localStorage.getItem('token');
+      const storedToken = PUBLIC_ONLY ? null : localStorage.getItem('token');
       if (storedToken) {
         try {
           const profile = await apiJson('/auth/me');
@@ -187,6 +188,9 @@ const App = () => {
     document.querySelector('link[rel="canonical"]')?.setAttribute('href', canonicalUrl.toString());
   }, [appMode, publicActivePage]);
 
+  // En el build ciudadano no existe el ingreso: el botón no se muestra.
+  const openLogin = PUBLIC_ONLY ? undefined : () => setAppMode('login');
+
   const handleLoginSuccess = (newToken, roles, dl, profile = null) => {
     setToken(newToken);
     setUserRoles(roles || []);
@@ -224,7 +228,7 @@ const App = () => {
     );
   }
 
-  if (appMode === 'login') {
+  if (appMode === 'login' && !PUBLIC_ONLY) {
     return (
       <Suspense fallback={<PageLoading />}>
         <LoginPage
@@ -236,13 +240,13 @@ const App = () => {
     );
   }
 
-  const isPublic = appMode === 'public';
+  const isPublic = PUBLIC_ONLY || appMode === 'public';
   const showCitizenAssistant = isPublic;
 
   // Páginas secundarias del portal: el mismo menú que el resto, para no depender del botón de regreso.
   const withPortalMenu = (page) => (
     <>
-      <PublicPortalHeader currentPage={publicActivePage} onNavigate={navigatePublic} onLoginClick={() => setAppMode('login')} />
+      <PublicPortalHeader currentPage={publicActivePage} onNavigate={navigatePublic} onLoginClick={openLogin} />
       {page}
     </>
   );
@@ -253,18 +257,18 @@ const App = () => {
         case 'hub':
           return <CitizenPortalHome
             onNavigate={navigatePublic}
-            onLoginClick={() => setAppMode('login')}
+            onLoginClick={openLogin}
           />;
         case 'transparency':
           return <PublicDashboard
-            onLoginClick={() => setAppMode('login')}
+            onLoginClick={openLogin}
             onBack={() => navigatePublic('hub')}
             onNavigate={navigatePublic}
           />;
         case 'technical-bulletins':
           return <ObservatoryBulletinsPage
             onNavigate={navigatePublic}
-            onLoginClick={() => setAppMode('login')}
+            onLoginClick={openLogin}
           />;
         case 'transparency-info':
         case 'open-data':
@@ -272,11 +276,11 @@ const App = () => {
             initialSection={publicActivePage}
             onBack={() => navigatePublic('hub')}
             onNavigate={navigatePublic}
-            onLoginClick={() => setAppMode('login')}
+            onLoginClick={openLogin}
           />;
         case 'sisc-cifras':
           return <>
-            <PublicPortalHeader currentPage="sisc-cifras" onNavigate={navigatePublic} onLoginClick={() => setAppMode('login')} />
+            <PublicPortalHeader currentPage="sisc-cifras" onNavigate={navigatePublic} onLoginClick={openLogin} />
             <SiscCifras publicMode />
           </>;
         case 'public-measures':
@@ -296,7 +300,7 @@ const App = () => {
         default:
           return <CitizenPortalHome
             onNavigate={navigatePublic}
-            onLoginClick={() => setAppMode('login')}
+            onLoginClick={openLogin}
           />;
       }
     }

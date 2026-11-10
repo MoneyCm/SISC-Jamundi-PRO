@@ -50,3 +50,56 @@ services:
           type: web
           name: sisc-backend
           property: url
+
+  # ---------------------------------------------------------------------------
+  # PORTAL CIUDADANO (público). Ver docs/despliegue/PORTAL_CIUDADANO.md
+  # Backend con SISC_PUBLIC_ONLY=true: solo rutas /public, sin login ni carga de datos.
+  # DATABASE_URL debe usar el usuario de solo lectura sisc_portal.
+  - type: web
+    name: sisc-api-publico
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SISC_PUBLIC_ONLY
+        value: "true"
+      - key: SISC_PUBLIC_ALLOW_WRITES
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: TZ
+        value: America/Bogota
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://sisc-portal.onrender.com,https://sisc.jamundi.gov.co
+      - key: NARRATIVE_ALERTS_SCHEDULER
+        value: "0"
+      - key: PISCC_MINDEFENSA_SYNC
+        value: "0"
+      - key: AI_PROVIDER
+        value: GEMINI
+      - key: GEMINI_API_KEY
+        sync: false
+
+  - type: static
+    name: sisc-portal
+    runtime: static
+    rootDir: frontend
+    plan: free
+    buildCommand: npm install && npm run build
+    publishDir: dist
+    envVars:
+      - key: VITE_PUBLIC_ONLY
+        value: "true"
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: sisc-api-publico
+          property: url
