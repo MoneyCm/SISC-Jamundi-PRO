@@ -5,7 +5,8 @@ import CitizenPortalHome from './pages/CitizenPortalHome';
 import PublicPortalHeader from './components/public/PublicPortalHeader';
 import { loadPublicDashboard } from './utils/publicDashboardCache';
 import { apiJson, clearStoredSession, SESSION_EXPIRED_EVENT } from './utils/apiClient';
-import { PUBLIC_ONLY } from './utils/publicBuild';
+import { PUBLIC_ONLY, PUBLIC_FORMS } from './utils/publicBuild';
+import PublicFormsUnavailable from './components/public/PublicFormsUnavailable';
 
 const Dashboard = lazy(() => import('./pages/DashboardV2'));
 const MapPage = lazy(() => import('./pages/MapPage'));
@@ -292,9 +293,13 @@ const App = () => {
         case 'victim-support':
           return withPortalMenu(<VictimRoutes onBack={() => navigatePublic('hub')} />);
         case 'reporting':
-          return withPortalMenu(<SecureReporting onBack={() => navigatePublic('hub')} />);
+          return withPortalMenu(PUBLIC_FORMS
+            ? <SecureReporting onBack={() => navigatePublic('hub')} />
+            : <PublicFormsUnavailable kind="reporting" onBack={() => navigatePublic('hub')} onNavigate={navigatePublic} />);
         case 'participation':
-          return withPortalMenu(<CommunityParticipation onBack={() => navigatePublic('hub')} />);
+          return withPortalMenu(PUBLIC_FORMS
+            ? <CommunityParticipation onBack={() => navigatePublic('hub')} />
+            : <PublicFormsUnavailable kind="participation" onBack={() => navigatePublic('hub')} onNavigate={navigatePublic} />);
         case 'pqr':
           return withPortalMenu(<PQRPage onBack={() => navigatePublic('hub')} />);
         default:
