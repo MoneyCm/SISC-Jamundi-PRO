@@ -71,7 +71,7 @@ const MetasPiscc = () => {
                 })}
             </div>
             <p className="mt-4 text-xs font-semibold leading-5 text-slate-500">
-                La meta 2027 es un límite: los casos del año no deberían pasar de esa cifra. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual.
+                La meta 2027 es un límite: los casos del año no deberían pasar de esa cifra. Estas cifras son de MinDefensa, que cuenta víctimas; por eso pueden diferir de los casos (hechos) de la Policía que se muestran arriba. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual.
                 Línea base 2023 y metas: {data.source}. Años cerrados: {data.closed_years_source}. {data.note}
             </p>
         </section>

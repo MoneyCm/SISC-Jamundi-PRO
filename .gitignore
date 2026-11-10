@@ -71,3 +71,6 @@ backend/data/respaldo_estado.json
 # Llaves de las copias cifradas: nunca al repositorio
 *.pem
 *LLAVE_PRIVADA*
+
+# Respaldos de base de datos (contienen datos completos)
+*.dump
