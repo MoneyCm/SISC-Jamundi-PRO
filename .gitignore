@@ -75,3 +75,5 @@ backend/data/respaldo_estado.json
 # Respaldos de base de datos (contienen datos completos)
 *.dump
 .neon_url
+.portal_sync_state
+logs/
