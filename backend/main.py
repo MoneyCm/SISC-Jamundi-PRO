@@ -12,6 +12,7 @@ import os
 import uuid
 from dotenv import load_dotenv
 from core.config import get_cors_origins
+from core.public_mode import is_public_only, restrict_to_public
 
 # Cargar variables de entorno desde .env (Solo para local)
 load_dotenv()
@@ -27,6 +28,12 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if is_public_only():
+        # El portal ciudadano no migra tablas, no crea usuarios ni corre sincronizaciones:
+        # todo eso lo hace el SISC institucional. Asi puede usar una base de solo lectura.
+        logger.info("[Modo publico] Sin migraciones, usuarios ni tareas programadas.")
+        yield
+        return
     # Iniciamos las migraciones en un hilo separado para NO bloquear el inicio del servidor.
     # Esto es CRÍTICO para Render, ya que si la BD tarda en conectar, Render mata el proceso por "Port scan timeout".
     import threading
@@ -126,7 +133,15 @@ async def lifespan(app: FastAPI):
 
     yield
 
-app = FastAPI(title="SISC Jamundí - Sistema de Información para la Seguridad", version="0.1.0", lifespan=lifespan)
+_PUBLIC_ONLY = is_public_only()
+app = FastAPI(
+    title="SISC Jamundí - Sistema de Información para la Seguridad",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None if _PUBLIC_ONLY else "/docs",
+    redoc_url=None if _PUBLIC_ONLY else "/redoc",
+    openapi_url=None if _PUBLIC_ONLY else "/openapi.json",
+)
 
 # Loguear variables de entorno críticas (sin contraseñas) para depuración
 logger.info(f"DATABASE_URL configurada: {'SÍ' if os.getenv('DATABASE_URL') else 'NO'}")
@@ -207,6 +222,10 @@ app.include_router(comisarias.router, prefix="/api/comisarias", tags=["comisaria
 # --- Fase 1.5: Router v1 para contrato aprobado ---
 from api import sisc_cifras_v1
 app.include_router(sisc_cifras_v1.router, prefix="/api/sisc-cifras", tags=["sisc-cifras-v1"])
+
+# --- Portal ciudadano: deja solo las rutas publicas (ver core/public_mode.py) ---
+if _PUBLIC_ONLY:
+    restrict_to_public(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

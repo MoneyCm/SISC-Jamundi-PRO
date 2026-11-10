@@ -49,9 +49,9 @@ const PublicPortalHeader = ({ currentPage = 'hub', onNavigate, onLoginClick }) =
                     ))}
                 </nav>
 
-                <button onClick={onLoginClick} className="ml-auto hidden min-h-11 items-center gap-2 border-l border-slate-200 pl-4 text-xs font-bold text-slate-600 hover:text-[#281FD0] sm:inline-flex xl:ml-2">
+                {onLoginClick && <button onClick={onLoginClick} className="ml-auto hidden min-h-11 items-center gap-2 border-l border-slate-200 pl-4 text-xs font-bold text-slate-600 hover:text-[#281FD0] sm:inline-flex xl:ml-2">
                     <LockKeyhole size={16} /> Ingreso institucional
-                </button>
+                </button>}
                 <button onClick={() => setOpen((value) => !value)} className="ml-auto inline-flex h-11 w-11 items-center justify-center border border-slate-200 text-slate-700 xl:hidden" aria-expanded={open} aria-controls="public-mobile-menu" aria-label={open ? 'Cerrar menú' : 'Abrir menú'}>
                     {open ? <X size={22} /> : <Menu size={22} />}
                 </button>
@@ -64,9 +64,9 @@ const PublicPortalHeader = ({ currentPage = 'hub', onNavigate, onLoginClick }) =
                                 {item.label}
                             </button>
                         ))}
-                        <button onClick={() => { setOpen(false); onLoginClick?.(); }} className="inline-flex min-h-11 items-center gap-2 px-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-[#281FD0] sm:hidden">
+                        {onLoginClick && <button onClick={() => { setOpen(false); onLoginClick(); }} className="inline-flex min-h-11 items-center gap-2 px-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-[#281FD0] sm:hidden">
                             <LockKeyhole size={16} /> Ingreso institucional
-                        </button>
+                        </button>}
                     </nav>
                 </div>
             )}

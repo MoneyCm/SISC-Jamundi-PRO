@@ -14,6 +14,22 @@ def normalize_conducta_text(value):
     return re.sub(r"\s+", " ", text.upper()).strip()
 
 
+# La sabana semanal de Policia Jamundi abrevia los hurtos: "H.PERSONAS", "H.MOTOS",
+# "H.AUTOMOTORES", "H. RESIDENCIAS". Sin expandirlos, caian en "Delito General".
+_HURTO_ABREVIADO = re.compile(r"^H\s*\.\s*")
+
+
+# En cargas antiguas la conducta quedo guardada sin el prefijo ("PERSONAS", "MOTOCICLETAS").
+# Solo se aceptan como hurto cuando son el valor completo, nunca como parte de otro texto.
+_HURTO_SIN_PREFIJO = {"PERSONAS", "MOTOS", "MOTOCICLETAS", "AUTOMOTORES", "RESIDENCIAS", "COMERCIO"}
+
+
+def expandir_abreviaturas(val):
+    if val in _HURTO_SIN_PREFIJO:
+        return "HURTO " + val
+    return _HURTO_ABREVIADO.sub("HURTO ", val)
+
+
 def homologar_conducta_policia(conducta_raw, catalogo=None):
     """
     Homologa conductas SIEDCO/PONAL, incluyendo denominaciones con articulo penal.
@@ -30,6 +46,7 @@ def homologar_conducta_policia(conducta_raw, catalogo=None):
         c = catalogo[compact]
         return c.valor_estandar, c.categoria_delito, True
 
+    val = expandir_abreviaturas(val)
     if "HOMICIDIO" in val or "MUERTE" in val:
         return "Homicidio", "HOMICIDIO", True
     if "LESIONES" in val or "HERIDO" in val:
