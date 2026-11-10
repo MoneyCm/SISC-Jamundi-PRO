@@ -5,7 +5,7 @@ import CitizenPortalHome from './pages/CitizenPortalHome';
 import PublicPortalHeader from './components/public/PublicPortalHeader';
 import { loadPublicDashboard } from './utils/publicDashboardCache';
 import { apiJson, clearStoredSession, SESSION_EXPIRED_EVENT } from './utils/apiClient';
-import { PUBLIC_ONLY, PUBLIC_FORMS } from './utils/publicBuild';
+import { PUBLIC_ONLY, PUBLIC_FORMS, HIDDEN_PUBLIC_PAGES } from './utils/publicBuild';
 import PublicFormsUnavailable from './components/public/PublicFormsUnavailable';
 
 const Dashboard = lazy(() => import('./pages/DashboardV2'));
@@ -254,7 +254,9 @@ const App = () => {
 
   const renderContent = () => {
     if (isPublic) {
-      switch (publicActivePage) {
+      // En el portal público, las páginas de publicaciones (solo oficina) llevan al inicio.
+      const publicPage = HIDDEN_PUBLIC_PAGES.includes(publicActivePage) ? 'hub' : publicActivePage;
+      switch (publicPage) {
         case 'hub':
           return <CitizenPortalHome
             onNavigate={navigatePublic}
