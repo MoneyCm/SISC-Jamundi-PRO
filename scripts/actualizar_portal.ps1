@@ -78,6 +78,8 @@ try {
     if (-not $ok) { Falla 'Neon no responde. Si esta en la red de la oficina, puede que bloquee el puerto 5432; se intentara de nuevo en la proxima ejecucion.' }
 
     Paso '4/6 Cargando en Neon (puede tardar varios minutos; el portal puede fallar mientras tanto)'
+    & $docker run --rm -v "${raiz}:/w" postgres:17 psql $neon -v ON_ERROR_STOP=1 -q -f /w/docs/despliegue/limpiar_neon.sql
+    if ($LASTEXITCODE -ne 0) { Falla 'No se pudo preparar Neon para la carga (limpiar_neon.sql).' }
     $ok = $false
     foreach ($i in 1..3) {
         & $docker run --rm -v "${raiz}:/w" postgres:17 pg_restore --clean --if-exists --no-owner --no-privileges --exit-on-error -d $neon "/w/$archivo"
