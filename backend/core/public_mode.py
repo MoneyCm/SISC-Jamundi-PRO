@@ -30,12 +30,9 @@ PUBLIC_READ_ROUTES: List[Tuple[str, str]] = [
     ("GET", r"/api/analitica/estadisticas/(kpis|distribucion|ultima-actualizacion)"),
     ("GET", r"/api/intelligence/public/.+"),
     ("GET", r"/api/institutional-indicators/public"),
-    ("GET", r"/api/sisc-cifras/sources"),
-    ("GET", r"/api/sisc-cifras/publications/public"),
-    ("GET", r"/api/sisc-cifras/publications/\{publication_id\}/pdf"),
     ("GET", r"/api/participacion/(propuestas|frentes)"),
-    # Calculos sin escritura que usa el portal (piezas de SISC en cifras y asistente ciudadano).
-    ("POST", r"/api/sisc-cifras/generate"),
+    # Asistente ciudadano (solo responde, no escribe en la base).
+    # "SISC en cifras" y los boletines no van aqui: se generan y revisan en la oficina.
     ("POST", r"/api/ia/chat_ciudadano"),
 ]
 

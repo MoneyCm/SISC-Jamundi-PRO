@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { LockKeyhole, Menu, X } from 'lucide-react';
+import { HIDDEN_PUBLIC_PAGES } from '../../utils/publicBuild';
 
 const NAV_ITEMS = [
     { label: 'Inicio', page: 'hub' },
@@ -12,7 +13,7 @@ const NAV_ITEMS = [
     { label: 'Boletines', page: 'technical-bulletins' },
     { label: 'Datos abiertos', page: 'open-data' },
     { label: 'Metodología', page: 'transparency-info' },
-];
+].filter((item) => !HIDDEN_PUBLIC_PAGES.includes(item.page));
 
 const PublicPortalHeader = ({ currentPage = 'hub', onNavigate, onLoginClick }) => {
     const [open, setOpen] = useState(false);

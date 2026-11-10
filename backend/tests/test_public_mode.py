@@ -24,11 +24,12 @@ def test_public_mode_keeps_only_citizen_routes(public_app):
     paths = _paths(public_app)
     assert ("GET", "/api/analitica/public/dashboard") in paths
     assert ("GET", "/api/analitica/public/piscc") in paths
-    assert ("GET", "/api/sisc-cifras/publications/public") in paths
     for method, path in paths:
         assert not path.startswith(("/api/auth", "/api/ingesta", "/api/users", "/api/source-center",
                                     "/api/alerts-tray", "/api/council-commitments", "/api/narrative-alerts")), path
     assert ("POST", "/api/participacion/reportes-seguros") not in paths
+    # Generador de SISC en cifras y archivo de boletines: solo en la oficina.
+    assert not any(path.startswith("/api/sisc-cifras") for _, path in paths)
 
 
 def test_public_mode_hides_login_and_docs(public_app):

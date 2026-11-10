@@ -35,3 +35,21 @@ y definir quién revisa lo que llega.
 
 El portal lee la base que alimenta el SISC institucional. Si la carga se hace en el PC (Docker) y Neon
 no se actualiza, el portal mostrará cifras viejas: hay que sincronizar Neon después de cada carga.
+
+## Actualizar el portal después de cada carga
+
+El portal no está conectado en vivo con la oficina: lee una copia en Neon. Después de cargar
+la sábana (o cualquier fuente) en el SISC de la oficina:
+
+1. Una sola vez: cree en la raíz del proyecto el archivo `.neon_url` con la cadena de conexión
+   de `neondb_owner` **sin pooling** (Neon → Connect → apagar "Connection pooling"). No se sube a GitHub.
+2. Doble clic en `ACTUALIZAR_PORTAL.bat`. Exporta la base, la carga en Neon (con reintentos),
+   restablece los permisos de `sisc_portal` y muestra el último hecho cargado.
+
+Si falla desde la red de la Alcaldía (puerto 5432 bloqueado), ejecútelo desde otra red.
+
+## Publicaciones
+
+El generador de "SISC en cifras" y el archivo de boletines quedan solo en el SISC de la oficina:
+ahí se preparan las piezas que se publican en la página de la Alcaldía. El portal público
+no los muestra, porque presenta directamente las cifras al día.
