@@ -46,6 +46,19 @@ la sábana (o cualquier fuente) en el SISC de la oficina:
 2. Doble clic en `ACTUALIZAR_PORTAL.bat`. Exporta la base, la carga en Neon (con reintentos),
    restablece los permisos de `sisc_portal` y muestra el último hecho cargado.
 
+### Automático
+
+Una sola vez, en PowerShell desde la carpeta del proyecto:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\programar_actualizacion_portal.ps1
+```
+
+Crea la tarea "SISC - Actualizar portal": todos los días a las 8:00 p. m. (después de la copia de
+seguridad) y al iniciar sesión. Si el equipo estaba apagado, corre al encenderlo. Solo sube a Neon
+si los datos cambiaron. Registro en `logs\actualizar_portal.log`. `ACTUALIZAR_PORTAL.bat` sigue
+sirviendo para actualizar en el momento (siempre copia, aunque no haya cambios).
+
 Si falla desde la red de la Alcaldía (puerto 5432 bloqueado), ejecútelo desde otra red.
 
 ## Publicaciones
