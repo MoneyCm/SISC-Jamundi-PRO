@@ -1,5 +1,5 @@
-import React from 'react';
-import { Filter, RotateCcw, Search } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronDown, Filter, RotateCcw, Search } from 'lucide-react';
 import { COMPARISON_OPTIONS, PERIOD_OPTIONS } from '../../utils/citizenInsights';
 
 const Field = ({ label, children }) => (
@@ -11,17 +11,29 @@ const Field = ({ label, children }) => (
 
 const inputClass = 'min-h-11 w-full border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#281FD0] focus:ring-2 focus:ring-[#281FD0]/20';
 
-const CitizenFilterBar = ({ filters, options = {}, onChange, onApply, onClear, busy = false }) => {
+// collapsible: los filtros arrancan plegados en una sola línea (con `summary` como resumen de lo que
+// se está viendo) y se abren con un botón, para que las cifras queden a la vista sin bajar.
+const CitizenFilterBar = ({ filters, options = {}, onChange, onApply, onClear, busy = false, collapsible = false, defaultOpen = false, summary = '' }) => {
+    const [open, setOpen] = useState(!collapsible || defaultOpen);
     const update = (key) => (event) => onChange?.({ ...filters, [key]: event.target.value });
 
     return (
         <form onSubmit={(event) => { event.preventDefault(); onApply?.(); }} className="border border-slate-200 bg-white shadow-sm" aria-label="Filtros de datos públicos">
-            <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <Filter size={16} className="text-[#281FD0]" />
-                <h2 className="text-sm font-black text-slate-900">Filtrar la información</h2>
-                <span className="ml-auto text-[11px] font-semibold text-slate-500">Los resultados conservan fuente y fecha de corte</span>
-            </div>
-            <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+            {collapsible ? (
+                <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="public-filter-fields" className="flex min-h-12 w-full flex-wrap items-center gap-x-3 gap-y-1 bg-slate-50 px-4 py-2 text-left hover:bg-slate-100">
+                    <Filter size={16} className="shrink-0 text-[#281FD0]" />
+                    <span className="text-sm font-black text-slate-900">{open ? 'Ocultar filtros' : 'Cambiar periodo o filtros'}</span>
+                    {summary && <span className="text-xs font-semibold text-slate-500">Viendo: {summary}</span>}
+                    <ChevronDown size={18} className={`ml-auto shrink-0 text-[#281FD0] transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
+            ) : (
+                <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                    <Filter size={16} className="text-[#281FD0]" />
+                    <h2 className="text-sm font-black text-slate-900">Filtrar la información</h2>
+                    <span className="ml-auto text-[11px] font-semibold text-slate-500">Los resultados conservan fuente y fecha de corte</span>
+                </div>
+            )}
+            <div id="public-filter-fields" hidden={!open} className={`gap-3 p-4 md:grid-cols-2 xl:grid-cols-4 ${collapsible ? 'border-t border-slate-200' : ''} ${open ? 'grid' : ''}`}>
                 <Field label="Periodo">
                     <select value={filters.periodMode} onChange={update('periodMode')} className={inputClass}>
                         {PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

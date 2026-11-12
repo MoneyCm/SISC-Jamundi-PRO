@@ -33,39 +33,41 @@ const MetasPiscc = () => {
                     Metas del Plan Integral de Seguridad y Convivencia Ciudadana (PISCC) 2024–2027: el máximo de casos al año que el plan se propone no superar en 2027, y cómo va este año.
                 </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {/* Tarjeta compacta: estado, cifra y meta a la vista; la explicación se abre con "Ver detalle". */}
+            <div className="grid grid-cols-2 items-start gap-3 lg:grid-cols-4">
                 {data.indicators.map((meta) => {
                     const tono = semaforoMeta(meta.status);
                     return (
-                        <article key={meta.id} className={`flex flex-col rounded-lg border p-4 ${TONOS[tono]}`}>
-                            <div className="flex items-start justify-between gap-3">
-                                <h3 className="text-base font-black">{meta.label}</h3>
-                                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-black">
-                                    <span className={`h-2.5 w-2.5 rounded-full ${PUNTOS[tono]}`} aria-hidden="true" />{meta.status_label}
-                                </span>
-                            </div>
+                        <article key={meta.id} className={`min-w-0 rounded-lg border p-3 sm:p-4 ${TONOS[tono]}`}>
+                            <h3 className="text-base font-black leading-5">{meta.label}</h3>
+                            <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-black">
+                                <span className={`h-2.5 w-2.5 rounded-full ${PUNTOS[tono]}`} aria-hidden="true" />{meta.status_label}
+                            </span>
                             <p className="mt-2 text-3xl font-black tabular-nums">{meta.count ?? '—'}</p>
                             <p className="text-xs font-bold opacity-80">{textoMeta(meta)}</p>
-                            {meta.previous != null && meta.cutoff && (
-                                <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded bg-white/70 px-2 py-0.5 text-[11px] font-bold" title={meta.previous_status_label || ''}>
-                                    <span className={`h-2 w-2 rounded-full ${PUNTOS[semaforoMeta(meta.previous_status)]}`} aria-hidden="true" />
-                                    Mismo periodo de {Number(String(meta.cutoff).slice(0, 4)) - 1}: {meta.previous}{meta.previous_status_label ? ` · ${meta.previous_status_label}` : ''}
+                            <details className="mt-2">
+                                <summary className="inline-flex min-h-9 cursor-pointer items-center text-xs font-black underline underline-offset-2">Ver detalle</summary>
+                                {meta.previous != null && meta.cutoff && (
+                                    <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded bg-white/70 px-2 py-0.5 text-[11px] font-bold" title={meta.previous_status_label || ''}>
+                                        <span className={`h-2 w-2 shrink-0 rounded-full ${PUNTOS[semaforoMeta(meta.previous_status)]}`} aria-hidden="true" />
+                                        Mismo periodo de {Number(String(meta.cutoff).slice(0, 4)) - 1}: {meta.previous}{meta.previous_status_label ? ` · ${meta.previous_status_label}` : ''}
+                                    </p>
+                                )}
+                                <p className="mt-2 text-sm font-semibold leading-5">{meta.detail}</p>
+                                {meta.closed_years?.some((a) => a.completo) && (
+                                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
+                                        {meta.closed_years.filter((a) => a.completo).map((a) => (
+                                            <span key={a.anio} className="inline-flex items-center gap-1 rounded bg-white/70 px-2 py-0.5" title={a.semaforo_label}>
+                                                <span className={`h-2 w-2 rounded-full ${ANIO_COLOR[a.semaforo] || 'bg-slate-400'}`} aria-hidden="true" />
+                                                {a.anio}: {a.total}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                <p className="pt-3 text-[11px] font-semibold opacity-75">
+                                    Fuente: {meta.source || 'sin fuente'}{meta.cutoff ? ` · hasta el ${fechaCorta(meta.cutoff)}` : ''}
                                 </p>
-                            )}
-                            <p className="mt-2 text-sm font-semibold leading-5">{meta.detail}</p>
-                            {meta.closed_years?.some((a) => a.completo) && (
-                                <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
-                                    {meta.closed_years.filter((a) => a.completo).map((a) => (
-                                        <span key={a.anio} className="inline-flex items-center gap-1 rounded bg-white/70 px-2 py-0.5" title={a.semaforo_label}>
-                                            <span className={`h-2 w-2 rounded-full ${ANIO_COLOR[a.semaforo] || 'bg-slate-400'}`} aria-hidden="true" />
-                                            {a.anio}: {a.total}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                            <p className="mt-auto pt-3 text-[11px] font-semibold opacity-75">
-                                Fuente: {meta.source || 'sin fuente'}{meta.cutoff ? ` · hasta el ${fechaCorta(meta.cutoff)}` : ''}
-                            </p>
+                            </details>
                         </article>
                     );
                 })}
