@@ -4,9 +4,9 @@ import { HIDDEN_PUBLIC_PAGES } from '../../utils/publicBuild';
 
 const NAV_ITEMS = [
     { label: 'Inicio', page: 'hub' },
+    { label: 'Mi barrio', page: 'hub', hash: 'mi-barrio' },
     { label: 'Explorar datos', page: 'transparency' },
     { label: 'Mapa', page: 'transparency', hash: 'mapa' },
-    { label: 'Mi barrio', page: 'hub', hash: 'mi-barrio' },
     { label: 'Metas del plan', page: 'hub', hash: 'metas' },
     { label: 'Comparar', page: 'hub', hash: 'comparar' },
     { label: 'SISC en cifras', page: 'sisc-cifras' },
