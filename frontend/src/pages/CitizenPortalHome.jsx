@@ -39,20 +39,20 @@ const KpiCard = ({ icon: Icon, label, value, helper, tone = 'blue' }) => {
     };
     const style = tones[tone] || tones.blue;
     return (
-        <article className={`min-h-[176px] border border-t-4 border-slate-200 bg-white p-5 shadow-sm ${style.border}`}>
+        <article className={`border border-t-4 border-slate-200 bg-white p-4 shadow-sm sm:min-h-[176px] sm:p-5 ${style.border}`}>
             <div className="flex items-start justify-between gap-3">
                 <p className="text-[11px] font-black uppercase tracking-[0.1em] text-slate-500">{label}</p>
-                <span className={`inline-flex h-9 w-9 items-center justify-center ${style.icon}`}><Icon size={19} /></span>
+                <span className={`hidden h-9 w-9 items-center justify-center sm:inline-flex ${style.icon}`}><Icon size={19} /></span>
             </div>
-            <p className="mt-5 text-3xl font-black leading-none tabular-nums text-slate-950">{value}</p>
-            <p className="mt-3 text-xs font-semibold leading-5 text-slate-600">{helper}</p>
+            <p className="mt-2 text-3xl font-black leading-none tabular-nums text-slate-950 sm:mt-5">{value}</p>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{helper}</p>
         </article>
     );
 };
 
 const DataSkeleton = () => (
     <div className="grid gap-3 sm:grid-cols-3" aria-label="Cargando indicadores">
-        {[0, 1, 2].map((item) => <div key={item} className="h-44 animate-pulse border border-slate-200 bg-white p-5"><div className="h-3 w-24 bg-slate-200" /><div className="mt-10 h-8 w-20 bg-slate-200" /><div className="mt-4 h-3 w-full bg-slate-100" /></div>)}
+        {[0, 1, 2].map((item) => <div key={item} className="h-28 animate-pulse border border-slate-200 bg-white p-5 sm:h-44"><div className="h-3 w-24 bg-slate-200" /><div className="mt-4 h-8 w-20 bg-slate-200" /><div className="mt-4 h-3 w-full bg-slate-100" /></div>)}
     </div>
 );
 
