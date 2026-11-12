@@ -554,10 +554,9 @@ class SourceCenterService:
             # MINDEFENSA (monitor-mindefensa en GitHub, deshabilitado) se reemplazó por MINDEFENSA_DATOS.
             cls._apply_state(cls._base("MINDEFENSA_DATOS"), states.get("MINDEFENSA_DATOS")),
             cls._apply_state(cls._base("MINDEFENSA_PISCC"), states.get("MINDEFENSA_PISCC")),
-            # SIEDCO_PUBLICO (monitor-siedco) volvió a la vista el 2026-11-12: la sábana tarda en llegar y su
-            # tablero público sirve para saber hasta qué fecha publicó la Policía.
-            cls._apply_state(cls._base("SIEDCO_PUBLICO"), states.get("SIEDCO_PUBLICO")),
-            # FISCALIA_SPOA_V3 (monitor-fiscalia-spoa-v3) sigue retirado: lo reemplaza FISCALIA_DATOS.
+            # SIEDCO_PUBLICO (monitor-siedco) y FISCALIA_SPOA_V3 (monitor-fiscalia-spoa-v3) están retirados de la
+            # vista: el segundo lo reemplaza FISCALIA_DATOS. El primero se probó de nuevo el 2026-11-12 y su
+            # tablero iba un mes atrás (corte 14 de octubre), más que la sábana y el Observatorio del Valle.
             cls._apply_state(cls._base("OBSERVATORIO_VALLE"), states.get("OBSERVATORIO_VALLE")),
             cls._apply_state(cls._base("FISCALIA_DATOS"), states.get("FISCALIA_DATOS")),
             cls._backup(),
