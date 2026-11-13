@@ -19,9 +19,11 @@ from services.sabana_history import build_record_identity, content_hash
 
 def test_catalog_declares_counting_unit():
     hom = get_indicator_meta("HOMICIDIO")
-    assert hom["unit"] == "HECHO"
+    # Metodología v2: homicidio por víctima, como la Policía; el resto por hecho.
+    assert hom["unit"] == "VICTIMA"
     assert hom["methodology_version"] == METHODOLOGY_VERSION
-    assert "COUNT DISTINCT" in hom["deduplication"]
+    assert "víctima" in hom["deduplication"]
+    assert get_indicator_meta("SEGURIDAD_TOTAL")["unit"] == "HECHO"
     assert hom["date_field"] == "fecha_evento"
     assert "barrio_normalizado" in hom["dimensions"]
     # Diagnóstico nunca es cifra oficial

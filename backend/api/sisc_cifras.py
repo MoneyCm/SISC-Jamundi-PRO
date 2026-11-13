@@ -14,6 +14,7 @@ from api.auth import get_optional_user, log_audit, require_role, institutional_a
 from db.models import User
 from db.models_sisc_cifras import SiscCifrasPublication
 from db.session import get_db
+from services.indicator_catalog import METHODOLOGY_VERSION
 from services.sisc_cifras_service import SiscCifrasService
 from services.sisc_cifras_pdf import build_sisc_cifras_pdf
 
@@ -581,7 +582,7 @@ class IndicatorRequest(BaseModel):
     period: dict = Field(default={"start": "2026-01-01", "end": "2026-07-12"})
     territory: str = Field(default="JAMUNDI")
     source_version_id: Optional[str] = None
-    methodology_version: str = Field(default="1")
+    methodology_version: str = Field(default=METHODOLOGY_VERSION)
 
 
 class ReconcileRequest(BaseModel):

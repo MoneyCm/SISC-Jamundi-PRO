@@ -4,8 +4,8 @@ Cifras de la sábana policial, los barrios con más casos y los compromisos del 
 necesitan atención. Las frases se arman con reglas fijas a partir de las cifras.
 
 Cuenta como el cálculo oficial publicable (services/indicator_calculation.py): hechos únicos
-sobre la foto de la última entrega de la Policía, no sobre el histórico acumulado. Así coincide
-con el boletín institucional, que cuenta los hechos únicos del mismo archivo.
+sobre la foto de la última entrega de la Policía, no sobre el histórico acumulado; homicidio
+se cuenta por víctima, como lo publica la Policía. Así coincide con el boletín institucional.
 """
 import io
 import os
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from db.models_council import CouncilCommitment
 from db.models_hechos_seguridad import SabanaSnapshotRow
+from services.hechos_metrics import hechos_unicos_expr
 from services import council_commitments_service as commitments
 from services.alert_engine import NON_PUBLIC_TERRITORY_VALUES, is_public_territory_name
 from services.indicator_calculation import _latest_completed_run
@@ -73,7 +74,8 @@ def tendencia(actual: int, referencia: int) -> str:
 
 
 Fila = SabanaSnapshotRow
-HECHOS = func.count(func.distinct(Fila.hecho_key))
+# Hechos unicos por conducta; homicidio suma victimas (ver hechos_metrics).
+HECHOS = hechos_unicos_expr(Fila)
 
 
 def _en_entrega(entrega, inicio: date, fin: date):
@@ -422,6 +424,7 @@ def render_pdf(datos: Dict[str, Any]) -> bytes:
     historia.append(Paragraph(
         f"Datos policiales al {fecha_larga(datos['corte'])} ({datos['dias_retraso']} días de retraso), "
         f"entrega {datos.get('entrega') or 'vigente'}. "
+        "Homicidios se cuentan por víctima, como los publica la Policía; los demás delitos, por hecho. "
         "Un mismo hecho puede incluir más de un delito (por ejemplo, un homicidio con un herido): "
         "por eso los delitos pueden sumar más que el total. "
         f"Generado por el SISC el {fecha_larga(datos['hoy'])}. Documento de uso interno.", pie))

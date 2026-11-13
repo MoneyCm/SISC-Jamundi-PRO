@@ -18,6 +18,7 @@ logger = logging.getLogger("sisc_api")
 from api.auth import admin_only, analyst_or_admin, ingestion_operator, log_audit, get_current_user, require_role
 from db import crud_dq
 from services import dq_service
+from services.indicator_catalog import METHODOLOGY_VERSION
 from services.hechos_metrics import hechos_unicos_expr
 from services.file_reader import select_sheet_frame
 from services.conducta_homologation import homologar_conducta_policia, normalize_conducta_key
@@ -521,8 +522,8 @@ async def police_weekly_explorer(
     return {
         "access": {"can_filter_detailed": can_filter_detailed, "label": role_label},
         "summary": {"total": query.with_entities(hechos_unicos_expr()).scalar() or 0, "corte": corte.isoformat() if corte else None,
-                    "unit": "HECHO", "methodology_version": "1",
-                    "note": "Total en hechos únicos (COUNT DISTINCT hecho_key)."},
+                    "unit": "HECHO", "methodology_version": METHODOLOGY_VERSION,
+                    "note": "Total en hechos únicos; homicidio suma víctimas."},
         "filters": {"years": years, "conductas": conductas if can_filter_detailed else [], "zonas": zonas if can_filter_detailed else [], "semanas": semanas if can_filter_detailed else []},
         "breakdowns": {
             "conductas": breakdown(HechoSeguridad.conducta_estandar),

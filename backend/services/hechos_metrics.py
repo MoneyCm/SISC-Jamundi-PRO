@@ -30,8 +30,28 @@ def hecho_key_expr(model=HechoSeguridad):
     )
 
 
+# Homicidio se cuenta por VICTIMA (una fila de la sabana = una persona), como lo publica la
+# Policia; el resto de conductas se cuenta por HECHO unico. Metodologia v2 (Observatorio, nov 2026).
+CONDUCTAS_POR_VICTIMA = ("HOMICIDIO", "HOMICIDIO INTENCIONAL", "HOMICIDIO DOLOSO")
+
+
+def es_conteo_por_victima(conducta) -> bool:
+    return str(conducta or "").strip().upper() in CONDUCTAS_POR_VICTIMA
+
+
+def conteo_key_expr(model=HechoSeguridad):
+    """Clave de conteo oficial: victima (fila) para homicidio; hecho unico para lo demas."""
+    hecho = model.hecho_key if hasattr(model, "hecho_key") else hecho_key_expr(model)
+    conducta = func.upper(func.trim(func.coalesce(model.conducta_estandar, "")))
+    return case(
+        (conducta.in_(CONDUCTAS_POR_VICTIMA), literal("V:") + cast(model.id, String)),
+        else_=hecho,
+    )
+
+
 def hechos_unicos_expr(model=HechoSeguridad):
-    return func.count(func.distinct(hecho_key_expr(model)))
+    """Conteo oficial: hechos unicos, salvo homicidio, que suma victimas."""
+    return func.count(func.distinct(conteo_key_expr(model)))
 
 
 def registros_expr(model=HechoSeguridad):

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from db.models import get_db, Event, EventType
 from db.models_hechos_seguridad import HechoSeguridad, IngestionRun, SabanaSnapshotRow
 from db.models_institutional import InstitutionalDataBatch, InstitutionalIndicator
+from services.indicator_catalog import METHODOLOGY_VERSION
 from services.institutional_agent_service import InstitutionalAgentService
 from services.hechos_metrics import hechos_unicos_expr
 from sqlalchemy import Integer, cast, func
@@ -889,8 +890,8 @@ async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
         HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL"
     ).scalar() or 0
 
-    # Unidad oficial: HECHO (hechos únicos). HOMICIDIO usa la misma regla que el
-    # resto de conductas —corrige inconsistencia histórica COUNT(filas) vs hechos—.
+    # Unidad oficial: HECHO (hechos únicos), salvo HOMICIDIO, que suma víctimas como la
+    # Policía (metodología v2, ver hechos_metrics.conteo_key_expr).
     # total_registros queda solo como diagnóstico de volumen de fuente.
     # Vía única: estas cifras deben coincidir con POST /api/sisc-cifras/indicator
     # para mismos filtros y versiones (ver provenance_* abajo).
@@ -1204,6 +1205,6 @@ async def citizen_chat(data: CitizenChatRequest, db: Session = Depends(get_db)):
         extra_allowed=[user_message, "123"],
     )
     return {"response": resultado["text"], "provenance": provenance_official or None,
-            "unit": "HECHO", "methodology_version": "1",
+            "unit": "HECHO", "methodology_version": METHODOLOGY_VERSION,
             "verified": resultado["verified"], "model": None if resultado["fallback"] else resultado["model"]}
 
