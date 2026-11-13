@@ -20,7 +20,7 @@ import type {
   SiscPublication,
   SiscSourceStatus
 } from '../types/stats';
-import { crimeEventKey, deduplicateCrimeRows, sourceRowRecordKey, uniqueCrimeEvents } from '../lib/sabanaHistory';
+import { crimeCountKey, deduplicateCrimeRows, sourceRowRecordKey, uniqueCrimeEvents } from '../lib/sabanaHistory';
 import { toPisccTracking, type BackendPisccGoals } from '../lib/pisccGoals';
 import { withinBulletinCutoff } from '../lib/bulletinPeriod';
 import OfficialQueryPanel from './OfficialQueryPanel';
@@ -882,7 +882,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
         }
       }
 
-      const eventKey = crimeEventKey(row);
+      const eventKey = crimeCountKey(row); // homicidio: una clave por víctima
       if (inCurrentPeriod) {
           if (!unicos.current.has(eventKey)) currentPeriodRows.push(row);
           unicos.current.add(eventKey);
