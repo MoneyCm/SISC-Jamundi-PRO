@@ -74,7 +74,7 @@ def test_aparicion_de_casos_sin_porcentaje_inventado(monkeypatch):
     assert "sin casos en la previa" in r["reason"]
     assert "no existe base para un porcentaje" in r["reason"]
     assert r["source_version_id"] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-    assert r["methodology_version"] == "1"
+    assert r["methodology_version"] == rules.METHODOLOGY_VERSION
     assert r["rules_version"] == rules.RULES_VERSION
     assert r["coverage"] == "COMPLETA"
     assert r["declared_coverage"] == {"start": "2026-06-01", "end": "2026-07-05"}

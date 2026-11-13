@@ -59,6 +59,7 @@ from sqlalchemy.orm import Session
 from db.models_fiscalia_spoa import FiscaliaSpoaRecord, FiscaliaSpoaSnapshot
 from db.models_hechos_seguridad import IngestionRun, SabanaSnapshotRow
 from db.models_medicina_legal import MedicinaLegalRecord, MedicinaLegalSnapshot
+from services.hechos_metrics import hechos_unicos_expr
 from services.indicator_catalog import METHODOLOGY_VERSION, get_indicator_meta
 
 # Umbral absoluto: la aritmética homicidial es de números pequeños.
@@ -143,8 +144,11 @@ def _count_policia_homicidio(
     end: date,
     source_version_id: str,
 ) -> int:
-    """HECHOS únicos de HOMICIDIO en la sábana policial para la entrega fija."""
-    value = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
+    """Víctimas de HOMICIDIO en la sábana policial para la entrega fija (metodología v2).
+
+    Medicina Legal registra personas fallecidas, así que comparar víctimas con víctimas es
+    más justo que hechos contra personas."""
+    value = db.query(hechos_unicos_expr(SabanaSnapshotRow)).filter(
         SabanaSnapshotRow.ingestion_id == UUID(str(source_version_id)),
         SabanaSnapshotRow.conducta_estandar.in_(HOMICIDIO_CONDUCTAS),
         SabanaSnapshotRow.fecha_evento >= start,

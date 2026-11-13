@@ -12,13 +12,14 @@ backend cuenta hechos únicos. Cada indicador declara:
 Un hecho con tres víctimas puede ser 3 registros, 1 hecho y 3 víctimas.
 El indicador debe declarar cuál utiliza. Validado por Observatorio.
 
-Metodología v1: POLICIA_SEMANAL cuenta HECHOS (COUNT DISTINCT hecho_key).
-Nunca COUNT(*) de filas para cifras oficiales.
+Metodología v2: POLICIA_SEMANAL cuenta HECHOS (COUNT DISTINCT hecho_key), salvo HOMICIDIO,
+que cuenta VÍCTIMAS (una fila de la sábana = una persona), como lo publica la Policía.
+Decisión del Observatorio, nov 2026. Ver services.hechos_metrics.conteo_key_expr.
 """
 
 from __future__ import annotations
 
-METHODOLOGY_VERSION = "1"
+METHODOLOGY_VERSION = "2"
 
 # Unidades canónicas
 UNIT_REGISTRO_ORIGEN = "REGISTRO_ORIGEN"  # una fila recibida
@@ -30,19 +31,17 @@ INDICATOR_CATALOG = {
     "HOMICIDIO": {
         "code": "HOMICIDIO",
         "source": "POLICIA_SEMANAL",
-        "unit": UNIT_HECHO,
-        "unit_label": "hechos registrados",
-        "deduplication": "COUNT DISTINCT canonical_hecho_key(id_fuente, fingerprint, id). "
-        "Mismo HECHOS_ID = 1 hecho aunque traiga N víctimas/filas. "
-        "Sin ID oficial: fallback a fingerprint (hecho+víctima); correspondencia marcada incierta.",
+        "unit": UNIT_VICTIMA,
+        "unit_label": "víctimas",
+        "deduplication": "Una fila de la sábana = una víctima (conteo_key_expr). "
+        "Un HECHOS_ID con N víctimas suma N, como el reporte oficial de la Policía.",
         "date_field": "fecha_evento",
         "dimensions": ["conducta_estandar", "barrio_normalizado", "zona", "arma_medio", "sexo", "grupo_edad"],
         "conducta_filter": ["Homicidio", "HOMICIDIO", "HOMICIDIO INTENCIONAL", "HOMICIDIO DOLOSO"],
         "territory": "JAMUNDI",
         "methodology_version": METHODOLOGY_VERSION,
-        "notes": "Homicidio se cuenta en HECHOS, igual que el resto de conductas. "
-        "Prohibido COUNT(id) por filas para este indicador (corrige inconsistencia histórica en chat/IA). "
-        "Víctimas múltiples del mismo HECHOS_ID no suman al total; ver indicador HOMICIDIO_VICTIMAS si se requiere.",
+        "notes": "Desde la metodología v2 homicidio se cuenta por VÍCTIMA para cuadrar con la Policía "
+        "(antes 1 hecho aunque tuviera N víctimas). El resto de conductas sigue en HECHOS.",
     },
     "HOMICIDIO_VICTIMAS": {
         "code": "HOMICIDIO_VICTIMAS",

@@ -24,7 +24,7 @@ Reglas:
 - methodology_version cambia cuando cambie una regla de conteo.
 - El frontend envía filtros y muestra resultados; no recalcula sobre el Excel
   para cifras oficiales.
-- HOMICIDIO usa hechos únicos (igual que el resto), no COUNT de filas.
+- HOMICIDIO cuenta víctimas (metodología v2, como la Policía); el resto, hechos únicos.
 """
 
 from __future__ import annotations
@@ -172,7 +172,7 @@ def calculate_indicator(
         if run is not None:
             # Reproducibilidad histórica: calcula sobre la foto de la entrega.
             value = (
-                db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key)))
+                db.query(hechos_unicos_expr(SabanaSnapshotRow))
                 .filter(
                     SabanaSnapshotRow.ingestion_id == run.id,
                     SabanaSnapshotRow.fecha_evento >= start,
