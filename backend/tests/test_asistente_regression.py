@@ -176,3 +176,22 @@ def test_mindefensa_completa_el_anio_que_la_sabana_no_trae(monkeypatch):
     assert '132 víctimas' in r['texto'] and 'todo 2024: 120; subió en 12' in r['texto']
     assert svc._mindefensa_periodo(['Hurto a personas'], date(2025, 1, 1), date(2025, 12, 31)) is None
     assert svc._mindefensa_periodo(['Homicidio'], date(2026, 1, 1), date(2026, 12, 31)) is None  # meses sin publicar
+
+
+def test_cada_meta_del_piscc_dice_su_corte_y_la_cifra_reciente(monkeypatch):
+    from datetime import date
+    from services import piscc_goals
+    monkeypatch.setattr(piscc_goals, 'build_goals', lambda db, corte, x: {'indicators': [
+        {'id': 'homicidios', 'label': 'Homicidios', 'status_label': 'En riesgo de pasar el límite', 'detail': 'Van 85.',
+         'cutoff': '2026-09-30', 'source': 'MinDefensa / Policía Nacional (víctimas, datos.gov.co)', 'goal_2027': 105,
+         'reciente': {'count': 104, 'cutoff': '2026-11-06', 'since': 19, 'since_start': '2026-10-01'}},
+        {'id': 'motos', 'label': 'Hurto a motocicletas', 'status_label': 'En riesgo', 'detail': 'Van 154.',
+         'cutoff': '2026-09-30', 'source': 'MinDefensa / Policía Nacional', 'goal_2027': 180,
+         'reciente': {'count': 147, 'cutoff': '2026-11-06', 'since': 31, 'since_start': '2026-10-01'}}]})
+    exp = svc.Expediente()
+    svc._piscc(None, exp, date(2026, 11, 17))
+    homicidios, motos = exp.bloques[0][1].split('\n')
+    assert '(al 30 de septiembre de 2026, MinDefensa / Policía Nacional)' in homicidios
+    assert 'registra 19 más del 1 de octubre de 2026 al 6 de noviembre de 2026 (no se suman)' in homicidios
+    assert 'En la sábana el año va en 104: queda 1 para el límite de 105.' in homicidios
+    assert 'registra 31 más' in motos and 'límite' not in motos.split('(no se suman)')[1]
