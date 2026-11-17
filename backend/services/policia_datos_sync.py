@@ -23,6 +23,9 @@ from services.piscc_mindefensa_sync import DANE_JAMUNDI, _fecha, _un_anio_antes,
 
 CONECTOR = "POLICIA_NACIONAL_DATOS"
 CADA_CUANTO = timedelta(days=7)
+# Tras un error (p. ej. datos.gov.co caído) se reintenta en la siguiente vuelta del programador
+# (cada 6 horas), no a la semana.
+REINTENTO_TRAS_ERROR = timedelta(hours=5)
 # (id en datos.gov.co, nombre, conductas de la sábana con las que se contrasta; None = la sábana no lo trae)
 DELITOS = [
     ("m8fd-ahd9", "Homicidio", ["Homicidio"]),
@@ -91,7 +94,8 @@ def sincronizar(db: Session, consulta: Callable = consultar, forzar: bool = Fals
     """Consulta datos.gov.co si pasó una semana desde la última revisión y lo anota en el Centro de fuentes."""
     ahora = datetime.now(timezone.utc)
     estado = _estado(db)
-    if not forzar and estado.last_checked_at and ahora - estado.last_checked_at < CADA_CUANTO:
+    espera = REINTENTO_TRAS_ERROR if estado.status == "ERROR" else CADA_CUANTO
+    if not forzar and estado.last_checked_at and ahora - estado.last_checked_at < espera:
         return None
     estado.last_checked_at = ahora
     try:

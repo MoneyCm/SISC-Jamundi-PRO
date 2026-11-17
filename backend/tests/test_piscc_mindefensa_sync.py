@@ -86,3 +86,17 @@ def test_si_falla_la_consulta_queda_el_aviso(db, archivo):
     assert "error" in sync.sincronizar(db, caida, archivo)
     estado = db.get(SourceConnectorState, sync.CONECTOR)
     assert estado.status == "ERROR" and "sin conexión" in estado.warnings[0]
+
+
+def test_tras_un_error_reintenta_a_las_pocas_horas_y_no_a_la_semana(db, archivo):
+    db.query(SourceConnectorState).filter_by(connector_code=sync.CONECTOR).delete()
+
+    def caida(dataset, **parametros):
+        raise OSError("HTTP Error 500")
+
+    assert "error" in sync.sincronizar(db, caida, archivo)
+    assert sync.sincronizar(db, falsa_consulta, archivo) is None  # recién falló: aún no
+    estado = db.get(SourceConnectorState, sync.CONECTOR)
+    estado.last_checked_at = datetime.now(timezone.utc) - timedelta(hours=6)
+    assert sync.sincronizar(db, falsa_consulta, archivo)["corte"].isoformat() == "2026-08-31"
+    assert db.get(SourceConnectorState, sync.CONECTOR).status == "CURRENT"

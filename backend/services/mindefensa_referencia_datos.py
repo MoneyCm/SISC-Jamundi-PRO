@@ -20,6 +20,9 @@ from services.piscc_mindefensa_sync import consultar
 
 CONECTOR = "MINDEFENSA_DATOS"
 CADA_CUANTO = timedelta(days=7)
+# Tras un error (p. ej. datos.gov.co caído) se reintenta en la siguiente vuelta del programador
+# (cada 6 horas), no a la semana.
+REINTENTO_TRAS_ERROR = timedelta(hours=5)
 DEPARTAMENTOS_REFERENCIA = {"76", "19"}  # Valle del Cauca y Cauca, como el monitor
 # (id en datos.gov.co, tipo_delito con el que "Contexto comparado" ya guarda la serie)
 DELITOS = [
@@ -113,7 +116,8 @@ def sincronizar(db: Session, consulta: Callable = consultar, forzar: bool = Fals
     """Actualiza la referencia si pasó una semana desde la última revisión y lo anota en el Centro de fuentes."""
     ahora = datetime.now(timezone.utc)
     estado = _estado(db)
-    if not forzar and estado.last_checked_at and ahora - estado.last_checked_at < CADA_CUANTO:
+    espera = REINTENTO_TRAS_ERROR if estado.status == "ERROR" else CADA_CUANTO
+    if not forzar and estado.last_checked_at and ahora - estado.last_checked_at < espera:
         return None
     try:
         resultado = actualizar(db, consulta)
