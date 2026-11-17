@@ -88,7 +88,77 @@ def resumen(consulta: Callable = consultar) -> Dict:
 
     personas = [{"delito": "Víctimas", "actual": total(VICTIMAS, anio), "anterior": total(VICTIMAS, anio - 1)},
                 {"delito": "Procesados", "actual": total(PROCESADOS, anio), "anterior": total(PROCESADOS, anio - 1)}]
-    return {"corte": corte, "procesos": tabla, "respuesta_judicial": respuesta, "personas": personas}
+    return {"corte": corte, "procesos": tabla, "respuesta_judicial": respuesta, "personas": personas,
+            "seguimiento": seguimiento_judicial(consulta, corte)}
+
+
+# Etapas del SPOA agrupadas para leer la respuesta judicial. "Indagación" inactiva suele ser archivo,
+# pero el dato abierto no dice el motivo; por eso se muestra aparte de la indagación activa.
+def _grupo_etapa(etapa: str, estado: str) -> str:
+    etapa = (etapa or "").strip().lower()
+    if etapa.startswith("indagaci"):
+        return "indagacion_inactiva" if (estado or "").strip().lower() == "inactivo" else "indagacion_activa"
+    if etapa.startswith("investigaci"):
+        return "investigacion"
+    if etapa.startswith("juicio"):
+        return "juicio"
+    if etapa.startswith("ejecuci"):
+        return "condena"
+    return "sin_informacion"
+
+
+GRUPOS = ("indagacion_inactiva", "indagacion_activa", "investigacion", "juicio", "condena", "sin_informacion")
+
+
+def _vacio() -> Dict[str, int]:
+    return {g: 0 for g in GRUPOS}
+
+
+def _con_totales(conteo: Dict[str, int]) -> Dict[str, int]:
+    return {**conteo, "total": sum(conteo[g] for g in GRUPOS), "juicio_o_condena": conteo["juicio"] + conteo["condena"]}
+
+
+def seguimiento_judicial(consulta: Callable, corte: date) -> Dict:
+    """En qué etapa van los procesos por hechos en Jamundí de los dos años anteriores y del año en curso.
+
+    Los años anteriores ya tuvieron tiempo de avanzar; el año en curso (hasta el corte) es muy reciente
+    y no sirve para medir resultados. Se separa el homicidio doloso del culposo (casi todo de tránsito).
+    """
+    anios = [corte.year - 2, corte.year - 1, corte.year]
+    lista = ", ".join(f"'{a}'" for a in anios)
+    donde = f"cod_dane_hecho='{DANE}' AND a_o_hecho in ({lista})"
+
+    todos = {a: _vacio() for a in anios}
+    for f in consulta(PROCESOS, **{"$select": "a_o_hecho, etapa, estado, count(*) as n", "$where": donde,
+                                   "$group": "a_o_hecho, etapa, estado", "$limit": 1000}):
+        todos[int(f["a_o_hecho"])][_grupo_etapa(f.get("etapa"), f.get("estado"))] += int(f["n"])
+
+    homicidio = {tipo: {a: _vacio() for a in anios} for tipo in ("doloso", "culposo")}
+    for f in consulta(PROCESOS, **{"$select": "a_o_hecho, delito, etapa, estado, count(*) as n",
+                                   "$where": f"{donde} AND capitulo_delito='Del Homicidio'",
+                                   "$group": "a_o_hecho, delito, etapa, estado", "$limit": 5000}):
+        tipo = "culposo" if "CULPOSO" in (f.get("delito") or "").upper() else "doloso"
+        homicidio[tipo][int(f["a_o_hecho"])][_grupo_etapa(f.get("etapa"), f.get("estado"))] += int(f["n"])
+
+    # Delitos con más procesos en el último año completo, con cuántos llegaron a juicio o condena.
+    por_capitulo: Dict[str, Dict[int, Dict[str, int]]] = {}
+    for f in consulta(PROCESOS, **{"$select": "a_o_hecho, capitulo_delito, etapa, estado, count(*) as n",
+                                   "$where": f"cod_dane_hecho='{DANE}' AND a_o_hecho in ('{anios[0]}', '{anios[1]}')",
+                                   "$group": "a_o_hecho, capitulo_delito, etapa, estado", "$limit": 5000}):
+        capitulo = por_capitulo.setdefault(f.get("capitulo_delito") or "Sin información",
+                                           {anios[0]: _vacio(), anios[1]: _vacio()})
+        capitulo[int(f["a_o_hecho"])][_grupo_etapa(f.get("etapa"), f.get("estado"))] += int(f["n"])
+    principales = sorted(por_capitulo, key=lambda c: -sum(por_capitulo[c][anios[1]].values()))[:CAPITULOS_MOSTRADOS]
+
+    return {
+        "anios": anios,
+        "anio_en_curso": corte.year,
+        "todos": {str(a): _con_totales(todos[a]) for a in anios},
+        "homicidio_doloso": {str(a): _con_totales(homicidio["doloso"][a]) for a in anios},
+        "homicidio_culposo": {str(a): _con_totales(homicidio["culposo"][a]) for a in anios},
+        "por_delito": [{"delito": nombre_capitulo(c),
+                        **{str(a): _con_totales(por_capitulo[c][a]) for a in anios[:2]}} for c in principales],
+    }
 
 
 def _estado(db: Session):
@@ -132,7 +202,8 @@ def sincronizar(db: Session, consulta: Callable = consultar, forzar: bool = Fals
               "sabana_actual": None, "diferencia": None, "corte": corte.isoformat()}
              for f in resultado["procesos"] + resultado["personas"]]
     estado.details = {"fuente": "datos.gov.co (Fiscalía General de la Nación, SPOA V3)", "contraste": filas,
-                      "respuesta_judicial": resultado["respuesta_judicial"], "tipo_tabla": "judicial"}
+                      "respuesta_judicial": resultado["respuesta_judicial"], "tipo_tabla": "judicial",
+                      "seguimiento": resultado["seguimiento"]}
     if corte != anterior:
         estado.last_change_detected_at = ahora
     db.commit()
