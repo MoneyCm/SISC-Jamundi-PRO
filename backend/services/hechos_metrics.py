@@ -39,13 +39,41 @@ def es_conteo_por_victima(conducta) -> bool:
     return str(conducta or "").strip().upper() in CONDUCTAS_POR_VICTIMA
 
 
+def _ultima_entrega_del_hecho(model):
+    """Entrega más reciente que trae el hecho (mismo id_fuente) en la tabla maestra."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import aliased
+
+    from db.models_hechos_seguridad import IngestionRun
+
+    otra = aliased(model)
+    return (select(otra.ingestion_id)
+            .join(IngestionRun, IngestionRun.id == otra.ingestion_id)
+            .where(otra.id_fuente == model.id_fuente)
+            .order_by(IngestionRun.fecha_inicio.desc())
+            .limit(1)
+            .correlate(model)
+            .scalar_subquery())
+
+
 def conteo_key_expr(model=HechoSeguridad):
-    """Clave de conteo oficial: victima (fila) para homicidio; hecho unico para lo demas."""
-    hecho = model.hecho_key if hasattr(model, "hecho_key") else hecho_key_expr(model)
+    """Clave de conteo oficial: victima (fila) para homicidio; hecho unico para lo demas.
+
+    En la tabla maestra un hecho puede conservar filas de entregas viejas cuando la Policía corrige
+    un dato (edad, barrio): se cuentan solo las víctimas de la entrega más reciente que trae el hecho.
+    Las demás filas dan NULL y COUNT(DISTINCT ...) no las cuenta. La foto de una entrega
+    (sabana_snapshot_rows, con hecho_key) ya es una sola entrega y no necesita ese filtro.
+    """
     conducta = func.upper(func.trim(func.coalesce(model.conducta_estandar, "")))
+    victima = literal("V:") + cast(model.id, String)
+    if hasattr(model, "hecho_key"):
+        return case((conducta.in_(CONDUCTAS_POR_VICTIMA), victima), else_=model.hecho_key)
+    sin_id = func.nullif(func.btrim(model.id_fuente), "").is_(None)
+    es_homicidio = conducta.in_(CONDUCTAS_POR_VICTIMA)
     return case(
-        (conducta.in_(CONDUCTAS_POR_VICTIMA), literal("V:") + cast(model.id, String)),
-        else_=hecho,
+        (and_(es_homicidio, or_(sin_id, model.ingestion_id == _ultima_entrega_del_hecho(model))), victima),
+        (es_homicidio, literal(None, String)),
+        else_=hecho_key_expr(model),
     )
 
 

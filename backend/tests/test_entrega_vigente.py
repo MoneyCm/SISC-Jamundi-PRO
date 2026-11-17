@@ -1,4 +1,7 @@
-"""Tablero y estadísticas cuentan como el cálculo oficial: última entrega en las fechas que cubre."""
+"""Tablero y estadísticas cuentan como el cálculo oficial: última entrega en las fechas que cubre.
+
+La foto se cuenta con la misma regla oficial (homicidio por víctima, lo demás por hecho único).
+"""
 from datetime import date
 from uuid import UUID
 
@@ -45,11 +48,11 @@ def test_dentro_de_la_entrega_cuenta_lo_mismo_que_la_foto(db):
     if entrega is None:
         pytest.skip("Sin entregas cargadas en esta base")
     inicio, fin = entrega.ventanas[-1]
-    foto = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
+    foto = db.query(hechos_unicos_expr(SabanaSnapshotRow)).filter(
         SabanaSnapshotRow.ingestion_id == entrega.run_id,
         SabanaSnapshotRow.fecha_evento.between(inicio, fin)).scalar()
     assert analitica._hechos_total(db, inicio, fin) == foto
-    homicidios_foto = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
+    homicidios_foto = db.query(hechos_unicos_expr(SabanaSnapshotRow)).filter(
         SabanaSnapshotRow.ingestion_id == entrega.run_id,
         SabanaSnapshotRow.fecha_evento.between(inicio, fin),
         SabanaSnapshotRow.conducta_estandar.in_(analitica.CONDUCTA_KEYS["HOMICIDIO"])).scalar()
@@ -77,7 +80,7 @@ def test_cada_mes_cuenta_lo_mismo_que_la_foto(db):
     for mes in range(inicio.month, fin.month + 1):
         desde = date(inicio.year, mes, 1)
         hasta = min(fin, date(inicio.year + (mes == 12), mes % 12 + 1, 1).replace(day=1) - (date(2000, 1, 2) - date(2000, 1, 1)))
-        foto = db.query(func.count(func.distinct(SabanaSnapshotRow.hecho_key))).filter(
+        foto = db.query(hechos_unicos_expr(SabanaSnapshotRow)).filter(
             SabanaSnapshotRow.ingestion_id == entrega.run_id, SabanaSnapshotRow.fecha_evento.between(desde, hasta)).scalar()
         sisc = db.query(hechos_unicos_expr()).filter(
             HechoSeguridad.fuente_codigo == "POLICIA_SEMANAL", ev.filtro_hechos(db, entrega=entrega),
