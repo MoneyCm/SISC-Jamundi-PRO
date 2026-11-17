@@ -7,3 +7,7 @@ export const HIDDEN_PUBLIC_PAGES = PUBLIC_ONLY ? ['sisc-cifras', 'technical-bull
 
 // Formularios ciudadanos (reporte seguro, frentes, propuestas): solo si el backend público acepta escrituras.
 export const PUBLIC_FORMS = !PUBLIC_ONLY || import.meta.env?.VITE_PUBLIC_FORMS === 'true';
+
+// Asistente ciudadano: por ahora solo en el SISC local (páginas públicas antes del ingreso), para
+// revisarlo antes de publicarlo. Para mostrarlo en el portal de internet: VITE_ASISTENTE_CIUDADANO=true.
+export const ASISTENTE_CIUDADANO = !PUBLIC_ONLY || import.meta.env?.VITE_ASISTENTE_CIUDADANO === 'true';

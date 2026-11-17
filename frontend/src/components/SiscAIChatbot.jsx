@@ -60,7 +60,7 @@ const SiscAIChatbot = () => {
     const [isMinimized, setIsMinimized] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState([
-        { id: 1, text: 'Hola. Soy el asistente ciudadano del SISC Jamundi. Puedo ayudarte a entender cifras publicas, fecha de corte, tendencias, territorios visibles y rutas de atencion. En emergencias llama al 123.', sender: 'ai' }
+        { id: 1, text: 'Hola. Soy el asistente ciudadano del SISC Jamundí. Puedo darle cifras públicas de seguridad (por ejemplo, «¿cuántos homicidios van en 2026?») y orientarle sobre las rutas de atención. En una emergencia llame al 123.', sender: 'ai' }
     ]);
     const [loading, setLoading] = useState(false);
     const scrollRef = useRef(null);
@@ -163,12 +163,17 @@ const SiscAIChatbot = () => {
                 body: JSON.stringify({ message: input, history: historyForRequest })
             });
 
+            if (response.status === 429) {
+                setMessages(prev => [...prev, { id: Date.now() + 1, sender: 'ai',
+                    text: 'Hizo muchas preguntas seguidas. Espere un minuto e intente de nuevo. En una emergencia llame al 123.' }]);
+                return;
+            }
             if (!response.ok) throw new Error('Error de conexion');
             const data = await response.json();
 
             setMessages(prev => [...prev, {
                 id: Date.now() + 1,
-                text: data.response || 'Lo siento, estoy teniendo problemas para procesar tu consulta. Por favor intenta mas tarde.',
+                text: data.response || 'No pude responder en este momento. Intente más tarde. En una emergencia llame al 123.',
                 sender: 'ai'
             }]);
         } catch (err) {
@@ -295,7 +300,7 @@ const SiscAIChatbot = () => {
 
                     <form onSubmit={handleSend} className="border-t border-slate-100 bg-white p-4 md:p-6">
                         <div className="mb-3 flex flex-wrap gap-2">
-                            {['Resume que informacion tienes', 'Homicidios en julio', 'Barrios con mas casos', 'Rutas de atencion'].map((quick) => (
+                            {['¿Cuántos homicidios van en 2026?', 'Hurtos de enero a octubre', 'Violencia intrafamiliar: ¿qué hago?', '¿Cómo denuncio un delito?'].map((quick) => (
                                 <button
                                     key={quick}
                                     type="button"
@@ -311,7 +316,7 @@ const SiscAIChatbot = () => {
                                 type="text"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
-                                placeholder="Escribe tu consulta aqui..."
+                                placeholder="Escriba su pregunta…"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-5 text-base focus:ring-2 focus:ring-[#281FD0] focus:border-[#281FD0] outline-none transition-all pr-12"
                                 disabled={loading}
                             />
