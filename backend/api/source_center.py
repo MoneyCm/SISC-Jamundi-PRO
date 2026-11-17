@@ -190,6 +190,27 @@ def get_source_center(
     return SourceCenterService.summary(db)
 
 
+@router.get("/fiscalia/respuesta-judicial")
+def fiscalia_respuesta_judicial(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(institutional_access),
+):
+    """En qué etapa van los procesos de la Fiscalía por hechos en Jamundí (uso interno)."""
+    from db.models_source_center import SourceConnectorState
+    from services.fiscalia_datos_sync import CONECTOR
+
+    estado = db.get(SourceConnectorState, CONECTOR)
+    seguimiento = (estado.details or {}).get("seguimiento") if estado else None
+    return {
+        "available": bool(seguimiento),
+        "corte": estado.source_cutoff_date.isoformat() if estado and estado.source_cutoff_date else None,
+        "revisado": estado.last_success_at.isoformat() if estado and estado.last_success_at else None,
+        "fuente": "Fiscalía General de la Nación, SPOA V3 (datos.gov.co)",
+        "enlace": "https://www.datos.gov.co/d/dbdv-iihs",
+        "seguimiento": seguimiento,
+    }
+
+
 @router.post("/heartbeat")
 async def source_heartbeat(
     payload: SourceHeartbeat,

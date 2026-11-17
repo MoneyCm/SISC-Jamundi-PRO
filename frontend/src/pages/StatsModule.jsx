@@ -6,8 +6,9 @@ import {
 import {
     Activity, Skull, Users, HeartPulse, ShieldAlert, Phone,
     ChevronRight, Filter, Loader, TrendingDown, TrendingUp, Minus,
-    MapPin, Calendar, RefreshCcw
+    MapPin, Calendar, RefreshCcw, Scale
 } from 'lucide-react';
+import RespuestaJudicial from '../components/RespuestaJudicial';
 import { API_BASE_URL } from '../utils/apiConfig';
 import { mesesIncompletos, mesesSinDatos, textoCobertura } from '../utils/cobertura';
 
@@ -34,6 +35,7 @@ const categories = [
     { id: 'hurtos',     label: 'Hurtos',                icon: ShieldAlert },
     { id: 'zona',       label: 'Por Zona',              icon: MapPin     },
     { id: 'semanal',    label: 'Análisis Semanal',      icon: Calendar   },
+    { id: 'judicial',   label: 'Respuesta judicial',    icon: Scale      },
 ];
 
 // ─── helpers ───────────────────────────────────────────────────────────────
@@ -409,6 +411,7 @@ const StatsModule = ({ userRoles = [] }) => {
         hurtos:     ViewHurtos,
         zona:       ViewZona,
         semanal:    ViewSemanal,
+        judicial:   RespuestaJudicial,
     };
     const ActiveView = VIEWS[selectedCategory];
 
@@ -465,7 +468,7 @@ const StatsModule = ({ userRoles = [] }) => {
                         </div>
                     </div>
                 )}
-                {avisoCobertura && (
+                {avisoCobertura && selectedCategory !== 'judicial' && (
                     <div role="status" className="bg-amber-50 text-amber-900 p-4 rounded-xl text-sm mb-4 border border-amber-200">{avisoCobertura}</div>
                 )}
                 {error && (
