@@ -35,7 +35,8 @@ def test_piscc_without_ai_uses_goals_not_general_summary():
 
 
 @pytest.mark.parametrize('question', ['Los primeros días de agosto', 'Hurtos del 5, 6 y 7 de agosto', '¿Qué pasó hoy?',
-                                      'Homicidios del trimestre', 'Del 31 de febrero al 3 de marzo'])
+                                      'Homicidios del trimestre', 'Del 31 de febrero al 3 de marzo',
+                                      'Homicidios en agostoo'])
 def test_unclear_dates_are_refused_not_replaced(question, monkeypatch):
     def unexpected(*args, **kwargs):
         raise AssertionError('Must not query a different period')
@@ -126,3 +127,14 @@ def test_ai_only_sees_the_blocks_of_the_topic():
     general = svc.Expediente(temas={'delitos': [], 'entidades': [], 'barrios': [], 'piscc': []})
     general.agregar('Cifras', ['Homicidios: 1.'])
     assert svc.enfocar(general, '¿Cómo vamos?') is general
+
+
+
+def test_la_pregunta_de_seguimiento_conserva_el_tema(monkeypatch):
+    monkeypatch.setattr(svc, 'detectar_temas', lambda db, texto: {
+        'delitos': ['Homicidio'] if 'homicidio' in svc.normalizar(texto) else [], 'entidades': [], 'barrios': [], 'piscc': []})
+    historial = [{'rol': 'usuario', 'texto': '¿Cuántos homicidios en 2026?'}, {'rol': 'asesor', 'texto': 'Homicidio: 104'}]
+    ampliada = svc.con_tema_previo(None, '¿Y en 2025?', historial)
+    assert 'homicidios' in ampliada and '2026' not in ampliada
+    assert svc.con_tema_previo(None, '¿Y los hurtos de 2025?', []) == '¿Y los hurtos de 2025?'
+    assert svc.con_tema_previo(None, '¿Y en 2025?', []) == '¿Y en 2025?'
