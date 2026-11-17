@@ -30,7 +30,7 @@ import { downloadBulletinPdf } from '../lib/exportPdf';
 import { downloadHojaEjecutiva } from '../../../utils/hojaEjecutiva';
 // Componente JSX compartido con SISC en cifras (misma revisión editorial).
 import EditorialReview from '../../../components/EditorialReview';
-import type { OfficialResult } from '../hooks/useOfficialIndicator';
+import { OFFICIAL_METHODOLOGY_VERSION, type OfficialResult } from '../hooks/useOfficialIndicator';
 
 export const NOMBRES_CONDUCTAS_DICT: Record<string, string> = {
   "H.PERSONAS": "Hurto a personas",
@@ -1458,7 +1458,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
   // o sin cifra oficial vigente (ningún conteo local alimenta cifras oficiales).
   // La cifra oficial debe corresponder a la consulta actual: mismo período,
   // indicador SEGURIDAD_TOTAL, entrega SELECCIONADA actualmente (no solo existente),
-  // territorio JAMUNDI y metodología 1. Restricción explícita de este flujo:
+  // territorio JAMUNDI y la metodología vigente (OFFICIAL_METHODOLOGY_VERSION). Restricción explícita de este flujo:
   // solo se publica JAMUNDI + SEGURIDAD_TOTAL; otros territorios/indicadores
   // requieren un flujo de publicación propio.
   const officialMatchesCurrentQuery = Boolean(
@@ -1468,7 +1468,7 @@ export default function Dashboard({ onOpenArchive }: { onOpenArchive: () => void
     && officialResult.period.start === requestedPeriodRange.start
     && officialResult.period.end === requestedPeriodRange.end
     && officialResult.territory === 'JAMUNDI'
-    && officialResult.methodology_version === '1'
+    && officialResult.methodology_version === OFFICIAL_METHODOLOGY_VERSION
     && officialResult.source_version_id
     && officialSelection.sourceVersionId
     && officialResult.source_version_id === officialSelection.sourceVersionId,

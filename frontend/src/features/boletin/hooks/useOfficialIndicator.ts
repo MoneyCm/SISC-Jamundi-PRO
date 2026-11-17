@@ -2,6 +2,10 @@ import { bulletinFetch as fetch } from '../lib/bulletinApi';
 "use client";
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+// Regla de conteo vigente en el backend (services/indicator_catalog.py: METHODOLOGY_VERSION).
+// La 2 cuenta los homicidios por víctima. Si el backend la cambia, se cambia aquí.
+export const OFFICIAL_METHODOLOGY_VERSION = '2';
+
 export interface OfficialQuery {
   indicator: string;
   periodStart: string;
