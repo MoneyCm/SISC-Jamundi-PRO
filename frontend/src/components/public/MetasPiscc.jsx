@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { API_BASE_URL } from '../../utils/apiConfig';
 import { fechaCorta, semaforoMeta, textoMeta } from '../../utils/metasPublicas';
+import { textoReciente } from '../../utils/metasPeriodo';
+import MetasPorPeriodo from './MetasPorPeriodo';
 
 const TONOS = {
     verde: 'border-emerald-300 bg-emerald-50 text-emerald-900',
@@ -23,7 +25,19 @@ const MetasPiscc = () => {
             .catch(() => { if (vigente) setError(true); });
         return () => { vigente = false; };
     }, []);
-    if (error || !data?.indicators?.length) return null;
+    // Si el resumen anual falla, la sección no desaparece: queda el seguimiento por periodo y el menú sigue llevando aquí.
+    if (error || !data?.indicators?.length) {
+        return (
+            <section id="metas" className="scroll-mt-24" aria-labelledby="metas-title">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#281FD0]">Rendición de cuentas</p>
+                <h2 id="metas-title" className="mt-1 text-3xl font-black tracking-normal text-slate-950">¿Se está cumpliendo el plan de seguridad?</h2>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-600" role="status">
+                    {error ? 'No fue posible cargar el resumen anual de las metas en este momento. Recargue la página para intentarlo de nuevo.' : 'Cargando las metas del plan…'}
+                </p>
+                <MetasPorPeriodo />
+            </section>
+        );
+    }
     return (
         <section id="metas" className="scroll-mt-24" aria-labelledby="metas-title">
             <div className="mb-5 max-w-3xl">
@@ -45,6 +59,8 @@ const MetasPiscc = () => {
                             </span>
                             <p className="mt-2 text-3xl font-black tabular-nums">{meta.count ?? '—'}</p>
                             <p className="text-xs font-bold opacity-80">{textoMeta(meta)}</p>
+                            {meta.cutoff && <p className="mt-1 text-[11px] font-semibold opacity-75">{(meta.source || '').split(' /')[0] || 'Fuente'} hasta el {fechaCorta(meta.cutoff)}</p>}
+                            {textoReciente(meta) && <p className="mt-1 rounded bg-white/70 px-2 py-1 text-[11px] font-bold leading-4">{textoReciente(meta, fechaCorta)}</p>}
                             <details className="mt-2">
                                 <summary className="inline-flex min-h-9 cursor-pointer items-center text-xs font-black underline underline-offset-2">Ver detalle</summary>
                                 {meta.previous != null && meta.cutoff && (
@@ -76,6 +92,7 @@ const MetasPiscc = () => {
                 La meta 2027 es un límite: los casos del año no deberían pasar de esa cifra. Estas cifras son de MinDefensa, que cuenta víctimas; por eso pueden diferir de los casos (hechos) de la Policía que se muestran arriba. Verde: dentro de la meta; amarillo: a este ritmo pasaría el límite; rojo: ya pasó el límite anual.
                 Línea base 2023 y metas: {data.source}. Años cerrados: {data.closed_years_source}. {data.note}
             </p>
+            <MetasPorPeriodo />
         </section>
     );
 };

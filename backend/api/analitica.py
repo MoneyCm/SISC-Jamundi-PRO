@@ -187,7 +187,17 @@ def _latest_public_source(db: Session):
         "snapshot_id": None,
         "run": run,
         "source_table": "hechos_seguridad",
-        "identity_expr": "COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text)",
+        # Conteo oficial (services.hechos_metrics.conteo_key_expr, metodología v2): homicidio por víctima
+        # (una fila de la sábana = una persona), como lo reporta la Policía; las demás conductas, por hecho único.
+        # Solo cuentan las víctimas de la entrega más reciente que trae el hecho: si la Policía corrigió
+        # una edad o un barrio, la fila vieja sigue en la maestra y no debe sumar otra víctima.
+        "identity_expr": (
+            "CASE WHEN UPPER(BTRIM(COALESCE(conducta_estandar, ''))) IN ('HOMICIDIO', 'HOMICIDIO INTENCIONAL', 'HOMICIDIO DOLOSO') THEN "
+            "CASE WHEN NULLIF(BTRIM(hechos_seguridad.id_fuente), '') IS NULL OR hechos_seguridad.ingestion_id = ("
+            "SELECT h2.ingestion_id FROM hechos_seguridad h2 JOIN ingestion_runs r2 ON r2.id = h2.ingestion_id "
+            "WHERE h2.id_fuente = hechos_seguridad.id_fuente ORDER BY r2.fecha_inicio DESC LIMIT 1"
+            ") THEN 'V:' || hechos_seguridad.id::text END "
+            "ELSE COALESCE(NULLIF(BTRIM(id_fuente), ''), NULLIF(BTRIM(fingerprint), ''), id::text) END"),
         "date_col": "fecha_evento",
         "conducta_col": "conducta_estandar",
         "location_expr": "COALESCE(NULLIF(BTRIM(barrio_normalizado), ''), NULLIF(BTRIM(vereda_normalizada), ''), NULLIF(BTRIM(corregimiento), ''), 'SIN DATO')",
@@ -711,7 +721,7 @@ def get_public_dashboard(
             "population_source": "DANE - Proyecciones municipales CNPV 2018",
             "population_year": period_end.year,
             "privacy": "Publicación agregada. No incluye nombres, identificadores, teléfonos, descripciones individuales, direcciones exactas ni coordenadas puntuales.",
-            "methodology": "Cada sábana oficial se valida y se conserva como evidencia. La publicación ciudadana usa una base maestra consolidada: las entregas más recientes actualizan hechos ya existentes y las entregas históricas completan hechos distintos. El mapa solo ubica territorios con polígono oficial verificado, mediante un punto interior de ese polígono; los demás se conservan en las tablas sin ubicación cartográfica.",
+            "methodology": "Cada sábana oficial se valida y se conserva como evidencia. La publicación ciudadana usa una base maestra consolidada: las entregas más recientes actualizan hechos ya existentes y las entregas históricas completan hechos distintos. El mapa solo ubica territorios con polígono oficial verificado, mediante un punto interior de ese polígono; los demás se conservan en las tablas sin ubicación cartográfica. Los homicidios se cuentan por víctima, como los reporta la Policía; las demás conductas, por hecho único.",
             "last_ingestion": {
                 "filename": run.filename if run else None,
                 "loaded_at": run.fecha_fin.isoformat() if run and run.fecha_fin else None,
@@ -1444,6 +1454,103 @@ def get_public_piscc(response: Response, db: Session = Depends(get_db)):
         "closed_years_source": metas["closed_years_source"], "closed_years_legend": metas["closed_years_legend"],
         "indicators": [{k: item.get(k) for k in PISCC_PUBLICO} for item in metas["indicators"]],
     }
+
+
+def _comparendos_por_mes(db: Session, hoy: date):
+    """({(año, mes): comparendos}, último mes completo cargado) del RNMC, para las metas por periodo."""
+    from calendar import monthrange
+
+    from services import comparendos_rnmc
+
+    corte = comparendos_rnmc.corte(db, hoy)
+    if not corte:
+        return {}, None
+    sub = comparendos_rnmc.primeras_fechas(db)
+    anio, mes = func.extract("year", sub.c.fecha), func.extract("month", sub.c.fecha)
+    filas = (db.query(anio, mes, func.count(sub.c.expediente_id))
+             .filter(sub.c.fecha >= datetime(2023, 1, 1)).group_by(anio, mes).all())
+    por_mes = {(int(a), int(m)): int(total) for a, m, total in filas}
+    if corte.day == monthrange(corte.year, corte.month)[1]:
+        completo = (corte.year, corte.month)
+    else:
+        completo = (corte.year, corte.month - 1) if corte.month > 1 else (corte.year - 1, 12)
+    return por_mes, completo
+
+
+def _sabana_por_mes(db: Session, publicado, hoy: date):
+    """({meta: {(año, mes): casos}}, último mes completo de la sábana) para los meses que MinDefensa no publica.
+
+    Incluye los mismos meses del año anterior, con la misma fuente, si la sábana los trae completos.
+    """
+    from calendar import monthrange
+
+    from services.cobertura_sabana import cobertura
+    from services.indicator_calculation import calculate_indicator
+    from services.indicator_catalog import METHODOLOGY_VERSION
+    from services.intervention_followup import latest_covering_run
+    from services.piscc_goals import TABLE_16
+    from services.piscc_periodos import meses_entre
+
+    run = latest_covering_run(db)
+    if not run or not publicado:
+        return {}, None
+    corte = min(hoy, run.cobertura_fin)
+    if corte.day == monthrange(corte.year, corte.month)[1]:
+        completo = (corte.year, corte.month)
+    else:
+        completo = (corte.year, corte.month - 1) if corte.month > 1 else (corte.year - 1, 12)
+    primero = (publicado[0], publicado[1] + 1) if publicado[1] < 12 else (publicado[0] + 1, 1)
+    if primero > completo:
+        return {}, None
+    nuevos = meses_entre(primero, completo)[:12]
+    kwargs = dict(territory="JAMUNDI", source_version_id=str(run.id), methodology_version=METHODOLOGY_VERSION)
+    datos = {}
+    for clave, _etiqueta, _base, _meta, indicador in TABLE_16:
+        if not indicador:
+            continue
+        por_mes = {}
+        for anio, mes in nuevos:
+            for a in (anio, anio - 1):
+                inicio, fin = date(a, mes, 1), date(a, mes, monthrange(a, mes)[1])
+                if inicio < run.cobertura_inicio or not cobertura(db, inicio, fin)["completa"]:
+                    continue
+                por_mes[(a, mes)] = int(calculate_indicator(db, indicator=indicador, period_start=inicio,
+                                                            period_end=fin, **kwargs)["value"])
+        datos[clave] = por_mes
+    return datos, completo
+
+
+@router.get("/public/piscc/periodo")
+def get_public_piscc_periodo(response: Response, desde: Optional[str] = Query(default=None, max_length=7),
+                             hasta: Optional[str] = Query(default=None, max_length=7),
+                             db: Session = Depends(get_db)):
+    """Metas del PISCC en un mes, trimestre, semestre o rango de meses (AAAA-MM). Sin periodo: último mes publicado."""
+    from services import piscc_historico, piscc_periodos
+
+    datos = piscc_historico.cargar()
+    hoy = date.today()
+    try:
+        if desde or hasta:
+            inicio = piscc_periodos.parse_mes(desde or hasta)
+            fin = piscc_periodos.parse_mes(hasta or desde)
+            piscc_periodos.meses_entre(inicio, fin)
+        else:
+            inicio, fin = piscc_periodos.periodo_por_defecto(datos, hoy)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    try:
+        comparendos, comparendos_hasta = _comparendos_por_mes(db, hoy)
+    except Exception:
+        db.rollback()
+        comparendos, comparendos_hasta = {}, None
+    try:
+        sabana, sabana_hasta = _sabana_por_mes(db, piscc_historico._ultimo_publicado(datos), hoy)
+    except Exception:
+        db.rollback()
+        sabana, sabana_hasta = {}, None
+    response.headers["Cache-Control"] = "public, max-age=600"
+    return {**piscc_periodos.seguimiento(inicio, fin, datos, comparendos, comparendos_hasta, hoy, sabana, sabana_hasta),
+            "opciones": piscc_periodos.opciones(datos, hoy, sabana_hasta)}
 
 
 @router.get("/public/comparacion")

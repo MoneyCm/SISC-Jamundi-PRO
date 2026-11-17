@@ -54,26 +54,26 @@
     },
     {
       "delito": "Extorsión",
-      "anterior": 26,
-      "actual": 34,
+      "anterior": 33,
+      "actual": 41,
       "diffAbs": 8,
-      "varPct": "+30.8%",
+      "varPct": "+24.2%",
       "estado": "SUBE",
-      "ultimo_registro": "31/08/2026",
+      "ultimo_registro": "30/09/2026",
       "barrios_top": "Sin datos de barrio",
-      "ultimo_caso_jamundi": "23/08/2026",
+      "ultimo_caso_jamundi": "28/09/2026",
       "fuente": "MinDefensa, datos.gov.co/resource/q2ib-t9am"
     },
     {
       "delito": "Secuestro",
       "anterior": 2,
-      "actual": 6,
-      "diffAbs": 4,
-      "varPct": "+200.0%",
+      "actual": 7,
+      "diffAbs": 5,
+      "varPct": "+250.0%",
       "estado": "SUBE",
-      "ultimo_registro": "31/08/2026",
+      "ultimo_registro": "30/09/2026",
       "barrios_top": "Sin datos de barrio",
-      "ultimo_caso_jamundi": "04/05/2026",
+      "ultimo_caso_jamundi": "21/08/2026",
       "fuente": "MinDefensa, datos.gov.co/resource/d7zw-hpf4"
     },
     {
@@ -98,14 +98,14 @@
     },
     {
       "delito": "Violencia Intrafamiliar",
-      "anterior": 171,
-      "actual": 213,
-      "diffAbs": 42,
-      "varPct": "+24.6%",
+      "anterior": 198,
+      "actual": 258,
+      "diffAbs": 60,
+      "varPct": "+30.3%",
       "estado": "SUBE",
-      "ultimo_registro": "31/08/2026",
+      "ultimo_registro": "30/09/2026",
       "barrios_top": "Sin datos de barrio",
-      "ultimo_caso_jamundi": "31/08/2026",
+      "ultimo_caso_jamundi": "30/09/2026",
       "fuente": "MinDefensa, datos.gov.co/resource/gepp-dxcs"
     },
     {
@@ -190,7 +190,7 @@
     }
   ],
   "actualizacion_piscc": {
-    "fecha": "2026-09-27",
+    "fecha": "2026-10-29",
     "indicadores": [
       "Secuestro",
       "Extorsión",
