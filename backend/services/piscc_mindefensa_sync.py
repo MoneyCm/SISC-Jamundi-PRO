@@ -23,6 +23,9 @@ ARCHIVO = Path(__file__).resolve().parents[1] / "data" / "piscc" / "mindefensa.j
 DANE_JAMUNDI = "76364"
 CONECTOR = "MINDEFENSA_PISCC"
 CADA_CUANTO = timedelta(days=7)
+# Tras un error (p. ej. datos.gov.co caído) se reintenta en la siguiente vuelta del programador
+# (cada 6 horas), no a la semana.
+REINTENTO_TRAS_ERROR = timedelta(hours=5)
 DATASETS = {
     # palabra que identifica la fila en el archivo: (id en datos.gov.co, nombre)
     "secuestro": ("d7zw-hpf4", "Secuestro"),
@@ -114,7 +117,8 @@ def sincronizar(db, consulta: Callable = consultar, archivo: Path = ARCHIVO, for
     """Revisa MinDefensa si pasó una semana desde la última revisión y lo anota en el Centro de fuentes."""
     ahora = datetime.now(timezone.utc)
     estado = _estado(db)
-    if not forzar and estado.last_checked_at and ahora - estado.last_checked_at < CADA_CUANTO:
+    espera = REINTENTO_TRAS_ERROR if estado.status == "ERROR" else CADA_CUANTO
+    if not forzar and estado.last_checked_at and ahora - estado.last_checked_at < espera:
         return None
     estado.last_checked_at = ahora
     try:

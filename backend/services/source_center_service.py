@@ -165,7 +165,9 @@ SOURCE_CONNECTORS: Dict[str, Dict[str, Any]] = {
         "action_type": "OPEN",
         "action_label": "Abrir fuente",
         "dataset_code": None,
-        "fresh_days": 10,
+        # El portal publica con unos 10 días de atraso; con 10 se ponía en amarillo antes de cada
+        # actualización normal. 14 días, igual que la sábana semanal.
+        "fresh_days": 14,
         "lagged_days": 24,
     },
     "FISCALIA_SPOA_V3": {
