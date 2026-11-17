@@ -450,7 +450,8 @@ def periodo_no_soportado(pregunta: str) -> bool:
     # A plan's official name is not a requested statistical time range.
     p = re.sub(r"piscc\s+2024\s*[-–]\s*2027", "piscc", p)
     return bool(re.search(r"\b(?:19|20)\d{2}\b|\b\d{1,2}[/-]\d{1,2}\b", p)
-                or any(re.search(rf"\b{mes}\b", p) for mes in MESES)
+                or any(re.search(rf"\b{mes}", p) for mes in MESES if mes != "mayo")
+                or re.search(r"\bmayo(?!r)", p)
                 or re.search(r"\b(mes|trimestre|semestre|ayer|anteayer|hoy|historico)\b|semana pasada|ano pasado|ultimos?\s+\d+", p))
 
 
@@ -682,6 +683,30 @@ def sugerencias(temas: Dict[str, List[str]], datos: Dict, pregunta: str = "") ->
     return [o for o in dict.fromkeys(opciones) if normalizar(o).strip(" ¿?") != hecha][:3]
 
 
+def con_tema_previo(db: Session, pregunta: str, historial: List[Dict]) -> str:
+    """ "¿Y en 2025?" después de "¿cuántos homicidios en 2026?": se sigue hablando de homicidios.
+
+    Solo si la pregunta nueva no nombra un tema propio (delito, barrio, convivencia, PISCC). Del mensaje
+    anterior se toma el tema, sin sus fechas, para no mezclar periodos.
+    """
+    temas = detectar_temas(db, pregunta)
+    p = normalizar(pregunta)
+    if any(temas.values()) or any(w in p for w in CONVIVENCIA):
+        return pregunta
+    anteriores = [m.get("texto") or m.get("content") or "" for m in historial
+                  if (m.get("rol") or m.get("role")) in ("usuario", "user")]
+    for previa in reversed(anteriores):
+        if normalizar(previa).strip(" ¿?") == p.strip(" ¿?"):
+            continue
+        sin_fechas = re.sub(r"\d+", " ", normalizar(previa))
+        sin_fechas = re.sub(r"\b(" + "|".join(MESES) + r")\b", " ", sin_fechas)
+        q = normalizar(sin_fechas)
+        if any(detectar_temas(db, sin_fechas).values()) or any(w in q for w in CONVIVENCIA):
+            return f"{pregunta} (tema de la pregunta anterior: {' '.join(sin_fechas.split())})"
+        break
+    return pregunta
+
+
 async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] = None, hoy: Optional[date] = None) -> Dict:
     from api import ia
     from services.ai_output_guard import verify_ai_text
@@ -694,7 +719,7 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
     from services.asistente_periodos import periodo as leer_periodo
     pedido = leer_periodo(pregunta, hoy) if not es_consulta(pregunta) else None
     if pedido:
-        return responder_periodo(db, pregunta, pedido, hoy)
+        return responder_periodo(db, con_tema_previo(db, pregunta, historial), pedido, hoy)
     if periodo_no_soportado(pregunta):
         return {"respuesta": "No entendí las fechas que pidió y no las reemplazaré por cifras de otro periodo. "
                 "Puede preguntar, por ejemplo, «homicidios en agosto», «hurtos del 5 al 10 de agosto» o "

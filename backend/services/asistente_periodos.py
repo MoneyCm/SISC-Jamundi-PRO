@@ -86,6 +86,11 @@ def periodo(pregunta: str, hoy: date) -> Optional[Periodo]:
 
 
 def _periodo(p: str, hoy: date) -> Optional[Periodo]:
+    # "de eneroa octubre": la palabra pegada al mes se separa. Otro mes mal escrito ("agostoo") no se
+    # adivina: antes se perdía y la respuesta salía solo del otro mes.
+    p = re.sub(rf"\b({_MES})(a|al|y|hasta)\b", r"\1 \2", p)
+    if re.search(rf"\b(?!mayor)(?:{_MES})[a-z]+", p):
+        return None
     relativo = _anio_relativo(p, hoy)
     # Números sueltos (sin contar años de cuatro cifras): cada patrón debe usarlos todos, o no se adivina.
     numeros = len(re.findall(r"(?<!\d)\d{1,2}(?!\d)", re.sub(r"\b(?:19|20)\d{2}\b", " ", p)))
@@ -205,6 +210,12 @@ def _anio_completo(p: str, relativo: Optional[int], hoy: date) -> Optional[Perio
         anios = [relativo]
     if not anios or len(anios) > 2:
         return None
+    if len(anios) == 2 and re.search(r"\bvs\b|versus|frente a|\bcontra\b|compar", p):
+        # "2025 vs 2026": el año más reciente, que el asesor ya compara con el mismo periodo del anterior.
+        # Años no seguidos (2024 vs 2026) no tienen esa comparación: mejor no adivinar.
+        if max(anios) - min(anios) != 1:
+            return None
+        return _hasta_hoy(date(max(anios), 1, 1), date(max(anios), 12, 31), hoy)
     return _hasta_hoy(date(min(anios), 1, 1), date(max(anios), 12, 31), hoy)
 
 

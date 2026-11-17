@@ -55,3 +55,18 @@ def test_sin_periodo_claro_no_se_adivina(pregunta):
 def test_meses_de_un_periodo():
     assert meses_de(date(2025, 12, 20), date(2026, 1, 10)) == [(date(2025, 12, 20), date(2025, 12, 31)),
                                                             (date(2026, 1, 1), date(2026, 1, 10))]
+
+
+@pytest.mark.parametrize('pregunta, inicio, fin', [
+    ('Homicidios de eneroa octubre de 2025', date(2025, 1, 1), date(2025, 10, 31)),  # tipeo real: "eneroa"
+    ('Dame una tabla comparando homicidios 2025 vs 2026', date(2026, 1, 1), date(2026, 9, 30)),
+    ('Hurtos 2025 frente a 2026', date(2026, 1, 1), date(2026, 9, 30)),
+])
+def test_tipeo_y_comparacion(pregunta, inicio, fin):
+    resultado = periodo(pregunta, HOY)
+    assert (resultado.inicio, resultado.fin) == (inicio, fin)
+
+
+@pytest.mark.parametrize('pregunta', ['Homicidios en agostoo', 'Homicidios 2024 vs 2026'])
+def test_mes_mal_escrito_o_comparacion_lejana_no_se_adivina(pregunta):
+    assert periodo(pregunta, HOY) is None
