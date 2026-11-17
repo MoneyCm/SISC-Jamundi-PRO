@@ -105,3 +105,13 @@ def get_rate_limit_info() -> dict:
         "requests_per_minute": _RATE_LIMIT_EXPLORE,
         "burst": _RATE_LIMIT_EXPLORE,
     }
+
+
+_RATE_LIMIT_ASISTENTE = int(os.getenv("SISC_RATE_LIMIT_ASISTENTE", "10"))
+
+
+def rate_limit_asistente(request: Request) -> None:
+    """Asistente ciudadano: pocas preguntas por minuto por persona, aparte del límite general."""
+    ip = get_client_ip(request)
+    if len(_store.add(f"asistente:{ip}")) > _RATE_LIMIT_ASISTENTE:
+        raise HTTPException(status_code=429, detail="Hizo muchas preguntas seguidas. Espere un minuto e intente de nuevo.")

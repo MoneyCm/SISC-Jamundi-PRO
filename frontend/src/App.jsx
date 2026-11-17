@@ -5,7 +5,7 @@ import CitizenPortalHome from './pages/CitizenPortalHome';
 import PublicPortalHeader from './components/public/PublicPortalHeader';
 import { loadPublicDashboard } from './utils/publicDashboardCache';
 import { apiJson, clearStoredSession, SESSION_EXPIRED_EVENT } from './utils/apiClient';
-import { PUBLIC_ONLY, PUBLIC_FORMS, HIDDEN_PUBLIC_PAGES } from './utils/publicBuild';
+import { PUBLIC_ONLY, PUBLIC_FORMS, HIDDEN_PUBLIC_PAGES, ASISTENTE_CIUDADANO } from './utils/publicBuild';
 import PublicFormsUnavailable from './components/public/PublicFormsUnavailable';
 
 const Dashboard = lazy(() => import('./pages/DashboardV2'));
@@ -242,7 +242,7 @@ const App = () => {
   }
 
   const isPublic = PUBLIC_ONLY || appMode === 'public';
-  const showCitizenAssistant = isPublic;
+  const showCitizenAssistant = isPublic && ASISTENTE_CIUDADANO;
 
   // Páginas secundarias del portal: el mismo menú que el resto, para no depender del botón de regreso.
   const withPortalMenu = (page) => (
@@ -390,6 +390,11 @@ const App = () => {
         <div className="animate-fade-in h-full">
           <Suspense fallback={<PageLoading />}>{renderContent()}</Suspense>
         </div>
+        {showCitizenAssistant && (
+          <Suspense fallback={null}>
+            <SiscAIChatbot />
+          </Suspense>
+        )}
       </Layout>
     );
   }
