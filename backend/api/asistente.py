@@ -42,7 +42,24 @@ async def preguntar(datos: Pregunta, request: Request, db: Session = Depends(get
         raise HTTPException(status_code=404, detail=str(error))
     await log_audit(db, "ASESOR_CONSULTA", actor_id=str(current_user.id), module="asistente",
                     target={"pregunta": datos.pregunta[:200], "redactada_por": resultado.get("redactada_por"),
-                            "temas": resultado.get("temas")},
+                            "temas": resultado.get("temas"), "resultado": asesor.clasificar(resultado),
+                            "respuesta": (resultado.get("respuesta") or "")[:300]},
                     level=2, request=request)
     resultado.pop("problemas", None)
     return resultado
+
+
+REVISORES = ["ANALYST", "FUNC_ADMIN", "TI_ADMIN"]
+
+
+@router.get("/revision")
+def revision(dias: int = 30, db: Session = Depends(get_db), current_user: User = Depends(require_role(REVISORES))):
+    """Preguntas al Asesor de los últimos días que no entendió o no pudo responder, para enseñarle."""
+    from datetime import datetime, timedelta
+    from db.models_auth import AuditLog
+
+    dias = max(1, min(dias, 180))
+    filas = (db.query(AuditLog.created_at, AuditLog.target_ref)
+             .filter(AuditLog.action == "ASESOR_CONSULTA", AuditLog.created_at >= datetime.utcnow() - timedelta(days=dias))
+             .order_by(AuditLog.created_at.desc()).all())
+    return asesor.resumen_revision([(fecha, target or {}) for fecha, target in filas], dias)

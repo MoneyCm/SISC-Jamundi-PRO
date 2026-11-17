@@ -102,3 +102,12 @@ def test_pregunta_de_convivencia_trae_comparendos(db):
     expediente, _extra = asesor.construir_expediente(db, "¿Cómo van los homicidios?")
     assert not any(titulo.startswith("Convivencia") for titulo, _ in expediente.bloques)
 
+
+
+def test_revision_de_preguntas_solo_para_revisores(db, monkeypatch):
+    directiva = client(db, monkeypatch, "DIRECTIVE")
+    assert directiva.get("/api/asistente/revision").status_code == 403
+    analista = client(db, monkeypatch, "ANALYST")
+    assert analista.post("/api/asistente/preguntar", json={"pregunta": "¿Cómo va el PISCC?"}).status_code == 200
+    r = analista.get("/api/asistente/revision?dias=1").json()
+    assert r["dias"] == 1 and r["total"] >= 1 and r["conteo"]["ok"] >= 1
