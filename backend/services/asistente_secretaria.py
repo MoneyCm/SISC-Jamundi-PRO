@@ -163,8 +163,27 @@ def _general(db: Session, exp: Expediente, hoy: date):
 def _piscc(db: Session, exp: Expediente, corte: date):
     from services.piscc_goals import build_goals
     metas = build_goals(db, corte, None)
-    lineas = [f"{g.get('label') or g.get('id')}: {g.get('status_label') or g.get('status')}. {g.get('detail') or ''}"
-              for g in metas.get("indicators", [])]
+    lineas = []
+    for g in metas.get("indicators", []):
+        # Cada meta con su propio corte: MinDefensa llega con uno o dos meses de atraso, el RNMC casi al día.
+        linea = f"{g.get('label') or g.get('id')}: {g.get('status_label') or g.get('status')}. {(g.get('detail') or '').strip()}"
+        if g.get("cutoff"):
+            linea = linea.rstrip(".") + f" (al {fecha_larga(g['cutoff'])}"
+            fuente = (g.get("source") or "").split(" (")[0]
+            linea += f", {fuente})." if fuente else ")."
+        reciente = g.get("reciente") or {}
+        if reciente.get("since") is not None and reciente.get("cutoff") and reciente.get("since_start"):
+            # Igual que en el portal: lo que la sábana registra después del corte de MinDefensa, sin sumarlo.
+            linea += (f" Después de ese corte, la sábana de la Policía registra {reciente['since']} más del "
+                      f"{fecha_larga(reciente['since_start'])} al {fecha_larga(reciente['cutoff'])} (no se suman).")
+            limite = g.get("goal_2027")
+            if g.get("id") == "homicidios" and limite and reciente.get("count") is not None:
+                # Homicidio: las dos fuentes cuentan víctimas, así que el acumulado de la sábana se compara con el límite.
+                van = reciente["count"]
+                linea += f" En la sábana el año va en {van}: " + (
+                    f"{'queda' if limite - van == 1 else 'quedan'} {limite - van} para el límite de {limite}." if van < limite
+                    else (f"ya llegó al límite de {limite}." if van == limite else f"ya pasó el límite de {limite} en {van - limite}."))
+        lineas.append(linea)
     exp.agregar("Metas del PISCC 2024-2027 (tabla 16)", lineas, "PISCC 2024-2027, tabla 16")
 
 
@@ -809,7 +828,10 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
     directo = (extra.get("whatsapp") and ("whatsapp" in p or "resum" in p)) or (
         "piscc" in p and not (temas.get("delitos") or temas.get("piscc") or temas.get("barrios")))
     if directo:
-        return {"respuesta": respuesta_sin_ia(pregunta, expediente, extra) + nota_periodo(extra["datos"]), "verificada": True,
+        # Las metas llevan su propio corte en cada línea: la nota del corte policial confundiría.
+        nota = ("\n\nCada meta indica su fuente y su fecha de corte." if "piscc" in p and "whatsapp" not in p and "resum" not in p
+                else nota_periodo(extra["datos"]))
+        return {"respuesta": respuesta_sin_ia(pregunta, expediente, extra) + nota, "verificada": True,
                 "redactada_por": "SISC (sin IA)", "fuentes": expediente.fuentes,
                 "sugerencias": sugerencias(temas, extra["datos"], pregunta), "temas": temas}
     datos_texto = expediente.texto() + "\n" + fecha_larga(hoy)
