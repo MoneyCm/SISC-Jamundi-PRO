@@ -48,7 +48,8 @@ export default function ReporteMensualAsesor({ reporte }) {
                                         {m.nombre}
                                         <span className="block text-[10px] font-normal text-slate-500">
                                             {m.anterior != null ? `${reporte.anio_anterior}: ${fmt(m.anterior)} · ` : ''}al {fechaCorta(m.corte)}
-                                            {m.reciente ? ` · semanal al ${fechaCorta(m.reciente.corte)}: ${fmt(m.reciente.van)}` : ''}
+                                            {m.reciente ? ` · después: +${fmt(m.reciente.despues)} en la sábana al ${fechaCorta(m.reciente.corte)}` : ''}
+                                            {m.reciente?.van != null ? ` (año: ${fmt(m.reciente.van)})` : ''}
                                         </span>
                                     </td>
                                     <td className={`${td} text-[14px] font-black`} style={{ color: AZUL }}>{fmt(m.van)}</td>

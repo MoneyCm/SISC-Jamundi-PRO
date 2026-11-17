@@ -28,13 +28,13 @@ def test_palabras_del_reporte_mensual_y_texto():
     assert rm.pide_reporte("reporte mensual para la secretaria") and not rm.pide_reporte("reporte semanal")
     reporte = {"titulo": "Reporte mensual de seguridad", "subtitulo": "Metas del PISCC 2026 y respuesta judicial",
                "metas": [{"nombre": "Homicidios", "van": 85, "limite": 105, "estado_texto": "En riesgo de pasar el límite",
-                          "reciente": {"van": 104, "corte": "2026-11-06"}}],
+                          "reciente": {"despues": 19, "desde": "2026-10-01", "corte": "2026-11-06", "van": 104}}],
                "fiscalia": {"filas": [{"nombre": "Homicidio doloso", "anio": "2024", "procesos": 245,
                                        "juicio_o_condena": 25, "porcentaje": 10.2}]},
                "fuentes": ["Metas: MinDefensa"]}
     texto = rm.texto(reporte)
     assert "• Homicidios: 85 (límite anual 105) — En riesgo de pasar el límite." in texto
-    assert "Registro semanal de la Policía al 6 de noviembre de 2026: 104." in texto
+    assert "la sábana registra 19 más hasta el 6 de noviembre de 2026 (no se suman). En la sábana el año va en 104." in texto
     assert "Homicidio doloso, hechos de 2024: 25 de 245 (10,2 %)." in texto
 
 

@@ -34,8 +34,12 @@ def _metas(db: Session, hoy: date) -> List[Dict]:
             "nombre": g.get("label"), "van": g.get("count"), "anterior": g.get("previous"),
             "limite": g.get("goal_2027"), "estado": g.get("status"), "estado_texto": g.get("status_label"),
             "detalle": g.get("detail"), "corte": g.get("cutoff"), "fuente": g.get("source"),
-            "reciente": ({"van": reciente.get("count"), "corte": reciente.get("cutoff")}
-                         if reciente.get("count") is not None else None),
+            # Lo que la sábana registra después del corte de MinDefensa (no se suma). El acumulado de la sábana
+            # solo se compara con el límite en homicidio, donde las dos fuentes cuentan víctimas.
+            "reciente": ({"despues": reciente.get("since"), "desde": reciente.get("since_start"),
+                          "corte": reciente.get("cutoff"),
+                          "van": reciente.get("count") if g.get("id") == "homicidios" else None}
+                         if reciente.get("since") is not None else None),
         })
     return filas
 
@@ -96,8 +100,12 @@ def texto(reporte: Dict) -> str:
     """Versión en texto, para copiar o enviar por WhatsApp."""
     lineas = [f"*{reporte['titulo']}*", reporte["subtitulo"], "", "*Metas del PISCC*"]
     for m in reporte["metas"]:
-        reciente = (f" Registro semanal de la Policía al {_fecha(m['reciente']['corte'])}: {m['reciente']['van']}."
-                    if m.get("reciente") else "")
+        r = m.get("reciente")
+        reciente = ""
+        if r:
+            reciente = f" Después de ese corte, la sábana registra {r['despues']} más hasta el {_fecha(r['corte'])} (no se suman)."
+            if r.get("van") is not None:
+                reciente += f" En la sábana el año va en {r['van']}."
         lineas.append(f"• {m['nombre']}: {m['van']} (límite anual {m['limite']}) — {m['estado_texto']}.{reciente}")
     if reporte.get("fiscalia"):
         lineas += ["", "*Fiscalía: procesos que llegaron a juicio o condena*"]
