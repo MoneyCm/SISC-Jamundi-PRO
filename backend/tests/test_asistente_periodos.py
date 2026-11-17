@@ -29,6 +29,14 @@ HOY = date(2026, 9, 30)
     ('¿Qué pasó ayer?', date(2026, 9, 29), date(2026, 9, 29), 'el 29 de septiembre de 2026'),
     ('Los últimos 10 días', date(2026, 9, 21), date(2026, 9, 30), 'del 21 al 30 de septiembre de 2026'),
     ('La semana pasada', date(2026, 9, 21), date(2026, 9, 27), 'del 21 al 27 de septiembre de 2026'),
+    ('¿Cuántos homicidios han ocurrido en 2026?', date(2026, 1, 1), date(2026, 9, 30), 'de enero a septiembre de 2026'),
+    ('Homicidios en 2025', date(2025, 1, 1), date(2025, 12, 31), 'todo 2025'),
+    ('Hurtos del año pasado', date(2025, 1, 1), date(2025, 12, 31), 'todo 2025'),
+    ('Homicidios de 2024 a 2025', date(2024, 1, 1), date(2025, 12, 31), 'de 2024 a 2025 (años completos)'),
+    ('Primer trimestre de 2026', date(2026, 1, 1), date(2026, 3, 31), 'de enero a marzo de 2026'),
+    ('Segundo semestre del año pasado', date(2025, 7, 1), date(2025, 12, 31), 'de julio a diciembre de 2025'),
+    ('Tercer trimestre', date(2026, 7, 1), date(2026, 9, 30), 'de julio a septiembre de 2026'),
+    ('Cuarto trimestre', date(2025, 10, 1), date(2025, 12, 31), 'de octubre a diciembre de 2025'),
 ])
 def test_periodos_entendidos(pregunta, inicio, fin, etiqueta):
     resultado = periodo(pregunta, HOY)
@@ -37,7 +45,9 @@ def test_periodos_entendidos(pregunta, inicio, fin, etiqueta):
 
 @pytest.mark.parametrize('pregunta', ['¿Cómo vamos esta semana?', '¿Cómo va el PISCC 2024-2027?', '¿Cuál es el barrio mayor?',
                                       'Los primeros días de agosto', '31 de febrero', 'Hurtos del 5, 6 y 7 de agosto',
-                                      'Tercera quincena de agosto'])
+                                      'Tercera quincena de agosto', 'Homicidios en 2027', 'Homicidios del trimestre',
+                                      'Homicidios en 2024, 2025 y 2026', 'Tercer semestre de 2025',
+                                      '¿Cómo va la convivencia este año?', 'Avance del plan de desarrollo 2024-2027'])
 def test_sin_periodo_claro_no_se_adivina(pregunta):
     assert periodo(pregunta, HOY) is None
 

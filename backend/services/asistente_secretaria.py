@@ -553,6 +553,18 @@ def responder_periodo(db: Session, pregunta: str, periodo, hoy: date) -> Dict:
     resultado["fuentes"] = [f"Sábana de la Policía al {fecha_larga(corte)}"]
     falta = _mes_incompleto_sabana(db, inicio, hasta, corte)
     if falta:
+        # Si el periodo empieza antes del mes que falta, se da la cifra hasta el día anterior a ese mes.
+        from services.cobertura_sabana import meses_incompletos
+        from services.asistente_periodos import Periodo, etiqueta
+        mes_falta = meses_incompletos(db, inicio, hasta, corte)[0]
+        if mes_falta > inicio:
+            antes = mes_falta - timedelta(days=1)
+            parcial = responder_periodo(db, pregunta, Periodo(inicio, antes, etiqueta(inicio, antes)), hoy)
+            if parcial.get("verificada"):
+                parcial["respuesta"] = (f"La sábana de la Policía cargada en el SISC no tiene completo {falta}, así que no "
+                                        f"doy la cifra {_en(periodo.etiqueta)}. Esto es lo que hay hasta el "
+                                        f"{fecha_larga(antes)}:\n\n" + parcial["respuesta"])
+                return parcial
         return {**resultado, "respuesta": f"La sábana de la Policía cargada en el SISC no tiene completo {falta}; "
                 "no doy una cifra que podría estar incompleta. Conviene pedir ese periodo a la Policía."}
     antes = (_un_anio_antes(inicio), _un_anio_antes(hasta))
