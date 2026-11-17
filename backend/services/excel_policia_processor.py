@@ -133,6 +133,17 @@ class PoliciaJamundiProcessor:
         raw = f"{data.get('id_fuente', '')}|{data['conducta_estandar']}|{data['fecha_evento']}|{data.get('hora_huella', data['hora_evento'])}|{data['barrio_normalizado'] or data['vereda_normalizada']}|{data['sexo']}|{data['edad']}|{data['arma_medio']}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
+    @staticmethod
+    def huella_de_victima(huella_base: str, ocurrencia: int) -> str:
+        """Dos víctimas del mismo hecho con igual sexo, edad, barrio y arma dan la misma huella.
+
+        La primera conserva la huella de siempre; la segunda, tercera... reciben una derivada, para
+        que la tabla maestra guarde cada víctima y no las funda en una sola fila.
+        """
+        if ocurrencia <= 1:
+            return huella_base
+        return hashlib.sha256(f"{huella_base}|victima#{ocurrencia}".encode()).hexdigest()
+
     def _truthy_value(self, value):
         if value is None:
             return False
@@ -313,6 +324,7 @@ class PoliciaJamundiProcessor:
             }
             snapshot_keys = set(existing_snapshot_keys)
             reused_snapshot_keys = set()
+            filas_por_huella = {}
             snapshot_coverage = list(existing_snapshot_coverage)
             current_delivery_cutoff = None
             if mapping.get("fecha_evento"):
@@ -411,6 +423,12 @@ class PoliciaJamundiProcessor:
                         identity = build_record_identity(processed_data["id_fuente"], fp)
                         payload_hash = content_hash(sanitized_payload)
                         record_key = build_snapshot_record_key(identity["record_identity"], payload_hash)
+                        if processed_data["id_fuente"]:
+                            # Cada fila distinta del archivo con la misma huella es otra víctima.
+                            filas_huella = filas_por_huella.setdefault(fp, [])
+                            if record_key not in filas_huella:
+                                filas_huella.append(record_key)
+                            fp = self.huella_de_victima(fp, filas_huella.index(record_key) + 1)
                         if record_key in existing_snapshot_keys:
                             # Un reintento del mismo proceso no debe volver a insertar su foto historica.
                             stats["duplicadas"] += 1
