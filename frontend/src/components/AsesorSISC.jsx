@@ -14,7 +14,10 @@ const INICIALES = [
     'Resúmame la semana para WhatsApp',
 ];
 
-const textoCompartible = (mensaje) => `${mensaje.texto}\n\nFuente: ${(mensaje.fuentes || []).join('; ')}. SISC Jamundí.`;
+const textoCompartible = (mensaje) => {
+    const fuentes = (mensaje.fuentes || []).filter(Boolean);
+    return `${mensaje.texto}\n\n${fuentes.length ? `Fuente: ${fuentes.join('; ')}. ` : ''}SISC Jamundí.`;
+};
 
 const imprimir = (pregunta, mensaje, nombre) => {
     const ventana = window.open('', '_blank', 'width=800,height=900');

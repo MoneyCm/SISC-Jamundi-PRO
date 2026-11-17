@@ -15,6 +15,8 @@ MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto
 _MES = "|".join(MESES)
 _ANIO = r"(?:\s+(?:de|del)\s+|\s+)((?:19|20)\d{2})\b"
 _ORDINALES = {"primera": 0, "segunda": 1, "tercera": 2, "cuarta": 3}
+_TRIMESTRES = {"primer": 1, "primero": 1, "segundo": 2, "tercer": 3, "tercero": 3, "cuarto": 4}
+_SEMESTRES = {"primer": 1, "primero": 1, "segundo": 2}
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,8 @@ def etiqueta(inicio: date, fin: date) -> str:
     if inicio == fin:
         return f"el {_dia(inicio)} de {inicio.year}"
     if inicio.day == 1 and fin == fin_de_mes(fin.year, fin.month):
+        if (inicio.month, fin.month) == (1, 12):
+            return f"todo {inicio.year}" if inicio.year == fin.year else f"de {inicio.year} a {fin.year} (años completos)"
         if (inicio.year, inicio.month) == (fin.year, fin.month):
             return f"{MESES[inicio.month - 1]} de {inicio.year}"
         desde = MESES[inicio.month - 1] + (f" de {inicio.year}" if inicio.year != fin.year else "")
@@ -145,6 +149,16 @@ def _periodo(p: str, hoy: date) -> Optional[Periodo]:
             return _crear(ultimo - timedelta(days=6), ultimo)
         inicio = date(anio, mes, 1 + 7 * _ORDINALES[m.group(1)])
         return _crear(inicio, inicio + timedelta(days=6))
+    # "primer trimestre de 2026", "segundo semestre del año pasado"
+    m = re.search(rf"\b(primer|primero|segundo|tercer|tercero|cuarto)\s+(trimestre|semestre)\b(?:{_ANIO})?", p)
+    if m:
+        tabla = _TRIMESTRES if m.group(2) == "trimestre" else _SEMESTRES
+        if m.group(1) not in tabla:
+            return None
+        tramo = 3 if m.group(2) == "trimestre" else 6
+        mes_ini = 1 + tramo * (tabla[m.group(1)] - 1)
+        anio = _anio(m.group(3), relativo, mes_ini, 1, hoy)
+        return _hasta_hoy(date(anio, mes_ini, 1), fin_de_mes(anio, mes_ini + tramo - 1), hoy)
     if re.search(r"\b(semana|quincena|dia|dias|primeros?|ultimos?|trimestre|semestre)\b", p):
         return None
     # "de enero a marzo", "entre julio y agosto de 2025", "desde agosto"
@@ -164,12 +178,34 @@ def _periodo(p: str, hoy: date) -> Optional[Periodo]:
     if "este mes" in p:
         return _crear(hoy.replace(day=1), hoy)
     meses = re.findall(rf"\b({_MES})\b(?:{_ANIO})?", p)
+    if not meses:
+        return _anio_completo(p, relativo, hoy)
     if len(meses) != 1:
         return None
     nombre, anio = meses[0]
     mes = MESES.index(nombre) + 1
     anio = _anio(anio, relativo, mes, 1, hoy)
     return _crear(date(anio, mes, 1), fin_de_mes(anio, mes))
+
+
+def _hasta_hoy(inicio: date, fin: date, hoy: date) -> Optional[Periodo]:
+    """Un periodo que aún no termina llega hasta hoy; uno que no ha empezado no existe."""
+    return _crear(inicio, min(fin, hoy)) if inicio <= hoy else None
+
+
+def _anio_completo(p: str, relativo: Optional[int], hoy: date) -> Optional[Periodo]:
+    """ "en 2026", "de 2024 a 2025", "el año pasado": años completos (el año en curso, hasta hoy).
+
+    "Este año" sin más no se toma como periodo: esas preguntas ya tienen su propia respuesta.
+    """
+    # "2024-2027" es el nombre de un plan (PISCC, plan de desarrollo), no un periodo pedido.
+    sin_planes = re.sub(r"\b(?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2}\b", " ", p)
+    anios = [int(a) for a in re.findall(r"\b((?:19|20)\d{2})\b", sin_planes)]
+    if not anios and relativo is not None and relativo < hoy.year:
+        anios = [relativo]
+    if not anios or len(anios) > 2:
+        return None
+    return _hasta_hoy(date(min(anios), 1, 1), date(max(anios), 12, 31), hoy)
 
 
 def meses_de(inicio: date, fin: date) -> List[Tuple[date, date]]:
