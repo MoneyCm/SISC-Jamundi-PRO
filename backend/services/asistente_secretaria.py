@@ -778,7 +778,13 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
 
     hoy = hoy or date.today()
     historial = historial or []
-    from services import reporte_semanal
+    from services import reporte_mensual, reporte_semanal
+    if reporte_mensual.pide_reporte(normalizar(pregunta)):
+        mensual = reporte_mensual.generar(db, hoy)
+        if mensual:
+            return {"respuesta": reporte_mensual.texto(mensual), "reporte_mensual": mensual, "verificada": True,
+                    "redactada_por": "SISC (sin IA)", "fuentes": mensual["fuentes"], "temas": {},
+                    "sugerencias": ["Reporte semanal para la secretaria", "¿Qué le pido a la Policía en el próximo Consejo?"]}
     if reporte_semanal.pide_reporte(normalizar(pregunta)):
         reporte = reporte_semanal.generar(db, hoy)
         if reporte:

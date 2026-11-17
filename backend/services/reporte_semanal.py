@@ -84,6 +84,7 @@ def generar(db: Session, hoy: Optional[date] = None) -> Optional[Dict]:
     if faltan:
         notas.append(f"El registro de {corte.year - 1} no trae completo {nombre_mes(faltan[0])}: la comparación puede quedar baja.")
     return {
+        "meta_homicidios": _meta_homicidios(db, corte, next(f["anio"] for f in filas if f["nombre"] == "Homicidios")),
         "titulo": "Así va la seguridad en Jamundí",
         "periodo": f"Del 1 de enero al {_dia(corte)} de {corte.year}",
         "corte": corte.isoformat(),
@@ -98,6 +99,23 @@ def generar(db: Session, hoy: Optional[date] = None) -> Optional[Dict]:
     }
 
 
+def _meta_homicidios(db: Session, corte: date, van: int) -> Optional[Dict]:
+    """Límite anual de homicidios del PISCC frente a lo que va el año en el registro semanal."""
+    try:
+        from services.piscc_goals import build_goals
+        meta = next((g for g in build_goals(db, corte, None).get("indicators", []) if g.get("id") == "homicidios"), None)
+    except Exception:  # noqa: BLE001 - sin metas, el reporte sale igual
+        meta = None
+    if not meta or not meta.get("goal_2027"):
+        return None
+    limite = int(meta["goal_2027"])
+    return {"limite": limite, "van": van, "faltan": limite - van, "estado": meta.get("status"),
+            "estado_texto": meta.get("status_label"),
+            "texto": (f"Meta del PISCC: máximo {limite} homicidios en el año. Al {_dia(corte)} van {van}"
+                      + (f": {'queda' if limite - van == 1 else 'quedan'} {limite - van} para llegar al límite." if van < limite
+                         else (": se alcanzó el límite." if van == limite else f": se pasó el límite en {van - limite}.")))}
+
+
 def texto(reporte: Dict) -> str:
     """Versión en texto, para copiar o enviar por WhatsApp."""
     lineas = [f"*{reporte['titulo']}*", reporte["periodo"], ""]
@@ -105,5 +123,7 @@ def texto(reporte: Dict) -> str:
         cambio = "igual" if not f["diferencia"] else (f"subió {f['diferencia']}" if f["diferencia"] > 0 else f"bajó {-f['diferencia']}")
         lineas.append(f"• {f['nombre']}: *{f['anio']}* (mismo periodo de {reporte['anio_anterior']}: {f['anio_anterior']}; {cambio}). "
                       f"Última semana: {f['semana']}.")
+    if reporte.get("meta_homicidios"):
+        lineas += ["", reporte["meta_homicidios"]["texto"]]
     lineas += ["", f"Última semana: {reporte['semana'].lower()}.", f"Fuente: {reporte['fuente']}. Cifras preliminares."]
     return "\n".join(lineas)

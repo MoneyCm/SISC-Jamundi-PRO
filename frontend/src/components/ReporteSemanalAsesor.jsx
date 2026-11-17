@@ -4,10 +4,10 @@ import { ArrowDownRight, ArrowUpRight, Download, Loader2, Minus } from 'lucide-r
 // Reporte semanal para la Secretaria (homicidios y hurto de vehículos), en cuadros con la identidad de
 // la Alcaldía. Lo arma el backend (services/reporte_semanal.py); aquí solo se dibuja y se descarga como imagen.
 
-const AZUL = '#281FD0';
-const AMARILLO = '#FFE000';
-const TINTA = '#14162B';
-const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('es-CO'));
+export const AZUL = '#281FD0';
+export const AMARILLO = '#FFE000';
+export const TINTA = '#14162B';
+export const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('es-CO'));
 
 const Cambio = ({ diferencia, porcentaje }) => {
     if (!diferencia) {
@@ -23,15 +23,15 @@ const Cambio = ({ diferencia, porcentaje }) => {
     );
 };
 
-const Cuadro = ({ titulo, children }) => (
+export const Cuadro = ({ titulo, children }) => (
     <section className="mt-3">
         <h4 className="mb-1 text-[11px] font-black uppercase tracking-wider" style={{ color: AZUL }}>{titulo}</h4>
         <table className="w-full border-collapse overflow-hidden rounded-md text-[12px]">{children}</table>
     </section>
 );
 
-const th = 'px-2 py-1.5 text-right font-black text-white first:text-left';
-const td = 'border-b border-slate-100 px-2 py-1.5 text-right tabular-nums first:text-left first:font-bold first:whitespace-nowrap';
+export const th = 'px-2 py-1.5 text-right font-black text-white first:text-left';
+export const td = 'border-b border-slate-100 px-2 py-1.5 text-right tabular-nums first:text-left first:font-bold first:whitespace-nowrap';
 
 const TablaMeses = ({ meses, anio, anterior }) => (
     <table className="w-full border-collapse text-[11.5px]">
@@ -54,13 +54,10 @@ const TablaMeses = ({ meses, anio, anterior }) => (
     </table>
 );
 
-export default function ReporteSemanalAsesor({ reporte }) {
+// Guarda la tarjeta como imagen PNG (para WhatsApp).
+export const useDescargaImagen = (nombre) => {
     const tarjeta = useRef(null);
     const [descargando, setDescargando] = useState(false);
-    const meses = reporte.homicidios_por_mes || [];
-    const mitad = Math.ceil(meses.length / 2);
-    const hayParcial = meses.some((m) => m.parcial);
-
     const descargar = async () => {
         if (!tarjeta.current || descargando) return;
         setDescargando(true);
@@ -69,26 +66,48 @@ export default function ReporteSemanalAsesor({ reporte }) {
             const lienzo = await html2canvas(tarjeta.current, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
             const enlace = document.createElement('a');
             enlace.href = lienzo.toDataURL('image/png');
-            enlace.download = `Reporte semanal seguridad - corte ${reporte.corte}.png`;
+            enlace.download = nombre;
             enlace.click();
         } finally {
             setDescargando(false);
         }
     };
+    return { tarjeta, descargando, descargar };
+};
+
+export const BotonImagen = ({ descargando, descargar }) => (
+    <button type="button" onClick={descargar} disabled={descargando}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#281FD0] px-3 py-1.5 text-xs font-black text-white hover:bg-[#3026D9] disabled:opacity-60">
+        {descargando ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Descargar imagen para WhatsApp
+    </button>
+);
+
+export const Encabezado = ({ titulo, franja }) => (
+    <>
+        <div style={{ height: 6, background: AMARILLO }} />
+        <header className="flex items-center gap-3 px-4 py-3 text-white" style={{ background: AZUL }}>
+            <img src="/assets/escudo-limpio.png" alt="" className="h-11 w-auto" />
+            <div>
+                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: AMARILLO }}>Alcaldía de Jamundí</p>
+                <p className="text-[10px] font-bold text-white/80">Secretaría de Seguridad y Convivencia</p>
+                <p className="text-[17px] font-black leading-tight">{titulo}</p>
+            </div>
+        </header>
+        <p className="px-4 py-1.5 text-center text-[12px] font-black" style={{ background: AMARILLO }}>{franja}</p>
+    </>
+);
+
+export default function ReporteSemanalAsesor({ reporte }) {
+    const { tarjeta, descargando, descargar } = useDescargaImagen(`Reporte semanal seguridad - corte ${reporte.corte}.png`);
+    const meses = reporte.homicidios_por_mes || [];
+    const mitad = Math.ceil(meses.length / 2);
+    const hayParcial = meses.some((m) => m.parcial);
+    const meta = reporte.meta_homicidios;
 
     return (
         <div>
             <div ref={tarjeta} className="overflow-hidden rounded-xl border border-slate-200 bg-white" style={{ color: TINTA }}>
-                <div style={{ height: 6, background: AMARILLO }} />
-                <header className="flex items-center gap-3 px-4 py-3 text-white" style={{ background: AZUL }}>
-                    <img src="/assets/escudo-limpio.png" alt="" className="h-11 w-auto" />
-                    <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: AMARILLO }}>Alcaldía de Jamundí</p>
-                        <p className="text-[10px] font-bold text-white/80">Secretaría de Seguridad y Convivencia</p>
-                        <p className="text-[17px] font-black leading-tight">{reporte.titulo}</p>
-                    </div>
-                </header>
-                <p className="px-4 py-1.5 text-center text-[12px] font-black" style={{ background: AMARILLO }}>{reporte.periodo}</p>
+                <Encabezado titulo={reporte.titulo} franja={reporte.periodo} />
 
                 <div className="px-4 pb-3">
                     <Cuadro titulo={`En lo corrido del año, frente a ${reporte.anio_anterior}`}>
@@ -109,6 +128,13 @@ export default function ReporteSemanalAsesor({ reporte }) {
                             ))}
                         </tbody>
                     </Cuadro>
+
+                    {meta && (
+                        <p className="mt-2 rounded-md border-l-4 px-3 py-2 text-[12px] font-bold"
+                            style={{ borderColor: meta.van >= meta.limite ? '#B42318' : '#FFB600', background: '#FFF8E1' }}>
+                            {meta.texto}
+                        </p>
+                    )}
 
                     <Cuadro titulo={`Última semana · ${reporte.semana.toLowerCase()}`}>
                         <thead>
@@ -147,10 +173,7 @@ export default function ReporteSemanalAsesor({ reporte }) {
                     {(reporte.notas || []).map((n) => <p key={n} className="text-[10px] text-white/60">{n}</p>)}
                 </footer>
             </div>
-            <button type="button" onClick={descargar} disabled={descargando}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#281FD0] px-3 py-1.5 text-xs font-black text-white hover:bg-[#3026D9] disabled:opacity-60">
-                {descargando ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Descargar imagen para WhatsApp
-            </button>
+            <BotonImagen descargando={descargando} descargar={descargar} />
         </div>
     );
 }

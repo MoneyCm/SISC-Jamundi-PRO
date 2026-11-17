@@ -3,6 +3,7 @@ import { Copy, Loader2, Mic, Printer, Send, ShieldCheck, Sparkles, Volume2, X } 
 import { apiJson } from '../utils/apiClient';
 import { asesorKey, readAsesor } from '../utils/asesorSession';
 import ReporteSemanalAsesor from './ReporteSemanalAsesor';
+import ReporteMensualAsesor from './ReporteMensualAsesor';
 
 // Asesor SISC: preguntas de la dirección con cifras oficiales verificadas (backend: /api/asistente).
 const ROLES = ['DIRECTIVE', 'ANALYST', 'FUNC_ADMIN', 'TI_ADMIN', 'DATA_OWNER'];
@@ -30,6 +31,7 @@ export const textoRevision = (r) => {
 };
 const INICIALES = [
     'Reporte semanal para la secretaria',
+    'Reporte mensual para la secretaria',
     '¿Cómo vamos esta semana?',
     '¿Qué le pido a la Policía en el próximo Consejo?',
     '¿Qué barrio me debe preocupar más?',
@@ -81,7 +83,9 @@ const Burbuja = ({ mensaje, pregunta, nombre, onSugerencia }) => {
     return (
         <div className="mr-4 self-start">
             <div className="rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3 text-[15px] leading-relaxed text-slate-800 shadow-sm">
-                {mensaje.reporte ? <ReporteSemanalAsesor reporte={mensaje.reporte} /> : <p className="whitespace-pre-wrap">{mensaje.texto}</p>}
+                {mensaje.reporte ? <ReporteSemanalAsesor reporte={mensaje.reporte} />
+                    : mensaje.reporteMensual ? <ReporteMensualAsesor reporte={mensaje.reporteMensual} />
+                    : <p className="whitespace-pre-wrap">{mensaje.texto}</p>}
                 {mensaje.fuentes?.length > 0 && (
                     <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
                         <ShieldCheck size={12} className="-mt-0.5 mr-1 inline text-emerald-600" />
@@ -147,7 +151,7 @@ const AsesorSession = ({ userRoles = [], currentUser }) => {
         try {
             const r = await apiJson('/asistente/preguntar', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pregunta: limpia, historial }) });
             if (controller.signal.aborted) return;
-            setMensajes((actual) => [...actual, { rol: 'asesor', texto: r.respuesta, fuentes: r.fuentes, sugerencias: r.sugerencias, pregunta: limpia, reporte: r.reporte }]);
+            setMensajes((actual) => [...actual, { rol: 'asesor', texto: r.respuesta, fuentes: r.fuentes, sugerencias: r.sugerencias, pregunta: limpia, reporte: r.reporte, reporteMensual: r.reporte_mensual }]);
         } catch (error) {
             if (controller.signal.aborted) return;
             setMensajes((actual) => [...actual, { rol: 'asesor', texto: `No pude responder en este momento (${error.message || 'sin conexión'}). Intente de nuevo en un momento.`, pregunta: limpia }]);
