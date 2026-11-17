@@ -5,6 +5,28 @@ import { asesorKey, readAsesor } from '../utils/asesorSession';
 
 // Asesor SISC: preguntas de la dirección con cifras oficiales verificadas (backend: /api/asistente).
 const ROLES = ['DIRECTIVE', 'ANALYST', 'FUNC_ADMIN', 'TI_ADMIN', 'DATA_OWNER'];
+// Quién puede ver la revisión de preguntas mal respondidas (backend: /api/asistente/revision).
+const REVISORES = ['ANALYST', 'FUNC_ADMIN', 'TI_ADMIN'];
+const fechaCorta = (iso) => (iso ? new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '');
+
+export const textoRevision = (r) => {
+    const c = r.conteo || {};
+    const lineas = [
+        `Revisión de los últimos ${r.dias} días: ${r.total} preguntas.`,
+        `• Bien respondidas: ${c.ok || 0}`,
+        `• No entendió la pregunta o sus fechas: ${c.no_entendio || 0}`,
+        `• No tenía los datos: ${c.sin_datos || 0}`,
+        `• La IA no respondió o no pasó la verificación: ${c.sin_ia || 0}`,
+    ];
+    if (c.sin_clasificar) lineas.push(`• Anteriores a esta revisión (sin clasificar): ${c.sin_clasificar}`);
+    if (r.revisar?.length) {
+        lineas.push('', 'Para revisar:');
+        r.revisar.slice(0, 15).forEach((x) => lineas.push(`• ${fechaCorta(x.fecha)} — «${x.pregunta}» — ${x.motivo}`));
+    } else {
+        lineas.push('', 'No hay preguntas mal respondidas en este periodo.');
+    }
+    return lineas.join('\n');
+};
 const INICIALES = [
     '¿Cómo vamos esta semana?',
     '¿Qué le pido a la Policía en el próximo Consejo?',
@@ -117,7 +139,7 @@ const AsesorSession = ({ userRoles = [], currentUser }) => {
         const limpia = (pregunta || '').trim();
         if (limpia.length < 2 || limpia.length > 500 || peticion.current) return;
         const controller = new AbortController(); peticion.current = controller;
-        const historial = mensajes.filter((m) => !m.bienvenida).slice(-6).map((m) => ({ rol: m.rol, texto: m.texto.slice(0, 4000) }));
+        const historial = mensajes.filter((m) => !m.bienvenida && !m.interno).slice(-6).map((m) => ({ rol: m.rol, texto: m.texto.slice(0, 4000) }));
         setMensajes((actual) => [...actual, { rol: 'usuario', texto: limpia }]);
         setTexto(''); setOcupado(true);
         try {
@@ -129,6 +151,19 @@ const AsesorSession = ({ userRoles = [], currentUser }) => {
             setMensajes((actual) => [...actual, { rol: 'asesor', texto: `No pude responder en este momento (${error.message || 'sin conexión'}). Intente de nuevo en un momento.`, pregunta: limpia }]);
         } finally {
             if (peticion.current === controller) { peticion.current = null; setOcupado(false); }
+        }
+    };
+
+    const verRevision = async () => {
+        if (ocupado) return;
+        setOcupado(true);
+        try {
+            const r = await apiJson('/asistente/revision?dias=30');
+            setMensajes((actual) => [...actual, { rol: 'asesor', interno: true, texto: textoRevision(r) }]);
+        } catch (error) {
+            setMensajes((actual) => [...actual, { rol: 'asesor', interno: true, texto: `No pude cargar la revisión (${error.message || 'sin conexión'}).` }]);
+        } finally {
+            setOcupado(false);
         }
     };
 
@@ -164,6 +199,10 @@ const AsesorSession = ({ userRoles = [], currentUser }) => {
                             <div><p className="text-sm font-black">Asesor SISC</p><p className="text-[11px] text-indigo-100">Datos y fuentes del SISC</p></div>
                         </div>
                         <div className="flex items-center gap-1">
+                            {userRoles.some((rol) => REVISORES.includes(rol)) && (
+                                <button type="button" onClick={verRevision} title="Preguntas de los últimos 30 días que no supo responder"
+                                    className="rounded-lg px-2 py-1 text-xs font-bold text-indigo-100 hover:bg-white/10">Revisión</button>
+                            )}
                             {mensajes.length > 0 && <button type="button" onClick={nuevaConsulta} className="rounded-lg px-2 py-1 text-xs font-bold text-indigo-100 hover:bg-white/10">Nueva consulta</button>}
                             <button type="button" onClick={() => { window.speechSynthesis?.cancel(); reconocimiento.current?.abort(); setAbierto(false); }} aria-label="Cerrar" className="rounded-lg p-1.5 hover:bg-white/10"><X size={18} /></button>
                         </div>

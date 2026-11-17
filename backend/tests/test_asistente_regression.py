@@ -138,3 +138,41 @@ def test_la_pregunta_de_seguimiento_conserva_el_tema(monkeypatch):
     assert 'homicidios' in ampliada and '2026' not in ampliada
     assert svc.con_tema_previo(None, '¿Y los hurtos de 2025?', []) == '¿Y los hurtos de 2025?'
     assert svc.con_tema_previo(None, '¿Y en 2025?', []) == '¿Y en 2025?'
+
+
+def test_clasificar_respuestas_para_la_revision():
+    assert svc.clasificar({'respuesta': 'No entendí las fechas que pidió…', 'verificada': False}) == 'no_entendio'
+    assert svc.clasificar({'respuesta': 'La sábana… no doy una cifra que podría estar incompleta.', 'verificada': True}) == 'sin_datos'
+    assert svc.clasificar({'respuesta': 'Homicidio: 104', 'verificada': True, 'problemas': ['Gemini: cifra']}) == 'sin_ia'
+    assert svc.clasificar({'respuesta': 'Homicidio: 104', 'verificada': True}) == 'ok'
+
+
+def test_resumen_de_la_revision():
+    from datetime import datetime
+    consultas = [(datetime(2026, 11, 17), {'pregunta': 'homicidios en agostoo', 'resultado': 'no_entendio'}),
+                 (datetime(2026, 11, 16), {'pregunta': '¿Cómo va el PISCC?', 'resultado': 'ok'}),
+                 (datetime(2026, 10, 1), {'pregunta': 'vieja'})]
+    r = svc.resumen_revision(consultas, 30)
+    assert r['total'] == 3 and r['conteo']['ok'] == 1 and r['conteo']['no_entendio'] == 1 and r['conteo']['sin_clasificar'] == 1
+    assert [x['pregunta'] for x in r['revisar']] == ['homicidios en agostoo']
+
+
+def test_respuesta_judicial_solo_con_anios_anteriores():
+    seg = {'anios': [2024, 2025, 2026], 'anio_en_curso': 2026,
+           'todos': {'2024': {'total': 100, 'juicio_o_condena': 4}, '2026': {'total': 50, 'juicio_o_condena': 1}},
+           'homicidio_doloso': {'2024': {'total': 20, 'juicio_o_condena': 2}}}
+    lineas = svc._lineas_respuesta_judicial(seg)
+    assert lineas[0] == 'Todos los delitos: hechos de 2024: 4 de 100 procesos llegaron a juicio o condena (4,0 %).'
+    assert '2026:' not in lineas[0] and 'procesos, no homicidios' in lineas[-1]
+
+
+def test_mindefensa_completa_el_anio_que_la_sabana_no_trae(monkeypatch):
+    from datetime import date
+    from services import piscc_historico as ph
+    datos = {'ultimo_mes': '2026-09', 'series': {'homicidios': {
+        '2024': {str(m): 10 for m in range(1, 13)}, '2025': {str(m): 11 for m in range(1, 13)}}}}
+    monkeypatch.setattr(ph, 'cargar', lambda *a, **k: datos)
+    r = svc._mindefensa_periodo(['Homicidio'], date(2025, 1, 1), date(2025, 12, 31))
+    assert '132 víctimas' in r['texto'] and 'todo 2024: 120; subió en 12' in r['texto']
+    assert svc._mindefensa_periodo(['Hurto a personas'], date(2025, 1, 1), date(2025, 12, 31)) is None
+    assert svc._mindefensa_periodo(['Homicidio'], date(2026, 1, 1), date(2026, 12, 31)) is None  # meses sin publicar

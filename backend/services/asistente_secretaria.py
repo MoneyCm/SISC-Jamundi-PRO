@@ -217,6 +217,29 @@ def _externas(db: Session, exp: Expediente):
         if etapas:
             lineas.append("En qué van los procesos del año: " + "; ".join(f"{k}: {v}" for k, v in etapas.items()) + ".")
         exp.agregar(titulo, lineas, fuente)
+        seguimiento = (estado.details or {}).get("seguimiento") if codigo == "FISCALIA_DATOS" else None
+        if seguimiento:
+            exp.agregar("Procesos de la Fiscalía: cuántos llegan a juicio o condena",
+                        _lineas_respuesta_judicial(seguimiento), fuente)
+
+
+def _lineas_respuesta_judicial(seguimiento: Dict) -> List[str]:
+    """Años anteriores (ya tuvieron tiempo de avanzar): procesos y cuántos llegaron a juicio o condena."""
+    lineas = []
+    en_curso = str(seguimiento.get("anio_en_curso"))
+    for nombre, clave in (("Todos los delitos", "todos"), ("Homicidio doloso", "homicidio_doloso")):
+        partes = []
+        for anio in (str(a) for a in seguimiento.get("anios", []) if str(a) != en_curso):
+            fila = (seguimiento.get(clave) or {}).get(anio) or {}
+            if fila.get("total"):
+                pct = str(round(100 * fila["juicio_o_condena"] / fila["total"], 1)).replace(".", ",")
+                partes.append(f"hechos de {anio}: {fila['juicio_o_condena']} de {fila['total']} procesos llegaron a "
+                              f"juicio o condena ({pct} %)")
+        if partes:
+            lineas.append(f"{nombre}: " + "; ".join(partes) + ".")
+    lineas.append("Se cuentan procesos, no homicidios ni víctimas: un hecho puede abrir varios procesos. El avance "
+                  f"depende de la Fiscalía y los jueces. Los procesos de {en_curso} son muy recientes para medir resultados.")
+    return lineas
 
 
 def _resumen_whatsapp(db: Session, exp: Expediente):
@@ -243,7 +266,7 @@ def _delito(db: Session, exp: Expediente, conductas: List[str], corte: date):
         n = db.query(hechos_unicos_expr()).filter(*base, HechoSeguridad.fecha_evento.between(inicio, fin)).scalar() or 0
         lineas.append(f"Semana que termina el {fecha_larga(fin)}: {n}.")
     lineas.append(_franjas(db, base, corte))
-    exp.agregar(f"Tendencia de {', '.join(c.lower() for c in conductas)} (últimas 8 semanas)", lineas)
+    exp.agregar(f"Tendencia de {', '.join(c.lower() for c in conductas)}: año a la fecha, últimas 8 semanas y horario", lineas)
 
 
 def _un_anio_antes(dia: date) -> date:
@@ -512,6 +535,35 @@ def _comparendos_periodo(db: Session, inicio: date, fin: date, barrio: Optional[
     return linea + ".", fuente
 
 
+def _mindefensa_periodo(conductas: List[str], inicio: date, fin: date) -> Optional[Dict]:
+    """Cifra oficial mensual de MinDefensa del periodo (meses completos), cuando la sábana no lo trae completo.
+
+    Solo para los delitos que MinDefensa publica mes a mes en el SISC (homicidio, hurto a motocicletas,
+    lesiones personales) y solo si todos los meses del periodo están publicados.
+    """
+    from services import piscc_historico as ph
+    from services.asistente_periodos import etiqueta, fin_de_mes, meses_de
+    clave = next((k for k, c in ph.CONDUCTAS_SABANA.items() if conductas and set(conductas) == set(c)), None)
+    if not clave or inicio.day != 1 or fin != fin_de_mes(fin.year, fin.month):
+        return None
+    datos = ph.cargar()
+
+    def total(desde: date, hasta: date) -> Optional[int]:
+        valores = [ph.serie_mensual(clave, a.year, datos)[a.month - 1] for a, _b in meses_de(desde, hasta)]
+        return sum(valores) if valores and all(v is not None for v in valores) else None
+
+    actual = total(inicio, fin)
+    if actual is None:
+        return None
+    previo_ini, previo_fin = inicio.replace(year=inicio.year - 1), fin_de_mes(fin.year - 1, fin.month)
+    previo = total(previo_ini, previo_fin)
+    comparacion = f" ({etiqueta(previo_ini, previo_fin)}: {previo}; {cambio(actual, previo)})" if previo is not None else ""
+    unidad = " víctimas" if clave == "homicidios" else ""
+    return {"fuente": "MinDefensa / Policía Nacional (datos.gov.co)",
+            "texto": f"Registro oficial de MinDefensa / Policía Nacional {_en(etiqueta(inicio, fin))}:\n"
+                     f"• {', '.join(conductas)}: {actual}{unidad}{comparacion}."}
+
+
 def responder_periodo(db: Session, pregunta: str, periodo, hoy: date) -> Dict:
     from services import hoja_ejecutiva
     from services.asistente_periodos import etiqueta
@@ -558,14 +610,25 @@ def responder_periodo(db: Session, pregunta: str, periodo, hoy: date) -> Dict:
         from services.cobertura_sabana import meses_incompletos
         from services.asistente_periodos import Periodo, etiqueta
         mes_falta = meses_incompletos(db, inicio, hasta, corte)[0]
+        oficial = _mindefensa_periodo(temas["delitos"], inicio, fin) if not barrio else None
+        if oficial:
+            resultado["fuentes"] = resultado["fuentes"] + [oficial["fuente"]]
         if mes_falta > inicio:
             antes = mes_falta - timedelta(days=1)
             parcial = responder_periodo(db, pregunta, Periodo(inicio, antes, etiqueta(inicio, antes)), hoy)
             if parcial.get("verificada"):
-                parcial["respuesta"] = (f"La sábana de la Policía cargada en el SISC no tiene completo {falta}, así que no "
-                                        f"doy la cifra {_en(periodo.etiqueta)}. Esto es lo que hay hasta el "
-                                        f"{fecha_larga(antes)}:\n\n" + parcial["respuesta"])
+                aviso = (f"La sábana de la Policía cargada en el SISC no tiene completo {falta}, así que con ella no doy "
+                         f"la cifra {_en(periodo.etiqueta)}.")
+                if oficial:
+                    aviso += f"\n\n{oficial['texto']}\n\nCon la sábana, hasta el {fecha_larga(antes)}:"
+                    parcial["fuentes"] = parcial.get("fuentes", []) + [oficial["fuente"]]
+                else:
+                    aviso += f" Esto es lo que hay hasta el {fecha_larga(antes)}:"
+                parcial["respuesta"] = aviso + "\n\n" + parcial["respuesta"]
                 return parcial
+        if oficial:
+            return {**resultado, "respuesta": f"La sábana de la Policía cargada en el SISC no tiene completo {falta}.\n\n"
+                    + oficial["texto"]}
         return {**resultado, "respuesta": f"La sábana de la Policía cargada en el SISC no tiene completo {falta}; "
                 "no doy una cifra que podría estar incompleta. Conviene pedir ese periodo a la Policía."}
     antes = (_un_anio_antes(inicio), _un_anio_antes(hasta))
@@ -603,10 +666,12 @@ def responder_periodo(db: Session, pregunta: str, periodo, hoy: date) -> Dict:
     return {**resultado, "respuesta": texto}
 
 
-def nota_periodo(datos: Dict) -> str:
+def nota_periodo(datos: Dict, foco: Optional["Expediente"] = None) -> str:
     corte = datos.get("corte")
     if not corte:
         return ""
+    if foco is not None and foco.bloques and all(t.startswith("Procesos de la Fiscalía") for t, _ in foco.bloques):
+        return ""  # respuesta solo de la Fiscalía: el corte de la sábana policial no viene al caso
     semana = datos.get("semana")
     periodo = (f"Última semana disponible: {fecha_larga(semana[0])} al {fecha_larga(semana[1])}. "
                if semana else "")
@@ -627,7 +692,7 @@ def prefijos_pertinentes(p: str, expediente: Expediente) -> List[str]:
         prefijos += [t for t, _ in expediente.bloques if t.endswith("(seguimiento del PISCC)")]
     if expediente.temas.get("entidades") and any(w in p for w in ("compromiso", "consejo", "pido", "pendiente")):
         prefijos.append("Compromisos del Consejo a cargo")
-    if any(w in p for w in ("fiscal", "judicial", "justicia")):
+    if any(w in p for w in ("fiscal", "judicial", "justicia", "juicio", "condena", "impunidad", "denuncias")):
         prefijos.append("Procesos de la Fiscalía")
     if any(w in p for w in CONVIVENCIA):
         prefijos.append("Convivencia")
@@ -761,11 +826,45 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
         guardia = verify_ai_text(texto, datos_texto)
         intentos.append(nombre)
         if guardia.ok and verificar_seleccion(texto, foco):
-            return {"respuesta": formatear_seleccion(texto, foco) + nota_periodo(extra["datos"]), "verificada": True, "redactada_por": nombre, "fuentes": expediente.fuentes,
+            return {"respuesta": formatear_seleccion(texto, foco) + nota_periodo(extra["datos"], foco), "verificada": True, "redactada_por": nombre, "fuentes": expediente.fuentes,
                     "sugerencias": sugerencias(expediente.temas, extra["datos"], pregunta), "temas": expediente.temas}
         problemas.append(f"{nombre}: {'; '.join(guardia.problems)[:200]}")
     respuesta = respuesta_sin_ia(pregunta, expediente, extra)
-    respuesta += nota_periodo(extra["datos"])
+    respuesta += nota_periodo(extra["datos"], foco)
     return {"respuesta": respuesta, "verificada": True, "redactada_por": "SISC (sin IA)",
             "fuentes": expediente.fuentes, "sugerencias": sugerencias(expediente.temas, extra["datos"], pregunta),
             "temas": expediente.temas, "problemas": problemas}
+
+
+# ------------------------------------------------------------------ revisión de preguntas
+
+RESULTADOS = {
+    "no_entendio": "No entendió la pregunta o sus fechas",
+    "sin_datos": "No tenía los datos para responder",
+    "sin_ia": "La IA no respondió o su texto no pasó la verificación (respondió el SISC solo)",
+}
+
+
+def clasificar(resultado: Dict) -> str:
+    """Cómo salió una respuesta, para la revisión mensual de preguntas mal respondidas."""
+    texto = normalizar(resultado.get("respuesta") or "")
+    if texto.startswith("no entendi") or resultado.get("verificada") is False:
+        return "no_entendio"
+    if any(f in texto for f in ("no hay datos disponibles", "no doy una cifra", "todavia no hay datos", "no hay datos de")):
+        return "sin_datos"
+    if resultado.get("problemas"):
+        return "sin_ia"
+    return "ok"
+
+
+def resumen_revision(consultas: List[Tuple], dias: int) -> Dict:
+    """Totales por resultado y la lista de preguntas a revisar (las más recientes primero)."""
+    conteo = {"ok": 0, **{k: 0 for k in RESULTADOS}, "sin_clasificar": 0}
+    revisar = []
+    for fecha, target in consultas:
+        clase = target.get("resultado") or "sin_clasificar"
+        conteo[clase] = conteo.get(clase, 0) + 1
+        if clase in RESULTADOS:
+            revisar.append({"fecha": fecha.isoformat() if fecha else None, "pregunta": target.get("pregunta"),
+                            "resultado": clase, "motivo": RESULTADOS[clase], "respuesta": target.get("respuesta")})
+    return {"dias": dias, "total": len(consultas), "conteo": conteo, "revisar": revisar[:100]}
