@@ -778,6 +778,13 @@ async def responder(db: Session, pregunta: str, historial: Optional[List[Dict]] 
 
     hoy = hoy or date.today()
     historial = historial or []
+    from services import reporte_semanal
+    if reporte_semanal.pide_reporte(normalizar(pregunta)):
+        reporte = reporte_semanal.generar(db, hoy)
+        if reporte:
+            return {"respuesta": reporte_semanal.texto(reporte), "reporte": reporte, "verificada": True,
+                    "redactada_por": "SISC (sin IA)", "fuentes": [reporte["fuente"]], "temas": {},
+                    "sugerencias": ["¿Qué le pido a la Policía en el próximo Consejo?", "¿Cómo va el PISCC?"]}
     from services.asistente_compromisos import es_consulta, responder_ranking
     if es_consulta(pregunta) and not periodo_no_soportado(pregunta):
         return responder_ranking(db, normalizar(pregunta), hoy)
